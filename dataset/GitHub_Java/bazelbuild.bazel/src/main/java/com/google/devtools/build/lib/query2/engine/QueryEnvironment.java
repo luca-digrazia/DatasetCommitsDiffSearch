@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,8 +116,8 @@ public interface QueryEnvironment<T> {
      * @param args the input arguments. These are type-checked against the specification returned
      *     by {@link #getArgumentTypes} and {@link #getMandatoryArguments}
      */
-    <T> void eval(QueryEnvironment<T> env, QueryExpression expression, List<Argument> args,
-        Callback<T> callback) throws QueryException, InterruptedException;
+    <T> Set<T> eval(QueryEnvironment<T> env, QueryExpression expression, List<Argument> args)
+        throws QueryException, InterruptedException;
   }
 
   /**
@@ -187,22 +187,6 @@ public interface QueryEnvironment<T> {
    * becomes undefined.  Returns the previous value, if any.
    */
   Set<T> setVariable(String name, Set<T> value);
-
-  /**
-   * Eval an expression {@code expr} and pass the results to the {@code callback}.
-   *
-   * <p>Note that this method should guarantee that the callback does not see repeated elements.
-   * @param expr The expression to evaluate
-   * @param callback The caller callback to notify when results are available
-   */
-  void eval(QueryExpression expr, Callback<T> callback) throws QueryException, InterruptedException;
-
-  /**
-   * Creates a Uniquifier for use in a {@code QueryExpression}. Note that the usage of this an
-   * uniquifier should not be used for returning unique results to the parent callback. It should
-   * only be used to avoid processing the same elements multiple times within this QueryExpression.
-   */
-  Uniquifier<T> createUniquifier();
 
   void reportBuildFileError(QueryExpression expression, String msg) throws QueryException;
 

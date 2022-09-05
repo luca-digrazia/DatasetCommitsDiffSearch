@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -36,11 +36,6 @@ import java.util.Objects;
  */
 public abstract class PackageLookupValue implements SkyValue {
 
-  public static final NoBuildFilePackageLookupValue NO_BUILD_FILE_VALUE =
-      new NoBuildFilePackageLookupValue();
-  public static final DeletedPackageLookupValue DELETED_PACKAGE_VALUE =
-      new DeletedPackageLookupValue();
-
   enum ErrorReason {
     // There is no BUILD file.
     NO_BUILD_FILE,
@@ -49,7 +44,11 @@ public abstract class PackageLookupValue implements SkyValue {
     INVALID_PACKAGE_NAME,
 
     // The package is considered deleted because of --deleted_packages.
-    DELETED_PACKAGE
+    DELETED_PACKAGE,
+
+    // The //external package could not be loaded, either because the WORKSPACE file could not be
+    // parsed or the packages it references cannot be loaded.
+    NO_EXTERNAL_PACKAGE
   }
 
   protected PackageLookupValue() {
@@ -68,8 +67,20 @@ public abstract class PackageLookupValue implements SkyValue {
     return new WorkspacePackageLookupValue(root);
   }
 
+  public static PackageLookupValue noBuildFile() {
+    return NoBuildFilePackageLookupValue.INSTANCE;
+  }
+
+  public static PackageLookupValue noExternalPackage() {
+    return NoExternalPackageLookupValue.INSTANCE;
+  }
+
   public static PackageLookupValue invalidPackageName(String errorMsg) {
     return new InvalidNamePackageLookupValue(errorMsg);
+  }
+
+  public static PackageLookupValue deletedPackage() {
+    return DeletedPackageLookupValue.INSTANCE;
   }
 
   public boolean isExternalPackage() {
@@ -214,8 +225,10 @@ public abstract class PackageLookupValue implements SkyValue {
     }
   }
 
-  /** Marker value for no build file found. */
-  public static class NoBuildFilePackageLookupValue extends UnsuccessfulPackageLookupValue {
+  private static class NoBuildFilePackageLookupValue extends UnsuccessfulPackageLookupValue {
+
+    public static final NoBuildFilePackageLookupValue INSTANCE =
+        new NoBuildFilePackageLookupValue();
 
     private NoBuildFilePackageLookupValue() {
     }
@@ -228,6 +241,25 @@ public abstract class PackageLookupValue implements SkyValue {
     @Override
     String getErrorMsg() {
       return "BUILD file not found on package path";
+    }
+  }
+
+  private static class NoExternalPackageLookupValue extends UnsuccessfulPackageLookupValue {
+
+    public static final NoExternalPackageLookupValue INSTANCE =
+        new NoExternalPackageLookupValue();
+
+    private NoExternalPackageLookupValue() {
+    }
+
+    @Override
+    ErrorReason getErrorReason() {
+      return ErrorReason.NO_EXTERNAL_PACKAGE;
+    }
+
+    @Override
+    String getErrorMsg() {
+      return "Error loading the //external package";
     }
   }
 
@@ -264,8 +296,9 @@ public abstract class PackageLookupValue implements SkyValue {
     }
   }
 
-  /** Marker value for a deleted package. */
-  public static class DeletedPackageLookupValue extends UnsuccessfulPackageLookupValue {
+  private static class DeletedPackageLookupValue extends UnsuccessfulPackageLookupValue {
+
+    public static final DeletedPackageLookupValue INSTANCE = new DeletedPackageLookupValue();
 
     private DeletedPackageLookupValue() {
     }

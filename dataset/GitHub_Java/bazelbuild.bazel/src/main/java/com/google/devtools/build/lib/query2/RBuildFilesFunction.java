@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ import com.google.common.base.Function;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
@@ -67,8 +66,8 @@ public class RBuildFilesFunction implements QueryFunction {
 
   @Override
   @SuppressWarnings("unchecked") // Cast from <Target> to <T>. This will only be used with <Target>.
-  public <T> void eval(QueryEnvironment<T> env, QueryExpression expression,
-      List<Argument> args, Callback<T> callback) throws QueryException, InterruptedException {
+  public <T> Set<T> eval(QueryEnvironment<T> env, QueryExpression expression, List<Argument> args)
+      throws QueryException {
     if (!(env instanceof SkyQueryEnvironment)) {
       throw new QueryException("rbuildfiles can only be used with SkyQueryEnvironment");
     }
@@ -76,8 +75,8 @@ public class RBuildFilesFunction implements QueryFunction {
     for (Argument arg : args) {
       fileNames.add(arg.getWord());
     }
-    callback.process((Set<T>)
+    return (Set<T>)
         ((SkyQueryEnvironment) env)
-            .getRBuildFiles(Collections2.transform(args, ARGUMENT_TO_PATH_FRAGMENT)));
+            .getRBuildFiles(Collections2.transform(args, ARGUMENT_TO_PATH_FRAGMENT));
   }
 }
