@@ -414,8 +414,8 @@ public class ExecutionTool {
       }
 
       runtime.getEventBus().post(new ExecutionFinishedEvent(ImmutableMap.<String, Long> of(), 0L,
-          skyframeExecutor.getOutputDirtyFilesAndClear(),
-          skyframeExecutor.getModifiedFilesDuringPreviousBuildAndClear()));
+          skyframeExecutor.getOutputDirtyFiles(),
+          skyframeExecutor.getModifiedFilesDuringPreviousBuild()));
 
       // Disable system load polling (noop if it was not enabled).
       ResourceManager.instance().setAutoSensing(false);
