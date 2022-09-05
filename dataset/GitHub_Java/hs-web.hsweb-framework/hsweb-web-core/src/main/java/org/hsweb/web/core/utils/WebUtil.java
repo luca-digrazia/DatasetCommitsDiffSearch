@@ -1,8 +1,6 @@
 package org.hsweb.web.core.utils;
 
 import org.hsweb.web.bean.po.user.User;
-import org.hsweb.web.core.authorize.oauth2.OAuth2Manager;
-import org.hsweb.web.core.authorize.oauth2.OAuth2ManagerHolder;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -63,13 +61,7 @@ public class WebUtil {
     public static User getLoginUser(HttpServletRequest request) {
         if (request == null) return null;
         HttpSession session = request.getSession(false);
-        if (session == null) {
-            OAuth2Manager manager = OAuth2ManagerHolder.getManager();
-            if (manager != null) {
-                return manager.getUserByRequest(request);
-            }
-            return null;
-        }
+        if (session == null) return null;
         return getLoginUser(session);
     }
 
