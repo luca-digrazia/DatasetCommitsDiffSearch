@@ -52,8 +52,10 @@ class NodeEntryVisitor {
 
   private final QuiescingExecutor quiescingExecutor;
   private final AtomicBoolean preventNewEvaluations = new AtomicBoolean(false);
+  private final Set<SkyKey> inflightNodes = Sets.newConcurrentHashSet();
   private final Set<RuntimeException> crashes = Sets.newConcurrentHashSet();
-  private final DirtyTrackingProgressReceiver progressReceiver;
+  private final DirtyKeyTracker dirtyKeyTracker;
+  private final EvaluationProgressReceiver progressReceiver;
   /**
    * Function that allows this visitor to execute the appropriate {@link Runnable} when given a
    * {@link SkyKey} to evaluate.
@@ -62,29 +64,33 @@ class NodeEntryVisitor {
 
   NodeEntryVisitor(
       ForkJoinPool forkJoinPool,
-      DirtyTrackingProgressReceiver progressReceiver,
+      DirtyKeyTracker dirtyKeyTracker,
+      EvaluationProgressReceiver progressReceiver,
       Function<SkyKey, Runnable> runnableMaker) {
     this.quiescingExecutor = ForkJoinQuiescingExecutor.newBuilder()
         .withOwnershipOf(forkJoinPool)
         .setErrorClassifier(NODE_ENTRY_VISITOR_ERROR_CLASSIFIER)
         .build();
+    this.dirtyKeyTracker = dirtyKeyTracker;
     this.progressReceiver = progressReceiver;
     this.runnableMaker = runnableMaker;
   }
 
   NodeEntryVisitor(
       int threadCount,
-      DirtyTrackingProgressReceiver progressReceiver,
+      DirtyKeyTracker dirtyKeyTracker,
+      EvaluationProgressReceiver progressReceiver,
       Function<SkyKey, Runnable> runnableMaker) {
     quiescingExecutor =
         new AbstractQueueVisitor(
+            /*concurrent*/ true,
             threadCount,
             /*keepAliveTime=*/ 1,
             TimeUnit.SECONDS,
             /*failFastOnException*/ true,
             "skyframe-evaluator",
-            AbstractQueueVisitor.EXECUTOR_FACTORY,
             NODE_ENTRY_VISITOR_ERROR_CLASSIFIER);
+    this.dirtyKeyTracker = dirtyKeyTracker;
     this.progressReceiver = progressReceiver;
     this.runnableMaker = runnableMaker;
   }
@@ -94,22 +100,30 @@ class NodeEntryVisitor {
   }
 
   void enqueueEvaluation(SkyKey key) {
+    // We unconditionally add the key to the set of in-flight nodes because even if evaluation is
+    // never scheduled we still want to remove the previously created NodeEntry from the graph.
+    // Otherwise we would leave the graph in a weird state (wasteful garbage in the best case and
+    // inconsistent in the worst case).
+    boolean newlyEnqueued = inflightNodes.add(key);
+    // All nodes enqueued for evaluation will be either verified clean, re-evaluated, or cleaned
+    // up after being in-flight when an error happens in nokeep_going mode or in the event of an
+    // interrupt. In any of these cases, they won't be dirty anymore.
+    if (newlyEnqueued) {
+      dirtyKeyTracker.notDirty(key);
+    }
     if (preventNewEvaluations.get()) {
-      // If an error happens in nokeep_going mode, we still want to mark these nodes as inflight,
-      // otherwise cleanup will not happen properly.
-      progressReceiver.enqueueAfterError(key);
       return;
     }
-    progressReceiver.enqueueing(key);
+    if (newlyEnqueued && progressReceiver != null) {
+      progressReceiver.enqueueing(key);
+    }
     quiescingExecutor.execute(runnableMaker.apply(key));
   }
 
   /**
    * Stop any new evaluations from being enqueued. Returns whether this was the first thread to
-   * request a halt.
-   *
-   * <p>If called from within node evaluation, the caller may use the return value to determine
-   * whether it is responsible for throwing an exception to halt evaluation at the executor level.
+   * request a halt. If true, this thread should proceed to throw an exception. If false, another
+   * thread already requested a halt and will throw an exception, and so this thread can simply end.
    */
   boolean preventNewEvaluations() {
     return preventNewEvaluations.compareAndSet(false, true);
@@ -121,6 +135,18 @@ class NodeEntryVisitor {
 
   Collection<RuntimeException> getCrashes() {
     return crashes;
+  }
+
+  void notifyDone(SkyKey key) {
+    inflightNodes.remove(key);
+  }
+
+  boolean isInflight(SkyKey key) {
+    return inflightNodes.contains(key);
+  }
+
+  Set<SkyKey> getInflightNodes() {
+    return inflightNodes;
   }
 
   @VisibleForTesting
