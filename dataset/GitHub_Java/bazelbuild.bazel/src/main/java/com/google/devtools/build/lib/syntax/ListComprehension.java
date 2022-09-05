@@ -26,12 +26,12 @@ import javax.annotation.Nullable;
 /**
  * Syntax node for lists comprehension expressions.
  *
- * <p> A list comprehension contains one or more clauses, e.g.
+ * A list comprehension contains one or more clauses, e.g.
  *   [a+d for a in b if c for d in e]
  * contains three clauses: "for a in b", "if c", "for d in e".
  * For and If clauses can happen in any order, except that the first one has to be a For.
  *
- * <p> The code above can be expanded as:
+ * The code above can be expanded as:
  * <pre>
  *   for a in b:
  *     if c:
@@ -78,6 +78,8 @@ public final class ListComprehension extends Expression {
     public abstract Expression getExpression();
   }
 
+  // TODO(bazel-team): Support IfClause
+
   /**
    * A for clause in a list comprehension, e.g. "for a in b" in the example above.
    */
@@ -120,46 +122,7 @@ public final class ListComprehension extends Expression {
 
     @Override
     public String toString() {
-      return String.format("for %s in %s", variables.toString(), Printer.repr(list));
-    }
-  }
-
-  /**
-   * A if clause in a list comprehension, e.g. "if c" in the example above.
-   */
-  public final class IfClause implements Clause {
-    private final Expression condition;
-
-    public IfClause(Expression condition) {
-      this.condition = condition;
-    }
-
-    @Override
-    public void eval(Environment env, List<Object> result, int step)
-        throws EvalException, InterruptedException {
-      if (EvalUtils.toBoolean(condition.eval(env))) {
-        evalStep(env, result, step);
-      }
-    }
-
-    @Override
-    public void validate(ValidationEnvironment env) throws EvalException {
-      condition.validate(env);
-    }
-
-    @Override
-    public LValue getLValue() {
-      return null;
-    }
-
-    @Override
-    public Expression getExpression() {
-      return condition;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("if %s", condition);
+      return String.format("for %s in %s", variables.toString(), EvalUtils.prettyPrintValue(list));
     }
   }
 
@@ -193,17 +156,9 @@ public final class ListComprehension extends Expression {
    * TODO(bazel-team): Remove this side-effect. Clauses should be passed to the constructor
    * instead.
    */
-  void addFor(Expression loopVar, Expression listExpression) {
+  public void add(Expression loopVar, Expression listExpression) {
     Clause forClause = new ForClause(new LValue(loopVar), listExpression);
     clauses.add(forClause);
-  }
-
-  /**
-   * Add a new ForClause to the list comprehension.
-   * TODO(bazel-team): Remove this side-effect.
-   */
-  void addIf(Expression condition) {
-    clauses.add(new IfClause(condition));
   }
 
   public List<Clause> getClauses() {
@@ -236,7 +191,7 @@ public final class ListComprehension extends Expression {
    * recursively call evalStep any number of times. After the last clause,
    * elementExpression is evaluated and added to the results.
    *
-   * <p> In the expanded example above, you can consider that evalStep is equivalent to
+   * In the expanded example above, you can consider that evalStep is equivalent to
    * evaluating the line number step.
    */
   private void evalStep(Environment env, List<Object> result, int step)
