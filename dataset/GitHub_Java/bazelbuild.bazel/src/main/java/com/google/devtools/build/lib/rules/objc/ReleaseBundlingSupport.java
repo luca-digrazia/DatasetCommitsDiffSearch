@@ -313,9 +313,7 @@ public final class ReleaseBundlingSupport {
    */
   ReleaseBundlingSupport addXcodeSettings(XcodeProvider.Builder xcodeProviderBuilder) {
     bundleSupport.addXcodeSettings(xcodeProviderBuilder);
-    // Add application-related Xcode build settings to the main target only. The companion library
-    // target does not need them.
-    xcodeProviderBuilder.addMainTargetXcodeprojBuildSettings(buildSettings());
+    xcodeProviderBuilder.addXcodeprojBuildSettings(buildSettings());
 
     return this;
   }
