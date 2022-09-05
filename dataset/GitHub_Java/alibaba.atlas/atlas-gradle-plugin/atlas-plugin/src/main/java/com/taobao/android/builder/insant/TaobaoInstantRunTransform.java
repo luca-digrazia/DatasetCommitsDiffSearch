@@ -28,7 +28,6 @@ import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.extension.PatchConfig;
 import com.taobao.android.builder.insant.incremental.TBIncrementalVisitor;
-import com.taobao.android.builder.insant.matcher.MatcherCreator;
 import org.gradle.api.logging.Logging;
 import org.objectweb.asm.*;
 
@@ -58,7 +57,6 @@ public class TaobaoInstantRunTransform extends Transform {
     private File injectFailedFile;
     private List<String> errors = new ArrayList<>();
     private Map<String, String> modifyClasses = new HashMap<>();
-
 
     public TaobaoInstantRunTransform(AppVariantContext variantContext, AppVariantOutputContext variantOutputContext, WaitableExecutor executor, InstantRunVariantScope transformScope) {
         this.variantContext = variantContext;
@@ -118,7 +116,6 @@ public class TaobaoInstantRunTransform extends Transform {
 
         Preconditions.checkState(
                 jarInputs.isEmpty(), "Unexpected inputs: " + Joiner.on(", ").join(jarInputs));
-
         InstantRunBuildContext buildContext = transformScope.getInstantRunBuildContext();
 
         buildContext.startRecording(InstantRunBuildContext.TaskType.INSTANT_RUN_TRANSFORM);
@@ -180,7 +177,6 @@ public class TaobaoInstantRunTransform extends Transform {
                     }
                     String path = FileUtils.relativePath(file, inputDir);
                     String className = path.replace("/", ".").substring(0, path.length() - 6);
-
                     boolean isAdd = false;
                     switch (patchPolicy) {
                         case ADD:
@@ -217,7 +213,7 @@ public class TaobaoInstantRunTransform extends Transform {
         }
 
 
-        Map<AwbBundle, File> awbBundleFileMap = new HashMap<>();
+        Map<AwbBundle,File> awbBundleFileMap = new HashMap<>();
         variantOutputContext.getAwbTransformMap().values().forEach(awbTransform -> {
             File awbClassesTwoOutout = variantOutputContext.getAwbClassesInstantOut(awbTransform.getAwbBundle());
             LOGGER.warning("InstantAwbclassOut[" + awbTransform.getAwbBundle().getPackageName() + "]---------------------" + awbClassesTwoOutout.getAbsolutePath());
@@ -230,7 +226,7 @@ public class TaobaoInstantRunTransform extends Transform {
             awbTransform.getInputDirs().forEach(dir -> {
                 LOGGER.warning("InstantAwbclassDir[" + awbTransform.getAwbBundle().getPackageName() + "]---------------------" + dir.getAbsolutePath());
                 for (File file : Files.fileTreeTraverser().breadthFirstTraversal(dir)) {
-                    if (!file.exists() || file.isDirectory()) {
+                    if (!file.exists()||file.isDirectory()) {
                         continue;
                     }
                     PatchPolicy patchPolicy = PatchPolicy.NONE;
@@ -273,7 +269,7 @@ public class TaobaoInstantRunTransform extends Transform {
 
             });
 
-            awbBundleFileMap.put(awbTransform.getAwbBundle(), awbClassesTwoOutout);
+            awbBundleFileMap.put(awbTransform.getAwbBundle(),awbClassesTwoOutout);
         });
 
         // first get all referenced input to construct a class loader capable of loading those
@@ -332,7 +328,7 @@ public class TaobaoInstantRunTransform extends Transform {
     }
 
     private PatchPolicy parseClassPolicy(File file) {
-        if (!variantContext.getBuildType().getPatchConfig().isCreateTPatch()) {
+        if (!variantContext.getBuildType().getPatchConfig().isCreateTPatch()){
             return PatchPolicy.NONE;
         }
         final PatchPolicy[] patchPolicy = {PatchPolicy.NONE};
@@ -540,25 +536,9 @@ public class TaobaoInstantRunTransform extends Transform {
             @NonNull final File inputFile,
             @NonNull final File outputDir,
             @NonNull final Status change) {
-
         if (inputFile.getPath().endsWith(SdkConstants.DOT_CLASS)) {
             String path = FileUtils.relativePath(inputFile, inputDir);
             try {
-                Set<String> excludePkgs = variantContext.getAtlasExtension().getTBuildConfig().getInjectExcludePkgs();
-                for (String s : excludePkgs) {
-                    boolean matched = MatcherCreator.create(s).match(path);
-                    if (matched) {
-                        File outputFile = new File(outputDir, path);
-                        try {
-                            Files.createParentDirs(outputFile);
-                            Files.copy(inputFile, outputFile);
-                            return null;
-                        } catch (IOException e1) {
-                            e1.printStackTrace();
-                        }
-                    }
-
-                }
                 File file = TBIncrementalVisitor.instrumentClass(
                         targetPlatformApi.getFeatureLevel(),
                         inputDir,
@@ -590,7 +570,6 @@ public class TaobaoInstantRunTransform extends Transform {
     }
 
 
-
     protected void wrapUpOutputs(File classes2Folder, File classes3Folder)
             throws IOException {
 
@@ -603,8 +582,8 @@ public class TaobaoInstantRunTransform extends Transform {
         // otherwise, generate the patch file and add it to the list of files to process next.
         ImmutableList<String> generatedClassNames = generatedClasses3Names.build();
         if (!generatedClassNames.isEmpty()) {
-            File patchClassInfo = new File(variantContext.getProject().getBuildDir(), "outputs/patchClassInfo.json");
-            org.apache.commons.io.FileUtils.writeStringToFile(patchClassInfo, JSON.toJSONString(modifyClasses));
+            File patchClassInfo = new File(variantContext.getProject().getBuildDir(),"outputs/patchClassInfo.json");
+            org.apache.commons.io.FileUtils.writeStringToFile(patchClassInfo,JSON.toJSONString(modifyClasses));
             writePatchFileContents(
                     generatedClassNames,
                     classes3Folder,
@@ -668,8 +647,8 @@ public class TaobaoInstantRunTransform extends Transform {
 
 
     enum PatchPolicy {
-
         ADD, MODIFY, NONE
+
     }
 
 
