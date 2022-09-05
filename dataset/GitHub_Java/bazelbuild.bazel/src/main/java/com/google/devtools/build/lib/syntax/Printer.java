@@ -158,11 +158,26 @@ public final class Printer {
     } else if (o instanceof Label) {
       write(buffer, o.toString(), quotationMark);
 
+    } else if (o instanceof FilesetEntry) {
+           FilesetEntry entry = (FilesetEntry) o;
+      append(buffer, "FilesetEntry(srcdir = ");
+      write(buffer, entry.getSrcLabel().toString(), quotationMark);
+      append(buffer, ", files = ");
+      write(buffer, makeStringList(entry.getFiles()), quotationMark);
+      append(buffer, ", excludes = ");
+      write(buffer, makeList(entry.getExcludes()), quotationMark);
+      append(buffer, ", destdir = ");
+      write(buffer, entry.getDestDir().getPathString(), quotationMark);
+      append(buffer, ", strip_prefix = ");
+      write(buffer, entry.getStripPrefix(), quotationMark);
+      append(buffer, ", symlinks = ");
+      append(buffer, quotationMark);
+      append(buffer, entry.getSymlinkBehavior().toString());
+      append(buffer, quotationMark);
+      append(buffer, ")");
+
     } else if (o instanceof PathFragment) {
       append(buffer, ((PathFragment) o).getPathString());
-
-    } else if (o instanceof SkylarkValue) {
-      ((SkylarkValue) o).write(buffer, quotationMark);
 
     } else {
       append(buffer, o.toString());
@@ -191,7 +206,7 @@ public final class Printer {
   // Throughout this file, we transform IOException into AssertionError.
   // During normal operations, we only use in-memory Appendable-s that
   // cannot cause an IOException.
-  public static Appendable append(Appendable buffer, char c) {
+  private static Appendable append(Appendable buffer, char c) {
     try {
       return buffer.append(c);
     } catch (IOException e) {
@@ -199,7 +214,7 @@ public final class Printer {
     }
   }
 
-  public static Appendable append(Appendable buffer, CharSequence s) {
+  private static Appendable append(Appendable buffer, CharSequence s) {
     try {
       return buffer.append(s);
     } catch (IOException e) {
@@ -342,11 +357,11 @@ public final class Printer {
     return listString(list, before, separator, after, singletonTerminator, SKYLARK_QUOTATION_MARK);
   }
 
-  public static List<?> makeList(Collection<?> list) {
+  private static List<?> makeList(Collection<?> list) {
     return list == null ? Lists.newArrayList() : Lists.newArrayList(list);
   }
 
-  public static List<String> makeStringList(List<Label> labels) {
+  private static List<String> makeStringList(List<Label> labels) {
     if (labels == null) {
       return Collections.emptyList();
     }
