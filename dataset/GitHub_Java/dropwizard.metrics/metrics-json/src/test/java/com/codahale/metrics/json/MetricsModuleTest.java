@@ -6,13 +6,13 @@ import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class MetricsModuleTest {
     private final ObjectMapper mapper = new ObjectMapper().registerModule(
-            new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false, MetricFilter.ALL));
+            new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, false));
 
     @Test
     public void serializesGauges() throws Exception {
@@ -84,7 +84,7 @@ public class MetricsModuleTest {
                                    "\"stddev\":5.0}");
 
         final ObjectMapper fullMapper = new ObjectMapper().registerModule(
-                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true, MetricFilter.ALL));
+                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true));
 
         assertThat(fullMapper.writeValueAsString(histogram))
                 .isEqualTo("{" +
@@ -171,7 +171,7 @@ public class MetricsModuleTest {
                                    "\"rate_units\":\"calls/second\"}");
 
         final ObjectMapper fullMapper = new ObjectMapper().registerModule(
-                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true, MetricFilter.ALL));
+                new MetricsModule(TimeUnit.SECONDS, TimeUnit.MILLISECONDS, true));
 
         assertThat(fullMapper.writeValueAsString(timer))
                 .isEqualTo("{" +
@@ -201,7 +201,7 @@ public class MetricsModuleTest {
 
         assertThat(mapper.writeValueAsString(registry))
                 .isEqualTo("{" +
-                                   "\"version\":\"3.1.3\"," +
+                                   "\"version\":\"3.0.0\"," +
                                    "\"gauges\":{}," +
                                    "\"counters\":{}," +
                                    "\"histograms\":{}," +
