@@ -274,12 +274,10 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         .addProviders(info.getProviders())
         .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(info.getOutputGroups())
-        .addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
-        .addProvider(
-            RunfilesProvider.class, RunfilesProvider.withData(staticRunfiles, sharedRunfiles))
+        .add(InstrumentedFilesProvider.class, instrumentedFilesProvider)
+        .add(RunfilesProvider.class, RunfilesProvider.withData(staticRunfiles, sharedRunfiles))
         // Remove this?
-        .addProvider(
-            CppRunfilesProvider.class, new CppRunfilesProvider(staticRunfiles, sharedRunfiles))
+        .add(CppRunfilesProvider.class, new CppRunfilesProvider(staticRunfiles, sharedRunfiles))
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL,
             collectHiddenTopLevelArtifacts(ruleContext, info.getCcCompilationOutputs()))
