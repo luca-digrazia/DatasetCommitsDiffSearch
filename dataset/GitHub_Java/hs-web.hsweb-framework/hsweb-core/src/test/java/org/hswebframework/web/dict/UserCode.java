@@ -83,7 +83,7 @@ public enum UserCode implements EnumDict {
     private String comments;
 
     @Override
-    public boolean isWriteJSONObjectEnabled() {
+    public boolean writeJSONObject() {
         return true;
     }
 }
