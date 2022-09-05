@@ -5,7 +5,10 @@ import com.yammer.metrics.util.ThreadPools;
 
 import javax.management.MalformedObjectNameException;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A registry of metric instances.
@@ -14,8 +17,7 @@ public class MetricsRegistry {
 
     private final ConcurrentMap<MetricName, Metric> metrics = newMetricsMap();
     private final ThreadPools threadPools = new ThreadPools();
-    private final List<MetricsRegistryListener> listeners = Collections.synchronizedList(new ArrayList<MetricsRegistryListener>());
-    private final ConcurrentMap<MetricsRegistryListener, ConcurrentMap<Metric, Boolean>> registeredMetrics = new ConcurrentHashMap<MetricsRegistryListener, ConcurrentMap<Metric, Boolean>>();
+    private final List<MetricsRegistryListener> listeners = new ArrayList<MetricsRegistryListener>();
 
 
    /**
@@ -25,9 +27,16 @@ public class MetricsRegistry {
     * @param listener the listener that will be notified
     */
     public void addListener(MetricsRegistryListener listener) {
-      listeners.add(listener);
-      for (Map.Entry<MetricName, Metric> entry : metrics.entrySet()) {
-        notify(entry.getKey(), entry.getValue());
+      /*
+       * If a listener is notified of an event immediately after it has been added to the list of listeners,
+       * there is the possibility it will be notified twice.  Synchronizing here prevents that, along with
+       * synchronization during listener notification.  This lock should be mostly uncontended.
+       */
+      synchronized(listeners) {
+        listeners.add(listener);
+        for (Map.Entry<MetricName, Metric> entry : metrics.entrySet()) {
+          listener.newMetric(entry.getKey(), entry.getValue());
+        }
       }
     }
 
@@ -479,26 +488,11 @@ public class MetricsRegistry {
     }
 
     private void notify(MetricName name, Metric metric) {
-      boolean dummyValue = true;
-      for (MetricsRegistryListener listener : listeners.toArray(new MetricsRegistryListener[]{})) {
-        ConcurrentMap<Metric, Boolean> listenerMetrics = getRegisteredMetricsForListener(listener);
-        if (listenerMetrics.putIfAbsent(metric, dummyValue) == null) {
-          // it did not exist before
+      synchronized(listeners) {
+        for (MetricsRegistryListener listener : listeners) {
           listener.newMetric(name, metric);
         }
       }
-    }
-
-    private ConcurrentMap<Metric, Boolean> getRegisteredMetricsForListener(MetricsRegistryListener listener) {
-      ConcurrentMap<Metric, Boolean> listenerMetrics = registeredMetrics.get(listener);
-      if (listenerMetrics == null) {
-        listenerMetrics = new ConcurrentHashMap<Metric, Boolean>();
-        ConcurrentMap<Metric, Boolean> previousMetrics = registeredMetrics.putIfAbsent(listener, listenerMetrics);
-        if (previousMetrics != null) {
-          listenerMetrics = previousMetrics;
-        }
-      }
-      return listenerMetrics;
     }
 
 }
