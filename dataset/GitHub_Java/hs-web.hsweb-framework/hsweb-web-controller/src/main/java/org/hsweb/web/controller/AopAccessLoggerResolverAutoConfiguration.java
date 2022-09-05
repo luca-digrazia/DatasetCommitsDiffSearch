@@ -8,7 +8,6 @@ import org.hsweb.web.bean.po.logger.LoggerInfo;
 import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.core.exception.BusinessException;
 import org.hsweb.web.core.logger.AccessLoggerPersisting;
-import org.hsweb.web.core.logger.Slf4jAccessLoggerPersisting;
 import org.hsweb.web.core.message.FastJsonHttpMessageConverter;
 import org.hsweb.web.core.message.ResponseMessage;
 import org.hsweb.web.core.utils.WebUtil;
@@ -28,11 +27,6 @@ public class AopAccessLoggerResolverAutoConfiguration {
     @Bean
     public AopAccessLoggerResolverConfiguration aopAccessLoggerResolverConfiguration() {
         return new AopAccessLoggerResolverConfiguration();
-    }
-
-    @Bean
-    public Slf4jAccessLoggerPersisting slf4jAccessLoggerPersisting() {
-        return new Slf4jAccessLoggerPersisting();
     }
 
     @Aspect
