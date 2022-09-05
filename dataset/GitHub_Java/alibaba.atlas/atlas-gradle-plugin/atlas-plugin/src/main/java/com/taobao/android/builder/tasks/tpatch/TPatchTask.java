@@ -209,38 +209,39 @@
 
 package com.taobao.android.builder.tasks.tpatch;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Callable;
-
 import com.alibaba.fastjson.JSON;
-
+import com.android.build.gradle.api.BaseVariantOutput;
+import com.android.build.gradle.internal.ApkDataUtils;
+import com.android.build.gradle.internal.TaskContainerAdaptor;
 import com.android.build.gradle.internal.api.ApContext;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
+import com.android.build.gradle.internal.incremental.FileType;
+import com.android.build.gradle.internal.incremental.InstantRunBuildContext;
 import com.android.build.gradle.internal.scope.ConventionMappingHelper;
 import com.android.build.gradle.internal.tasks.BaseTask;
-import com.android.build.gradle.internal.variant.ApkVariantOutputData;
-import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.builder.signing.DefaultSigningConfig;
+import com.android.builder.signing.SigningException;
 import com.android.utils.Pair;
-import com.taobao.android.TPatchTool;
+import com.intellij.util.io.ZipUtil;
+import com.taobao.android.PatchManager;
+import com.taobao.android.PatchType;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.extension.TBuildType;
+import com.taobao.android.builder.insant.InstantInfo;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.BuildHelper;
-import com.taobao.android.builder.tools.VersionUtils;
+import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.manifest.ManifestFileUtils;
-import com.taobao.android.builder.tools.update.UpdateInfo;
-import com.taobao.android.object.PatchInfo;
+import com.taobao.android.builder.tools.zip.ZipUtils;
+import com.taobao.android.inputs.BaseInput;
+import com.taobao.android.inputs.DexPatchInput;
+import com.taobao.android.inputs.HotPatchInput;
+import com.taobao.android.inputs.TpatchInput;
 import com.taobao.android.object.ApkFileList;
 import com.taobao.android.object.ArtifactBundleInfo;
-import com.taobao.android.object.BuildPatchInfos;
+import com.taobao.android.object.DiffType;
 import com.taobao.android.tpatch.model.ApkBO;
 import com.taobao.android.tpatch.model.BundleBO;
 import org.apache.commons.io.FileUtils;
@@ -251,10 +252,21 @@ import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
+import java.io.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.function.Consumer;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
+
 import static com.android.build.gradle.internal.api.ApContext.APK_FILE_MD5;
 
 /**
- * 动态部署tpatch构建任务
+ * Dynamic deployment of the tpatch build task
  * Created by wuzhong
  */
 public class TPatchTask extends BaseTask {
@@ -265,6 +277,10 @@ public class TPatchTask extends BaseTask {
 
     private File outPatchFolder;
 
+    private File instantInfoFile;
+
+    private AppVariantContext appVariantContext;
+
     @TaskAction
     public void doTPatch() throws Exception {
 
@@ -272,7 +288,27 @@ public class TPatchTask extends BaseTask {
         signingConfig = getSigningConfig();
         outPatchFolder = getOutPatchFolder();
 
-        // 获取容器版本
+
+        //the bundle List Copied to the outpatchFoulder
+        new File(outPatchFolder, appVariantContext.bundleListCfg.getName()).delete();
+        outPatchFolder.mkdirs();
+        FileUtils.copyFileToDirectory(appVariantContext.bundleListCfg, outPatchFolder);
+
+        if (appVariantContext.getScope().getInstantRunBuildContext().isInInstantRunMode()) {
+            InstantRunBuildContext instantRunBuildContext = appVariantContext.getScope().getInstantRunBuildContext();
+            InstantRunBuildContext.Artifact artifact = instantRunBuildContext.getLastBuild().getArtifactForType(FileType.RELOAD_DEX);
+            File patchFile = artifact.getLocation();
+            if (patchFile.exists()) {
+                File finalFile = new File(outPatchFolder, patchContext.getBaseVersionName() + "@" + patchContext.getBaseVersionName() + ".tpatch");
+                zipPatch(finalFile, patchFile);
+                generatePatchInfo(finalFile);
+                return;
+            }else {
+               getLogger().warn("patchFile is not exist!");
+            }
+        }
+
+        // Get the container version
         String baseApkVersion = patchContext.getBaseVersionName();
         String newApkVersion = patchContext.versionName;
 
@@ -287,114 +323,42 @@ public class TPatchTask extends BaseTask {
         }
 
         getLogger().info("BaseApk:" +
-                             baseApk +
-                             ",baseVersion:" +
-                             baseApkVersion +
-                             ",newApk:" +
-                             newApk +
-                             ",newApkVersion:" +
-                             newApkVersion);
+                baseApk +
+                ",baseVersion:" +
+                baseApkVersion +
+                ",newApk:" +
+                newApk +
+                ",newApkVersion:" +
+                newApkVersion);
 
         ApkBO apkBO = new ApkBO(baseApk, baseApkVersion, baseApk.getName());
         ApkBO newApkBO = new ApkBO(newApk, newApkVersion, newApk.getName());
-
-        TPatchTool tPatchTool = new TPatchTool(apkBO,
-                                               newApkBO,
-                                               patchContext.diffBundleDex);
-
-        List<Pair<BundleBO, BundleBO>> remoteBundles = new ArrayList<>();
-
-        //获取远程的bundle
-        for (AwbBundle awbBundle : AtlasBuildContext.awbBundleMap.values()) {
-            if (awbBundle.isRemote) {
-
-                File bundleFile = awbBundle.outputBundleFile;
-
-                getProject().getLogger().error("add bundle compare " + bundleFile.getAbsolutePath());
-
-                BundleBO newBundleBO = new BundleBO(bundleFile.getName(), bundleFile, "");
-
-                File baseBundleFile = new File(patchContext.apExplodeFolder, "remotebundles/" + bundleFile.getName());
-
-                getProject().getLogger().error("add bundle compare base : " + baseBundleFile.getAbsolutePath());
-
-                BundleBO baseBundleBO = null;
-                if (baseBundleFile.exists()) {
-
-                    getProject().getLogger().error(
-                        "add bundle compare " + baseBundleFile.getAbsolutePath() + "->" + bundleFile.getAbsolutePath());
-
-                    baseBundleBO = new BundleBO(baseBundleFile.getName(), baseBundleFile, "");
+        BaseInput baseInput = createInput(apkBO, newApkBO, retainMainBundleRes);
+        if (baseInput.patchType.equals(PatchType.DEXPATCH)) {
+            List<ArtifactBundleInfo> modifyBundles = new ArrayList<ArtifactBundleInfo>();
+            baseInput.artifactBundleInfos.forEach(artifactBundleInfo -> {
+                if (artifactBundleInfo.getDiffType().equals(DiffType.MODIFY)) {
+                    modifyBundles.add(artifactBundleInfo);
                 }
-                remoteBundles.add(Pair.of(baseBundleBO, newBundleBO));
+            });
+            if (modifyBundles.size() > 1) {
+                throw new Exception("more than 1 bundle has changed:" + JSON.toJSONString(modifyBundles));
             }
         }
+        PatchManager patchManager = new PatchManager(baseInput);
+        patchManager.setLogger(getILogger());
+        getLogger().info("start to do patch");
 
-        if (remoteBundles.size() > 0) {
-            tPatchTool.setSplitDiffBundle(remoteBundles);
-        }
+        patchManager.doPatch();
 
-        tPatchTool.setMainBundleName(patchContext.mainBundleName);
-        if (StringUtils.isNotBlank(patchContext.excludeFiles)) {
-            tPatchTool.setNotIncludeFiles(patchContext.excludeFiles.split(","));
-        }
-        tPatchTool.setRetainMainBundleRes(retainMainBundleRes);
-        if (null != patchContext.artifactBundleInfos) {
-            tPatchTool.setArtifactBundleInfos(patchContext.artifactBundleInfos);
-        }
+        getLogger().info("finish  do patch");
 
-        tPatchTool.setBaseApkFileList(patchContext.getBaseApkFiles());
-        tPatchTool.setNewApkFileList(patchContext.getNewApkFiles());
-        tPatchTool.setLogger(getILogger());
-        tPatchTool.setOnlyIncludeModifyBundle(patchContext.onlyBuildModifyAwb);
 
-        if (StringUtils.isNotBlank(patchContext.excludeFiles)) {
-            tPatchTool.setNotIncludeFiles(patchContext.excludeFiles.split(","));
-        }
-
-        ApkFileList apkFileList = AtlasBuildContext.finalApkFileList;
         try {
 
-            tPatchTool.setCreateAll(StringUtils.isEmpty(patchContext.tpatchHistoryUrl));
             FileUtils.writeStringToFile(new File(getOutPatchFolder(), "tpatch-bundles.json"),
-                                        JSON.toJSONString(patchContext.artifactBundleInfos));
+                    JSON.toJSONString(patchContext.artifactBundleInfos));
 
-            getLogger().info("start to do patch");
-            tPatchTool.doPatch(outPatchFolder,
-                               true,
-                               new File(getOutPatchFolder(), "patchs.json"),
-                               StringUtils.isNotEmpty(patchContext.tpatchHistoryUrl),
-                               patchContext.tpatchHistoryUrl,
-                               patchContext.appSignName);
-            getLogger().info("finish  do patch");
-
-            File patchJson = new File(getOutPatchFolder(), "patchs.json");
-            String json = FileUtils.readFileToString(patchJson);
-            BuildPatchInfos patchInfos = JSON.parseObject(json, BuildPatchInfos.class);
-            for (PatchInfo patchInfo:patchInfos.getPatches()) {
-                UpdateInfo updateInfo = new UpdateInfo(patchInfo,patchInfos.getBaseVersion());
-                File updateJson = new File(getOutPatchFolder(), "update-"+patchInfo.getTargetVersion()+".json");
-                FileUtils.writeStringToFile(updateJson, JSON.toJSONString(updateInfo, true));
-            }
-
-            File baseVesrionApk = new File(patchContext.newApk.getParentFile(),
-                                           patchContext.newApk.getName()
-                                               .replace(".apk", "-" + baseApkVersion + ".apk"));
-            FileUtils.copyFile(patchContext.getBaseApk(), baseVesrionApk);
-            if (patchContext.writeBuildInfo && StringUtils.isNotEmpty(patchContext.buildId)) {
-                File buildFile = new File(getOutPatchFolder(), "build.txt");
-                FileUtils.writeStringToFile(buildFile,
-                                            patchContext.buildId +
-                                                "," +
-                                                patchContext.versionName +
-                                                "," +
-                                                apkFileList.getMainBundle().get("classes.dex"));
-                if (buildFile != null && buildFile.exists()) {
-                    getLogger().debug("write build to apk!");
-                    BuildHelper.writeFileToApk(buildFile, baseVesrionApk, "assets/build.txt");
-                }
-                BuildHelper.reSign(baseVesrionApk, signingConfig);
-            }
 
             FileUtils.forceDelete(patchContext.newApk);
 
@@ -404,7 +368,134 @@ public class TPatchTask extends BaseTask {
 
     }
 
-    @OutputDirectory
+    private void generatePatchInfo(File finalFile) throws IOException, DocumentException {
+        InstantInfo instantInfo = new InstantInfo();
+        instantInfo.baseVersion = patchContext.getBaseVersionName();
+        instantInfo.patchSize = finalFile.length();
+        instantInfo.fileName = finalFile.getName();
+        instantInfo.md5 = MD5Util.getFileMD5(finalFile);
+        instantInfoFile = new File(appVariantContext.getProject().getBuildDir(),"outputs/instantInfo.json");
+        File patchClassInfo = new File(appVariantContext.getProject().getBuildDir(),"outputs/patchClassInfo.json");
+        FileUtils.copyFile(patchContext.hotClassListFile,patchClassInfo);
+        FileUtils.writeStringToFile(instantInfoFile,JSON.toJSONString(instantInfo));
+
+
+
+    }
+
+    private BaseInput createInput(ApkBO apkBO, ApkBO newApkBO, boolean retainMainBundleRes) throws IOException {
+        TpatchInput tpatchInput = null;
+        if (getProject().hasProperty("hotfix")) {
+            tpatchInput = new HotPatchInput();
+        } else {
+            tpatchInput = new DexPatchInput();
+        }
+        tpatchInput.baseApkBo = apkBO;
+        tpatchInput.newApkBo = newApkBO;
+        tpatchInput.baseApkFileList = patchContext.getBaseApkFiles();
+        tpatchInput.newApkFileList = patchContext.getNewApkFiles(appVariantContext);
+        tpatchInput.outPatchDir = outPatchFolder;
+        tpatchInput.productName = patchContext.appSignName;
+        tpatchInput.outPutJson = new File(getOutPatchFolder(), "patchs.json");
+        tpatchInput.artifactBundleInfos = patchContext.artifactBundleInfos;
+        tpatchInput.diffBundleDex = true;
+        tpatchInput.newPatch = patchContext.newPatch;
+        tpatchInput.mainBundleName = patchContext.mainBundleName;
+        tpatchInput.retainMainBundleRes = retainMainBundleRes;
+        if (StringUtils.isNotBlank(patchContext.excludeFiles)) {
+            tpatchInput.notIncludeFiles = (patchContext.excludeFiles.split(","));
+        }
+        if (apkBO.getVersionName().equals(newApkBO.getVersionName())) {
+            if (tpatchInput instanceof HotPatchInput) {
+                ((HotPatchInput) tpatchInput).hotClassListFile = patchContext.hotClassListFile;
+                ((HotPatchInput) tpatchInput).patchType = PatchType.HOTFIX;
+                ((HotPatchInput) tpatchInput).excludeClasses = patchContext.excludeClasses;
+
+            } else {
+                tpatchInput.patchType = PatchType.DEXPATCH;
+                ((DexPatchInput) tpatchInput).patchClasses = patchContext.patchClasses;
+                ((DexPatchInput) tpatchInput).excludeClasses = patchContext.excludeClasses;
+            }
+            tpatchInput.mainBundleName = "com.taobao.maindex";
+        } else {
+            tpatchInput.patchType = PatchType.TPATCH;
+            tpatchInput.createHisPatch = true;
+            tpatchInput.diffNativeSo = patchContext.diffNativeSo;
+            tpatchInput.diffBundleSo = patchContext.diffBundleSo;
+            tpatchInput.bundleWhiteList = appVariantContext.bundleListCfg;
+            tpatchInput.createAll = StringUtils.isEmpty(patchContext.tpatchHistoryUrl);
+            tpatchInput.LAST_PATCH_URL = patchContext.LAST_PATCH_URL;
+            tpatchInput.hisPatchUrl = patchContext.tpatchHistoryUrl;
+            if (null != patchContext.patchVersions) {
+                tpatchInput.versionList = patchContext.patchVersions;
+            }
+        }
+        List<Pair<BundleBO, BundleBO>> remoteBundles = new ArrayList<>();
+
+        //Get the remote bundle
+        for (AwbBundle awbBundle : AtlasBuildContext.awbBundleMap.values()) {
+            if (awbBundle.isRemote) {
+
+                File bundleFile = awbBundle.outputBundleFile;
+
+                getProject().getLogger().error("add bundle compare " + bundleFile.getAbsolutePath());
+
+                BundleBO newBundleBO = new BundleBO(awbBundle.getResolvedCoordinates().getArtifactId(), bundleFile, "");
+
+                File baseBundleFile = new File(patchContext.apExplodeFolder, "remotebundles/" + bundleFile.getName());
+
+                getProject().getLogger().error("add bundle compare base : " + baseBundleFile.getAbsolutePath());
+
+                BundleBO baseBundleBO = null;
+                if (baseBundleFile.exists()) {
+
+                    getProject().getLogger().error(
+                            "add bundle compare " + baseBundleFile.getAbsolutePath() + "->" + bundleFile.getAbsolutePath());
+
+                    baseBundleBO = new BundleBO(awbBundle.getResolvedCoordinates().getArtifactId(), baseBundleFile, "");
+                }
+                remoteBundles.add(Pair.of(baseBundleBO, newBundleBO));
+            }
+        }
+
+        if (remoteBundles.size() > 0) {
+            tpatchInput.splitDiffBundle = remoteBundles;
+        }
+        return tpatchInput;
+
+    }
+
+    private void resignBaseApk(String baseApkVersion, ApkFileList apkFileList) throws IOException, SigningException {
+        File baseVesrionApk = new File(patchContext.newApk.getParentFile(),
+                patchContext.newApk.getName()
+                        .replace(".apk", "-" + baseApkVersion + ".apk"));
+        FileUtils.copyFile(patchContext.getBaseApk(), baseVesrionApk);
+        if (patchContext.writeBuildInfo && StringUtils.isNotEmpty(patchContext.buildId)) {
+            File buildFile = new File(getOutPatchFolder(), "build.txt");
+            FileUtils.writeStringToFile(buildFile,
+                    patchContext.buildId +
+                            "," +
+                            patchContext.versionName +
+                            "," +
+                            apkFileList.getMainBundle().get("classes.dex"));
+            if (buildFile != null && buildFile.exists()) {
+                getLogger().info("add build file to apk!");
+                BuildHelper.writeFileToApk(buildFile, baseVesrionApk, "assets/build.txt");
+            }
+
+            String bundleInfoFileName = "bundleInfo-" +
+                    appVariantContext.getVariantConfiguration().getVersionName() + ".json";
+            File bundleInfoFile = new File(appVariantContext.getScope().getGlobalScope().getOutputsDir(),
+                    bundleInfoFileName);
+            if (bundleInfoFile.exists()) {
+                getLogger().info("add " + bundleInfoFileName + " to apk!");
+                BuildHelper.writeFileToApk(bundleInfoFile, baseVesrionApk, "assets/" + bundleInfoFileName);
+            }
+
+            BuildHelper.reSign(baseVesrionApk, signingConfig);
+        }
+    }
+
     public File getOutPatchFolder() {
         return outPatchFolder;
     }
@@ -423,14 +514,14 @@ public class TPatchTask extends BaseTask {
         private AppVariantContext appVariantContext;
 
         public ConfigAction(AppVariantContext appVariantContext,
-                            BaseVariantOutputData baseVariantOutputData) {
+                            BaseVariantOutput baseVariantOutputData) {
             super(appVariantContext, baseVariantOutputData);
             this.appVariantContext = appVariantContext;
         }
 
         @Override
         public String getName() {
-            return scope.getTaskName("Create", "TPatch");
+            return scope.getTaskName("createTPatch");
         }
 
         @Override
@@ -446,13 +537,15 @@ public class TPatchTask extends BaseTask {
             final TBuildType tBuildType = appVariantContext.getBuildType();
 
             if (null == tBuildType ||
-                null == tBuildType.getPatchConfig() ||
-                !tBuildType.getPatchConfig().isCreateTPatch()) {
+                    null == tBuildType.getPatchConfig() ||
+                    !tBuildType.getPatchConfig().isCreateTPatch()) {
                 tPatchTask.setEnabled(false);
                 return;
             }
 
-            final ApkVariantOutputData variantOutputData = (ApkVariantOutputData)scope.getVariantOutputData();
+
+            tPatchTask.appVariantContext = appVariantContext;
+
 
             ConventionMappingHelper.map(tPatchTask, "outPatchFolder", new Callable<File>() {
 
@@ -463,14 +556,14 @@ public class TPatchTask extends BaseTask {
             });
 
             ConventionMappingHelper.map(tPatchTask,
-                                        "signingConfig",
-                                        new Callable<DefaultSigningConfig>() {
+                    "signingConfig",
+                    new Callable<DefaultSigningConfig>() {
 
-                                            @Override
-                                            public DefaultSigningConfig call() throws Exception {
-                                                return appVariantContext.getSigningConfig();
-                                            }
-                                        });
+                        @Override
+                        public DefaultSigningConfig call() throws Exception {
+                            return appVariantContext.getSigningConfig();
+                        }
+                    });
 
             ConventionMappingHelper.map(tPatchTask, "patchContext", new Callable<TPatchContext>() {
 
@@ -484,31 +577,45 @@ public class TPatchTask extends BaseTask {
                     tPatchContext.diffApkFile = appVariantOutputContext.getDiffApk();
                     tPatchContext.newApk = appVariantOutputContext.getApkOutputFile(true);
                     tPatchContext.outPatchFolder = appVariantOutputContext.getTPatchFolder();
-                    tPatchContext.manifestFile = variantOutputData.manifestProcessorTask.getManifestOutputFile();
+                    tPatchContext.manifestFile = new File(scope.getManifestProcessorTask().get(new TaskContainerAdaptor(scope.getGlobalScope().getProject().getTasks())).getManifestOutputDirectory(), "AndroidManifest.xml");
                     tPatchContext.apExplodeFolder = appVariantContext.apContext.getApExploredFolder();
-                    tPatchContext.versionName = VersionUtils.getVersionName((ApkVariantOutputData)baseVariantOutputData,
-                                                                            variantOutputData.manifestProcessorTask
-                                                                                .getManifestOutputFile());
+                    tPatchContext.versionName = ApkDataUtils.get(baseVariantOutput).getVersionName();
                     tPatchContext.tpatchHistoryUrl = tBuildType.getPatchConfig()
-                        .getTpatchHistoryUrl();
+                            .getTpatchHistoryUrl();
+                    tPatchContext.hotClassListFile = tBuildType.getPatchConfig().getHotClassListFile();
+                    tPatchContext.LAST_PATCH_URL = tBuildType.getPatchConfig().getLastPatchUrl();
                     tPatchContext.onlyBuildModifyAwb = tBuildType.getPatchConfig()
-                        .getOnlyBuildModifyAwb();
+                            .getOnlyBuildModifyAwb();
                     tPatchContext.artifactBundleInfos = appVariantOutputContext.artifactBundleInfos;
                     tPatchContext.notPatchBundles = tBuildType.getPatchConfig().getNoPatchBundles();
+                    tPatchContext.diffNativeSo = tBuildType.getPatchConfig().isDiffNativeSo();
+                    tPatchContext.diffBundleSo = tBuildType.getPatchConfig().isDiffBundleSo();
                     tPatchContext.mainBundleName = tBuildType.getPatchConfig()
-                        .getTpatchMainBundleName();
+                            .getTpatchMainBundleName();
                     tPatchContext.excludeFiles = tBuildType.getPatchConfig()
-                        .gettPatchNotIncludeFiles()
-                        .isEmpty() ? "" : StringUtils.join(tBuildType.getPatchConfig()
-                                                               .gettPatchNotIncludeFiles(),
-                                                           ",");
+                            .gettPatchNotIncludeFiles()
+                            .isEmpty() ? "" : StringUtils.join(tBuildType.getPatchConfig()
+                                    .gettPatchNotIncludeFiles(),
+                            ",");
 
                     tPatchContext.buildId = tBuildType.getPatchConfig().getBuildId();
+
+                    tPatchContext.newPatch = tBuildType.getPatchConfig().isNewPatch();
                     tPatchContext.writeBuildInfo = tBuildType.getPatchConfig()
-                        .isTpatchWriteBuildInfo();
+                            .isTpatchWriteBuildInfo();
                     tPatchContext.diffBundleDex = tBuildType.getPatchConfig()
-                        .isOnlyIncrementInAwb();
+                            .isOnlyIncrementInAwb();
+                    tPatchContext.diffMainDex = tBuildType.getPatchConfig()
+                            .isOnlyIncrementInMain();
+                    tPatchContext.excludeClasses = tBuildType.getPatchConfig()
+                            .getExcludeClasses();
+
+                    tPatchContext.patchClasses = tBuildType.getPatchConfig()
+                            .getPatchClasses();
+
                     tPatchContext.appSignName = tBuildType.getPatchConfig().getAppSignName();
+
+                    tPatchContext.patchVersions = tBuildType.getPatchConfig().getPatchVersions();
 
                     return tPatchContext;
                 }
@@ -532,33 +639,52 @@ public class TPatchTask extends BaseTask {
 
         public String tpatchHistoryUrl;
 
+        public String LAST_PATCH_URL;
+
         public Boolean onlyBuildModifyAwb;
 
         public String notPatchBundles;
 
         public String buildId;
 
+        public boolean newPatch = true;
+
+        public boolean diffNativeSo;
+
         public boolean writeBuildInfo;
 
         /**
-         * 判断是否对bundle的dex文件进行diff操作
+         * Decide whether to diff the bundle's dex file
          */
         public boolean diffBundleDex;
+
+
+        public Set<String> excludeClasses;
+
+        public boolean diffMainDex;
 
         //    @Parameter(property = "android.patch.mainBundleName", defaultValue = "libcom_taobao_maindex")
         public String mainBundleName;
 
+        public List<String> patchVersions;
+
         public Set<ArtifactBundleInfo> artifactBundleInfos;
 
+        public Set<String> patchClasses = new HashSet<>();
+
         /**
-         * patch需要排除的目录
+         * patchDirectories that need to be excluded
          */
         public String excludeFiles;
 
         public String appSignName;
 
-        public File getNewApkFiles() throws IOException {
-            ApkFileList apkFileList = AtlasBuildContext.finalApkFileList;
+        public File hotClassListFile;
+
+        public boolean diffBundleSo;
+
+        public File getNewApkFiles(AppVariantContext appVariantContext) throws IOException {
+            ApkFileList apkFileList = appVariantContext.getApkFiles().finalApkFileList;
             File apkFiles = new File(outPatchFolder.getParentFile(), APK_FILE_MD5);
             FileUtils.writeStringToFile(apkFiles, JSON.toJSONString(apkFileList));
             return apkFiles;
@@ -580,4 +706,23 @@ public class TPatchTask extends BaseTask {
             return baseVersionName;
         }
     }
+
+    public static void zipPatch(File file, File dexFile) throws IOException {
+        if (!file.exists())
+            file.createNewFile();
+        BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(dexFile));
+        byte[] BUFFER = new byte[4096];
+        FileOutputStream fOutputStream = new FileOutputStream(file);
+        ZipOutputStream zoutput = new ZipOutputStream(fOutputStream);
+        ZipEntry zEntry = new ZipEntry(dexFile.getName());
+        zoutput.putNextEntry(zEntry);
+        int len;
+        while ((len = inputStream.read(BUFFER)) > 0) {
+            zoutput.write(BUFFER, 0, len);
+        }
+        zoutput.closeEntry();
+        zoutput.close();
+        inputStream.close();
+    }
+
 }
