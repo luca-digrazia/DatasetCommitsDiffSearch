@@ -217,7 +217,6 @@ import android.app.Dialog;
 import android.app.Fragment;
 import android.app.Instrumentation;
 import android.app.UiAutomation;
-import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -234,6 +233,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
+import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleClassLoader;
 import android.taobao.atlas.framework.BundleImpl;
@@ -248,8 +248,9 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
-
+import android.content.BroadcastReceiver;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -408,25 +409,15 @@ public class InstrumentationHook extends Instrumentation {
 		if(!TextUtils.isEmpty(bundleName) && !Atlas.isDisableBundle(bundleName)){
 			BundleImpl impl = (BundleImpl)Atlas.getInstance().getBundle(bundleName);
 			if(impl!=null&&impl.checkValidate()) {
-
 				return callback.execStartActivity();
-
-
 			}else if (Atlas.getInstance().getBundle(bundleName) == null && !AtlasBundleInfoManager.instance().getBundleInfo(bundleName).isInternal() && Framework.getInstalledBundle(bundleName,AtlasBundleInfoManager.instance().getBundleInfo(bundleName).unique_tag) == null) {
-
 				fallBackToClassNotFoundCallback(context,intent,bundleName);
 				return null;
-
-
 			} else {
-
-				if(ActivityTaskMgr.getInstance().peekTopActivity()!=null && Looper.getMainLooper().getThread().getId()==Thread.currentThread().getId() && !AtlasBundleInfoManager.instance().getBundleInfo(bundleName).isMBundle) {
+				if(ActivityTaskMgr.getInstance().peekTopActivity()!=null && Looper.getMainLooper().getThread().getId()==Thread.currentThread().getId()) {
 					final String component = componentName;
 					asyncStartActivity(context, bundleName, intent, requestCode, component,callback);
-
 				}else{
-
-					RuntimeVariables.delegateClassLoader.installMbundleWithDependency(bundleName);
 					callback.execStartActivity();
 					Log.e("InsturmentationHook","patch execStartActivity finish");
 				}
