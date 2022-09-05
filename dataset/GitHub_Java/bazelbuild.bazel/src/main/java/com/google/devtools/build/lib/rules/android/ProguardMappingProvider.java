@@ -13,44 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuiltinProvider;
-import com.google.devtools.build.lib.packages.NativeInfo;
-import com.google.devtools.build.lib.skylarkbuildapi.android.ProguardMappingProviderApi;
-import com.google.devtools.build.lib.syntax.EvalException;
 
 /** A target that can provide a proguard obfuscation mapping to Android binaries or tests. */
+@AutoValue
 @Immutable
-public final class ProguardMappingProvider extends NativeInfo
-    implements ProguardMappingProviderApi<Artifact> {
+public abstract class ProguardMappingProvider implements TransitiveInfoProvider {
 
-  public static final String PROVIDER_NAME = "ProguardMappingInfo";
-  public static final Provider PROVIDER = new Provider();
-
-  private final Artifact proguardMapping;
-
-  public ProguardMappingProvider(Artifact proguardMapping) {
-    super(PROVIDER);
-    this.proguardMapping = proguardMapping;
+  public static ProguardMappingProvider create(Artifact proguardMapping) {
+    return new AutoValue_ProguardMappingProvider(proguardMapping);
   }
 
-  @Override
-  public Artifact getProguardMapping() {
-    return proguardMapping;
-  }
+  public abstract Artifact getProguardMapping();
 
-  /** The provider can construct the ProguardMappingProvider provider. */
-  public static class Provider extends BuiltinProvider<ProguardMappingProvider>
-      implements ProguardMappingProviderApi.Provider<Artifact> {
-
-    private Provider() {
-      super(PROVIDER_NAME, ProguardMappingProvider.class);
-    }
-
-    @Override
-    public ProguardMappingProvider createInfo(Artifact proguardMapping) throws EvalException {
-      return new ProguardMappingProvider(proguardMapping);
-    }
-  }
+  ProguardMappingProvider() {}
 }

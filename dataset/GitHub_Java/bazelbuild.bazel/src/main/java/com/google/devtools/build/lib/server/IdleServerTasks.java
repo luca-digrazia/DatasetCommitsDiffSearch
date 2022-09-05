@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.IOException;
-import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -57,19 +56,13 @@ class IdleServerTasks {
     Preconditions.checkState(!executor.isShutdown());
 
     // Do a GC cycle while the server is idle.
-    @SuppressWarnings("unused") 
-    Future<?> possiblyIgnoredError =
-        executor.schedule(
-            new Runnable() {
-              @Override
-              public void run() {
-                try (AutoProfiler p = AutoProfiler.logged("Idle GC", LOG)) {
-                  System.gc();
-                }
-              }
-            },
-            10,
-            TimeUnit.SECONDS);
+    executor.schedule(new Runnable() {
+        @Override public void run() {
+          try (AutoProfiler p = AutoProfiler.logged("Idle GC", LOG)) {
+            System.gc();
+          }
+        }
+      }, 10, TimeUnit.SECONDS);
   }
 
   /**

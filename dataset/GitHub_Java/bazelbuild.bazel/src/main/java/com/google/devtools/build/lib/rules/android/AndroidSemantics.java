@@ -48,7 +48,8 @@ public interface AndroidSemantics {
       RuleConfiguredTargetBuilder builder,
       RuleContext ruleContext,
       JavaCommon javaCommon,
-      AndroidCommon androidCommon)
+      AndroidCommon androidCommon,
+      Artifact jarWithAllClasses)
       throws InterruptedException;
 
   /**

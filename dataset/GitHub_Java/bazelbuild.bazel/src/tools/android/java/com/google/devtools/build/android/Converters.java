@@ -19,7 +19,6 @@ import com.android.manifmerger.ManifestMerger2.MergeType;
 import com.android.repository.Revision;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterables;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -34,7 +33,6 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * Some convenient converters used by android actions. Note: These are specific to android actions.
@@ -292,15 +290,7 @@ public final class Converters {
    * Validating converter for a list of Paths.
    * A Path is considered valid if it resolves to a file.
    */
-  @Deprecated
   public static class PathListConverter implements Converter<List<Path>> {
-
-    public static List<Path> concatLists(@Nullable List<Path> a, @Nullable List<Path> b) {
-      if (a == null || a.isEmpty()) {
-        return (b == null || b.isEmpty()) ? ImmutableList.of() : b;
-      }
-      return (b == null || b.isEmpty()) ? a : ImmutableList.copyOf(Iterables.concat(a, b));
-    }
 
     private final PathConverter baseConverter;
 
@@ -326,6 +316,16 @@ public final class Converters {
     @Override
     public String getTypeDescription() {
       return "a colon-separated list of paths";
+    }
+  }
+
+  /**
+   * Validating converter for a list of Paths. The list is considered valid if all Paths resolve to
+   * a file that exists.
+   */
+  public static class ExistingPathListConverter extends PathListConverter {
+    public ExistingPathListConverter() {
+      super(true);
     }
   }
 
