@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,44 +15,79 @@
 package com.google.devtools.build.lib.rules.test;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Closeables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.config.BinTools;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SymlinkTreeHelper;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.runtime.BlazeServerStartupOptions;
+import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.io.FileWatcher;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileStatus;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.SearchPath;
 import com.google.devtools.build.lib.view.test.TestStatus.TestCase;
 import com.google.devtools.common.options.Converters.RangeConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParsingException;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-
 import javax.annotation.Nullable;
 
 /**
  * A strategy for executing a {@link TestRunnerAction}.
  */
 public abstract class TestStrategy implements TestActionContext {
+  public static final String TEST_SETUP_BASENAME = "test-setup.sh";
+
+  /**
+   * Returns true if coverage data should be gathered.
+   */
+  protected static boolean isCoverageMode(TestRunnerAction action) {
+    return action.getCoverageData() != null;
+  }
+
+  /**
+   * Ensures that all directories used to run test are in the correct state and
+   * their content will not result in stale files.
+   */
+  protected void prepareFileSystem(TestRunnerAction testAction, Path tmpDir,
+      Path coverageDir, Path workingDirectory) throws IOException {
+    if (isCoverageMode(testAction)) {
+      recreateDirectory(coverageDir);
+    }
+    recreateDirectory(tmpDir);
+    FileSystemUtils.createDirectoryAndParents(workingDirectory);
+  }
+
+  /**
+   * Removes directory if it exists and recreates it.
+   */
+  protected void recreateDirectory(Path directory) throws IOException {
+    FileSystemUtils.deleteTree(directory);
+    FileSystemUtils.createDirectoryAndParents(directory);
+  }
+
   /**
    * Converter for the --flaky_test_attempts option.
    */
@@ -113,35 +148,25 @@ public abstract class TestStrategy implements TestActionContext {
   // Used for selecting subset of testcase / testmethods.
   private static final String TEST_BRIDGE_TEST_FILTER_ENV = "TESTBRIDGE_TEST_ONLY";
 
-  private final boolean statusServerRunning;
+  // Used for generating unique temporary directory names. Contains the next numeric index for every
+  // executable base name.
+  private final Map<String, Integer> tmpIndex = new HashMap<>();
+  protected final ImmutableMap<String, String> clientEnv;
   protected final ExecutionOptions executionOptions;
   protected final BinTools binTools;
 
-  public TestStrategy(OptionsClassProvider requestOptionsProvider,
-      OptionsClassProvider startupOptionsProvider, BinTools binTools) {
+  public TestStrategy(
+      OptionsClassProvider requestOptionsProvider,
+      BinTools binTools,
+      Map<String, String> clientEnv) {
     this.executionOptions = requestOptionsProvider.getOptions(ExecutionOptions.class);
     this.binTools = binTools;
-    BlazeServerStartupOptions startupOptions =
-        startupOptionsProvider.getOptions(BlazeServerStartupOptions.class);
-    statusServerRunning = startupOptions != null && startupOptions.useWebStatusServer > 0;
+    this.clientEnv = ImmutableMap.copyOf(clientEnv);
   }
 
   @Override
   public abstract void exec(TestRunnerAction action, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException;
-
-  @Override
-  public abstract String strategyLocality(TestRunnerAction action);
-
-  /**
-   * Callback for determining the strategy locality.
-   *
-   * @param action the test action
-   * @param localRun whether to run it locally
-   */
-  protected String strategyLocality(TestRunnerAction action, boolean localRun) {
-    return strategyLocality(action);
-  }
 
   /**
    * Returns mutable map of default testing shell environment. By itself it is incomplete and is
@@ -151,7 +176,7 @@ public abstract class TestStrategy implements TestActionContext {
   protected Map<String, String> getDefaultTestEnvironment(TestRunnerAction action) {
     Map<String, String> env = new HashMap<>();
 
-    env.putAll(action.getConfiguration().getDefaultShellEnvironment());
+    env.putAll(action.getConfiguration().getLocalShellEnvironment());
     env.remove("LANG");
     env.put("TZ", "UTC");
     env.put("TEST_SIZE", action.getTestProperties().getSize().toString());
@@ -174,6 +199,70 @@ public abstract class TestStrategy implements TestActionContext {
     }
 
     return env;
+  }
+
+  /**
+   * Generates a command line to run for the test action, taking into account coverage
+   * and {@code --run_under} settings.
+   *
+   * @param testScript  the setup script that invokes the test
+   * @param coverageScript a script interjected between setup script and rest of command line
+   * to collect coverage data. If this is an empty string, it is ignored.
+   * @param testAction The test action.
+   * @return the command line as string list.
+   */
+  protected List<String> getArgs(
+      String testScript, String coverageScript, TestRunnerAction testAction) {
+    List<String> args = Lists.newArrayList();
+    if (OS.getCurrent() == OS.WINDOWS) {
+      args.add(testAction.getShExecutable().getPathString());
+      args.add("-c");
+      args.add("$0 $*");
+    }
+    args.add(testScript);
+    TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
+
+    List<String> execArgs = new ArrayList<>();
+    if (!coverageScript.isEmpty() && isCoverageMode(testAction)) {
+      execArgs.add(coverageScript);
+    }
+
+    // Execute the test using the alias in the runfiles tree, as mandated by
+    // the Test Encyclopedia.
+    execArgs.add(execSettings.getExecutable().getRootRelativePath().getPathString());
+    execArgs.addAll(execSettings.getArgs());
+
+    // Insert the command prefix specified by the "--run_under=<command-prefix>" option,
+    // if any.
+    if (execSettings.getRunUnder() == null) {
+      args.addAll(execArgs);
+    } else if (execSettings.getRunUnderExecutable() != null) {
+      args.add(execSettings.getRunUnderExecutable().getRootRelativePath().getPathString());
+      args.addAll(execSettings.getRunUnder().getOptions());
+      args.addAll(execArgs);
+    } else {
+      args.add(testAction.getConfiguration().getShellExecutable().getPathString());
+      args.add("-c");
+
+      String runUnderCommand = ShellEscaper.escapeString(execSettings.getRunUnder().getCommand());
+
+      Path fullySpecified =
+          SearchPath.which(
+              SearchPath.parse(
+                  testAction.getTestLog().getPath().getFileSystem(), clientEnv.get("PATH")),
+              runUnderCommand);
+
+      if (fullySpecified != null) {
+        runUnderCommand = fullySpecified.toString();
+      }
+
+      args.add(
+          runUnderCommand
+              + ' '
+              + ShellEscaper.escapeJoinAll(
+                  Iterables.concat(execSettings.getRunUnder().getOptions(), execArgs)));
+    }
+    return args;
   }
 
   /**
@@ -207,9 +296,8 @@ public abstract class TestStrategy implements TestActionContext {
    * MUST NOT be used by any rule or action in such a way as to affect the semantics of that
    * build step.
    */
-  public Map<String, String> getAdmissibleShellEnvironment(BuildConfiguration config,
-      Iterable<String> variables) {
-    return getMapping(variables, config.getClientEnv());
+  public Map<String, String> getAdmissibleShellEnvironment(Iterable<String> variables) {
+    return getMapping(variables, clientEnv);
   }
 
   /*
@@ -221,13 +309,32 @@ public abstract class TestStrategy implements TestActionContext {
   }
 
   /**
+   * Returns a unique name for a temporary directory a test could use.
+   *
+   * <p>Since each test within single Blaze run must have a unique TEST_TMPDIR,
+   * we will use rule name and a unique (within single Blaze request) number
+   * to generate directory name.</p>
+   *
+   * <p>This does not create the directory.</p>
+   */
+  protected String getTmpDirName(PathFragment execPath) {
+    String basename = execPath.getBaseName();
+
+    synchronized (tmpIndex) {
+      int index = tmpIndex.containsKey(basename) ? tmpIndex.get(basename) : 1;
+      tmpIndex.put(basename, index + 1);
+      return basename + "_" + index;
+    }
+  }
+
+  /**
    * Parse a test result XML file into a {@link TestCase}.
    */
   @Nullable
   protected TestCase parseTestResult(Path resultFile) {
     /* xml files. We avoid parsing it unnecessarily, since test results can potentially consume
-       a large amount of memory. */
-    if (executionOptions.testSummary != TestSummaryFormat.DETAILED && !statusServerRunning) {
+     a large amount of memory. */
+    if (executionOptions.testSummary != TestSummaryFormat.DETAILED) {
       return null;
     }
 
@@ -236,6 +343,19 @@ public abstract class TestStrategy implements TestActionContext {
     } catch (IOException | TestXmlOutputParserException e) {
       return null;
     }
+  }
+
+  /**
+   * Returns a temporary directory for all tests in a workspace to use. Individual tests should
+   * create child directories to actually use.
+   *
+   * <p>This either dynamically generates a directory name or uses the directory specified by
+   * --test_tmpdir. This does not create the directory.</p>
+   */
+  public static Path getTmpRoot(Path workspace, Path execRoot, ExecutionOptions executionOptions) {
+    return executionOptions.testTmpDir != null
+        ? workspace.getRelative(executionOptions.testTmpDir).getRelative(TEST_TMP_ROOT)
+        : execRoot.getRelative(TEST_TMP_ROOT);
   }
 
   /**
@@ -258,21 +378,24 @@ public abstract class TestStrategy implements TestActionContext {
    * Returns the runfiles directory associated with the test executable,
    * creating/updating it if necessary and --build_runfile_links is specified.
    */
-  protected static Path getLocalRunfilesDirectory(TestRunnerAction testAction,
-      ActionExecutionContext actionExecutionContext, BinTools binTools) throws ExecException,
-      InterruptedException {
+  protected static Path getLocalRunfilesDirectory(
+      TestRunnerAction testAction,
+      ActionExecutionContext actionExecutionContext,
+      BinTools binTools,
+      ImmutableMap<String, String> shellEnvironment,
+      boolean enableRunfiles)
+      throws ExecException, InterruptedException {
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
 
-    // --nobuild_runfile_links disables runfiles generation only for C++ rules.
-    // In that case, getManifest returns the .runfiles_manifest (input) file,
-    // not the MANIFEST output file of the build-runfiles action. So the
-    // extension ".runfiles_manifest" indicates no runfiles tree.
-    if (!execSettings.getManifest().equals(execSettings.getInputManifest())) {
-      return execSettings.getManifest().getPath().getParentDirectory();
+    // If the symlink farm is already created then return the existing directory. If not we
+    // need to explicitly build it. This can happen when --nobuild_runfile_links is supplied
+    // as a flag to the build.
+    if (execSettings.getRunfilesSymlinksCreated()) {
+      return execSettings.getRunfilesDir();
     }
 
-    // We might need to build runfiles tree now, since it was not created yet
-    // local testing is needed.
+    // TODO(bazel-team): Should we be using TestTargetExecutionSettings#getRunfilesDir() here over
+    // generating the directory ourselves?
     Path program = execSettings.getExecutable().getPath();
     Path runfilesDir = program.getParentDirectory().getChild(program.getBaseName() + ".runfiles");
 
@@ -281,9 +404,15 @@ public abstract class TestStrategy implements TestActionContext {
     // trying to generate same runfiles tree in case of --runs_per_test > 1 or
     // local test sharding.
     long startTime = Profiler.nanoTimeMaybe();
-    synchronized (execSettings.getManifest()) {
+    synchronized (execSettings.getInputManifest()) {
       Profiler.instance().logSimpleTask(startTime, ProfilerTask.WAIT, testAction);
-      updateLocalRunfilesDirectory(testAction, runfilesDir, actionExecutionContext, binTools);
+      updateLocalRunfilesDirectory(
+          testAction,
+          runfilesDir,
+          actionExecutionContext,
+          binTools,
+          shellEnvironment,
+          enableRunfiles);
     }
 
     return runfilesDir;
@@ -295,15 +424,22 @@ public abstract class TestStrategy implements TestActionContext {
    * $0.runfiles/MANIFEST, if it exists, are used a proxy for the set of existing symlinks, to avoid
    * the need for recursion.
    */
-  private static void updateLocalRunfilesDirectory(TestRunnerAction testAction, Path runfilesDir,
-      ActionExecutionContext actionExecutionContext, BinTools binTools) throws ExecException,
-      InterruptedException {
+  private static void updateLocalRunfilesDirectory(
+      TestRunnerAction testAction,
+      Path runfilesDir,
+      ActionExecutionContext actionExecutionContext,
+      BinTools binTools,
+      ImmutableMap<String, String> shellEnvironment,
+      boolean enableRunfiles)
+      throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
 
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
     try {
+      // Avoid rebuilding the runfiles directory if the manifest in it matches the input manifest,
+      // implying the symlinks exist and are already up to date.
       if (Arrays.equals(runfilesDir.getRelative("MANIFEST").getMD5Digest(),
-          execSettings.getManifest().getPath().getMD5Digest())) {
+          execSettings.getInputManifest().getPath().getMD5Digest())) {
         return;
       }
     } catch (IOException e1) {
@@ -313,9 +449,16 @@ public abstract class TestStrategy implements TestActionContext {
     executor.getEventHandler().handle(Event.progress(
         "Building runfiles directory for '" + execSettings.getExecutable().prettyPrint() + "'."));
 
-    new SymlinkTreeHelper(execSettings.getManifest().getExecPath(),
-        runfilesDir.relativeTo(executor.getExecRoot()), /* filesetTree= */ false)
-        .createSymlinks(testAction, actionExecutionContext, binTools);
+    new SymlinkTreeHelper(
+            execSettings.getInputManifest().getPath(),
+            runfilesDir,
+            false)
+        .createSymlinks(
+            testAction,
+            actionExecutionContext,
+            binTools,
+            shellEnvironment,
+            enableRunfiles);
 
     executor.getEventHandler().handle(Event.progress(testAction.getProgressMessage()));
   }
@@ -375,11 +518,8 @@ public abstract class TestStrategy implements TestActionContext {
         Thread.currentThread().interrupt();
       }
       if (!headerFilter.foundHeader()) {
-        InputStream input = testLogPath.getInputStream();
-        try {
+        try (InputStream input = testLogPath.getInputStream()) {
           ByteStreams.copy(input, outErr.getOutputStream());
-        } finally {
-          input.close();
         }
       }
     }
