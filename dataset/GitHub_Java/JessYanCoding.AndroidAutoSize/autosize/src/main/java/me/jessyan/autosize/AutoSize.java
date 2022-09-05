@@ -23,10 +23,11 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.util.DisplayMetrics;
-import android.util.SparseArray;
 import android.view.View;
 
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import me.jessyan.autosize.external.ExternalAdaptInfo;
 import me.jessyan.autosize.external.ExternalAdaptManager;
@@ -38,7 +39,7 @@ import me.jessyan.autosize.utils.Preconditions;
 /**
  * ================================================
  * AndroidAutoSize 用于屏幕适配的核心方法都在这里, 核心原理来自于 <a href="https://mp.weixin.qq.com/s/d9QCoBP6kV9VSWvVldVVwA">今日头条官方适配方案</a>
- * 此方案只要应用到 {@link Activity} 上, 这个 {@link Activity} 下的所有 Fragment、{@link Dialog}、
+ * 此方案只要应用到 {@link Activity} 上, 这个 {@link Activity} 下的所有 {@link android.support.v4.app.Fragment}、{@link Dialog}、
  * 自定义 {@link View} 都会达到适配的效果, 如果某个页面不想使用适配请让该 {@link Activity} 实现 {@link CancelAdapt}
  * <p>
  * 任何方案都不可能完美, 在成本和收益中做出取舍, 选择出最适合自己的方案即可, 在没有更好的方案出来之前, 只有继续忍耐它的不完美, 或者自己作出改变
@@ -50,11 +51,7 @@ import me.jessyan.autosize.utils.Preconditions;
  * ================================================
  */
 public final class AutoSize {
-    private static SparseArray<DisplayMetricsInfo> mCache = new SparseArray<>();
-    private static final int MODE_SHIFT = 30;
-    private static final int MODE_MASK  = 0x3 << MODE_SHIFT;
-    private static final int MODE_ON_WIDTH  = 1 << MODE_SHIFT;
-    private static final int MODE_DEVICE_SIZE  = 2 << MODE_SHIFT;
+    private static Map<String, DisplayMetricsInfo> mCache = new ConcurrentHashMap<>();
 
     private AutoSize() {
         throw new IllegalStateException("you can't instantiate me!");
@@ -100,10 +97,10 @@ public final class AutoSize {
     }
 
     /**
-     * 使用 {@link Activity} 或 Fragment 的自定义参数进行适配
+     * 使用 {@link Activity} 或 {@link android.support.v4.app.Fragment} 的自定义参数进行适配
      *
      * @param activity    {@link Activity}
-     * @param customAdapt {@link Activity} 或 Fragment 需实现 {@link CustomAdapt}
+     * @param customAdapt {@link Activity} 或 {@link android.support.v4.app.Fragment} 需实现 {@link CustomAdapt}
      */
     public static void autoConvertDensityOfCustomAdapt(Activity activity, CustomAdapt customAdapt) {
         Preconditions.checkNotNull(customAdapt, "customAdapt == null");
@@ -121,10 +118,10 @@ public final class AutoSize {
     }
 
     /**
-     * 使用外部三方库的 {@link Activity} 或 Fragment 的自定义适配参数进行适配
+     * 使用外部三方库的 {@link Activity} 或 {@link android.support.v4.app.Fragment} 的自定义适配参数进行适配
      *
      * @param activity          {@link Activity}
-     * @param externalAdaptInfo 三方库的 {@link Activity} 或 Fragment 提供的适配参数, 需要配合 {@link ExternalAdaptManager#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)}
+     * @param externalAdaptInfo 三方库的 {@link Activity} 或 {@link android.support.v4.app.Fragment} 提供的适配参数, 需要配合 {@link ExternalAdaptManager#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)}
      */
     public static void autoConvertDensityOfExternalAdaptInfo(Activity activity, ExternalAdaptInfo externalAdaptInfo) {
         Preconditions.checkNotNull(externalAdaptInfo, "externalAdaptInfo == null");
@@ -175,7 +172,6 @@ public final class AutoSize {
      */
     public static void autoConvertDensity(Activity activity, float sizeInDp, boolean isBaseOnWidth) {
         Preconditions.checkNotNull(activity, "activity == null");
-        Preconditions.checkMainThread();
 
         float subunitsDesignSize = isBaseOnWidth ? AutoSizeConfig.getInstance().getUnitsManager().getDesignWidth()
                 : AutoSizeConfig.getInstance().getUnitsManager().getDesignHeight();
@@ -183,10 +179,10 @@ public final class AutoSize {
 
         int screenSize = isBaseOnWidth ? AutoSizeConfig.getInstance().getScreenWidth()
                 : AutoSizeConfig.getInstance().getScreenHeight();
-
-        int key = Math.round(sizeInDp + subunitsDesignSize + AutoSizeConfig.getInstance().getInitScaledDensity() + screenSize) & ~MODE_MASK;
-        key = isBaseOnWidth ? (key | MODE_ON_WIDTH) : (key & ~MODE_ON_WIDTH);
-        key = AutoSizeConfig.getInstance().isUseDeviceSize() ? (key | MODE_DEVICE_SIZE) : (key & ~MODE_DEVICE_SIZE);
+        String key = sizeInDp + "|" + subunitsDesignSize + "|" + isBaseOnWidth + "|"
+                + AutoSizeConfig.getInstance().isUseDeviceSize() + "|"
+                + AutoSizeConfig.getInstance().getInitScaledDensity() + "|"
+                + screenSize;
 
         DisplayMetricsInfo displayMetricsInfo = mCache.get(key);
 
@@ -246,7 +242,6 @@ public final class AutoSize {
      * @param activity {@link Activity}
      */
     public static void cancelAdapt(Activity activity) {
-        Preconditions.checkMainThread();
         float initXdpi = AutoSizeConfig.getInstance().getInitXdpi();
         switch (AutoSizeConfig.getInstance().getUnitsManager().getSupportSubunits()) {
             case PT:
