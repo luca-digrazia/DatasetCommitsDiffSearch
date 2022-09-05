@@ -222,7 +222,7 @@ public class MaterialCalendarView extends ViewGroup {
     private OnDateSelectedListener listener;
     private OnMonthChangedListener monthListener;
     private OnRangeSelectedListener rangeListener;
-    private OnClickListener titleListener;
+
 
     CharSequence calendarContentDescription;
     private int accentColor = 0;
@@ -262,6 +262,7 @@ public class MaterialCalendarView extends ViewGroup {
         buttonFuture.setContentDescription(getContext().getString(R.string.next));
         pager = new CalendarPager(getContext());
 
+        title.setOnClickListener(onClickListener);
         buttonPast.setOnClickListener(onClickListener);
         buttonFuture.setOnClickListener(onClickListener);
 
@@ -309,12 +310,12 @@ public class MaterialCalendarView extends ViewGroup {
             }
 
             final int tileWidth = a.getLayoutDimension(R.styleable.MaterialCalendarView_mcv_tileWidth, INVALID_TILE_DIMENSION);
-            if (tileWidth > INVALID_TILE_DIMENSION) {
+            if(tileWidth > INVALID_TILE_DIMENSION){
                 setTileWidth(tileWidth);
             }
 
             final int tileHeight = a.getLayoutDimension(R.styleable.MaterialCalendarView_mcv_tileHeight, INVALID_TILE_DIMENSION);
-            if (tileHeight > INVALID_TILE_DIMENSION) {
+            if(tileHeight > INVALID_TILE_DIMENSION){
                 setTileHeight(tileHeight);
             }
 
@@ -408,7 +409,6 @@ public class MaterialCalendarView extends ViewGroup {
         addView(topbar, new LayoutParams(1));
 
         buttonPast.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        buttonPast.setImageResource(R.drawable.mcv_action_previous);
         topbar.addView(buttonPast, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1));
 
         title.setGravity(Gravity.CENTER);
@@ -417,7 +417,6 @@ public class MaterialCalendarView extends ViewGroup {
         ));
 
         buttonFuture.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        buttonFuture.setImageResource(R.drawable.mcv_action_next);
         topbar.addView(buttonFuture, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1));
 
         pager.setId(R.id.mcv_pager);
@@ -1083,6 +1082,7 @@ public class MaterialCalendarView extends ViewGroup {
         ss.tileHeightPx = getTileHeight();
         ss.topbarVisible = getTopbarVisible();
         ss.calendarMode = calendarMode;
+        ss.dynamicHeightEnabled = mDynamicHeightEnabled;
         ss.currentMonth = currentMonth;
         return ss;
     }
@@ -1353,24 +1353,6 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Add listener to the title.
-     *
-     * @param listener thing to be notified
-     */
-    public void setOnTitleClickListener(final OnClickListener listener) {
-        if (listener != null) {
-            title.setOnClickListener(listener);
-        }
-    }
-
-    /**
-     * Remove listener from title view.
-     */
-    public void removeOnTitleClickListener() {
-        title.setOnClickListener(null);
-    }
-
-    /**
      * Dispatch date change events to a listener, if set
      *
      * @param day      the day that was selected
@@ -1486,22 +1468,23 @@ public class MaterialCalendarView extends ViewGroup {
      *
      * @param dayView
      */
-    protected void onDateClicked(DayView dayView) {
-        final int currentMonth = getCurrentDate().getMonth();
-        final int selectedMonth = dayView.getDate().getMonth();
+    protected void onDateClicked(final DayView dayView) {
+        final CalendarDay currentDate = getCurrentDate();
+        final CalendarDay selectedDate = dayView.getDate();
+        final int currentMonth = currentDate.getMonth();
+        final int selectedMonth = selectedDate.getMonth();
 
-        if (calendarMode == CalendarMode.MONTHS) {
-            if (allowClickDaysOutsideCurrentMonth || currentMonth == selectedMonth) {
-                if (currentMonth > selectedMonth) {
-                    goToPrevious();
-                } else if (currentMonth < selectedMonth) {
-                    goToNext();
-                }
-                onDateClicked(dayView.getDate(), !dayView.isChecked());
+        if (calendarMode == CalendarMode.MONTHS
+            && allowClickDaysOutsideCurrentMonth
+            && currentMonth != selectedMonth) {
+            if (currentDate.isAfter(selectedDate)) {
+                goToPrevious();
+            } else if (currentDate.isBefore(selectedDate)) {
+                goToNext();
             }
-        } else {
-            onDateClicked(dayView.getDate(), !dayView.isChecked());
         }
+        onDateClicked(dayView.getDate(), !dayView.isChecked());
+
     }
 
     /**
