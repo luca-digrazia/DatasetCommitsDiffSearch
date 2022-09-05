@@ -55,9 +55,8 @@ public class TestSupport {
 
   /**
    * Registers actions to create all files needed in order to actually run the test.
-   * @throws InterruptedException 
    */
-  public TestSupport registerTestRunnerActions() throws InterruptedException {
+  public TestSupport registerTestRunnerActions() {
     registerTestScriptSubstitutionAction();
     return this;
   }
@@ -69,7 +68,7 @@ public class TestSupport {
     return ObjcRuleClasses.artifactByAppendingToBaseName(ruleContext, "_test_script");
   }
 
-  private void registerTestScriptSubstitutionAction() throws InterruptedException {
+  private void registerTestScriptSubstitutionAction() {
     // testIpa is the app actually containing the tests
     Artifact testIpa = testIpa();
 
@@ -131,7 +130,7 @@ public class TestSupport {
         "target_device", Mode.TARGET, IosTestSubstitutionProvider.class);
   }
 
-  private Artifact testIpa() throws InterruptedException {
+  private Artifact testIpa() {
     return ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA);
   }
 
@@ -199,10 +198,8 @@ public class TestSupport {
    * Adds all files needed to run this test to the passed Runfiles builder.
    *
    * @param objcProvider common information about this rule's attributes and its dependencies
-   * @throws InterruptedException 
    */
-  public TestSupport addRunfiles(Builder runfilesBuilder, ObjcProvider objcProvider)
-      throws InterruptedException {
+  public TestSupport addRunfiles(Builder runfilesBuilder, ObjcProvider objcProvider) {
     runfilesBuilder
         .addArtifact(testIpa())
         .addArtifacts(xctestIpa().asSet())
@@ -307,10 +304,8 @@ public class TestSupport {
 
   /**
    * Adds files which must be built in order to run this test to builder.
-   * @throws InterruptedException 
    */
-  public TestSupport addFilesToBuild(NestedSetBuilder<Artifact> builder)
-      throws InterruptedException {
+  public TestSupport addFilesToBuild(NestedSetBuilder<Artifact> builder) {
     builder.add(testIpa()).addAll(xctestIpa().asSet());
     return this;
   }
