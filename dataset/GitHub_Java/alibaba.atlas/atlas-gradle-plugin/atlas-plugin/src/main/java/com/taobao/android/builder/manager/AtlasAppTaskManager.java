@@ -209,7 +209,6 @@
 
 package com.taobao.android.builder.manager;
 
-import com.android.SdkConstants;
 import com.android.build.api.transform.QualifiedContent;
 import com.android.build.gradle.AppExtension;
 import com.android.build.gradle.api.ApplicationVariant;
@@ -229,8 +228,6 @@ import com.android.build.gradle.internal.tasks.ExtractProguardFiles;
 import com.android.build.gradle.internal.transforms.DexTransform;
 import com.android.build.gradle.internal.transforms.MultiDexTransform;
 import com.android.build.gradle.internal.transforms.ProGuardTransform;
-import com.android.build.gradle.options.BooleanOption;
-import com.android.build.gradle.options.ProjectOptions;
 import com.android.build.gradle.tasks.*;
 import com.android.builder.core.AtlasBuilder;
 import com.android.builder.core.DefaultDexOptions;
@@ -250,7 +247,6 @@ import com.taobao.android.builder.tasks.app.BuildAtlasEnvTask;
 import com.taobao.android.builder.tasks.app.GenerateAtlasSourceTask;
 import com.taobao.android.builder.tasks.app.LogDependenciesTask;
 import com.taobao.android.builder.tasks.app.BuildAtlasEnvTask;
-import com.taobao.android.builder.tasks.app.ResourcePatch;
 import com.taobao.android.builder.tasks.app.bundle.JavacAwbsTask;
 import com.taobao.android.builder.tasks.app.bundle.PackageAwbsTask;
 import com.taobao.android.builder.tasks.app.bundle.ProcessResAwbsTask;
@@ -278,7 +274,6 @@ import com.taobao.android.builder.tasks.transform.ClassInjectTransform;
 import com.taobao.android.builder.tasks.transform.TransformReplacer;
 import com.taobao.android.builder.tools.ReflectUtils;
 import com.taobao.android.builder.tools.multidex.FastMultiDexer;
-import org.apache.commons.io.FileUtils;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
@@ -286,13 +281,9 @@ import org.gradle.api.Task;
 import org.gradle.api.specs.Spec;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 /**
@@ -380,31 +371,6 @@ public class AtlasAppTaskManager extends AtlasBaseTaskManager {
 
                                                               mtlTaskContextList.add(new MtlTaskContext(ProcessAndroidResources.class));
 
-                                                              ProcessAndroidResources processAndroidResources
-                                                                  = appVariantContext.getScope()
-                                                                  .getProcessResourcesTask()
-                                                                  .get(new TaskContainerAdaptor(appVariantContext.getProject()
-                                                                      .getTasks()));
-                                                              if (processAndroidResources.isAapt2Enabled()) {
-                                                                  processAndroidResources.doLast(new Action<Task>() {
-                                                                      @Override
-                                                                      public void execute(Task task) {
-                                                                          File processResourcePackageOutputDirectory
-                                                                              = appVariantContext.getScope()
-                                                                              .getProcessResourcePackageOutputDirectory();
-                                                                          File[] files
-                                                                              = processResourcePackageOutputDirectory.listFiles(
-                                                                              (file, name) -> name.endsWith(SdkConstants.DOT_RES));
-                                                                          for (File file : files) {
-                                                                              try {
-                                                                                  ResourcePatch.makePatchable(file);
-                                                                              } catch (IOException e) {
-                                                                                  throw new UncheckedIOException(e);
-                                                                              }
-                                                                          }
-                                                                      }
-                                                                  });
-                                                              }
                                                               mtlTaskContextList.add(new MtlTaskContext(ProcessResAwbsTask.ConfigAction.class, null));
 
                                                               mtlTaskContextList.add(new MtlTaskContext(JavacAwbsTask.ConfigAction.class, null));
@@ -444,9 +410,9 @@ public class AtlasAppTaskManager extends AtlasBaseTaskManager {
 
                                                               mtlTaskContextList.add(new MtlTaskContext(PackageApplication.class));
 
-                                                              if (appVariantContext.getAtlasExtension().isInstantAppEnabled()) {
+                                                              if (appVariantContext.getAtlasExtension().isInstantAppEnabled()){
 
-                                                                  mtlTaskContextList.add(new MtlTaskContext(AtlasBundleInstantApp.ConfigAction.class, null));
+                                                                  mtlTaskContextList.add(new MtlTaskContext(AtlasBundleInstantApp.ConfigAction.class,null));
                                                               }
 
                                                               mtlTaskContextList.add(new MtlTaskContext(ApBuildTask.ConfigAction.class, null));
@@ -489,13 +455,12 @@ public class AtlasAppTaskManager extends AtlasBaseTaskManager {
                                                               }
 
                                                               for (final BaseVariantOutput vod : baseVariantOutputDataList) {
-                                                                  transformReplacer.replaceFixStackFramesTransform(vod);
-                                                                  transformReplacer.replaceDesugarTransform(vod);
+
                                                                   transformReplacer.replaceDexArchiveBuilderTransform(vod);
                                                                   transformReplacer.replaceDexExternalLibMerge(vod);
                                                                   transformReplacer.replaceDexMerge(vod);
-                                                                  transformReplacer.replaceDexTransform(appVariantContext, vod);
-                                                                  transformReplacer.replaceMergeJavaResourcesTransform(appVariantContext, vod);
+                                                                  transformReplacer.replaceDexTransform(appVariantContext,vod);
+                                                                  transformReplacer.replaceMergeJavaResourcesTransform(appVariantContext,vod);
 
 
                                                                   if (atlasExtension.getTBuildConfig().isIncremental()) {
@@ -544,13 +509,8 @@ public class AtlasAppTaskManager extends AtlasBaseTaskManager {
             if (applicationVariant instanceof ApplicationVariantImpl) {
                 VariantScope variantScope = ((ApplicationVariantImpl) applicationVariant).getVariantData().getScope();
                 GlobalScope globalScope = variantScope.getGlobalScope();
-//                ReflectUtils.updateField(globalScope, "androidBuilder", AtlasBuildContext.androidBuilderMap.get(globalScope.getProject()));
-//                Field f = ProjectOptions.class.getDeclaredField("booleanOptions");
-//                f.setAccessible(true);
-//                Map map = (Map) f.get(((ApplicationVariantImpl) applicationVariant).getVariantData().getScope().getGlobalScope().getProjectOptions());
-//                map.put(BooleanOption.ENABLE_AAPT2, false);
+                ReflectUtils.updateField(globalScope, "androidBuilder", AtlasBuildContext.androidBuilderMap.get(globalScope.getProject()));
                 AtlasBuildContext.androidBuilderMap.get(globalScope.getProject()).initAapt(globalScope.getProjectOptions());
-
             }
         } catch (Exception e) {
             logger.error(e, "write globalScope androidBuilder field failed!");
