@@ -223,7 +223,7 @@ public class JmxReporter implements Runnable {
 
 		@Override
 		public TimeUnit getLatencyUnit() {
-			return metric.getDurationUnit();
+			return metric.getLatencyUnit();
 		}
 
 		@Override
@@ -279,7 +279,7 @@ public class JmxReporter implements Runnable {
 	}
 
 	public void start() {
-		this.future = TICK_THREAD.scheduleAtFixedRate(this, 0, 1, TimeUnit.MINUTES);
+		this.future = TICK_THREAD.scheduleAtFixedRate(this, 0, 1, TimeUnit.SECONDS);
 	}
 
 	public void stop() {
