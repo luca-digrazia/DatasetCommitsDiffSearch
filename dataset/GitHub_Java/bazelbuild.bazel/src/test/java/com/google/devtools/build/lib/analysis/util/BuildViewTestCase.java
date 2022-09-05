@@ -1203,7 +1203,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected BuildConfiguration getHostConfiguration() {
-    return masterConfig.getHostConfiguration();
+    return getTargetConfiguration().getConfiguration(ConfigurationTransition.HOST);
   }
 
   /**

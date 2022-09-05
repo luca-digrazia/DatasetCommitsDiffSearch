@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
-import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.nativedeps.NativeDepsHelper;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -54,7 +53,7 @@ public final class NativeLibs {
         depsByArchitecture.asMap().entrySet()) {
       NestedSet<LinkerInput> nativeLibraries =
           AndroidCommon.collectTransitiveNativeLibraries(entry.getValue());
-      builder.put(entry.getKey(), filterUniqueSharedLibraries(ruleContext, nativeLibraries));
+      builder.put(entry.getKey(), checkUniqueBaseNames(ruleContext, nativeLibraries));
     }
     return new NativeLibs(builder.build(), null);
   }
@@ -70,20 +69,11 @@ public final class NativeLibs {
         depsByArchitecture.asMap().entrySet()) {
       CcLinkParams linkParams = AndroidCommon.getCcLinkParamsStore(entry.getValue())
           .get(/* linkingStatically */ true, /* linkShared */ true);
-
       Artifact nativeDepsLibrary = NativeDepsHelper.maybeCreateAndroidNativeDepsAction(
           ruleContext, linkParams, configurationMap.get(entry.getKey()),
           toolchainMap.get(entry.getKey()));
-
-      ImmutableList.Builder<Artifact> librariesBuilder = ImmutableList.builder();
-      librariesBuilder.addAll(filterUniqueSharedLibraries(ruleContext, linkParams.getLibraries()));
       if (nativeDepsLibrary != null) {
-        librariesBuilder.add(nativeDepsLibrary);
-      }
-      ImmutableList<Artifact> libraries = librariesBuilder.build();
-
-      if (!libraries.isEmpty()) {
-        result.put(entry.getKey(), libraries);
+        result.put(entry.getKey(), ImmutableList.of(nativeDepsLibrary));
       }
     }
     if (result.isEmpty()) {
@@ -166,17 +156,11 @@ public final class NativeLibs {
     return nativeLibsName;
   }
 
-  private static Iterable<Artifact> filterUniqueSharedLibraries(
-      RuleContext ruleContext, NestedSet<? extends LinkerInput> libraries) {
+  private static Iterable<Artifact> checkUniqueBaseNames(
+      RuleContext ruleContext, NestedSet<LinkerInput> libraries) {
     Map<String, Artifact> basenames = new HashMap<>();
     Set<Artifact> artifacts = new HashSet<>();
     for (LinkerInput linkerInput : libraries) {
-      String name = linkerInput.getArtifact().getFilename();
-      if (!(CppFileTypes.SHARED_LIBRARY.matches(name)
-          || CppFileTypes.VERSIONED_SHARED_LIBRARY.matches(name))) {
-        // This is not a shared library and will not be loaded by Android, so skip it.
-        continue;
-      }
       Artifact artifact = linkerInput.getOriginalLibraryArtifact();
       if (!artifacts.add(artifact)) {
         // We have already reached this library, e.g., through a different solib symlink.
@@ -185,7 +169,7 @@ public final class NativeLibs {
       String basename = artifact.getExecPath().getBaseName();
       Artifact oldArtifact = basenames.put(basename, artifact);
       if (oldArtifact != null) {
-        // There may be name collisions in the libraries which were provided, so
+        // Without linking, there may be name collisions in the libraries which were provided, so
         // check for this at this step.
         ruleContext.ruleError("Each library in the transitive closure must have a unique "
             + "basename, but two libraries had the basename '" + basename + "': "
