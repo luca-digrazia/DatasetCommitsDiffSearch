@@ -331,9 +331,6 @@ public class SkyframeBuilder implements Builder {
     }
 
     @Override
-    public void computed(SkyKey skyKey, long elapsedTimeNanos) {}
-
-    @Override
     public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
         EvaluationState state) {
       SkyFunctionName type = skyKey.functionName();
