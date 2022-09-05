@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.test;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
@@ -42,8 +41,7 @@ import java.util.List;
 /**
  * Generates baseline (empty) coverage for the given non-test target.
  */
-@VisibleForTesting
-public final class BaselineCoverageAction extends AbstractFileWriteAction
+public class BaselineCoverageAction extends AbstractFileWriteAction
     implements NotifyOnActionCacheHit {
 
   private final Iterable<Artifact> instrumentedFiles;
@@ -120,7 +118,7 @@ public final class BaselineCoverageAction extends AbstractFileWriteAction
    * Returns collection of baseline coverage artifacts associated with the given target.
    * Will always return 0 or 1 elements.
    */
-  static NestedSet<Artifact> getBaselineCoverageArtifacts(RuleContext ruleContext,
+  public static NestedSet<Artifact> getBaselineCoverageArtifacts(RuleContext ruleContext,
       Iterable<Artifact> instrumentedFiles) {
     // Baseline coverage artifacts will still go into "testlogs" directory.
     Artifact coverageData = ruleContext.getPackageRelativeArtifact(
@@ -131,4 +129,5 @@ public final class BaselineCoverageAction extends AbstractFileWriteAction
 
     return NestedSetBuilder.create(Order.STABLE_ORDER, coverageData);
   }
+
 }

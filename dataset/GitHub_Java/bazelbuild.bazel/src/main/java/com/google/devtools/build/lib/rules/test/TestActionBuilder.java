@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.test;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -22,23 +23,21 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.rules.test.TestProvider.TestParams;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.EnumConverter;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -189,9 +188,9 @@ public final class TestActionBuilder {
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     inputsBuilder.addTransitive(
         NestedSetBuilder.create(Order.STABLE_ORDER, runfilesSupport.getRunfilesMiddleman()));
-    NestedSet<Artifact> testRuntime = PrerequisiteArtifacts.nestedSet(
-        ruleContext, "$test_runtime", Mode.HOST);
-    inputsBuilder.addTransitive(testRuntime);
+    for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("$test_runtime", Mode.HOST)) {
+      inputsBuilder.addTransitive(dep.getProvider(FileProvider.class).getFilesToBuild());
+    }
     TestTargetProperties testProperties = new TestTargetProperties(
         ruleContext, executionRequirements);
 
@@ -203,8 +202,9 @@ public final class TestActionBuilder {
     if (collectCodeCoverage) {
       // Add instrumented file manifest artifact to the list of inputs. This file will contain
       // exec paths of all source files that should be included into the code coverage output.
-      NestedSet<Artifact> metadataFiles = instrumentedFiles.getInstrumentationMetadataFiles();
-      inputsBuilder.addTransitive(metadataFiles);
+      Collection<Artifact> metadataFiles =
+          ImmutableList.copyOf(instrumentedFiles.getInstrumentationMetadataFiles());
+      inputsBuilder.addTransitive(NestedSetBuilder.wrap(Order.STABLE_ORDER, metadataFiles));
       for (TransitiveInfoCollection dep :
           ruleContext.getPrerequisites(":coverage_support", Mode.HOST)) {
         inputsBuilder.addTransitive(dep.getProvider(FileProvider.class).getFilesToBuild());
@@ -215,7 +215,8 @@ public final class TestActionBuilder {
       }
       Artifact instrumentedFileManifest =
           InstrumentedFileManifestAction.getInstrumentedFileManifest(ruleContext,
-              instrumentedFiles.getInstrumentedFiles(), metadataFiles);
+              ImmutableList.copyOf(instrumentedFiles.getInstrumentedFiles()),
+              metadataFiles);
       executionSettings = new TestTargetExecutionSettings(ruleContext, runfilesSupport,
           executable, instrumentedFileManifest, shards);
       inputsBuilder.add(instrumentedFileManifest);
@@ -264,7 +265,7 @@ public final class TestActionBuilder {
         }
 
         env.registerAction(new TestRunnerAction(
-            ruleContext.getActionOwner(), inputs, testRuntime,
+            ruleContext.getActionOwner(), inputs,
             testLog, cacheStatus,
             coverageArtifact, microCoverageArtifact,
             testProperties, extraEnv, executionSettings,
