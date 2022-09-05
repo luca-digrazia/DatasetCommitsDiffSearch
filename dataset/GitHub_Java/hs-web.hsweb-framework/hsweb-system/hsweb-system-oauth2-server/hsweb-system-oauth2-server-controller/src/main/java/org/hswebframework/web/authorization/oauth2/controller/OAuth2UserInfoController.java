@@ -20,7 +20,6 @@ package org.hswebframework.web.authorization.oauth2.controller;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.AuthenticationHolder;
 import org.hswebframework.web.authorization.exception.AccessDenyException;
@@ -65,14 +64,10 @@ public class OAuth2UserInfoController {
         if (null == auth2AccessEntity) {
             throw new GrantTokenException(ErrorType.EXPIRED_TOKEN);
         }
-        if (auth2AccessEntity.getScope() == null ||(!auth2AccessEntity.getScope().contains("*")&&!auth2AccessEntity.getScope().contains("user:get"))) {
-            throw new GrantTokenException(ErrorType.UNAUTHORIZED_CLIENT);
+        if (auth2AccessEntity.getScope() == null || !auth2AccessEntity.getScope().contains("user-info")) {
+            throw new GrantTokenException(ErrorType.UNSUPPORTED_GRANT_TYPE);
         }
-        Authentication info=  AuthenticationHolder.get(userId);
-        if(info==null){
-            throw new NotFoundException("user:"+userId+" not found");
-        }
-        return ResponseMessage.ok(info);
+        return ResponseMessage.ok(AuthenticationHolder.get(userId));
     }
 
 }
