@@ -13,14 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Optional;
-import com.google.devtools.build.lib.syntax.compiler.DebugInfo;
-import com.google.devtools.build.lib.syntax.compiler.Jump;
-import com.google.devtools.build.lib.syntax.compiler.LoopLabels;
-import com.google.devtools.build.lib.syntax.compiler.VariableScope;
-import com.google.devtools.build.lib.util.Preconditions;
-import net.bytebuddy.implementation.bytecode.ByteCodeAppender;
-
 /**
  * A class for flow statements (e.g. break and continue)
  */
@@ -29,19 +21,21 @@ public final class FlowStatement extends Statement {
     BREAK("break"),
     CONTINUE("continue");
 
-    private final String name;
+    private String name;
 
     private Kind(String name) {
       this.name = name;
     }
-  }
+  };
 
   private final Kind kind;
   private final FlowException ex;
 
   /**
    *
-   * @param kind The label of the statement (either break or continue)
+   * @param name The label of the statement (either break or continue)
+   * @param terminateLoop Determines whether the enclosing loop should be terminated completely
+   *        (break)
    */
   public FlowStatement(Kind kind) {
     this.kind = kind;
@@ -74,19 +68,17 @@ public final class FlowStatement extends Statement {
     visitor.visit(this);
   }
 
-  @Override
-  ByteCodeAppender compile(
-      VariableScope scope, Optional<LoopLabels> loopLabels, DebugInfo debugInfo) {
-    Preconditions.checkArgument(loopLabels.isPresent(), "break/continue not within loop");
-    return new ByteCodeAppender.Simple(Jump.to(loopLabels.get().labelFor(kind)));
-  }
-
   /**
    * An exception that signals changes in the control flow (e.g. break or continue)
    */
   class FlowException extends EvalException {
     private final Kind kind;
 
+    /**
+     *
+     * @param terminateLoop Determines whether the enclosing loop should be terminated completely
+     *        (break)
+     */
     public FlowException(Kind kind) {
       super(FlowStatement.this.getLocation(), "FlowException with kind = " + kind.name);
       this.kind = kind;
