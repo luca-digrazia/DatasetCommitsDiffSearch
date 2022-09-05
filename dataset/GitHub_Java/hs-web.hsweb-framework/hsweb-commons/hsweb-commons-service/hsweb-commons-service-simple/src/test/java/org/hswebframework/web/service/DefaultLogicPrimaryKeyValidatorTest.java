@@ -19,7 +19,7 @@ public class DefaultLogicPrimaryKeyValidatorTest {
 
     @Test
     public void testSimple() {
-        DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(TestBean.class, bean ->
+        validator.registerQuerySuppiler(TestBean.class, bean ->
                 Query.<TestBean, QueryParamEntity>empty(QueryParamEntity.empty())
                         .setSingleExecutor(param -> {
                             Assert.assertNotNull(param.getTerms());
@@ -34,7 +34,7 @@ public class DefaultLogicPrimaryKeyValidatorTest {
 
     @Test
     public void testClassAnn() {
-        DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(ClassAnnTestBean.class, bean ->
+        validator.registerQuerySuppiler(ClassAnnTestBean.class, bean ->
                 Query.<ClassAnnTestBean, QueryParamEntity>empty(QueryParamEntity.empty())
                         .setSingleExecutor(param -> {
                             Assert.assertNotNull(param.getTerms());
@@ -49,7 +49,7 @@ public class DefaultLogicPrimaryKeyValidatorTest {
 
     @Test
     public void testGroupAnn() {
-        DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(GroupAnnTestBean.class, bean ->
+        validator.registerQuerySuppiler(GroupAnnTestBean.class, bean ->
                 Query.<GroupAnnTestBean, QueryParamEntity>empty(QueryParamEntity.empty())
                         .setSingleExecutor(param -> {
                             Assert.assertNotNull(param.getTerms());
@@ -68,7 +68,7 @@ public class DefaultLogicPrimaryKeyValidatorTest {
     public void testNestProperty() {
         NestTestBean nestTestBean=new NestTestBean(new TestBean("test","1"),"test");
 
-        DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(NestTestBean.class, bean ->
+        validator.registerQuerySuppiler(NestTestBean.class, bean ->
                 Query.<NestTestBean, QueryParamEntity>empty(QueryParamEntity.empty())
                         .setSingleExecutor(param -> {
                             Assert.assertNotNull(param.getTerms());

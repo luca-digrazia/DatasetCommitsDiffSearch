@@ -57,10 +57,14 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
      */
     protected abstract IDGenerator<PK> getIDGenerator();
 
+    @Autowired(required = false)
+    public LogicPrimaryKeyValidator logicPrimaryKeyValidator;
+
     @PostConstruct
     public void init() {
         if (null != logicPrimaryKeyValidator && logicPrimaryKeyValidator instanceof DefaultLogicPrimaryKeyValidator) {
-            DefaultLogicPrimaryKeyValidator.registerQuerySuppiler(getEntityInstanceType(), bean -> this.createQuery().not("id", bean.getId()));
+            ((DefaultLogicPrimaryKeyValidator) logicPrimaryKeyValidator)
+                    .registerQuerySuppiler(getEntityInstanceType(), bean -> this.createQuery().not("id", bean.getId()));
         }
     }
 
