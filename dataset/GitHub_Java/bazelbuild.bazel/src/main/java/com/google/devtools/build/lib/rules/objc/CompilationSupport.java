@@ -38,6 +38,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.CLANG_PLU
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.COMPILABLE_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.DSYMUTIL;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.HEADERS;
+import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.LIBTOOL;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PRECOMPILED_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
@@ -73,6 +74,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
@@ -141,14 +143,7 @@ public final class CompilationSupport {
    * Returns the location of the xcrunwrapper tool.
    */
   public static final FilesToRunProvider xcrunwrapper(RuleContext ruleContext) {
-    return ruleContext.getExecutablePrerequisite("$xcrunwrapper", Mode.HOST);
-  }
-
-  /**
-   * Returns the location of the libtool tool.
-   */
-  public static final FilesToRunProvider libtool(RuleContext ruleContext) {
-    return ruleContext.getExecutablePrerequisite(ObjcRuleClasses.LIBTOOL_ATTRIBUTE, Mode.HOST);
+   return ruleContext.getExecutablePrerequisite("$xcrunwrapper", Mode.HOST);
   }
 
   /**
@@ -304,20 +299,7 @@ public final class CompilationSupport {
    * @return this compilation support
    */
   CompilationSupport registerCompileAndArchiveActions(ObjcCommon common) {
-    return registerCompileAndArchiveActions(
-        common, ExtraCompileArgs.NONE, ImmutableList.<PathFragment>of());
-  }
-
-  /**
-   * Registers all actions necessary to compile this rule's sources and archive them.
-   *
-   * @param common common information about this rule and its dependencies
-   * @param priorityHeaders priority headers to be included before the dependency headers
-   * @return this compilation support
-   */
-  CompilationSupport registerCompileAndArchiveActions(
-      ObjcCommon common, Iterable<PathFragment> priorityHeaders) {
-    return registerCompileAndArchiveActions(common, ExtraCompileArgs.NONE, priorityHeaders);
+    return registerCompileAndArchiveActions(common, ExtraCompileArgs.NONE);
   }
 
   /**
@@ -325,26 +307,11 @@ public final class CompilationSupport {
    *
    * @param common common information about this rule and its dependencies
    * @param extraCompileArgs args to be added to compile actions
-   * @return this compilation support
-   */
-  CompilationSupport registerCompileAndArchiveActions(
-      ObjcCommon common, ExtraCompileArgs extraCompileArgs) {
-    return registerCompileAndArchiveActions(
-        common, extraCompileArgs, ImmutableList.<PathFragment>of());
-  }
-
-  /**
-   * Registers all actions necessary to compile this rule's sources and archive them.
-   *
-   * @param common common information about this rule and its dependencies
-   * @param extraCompileArgs args to be added to compile actions
-   * @param priorityHeaders priority headers to be included before the dependency headers
    * @return this compilation support
    */
   CompilationSupport registerCompileAndArchiveActions(
       ObjcCommon common,
-      ExtraCompileArgs extraCompileArgs,
-      Iterable<PathFragment> priorityHeaders) {
+      ExtraCompileArgs extraCompileArgs) {
     if (common.getCompilationArtifacts().isPresent()) {
       registerGenerateModuleMapAction(common.getCompilationArtifacts());
       Optional<CppModuleMap> moduleMap;
@@ -357,7 +324,6 @@ public final class CompilationSupport {
           common.getCompilationArtifacts().get(),
           common.getObjcProvider(),
           extraCompileArgs,
-          priorityHeaders,
           moduleMap,
           buildConfiguration.isCodeCoverageEnabled());
     }
@@ -372,7 +338,6 @@ public final class CompilationSupport {
       CompilationArtifacts compilationArtifacts,
       ObjcProvider objcProvider,
       ExtraCompileArgs extraCompileArgs,
-      Iterable<PathFragment> priorityHeaders,
       Optional<CppModuleMap> moduleMap,
       boolean isCodeCoverageEnabled) {
     ImmutableList.Builder<Artifact> objFiles = new ImmutableList.Builder<>();
@@ -386,7 +351,6 @@ public final class CompilationSupport {
             sourceFile,
             objFile,
             objcProvider,
-            priorityHeaders,
             moduleMap,
             compilationArtifacts,
             Iterables.concat(extraCompileArgs, ImmutableList.of("-fobjc-arc")),
@@ -400,7 +364,6 @@ public final class CompilationSupport {
           nonArcSourceFile,
           objFile,
           objcProvider,
-          priorityHeaders,
           moduleMap,
           compilationArtifacts,
           Iterables.concat(extraCompileArgs, ImmutableList.of("-fno-objc-arc")),
@@ -408,7 +371,7 @@ public final class CompilationSupport {
     }
 
     objFiles.addAll(compilationArtifacts.getPrecompiledSrcs());
-
+  
     if (compilationArtifacts.hasSwiftSources()) {
       registerSwiftModuleMergeAction(compilationArtifacts, objcProvider);
     }
@@ -442,7 +405,6 @@ public final class CompilationSupport {
       Artifact sourceFile,
       Artifact objFile,
       ObjcProvider objcProvider,
-      Iterable<PathFragment> priorityHeaders,
       Optional<CppModuleMap> moduleMap,
       CompilationArtifacts compilationArtifacts,
       Iterable<String> otherFlags,
@@ -480,7 +442,6 @@ public final class CompilationSupport {
         .add(objcConfiguration.getCoptsForCompilationMode())
         .addBeforeEachPath("-iquote", ObjcCommon.userHeaderSearchPaths(buildConfiguration))
         .addBeforeEachExecPath("-include", compilationArtifacts.getPchFile().asSet())
-        .addBeforeEachPath("-I", priorityHeaders)
         .addBeforeEachPath("-I", objcProvider.get(INCLUDE))
         .addBeforeEachPath("-isystem", objcProvider.get(INCLUDE_SYSTEM))
         .add(otherFlags)
@@ -758,8 +719,9 @@ public final class CompilationSupport {
     actions.add(ObjcRuleClasses.spawnAppleEnvActionBuilder(
             ruleContext, appleConfiguration.getIosCpuPlatform())
         .setMnemonic("ObjcLink")
-        .setExecutable(libtool(ruleContext))
+        .setExecutable(xcrunwrapper(ruleContext))
         .setCommandLine(new CustomCommandLine.Builder()
+            .add(LIBTOOL)
             .add("-static")
             .add("-filelist").add(objList.getExecPathString())
             .add("-arch_only").add(appleConfiguration.getIosCpu())
@@ -784,23 +746,23 @@ public final class CompilationSupport {
       throws InterruptedException {
     Artifact outputArchive =
         ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB);
-    ImmutableList<Artifact> objcLibraries = objcLibraries(objcProvider);
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(
             ruleContext, appleConfiguration.getIosCpuPlatform())
         .setMnemonic("ObjcLink")
-        .setExecutable(libtool(ruleContext))
+        .setExecutable(xcrunwrapper(ruleContext))
         .setCommandLine(new CustomCommandLine.Builder()
+            .add(LIBTOOL)
             .add("-static")
             .add("-arch_only").add(appleConfiguration.getIosCpu())
             .add("-syslibroot").add(AppleToolchain.sdkDir())
             .add("-o").add(outputArchive.getExecPathString())
-            .addExecPaths(objcLibraries)
+            .addExecPaths(objcProvider.get(LIBRARY))
             .addExecPaths(objcProvider.get(IMPORTED_LIBRARY))
             .addExecPaths(ccLibraries)
             .build())
         .addInputs(ccLibraries)
-        .addInputs(objcLibraries)
+        .addTransitiveInputs(objcProvider.get(LIBRARY))
         .addTransitiveInputs(objcProvider.get(IMPORTED_LIBRARY))
         .addOutput(outputArchive)
         .build(ruleContext));
@@ -975,10 +937,9 @@ public final class CompilationSupport {
             ? intermediateArtifacts.unstrippedSingleArchitectureBinary()
             : intermediateArtifacts.strippedSingleArchitectureBinary();
 
-    ImmutableList<Artifact> objcLibraries = objcLibraries(objcProvider);
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
-    ImmutableList<Artifact> bazelBuiltLibraries = Iterables.isEmpty(prunedJ2ObjcArchives)
-        ? objcLibraries : substituteJ2ObjcPrunedLibraries(objcProvider);
+    NestedSet<Artifact> bazelBuiltLibraries = Iterables.isEmpty(prunedJ2ObjcArchives)
+        ? objcProvider.get(LIBRARY) : substituteJ2ObjcPrunedLibraries(objcProvider);
     CommandLine commandLine =
         linkCommandLine(
             extraLinkArgs,
@@ -997,7 +958,7 @@ public final class CompilationSupport {
             .addOutput(binaryToLink)
             .addOutputs(dsymBundleZip.asSet())
             .addOutputs(linkmap.asSet())
-            .addInputs(bazelBuiltLibraries)
+            .addTransitiveInputs(bazelBuiltLibraries)
             .addTransitiveInputs(objcProvider.get(IMPORTED_LIBRARY))
             .addTransitiveInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
             .addTransitiveInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
@@ -1034,16 +995,6 @@ public final class CompilationSupport {
     }
   }
 
-  private ImmutableList<Artifact> objcLibraries(ObjcProvider objcProvider) {
-    ImmutableList.Builder<Artifact> objcLibraryBuilder = ImmutableList.builder();
-    // JRE libraries must be ordered after all regular objc libraries.
-    NestedSet<Artifact> jreLibs = objcProvider.get(ObjcProvider.JRE_LIBRARY);
-    objcLibraryBuilder.addAll(Iterables.filter(
-        objcProvider.get(LIBRARY), Predicates.not(Predicates.in(jreLibs.toSet()))));
-    objcLibraryBuilder.addAll(jreLibs);
-    return objcLibraryBuilder.build();
-  }
-
   private ImmutableList<Artifact> ccLibraries(ObjcProvider objcProvider) {
     ImmutableList.Builder<Artifact> ccLibraryBuilder = ImmutableList.builder();
     for (LinkerInputs.LibraryToLink libraryToLink : objcProvider.get(ObjcProvider.CC_LIBRARY)) {
@@ -1074,11 +1025,11 @@ public final class CompilationSupport {
    * Returns a nested set of Bazel-built ObjC libraries with all unpruned J2ObjC libraries
    * substituted with pruned ones.
    */
-  private ImmutableList<Artifact> substituteJ2ObjcPrunedLibraries(ObjcProvider objcProvider) {
+  private NestedSet<Artifact> substituteJ2ObjcPrunedLibraries(ObjcProvider objcProvider) {
     ImmutableList.Builder<Artifact> libraries = new ImmutableList.Builder<>();
 
     Set<Artifact> unprunedJ2ObjcLibs = objcProvider.get(ObjcProvider.J2OBJC_LIBRARY).toSet();
-    for (Artifact library : objcLibraries(objcProvider)) {
+    for (Artifact library : objcProvider.get(LIBRARY)) {
       // If we match an unpruned J2ObjC library, add the pruned version of the J2ObjC static library
       // instead.
       if (unprunedJ2ObjcLibs.contains(library)) {
@@ -1087,7 +1038,7 @@ public final class CompilationSupport {
         libraries.add(library);
       }
     }
-    return libraries.build();
+    return NestedSetBuilder.wrap(Order.NAIVE_LINK_ORDER, libraries.build());
   }
 
   private CommandLine linkCommandLine(
