@@ -87,7 +87,7 @@ public final class CommandEnvironment {
       EventBus eventBus) {
     this.runtime = runtime;
     this.commandId = commandId;
-    this.reporter = reporter == null ? new Reporter() : reporter;
+    this.reporter = reporter;
     this.eventBus = eventBus;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
     this.view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
@@ -226,7 +226,7 @@ public final class CommandEnvironment {
    */
   public void setupPackageCache(PackageCacheOptions packageCacheOptions,
       String defaultsPackageContents) throws InterruptedException, AbruptExitException {
-    runtime.setupPackageCache(reporter, packageCacheOptions, defaultsPackageContents, commandId);
+    runtime.setupPackageCache(packageCacheOptions, defaultsPackageContents, commandId);
   }
 
   public long getCommandStartTime() {

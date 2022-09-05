@@ -1588,6 +1588,7 @@ public final class BlazeRuntime {
           new PackageFactory(ruleClassProvider, platformRegexps, extensions);
       SkyframeExecutor skyframeExecutor =
           skyframeExecutorFactory.create(
+              reporter,
               pkgFactory,
               timestampMonitor,
               directories,
