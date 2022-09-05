@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.PackageFactory;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorFactory;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -206,7 +206,7 @@ public abstract class BlazeModule {
      * Gets a file from the depot based on its label and returns the {@link Path} where it can
      * be found.
      */
-    Path getFileFromWorkspace(Label label)
+    Path getFileFromDepot(Label label)
         throws NoSuchThingException, InterruptedException, IOException;
 
     /**
@@ -370,10 +370,8 @@ public abstract class BlazeModule {
   public PackageFactory.EnvironmentExtension getPackageEnvironmentExtension() {
     return new PackageFactory.EnvironmentExtension() {
       @Override
-      public void update(Environment environment) {}
+      public void update(Environment environment, Label buildFileLabel) {}
 
-      @Override
-      public void updateWorkspace(Environment environment) {}
       @Override
       public Iterable<PackageArgument<?>> getPackageArguments() {
         return ImmutableList.of();
