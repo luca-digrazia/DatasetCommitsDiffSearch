@@ -90,13 +90,10 @@ public class BinaryOperatorExpression extends QueryExpression {
       return;
     }
 
-    // For each right-hand side operand, intersection cannot be performed in a streaming manner; the
-    // entire result of that operand is needed. So, in order to avoid pinning too much in memory at
-    // once, we process each right-hand side operand one at a time and throw away that operand's
-    // result.
+    // Intersection is not associative, so we are forced to pin both the left-hand and right-hand
+    // side of the operation at the same time.
     // TODO(bazel-team): Consider keeping just the name / label of the right-hand side results
-    // instead of the potentially heavy-weight instances of type T. This would let us process all
-    // right-hand side operands in parallel without worrying about memory usage.
+    // instead of the potentially heavy-weight instances of type T.
     Preconditions.checkState(operator == TokenKind.INTERSECT || operator == TokenKind.CARET,
         operator);
     for (int i = 1; i < operands.size(); i++) {
