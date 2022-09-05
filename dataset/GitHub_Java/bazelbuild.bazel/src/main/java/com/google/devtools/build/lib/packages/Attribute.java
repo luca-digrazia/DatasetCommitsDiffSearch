@@ -24,11 +24,11 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFactory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.util.FileType;
@@ -314,8 +314,7 @@ public final class Attribute implements Comparable<Attribute> {
     private Predicate<AttributeMap> condition;
     private Set<PropertyFlag> propertyFlags = EnumSet.noneOf(PropertyFlag.class);
     private PredicateWithMessage<Object> allowedValues = null;
-    private ImmutableList<ImmutableSet<String>> mandatoryProvidersList =
-        ImmutableList.<ImmutableSet<String>>of();
+    private ImmutableSet<String> mandatoryProviders = ImmutableSet.<String>of();
     private Set<RuleAspect> aspects = new LinkedHashSet<>();
 
     /**
@@ -697,23 +696,14 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     /**
-     * Sets a list of sets of mandatory Skylark providers. Every configured target occurring in
-     * this label type attribute has to provide all the providers from one of those sets,
-     * otherwise an error is produces during the analysis phase.
+     * Sets a set of mandatory Skylark providers. Every configured target occurring in 
+     * this label type attribute has to provide all of these providers, otherwise an
+     * error is produces during the analysis phase for every missing provider.
      */
-    public Builder<TYPE> mandatoryProvidersList(Iterable<? extends Iterable<String>> providersList){
+    public Builder<TYPE> mandatoryProviders(Iterable<String> providers) {
       Preconditions.checkState((type == BuildType.LABEL) || (type == BuildType.LABEL_LIST),
           "must be a label-valued type");
-      ImmutableList.Builder<ImmutableSet<String>> listBuilder = ImmutableList.builder();
-      for (Iterable<String> providers : providersList) {
-        listBuilder.add(ImmutableSet.copyOf(providers));
-      }
-      this.mandatoryProvidersList = listBuilder.build();
-      return this;
-    }
-
-    public Builder<TYPE> mandatoryProviders(Iterable<String> providers) {
-      mandatoryProvidersList(ImmutableList.of(providers));
+      this.mandatoryProviders = ImmutableSet.copyOf(providers);
       return this;
     }
 
@@ -836,21 +826,11 @@ public final class Attribute implements Comparable<Attribute> {
           allowedFileTypesForLabels = FileTypeSet.ANY_FILE;
         }
       }
-      return new Attribute(
-          name,
-          type,
-          Sets.immutableEnumSet(propertyFlags),
-          valueSet ? value : type.getDefaultValue(),
-          configTransition,
-          configurator,
-          allowedRuleClassesForLabels,
-          allowedRuleClassesForLabelsWarning,
-          allowedFileTypesForLabels,
-          validityPredicate,
-          condition,
-          allowedValues,
-          mandatoryProvidersList,
-          ImmutableSet.copyOf(aspects));
+      return new Attribute(name, type, Sets.immutableEnumSet(propertyFlags),
+          valueSet ? value : type.getDefaultValue(), configTransition, configurator,
+          allowedRuleClassesForLabels, allowedRuleClassesForLabelsWarning,
+          allowedFileTypesForLabels, validityPredicate, condition,
+          allowedValues, mandatoryProviders, ImmutableSet.copyOf(aspects));
     }
   }
 
@@ -942,13 +922,8 @@ public final class Attribute implements Comparable<Attribute> {
      * The actual value for the attribute for the analysis phase, which depends on the build
      * configuration. Note that configurations transitions are applied after the late-bound
      * attribute was evaluated.
-     *
-     * @param rule the rule being evaluated
-     * @param attributes interface for retrieving the values of the rule's other attributes
-     * @param o the configuration to evaluate with
      */
-    Object getDefault(Rule rule, AttributeMap attributes, T o)
-        throws EvalException, InterruptedException;
+    Object getDefault(Rule rule, T o) throws EvalException, InterruptedException;
   }
 
   /**
@@ -1001,7 +976,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public abstract Label getDefault(Rule rule, AttributeMap attributes, T configuration);
+    public abstract Label getDefault(Rule rule, T configuration);
   }
 
   /**
@@ -1035,7 +1010,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public abstract List<Label> getDefault(Rule rule, AttributeMap attributes, T configuration);
+    public abstract List<Label> getDefault(Rule rule, T configuration);
   }
 
   /**
@@ -1065,9 +1040,11 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public Object getDefault(Rule rule, AttributeMap attributes, Object o)
-        throws EvalException, InterruptedException {
+    public Object getDefault(Rule rule, Object o) throws EvalException, InterruptedException {
       Map<String, Object> attrValues = new HashMap<>();
+      // TODO(bazel-team): support configurable attributes here. RawAttributeMapper will throw
+      // an exception on any instance of configurable attributes.
+      AttributeMap attributes = RawAttributeMapper.of(rule);
       for (Attribute attr : rule.getAttributes()) {
         if (!attr.isLateBound()) {
           Object value = attributes.get(attr.getName(), attr.getType());
@@ -1132,7 +1109,7 @@ public final class Attribute implements Comparable<Attribute> {
 
   private final PredicateWithMessage<Object> allowedValues;
 
-  private final ImmutableList<ImmutableSet<String>> mandatoryProvidersList;
+  private final ImmutableSet<String> mandatoryProviders;
 
   private final ImmutableSet<RuleAspect> aspects;
 
@@ -1151,12 +1128,8 @@ public final class Attribute implements Comparable<Attribute> {
    *        (which must be of type LABEL, LABEL_LIST, NODEP_LABEL or
    *        NODEP_LABEL_LIST).
    */
-  private Attribute(
-      String name,
-      Type<?> type,
-      Set<PropertyFlag> propertyFlags,
-      Object defaultValue,
-      Transition configTransition,
+  private Attribute(String name, Type<?> type, Set<PropertyFlag> propertyFlags,
+      Object defaultValue, Transition configTransition,
       Configurator<?, ?> configurator,
       Predicate<RuleClass> allowedRuleClassesForLabels,
       Predicate<RuleClass> allowedRuleClassesForLabelsWarning,
@@ -1164,7 +1137,7 @@ public final class Attribute implements Comparable<Attribute> {
       ValidityPredicate validityPredicate,
       Predicate<AttributeMap> condition,
       PredicateWithMessage<Object> allowedValues,
-      ImmutableList<ImmutableSet<String>> mandatoryProvidersList,
+      ImmutableSet<String> mandatoryProviders,
       ImmutableSet<RuleAspect> aspects) {
     Preconditions.checkNotNull(configTransition);
     Preconditions.checkArgument(
@@ -1197,7 +1170,7 @@ public final class Attribute implements Comparable<Attribute> {
     this.validityPredicate = validityPredicate;
     this.condition = condition;
     this.allowedValues = allowedValues;
-    this.mandatoryProvidersList = mandatoryProvidersList;
+    this.mandatoryProviders = mandatoryProviders;
     this.aspects = aspects;
   }
 
@@ -1371,10 +1344,10 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   /**
-   * Returns the list of sets of mandatory Skylark providers.
+   * Returns the set of mandatory Skylark providers.
    */
-  public ImmutableList<ImmutableSet<String>> getMandatoryProvidersList() {
-    return mandatoryProvidersList;
+  public ImmutableSet<String> getMandatoryProviders() {
+    return mandatoryProviders;
   }
 
   public FileTypeSet getAllowedFileTypesPredicate() {

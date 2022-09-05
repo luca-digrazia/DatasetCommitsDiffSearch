@@ -54,7 +54,7 @@ public abstract class SkylarkTestCase extends BuildViewTestCase {
         return Environment.builder(mutability)
             .setSkylark()
             .setEventHandler(getEventHandler())
-            .setGlobals(SkylarkModules.getGlobals(SkylarkModules.MODULES))
+            .setGlobals(SkylarkModules.GLOBALS)
             .setLoadingPhase()
             .build()
             .setupDynamic(

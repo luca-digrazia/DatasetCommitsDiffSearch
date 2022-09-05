@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -31,10 +30,6 @@ import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalExceptionWithStackTrace;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkType;
-
-import java.util.Map;
 
 /**
  * A factory for aspects that are defined in Skylark.
@@ -91,9 +86,6 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
         SkylarkClassObject struct = (SkylarkClassObject) aspectSkylarkObject;
         Location loc = struct.getCreationLoc();
         for (String key : struct.getKeys()) {
-          if (key.equals("output_groups")) {
-            addOutputGroups(struct.getValue(key), loc, builder);
-          }
           builder.addSkylarkTransitiveInfo(key, struct.getValue(key), loc);
         }
         ConfiguredAspect configuredAspect = builder.build();
@@ -105,20 +97,6 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
         return null;
       }
 
-    }
-  }
-
-  private static void addOutputGroups(Object value, Location loc,
-      ConfiguredAspect.Builder builder)
-      throws EvalException {
-    Map<String, SkylarkNestedSet> outputGroups = SkylarkType
-        .castMap(value, String.class, SkylarkNestedSet.class, "output_groups");
-
-    for (String outputGroup : outputGroups.keySet()) {
-      SkylarkNestedSet objects = outputGroups.get(outputGroup);
-      builder.addOutputGroup(outputGroup,
-          SkylarkType.cast(objects, SkylarkNestedSet.class, Artifact.class, loc,
-              "Output group '%s'", outputGroup).getSet(Artifact.class));
     }
   }
 

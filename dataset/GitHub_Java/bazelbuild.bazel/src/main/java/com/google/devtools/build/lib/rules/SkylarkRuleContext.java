@@ -46,14 +46,14 @@ import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.shell.ShellUtils.TokenizationException;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression.FuncallException;
 import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -324,7 +324,6 @@ public final class SkylarkRuleContext {
     }
 
     return new SkylarkRuleAttributesCollection(
-        ruleContext.getRule().getRuleClass(),
         attrBuilder.build(),
         executableBuilder.build(),
         fileBuilder.build(),
@@ -342,15 +341,13 @@ public final class SkylarkRuleContext {
     private final SkylarkClassObject fileObject;
     private final SkylarkClassObject filesObject;
     private final ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap;
-    private final String ruleClassName;
 
     private SkylarkRuleAttributesCollection(
-        String ruleClassName, ImmutableMap<String, Object> attrs,
+        ImmutableMap<String, Object> attrs,
         ImmutableMap<String, Object> executables,
         ImmutableMap<String, Object> singleFiles,
         ImmutableMap<String, Object> files,
         ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap) {
-      this.ruleClassName = ruleClassName;
       attrObject =
           new SkylarkClassObject(
               attrs,
@@ -392,13 +389,6 @@ public final class SkylarkRuleContext {
     public SkylarkClassObject getFiles() {
       return filesObject;
     }
-
-    @SkylarkCallable(name = "kind", structField = true, doc =
-        "The kind of a rule, such as 'cc_library'")
-    public String getRuleClassName() {
-      return ruleClassName;
-    }
-
 
     public ImmutableMap<Artifact, FilesToRunProvider> getExecutableRunfilesMap() {
       return executableRunfilesMap;
@@ -504,13 +494,10 @@ public final class SkylarkRuleContext {
     return outputsObject;
   }
 
-  @SkylarkCallable(structField = true,
-      doc = "Returns rule attributes descriptor for the rule that aspect is applied to."
-          + " Only avaliable in aspect implementation functions.")
+  @SkylarkCallable(structField = true, doc = "Returns rule attributes descriptor")
   public SkylarkRuleAttributesCollection rule() throws EvalException {
     if (ruleAttributesCollection == null) {
-      throw new EvalException(
-          Location.BUILTIN, "'rule' is only available in aspect implementations");
+      throw new EvalException(Location.BUILTIN, "'rule' is not defined");
     }
     return ruleAttributesCollection;
   }
