@@ -1,8 +1,6 @@
 package org.nlpcn.es4sql.domain;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.nlpcn.es4sql.Util;
 
@@ -28,14 +26,6 @@ public class MethodField extends Field {
 	public List<KVValue> getParams() {
 		return params;
 	}
-
-    public Map<String,Object> getParamsAsMap(){
-        Map<String,Object> paramsAsMap = new HashMap<>();
-        for(KVValue kvValue : this.params){
-            paramsAsMap.put(kvValue.key,kvValue.value);
-        }
-        return paramsAsMap;
-    }
 
 	@Override
 	public String toString() {
