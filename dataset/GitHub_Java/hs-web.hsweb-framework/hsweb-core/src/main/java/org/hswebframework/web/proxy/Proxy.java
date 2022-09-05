@@ -1,24 +1,15 @@
 package org.hswebframework.web.proxy;
 
-import javassist.ClassClassPath;
-import javassist.ClassPool;
-import javassist.CtClass;
-import javassist.CtField;
-import javassist.CtNewConstructor;
-import javassist.CtNewMethod;
-import javassist.LoaderClassPath;
+import javassist.*;
 import javassist.bytecode.AnnotationsAttribute;
 import javassist.bytecode.ConstPool;
-import javassist.bytecode.annotation.Annotation;
-import javassist.bytecode.annotation.ArrayMemberValue;
-import javassist.bytecode.annotation.BooleanMemberValue;
-import javassist.bytecode.annotation.ClassMemberValue;
-import javassist.bytecode.annotation.IntegerMemberValue;
-import javassist.bytecode.annotation.LongMemberValue;
-import javassist.bytecode.annotation.MemberValue;
-import javassist.bytecode.annotation.StringMemberValue;
+import javassist.bytecode.annotation.*;
+import javassist.scopedpool.*;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.type.AnnotationMetadata;
+import org.springframework.core.type.StandardAnnotationMetadata;
 import org.springframework.util.ClassUtils;
 
 import java.util.Arrays;
@@ -54,10 +45,12 @@ public class Proxy<I> {
             throw new NullPointerException("superClass can not be null");
         }
         this.superClass = superClass;
-        ClassPool classPool = ClassPool.getDefault();
+        ClassPool classPool = new ClassPool(true);
 
-        classPool.insertClassPath(new ClassClassPath(this.getClass()));
+        ClassPath classPath = new ClassClassPath(this.getClass());
+        classPool.insertClassPath(classPath);
         classPool.insertClassPath(new LoaderClassPath(ClassUtils.getDefaultClassLoader()));
+
         if (classPathString != null) {
             for (String path : classPathString) {
                 classPool.insertClassPath(path);
