@@ -114,7 +114,6 @@ public class DependencyResolverTest extends AnalysisTestCase {
     Target target = packageManager.getTarget(reporter, Label.parseAbsolute(targetName));
     return dependencyResolver.dependentNodeMap(
         new TargetAndConfiguration(target, getTargetConfiguration()),
-        getHostConfiguration(),
         aspectDefinition,
         ImmutableSet.<ConfigMatchingProvider>of());
   }
@@ -228,10 +227,10 @@ public class DependencyResolverTest extends AnalysisTestCase {
             new Dependency(aExplicit, target, inverseAspects))
         .addEqualityGroup(
             // base set but with null configuration
-            new Dependency(a, (BuildConfiguration) null, twoAspects),
-            new Dependency(aExplicit, (BuildConfiguration) null, twoAspects),
-            new Dependency(a, (BuildConfiguration) null, inverseAspects),
-            new Dependency(aExplicit, (BuildConfiguration) null, inverseAspects))
+            new Dependency(a, null, twoAspects),
+            new Dependency(aExplicit, null, twoAspects),
+            new Dependency(a, null, inverseAspects),
+            new Dependency(aExplicit, null, inverseAspects))
         .addEqualityGroup(
             // base set but with different aspects
             new Dependency(a, host, differentAspects),
@@ -242,8 +241,8 @@ public class DependencyResolverTest extends AnalysisTestCase {
             new Dependency(b, target, inverseAspects))
         .addEqualityGroup(
             // base set but with label //b and null configuration
-            new Dependency(b, (BuildConfiguration) null, twoAspects),
-            new Dependency(b, (BuildConfiguration) null, inverseAspects))
+            new Dependency(b, null, twoAspects),
+            new Dependency(b, null, inverseAspects))
         .addEqualityGroup(
             // base set but with label //b and different aspects
             new Dependency(b, host, differentAspects))
@@ -253,14 +252,14 @@ public class DependencyResolverTest extends AnalysisTestCase {
             new Dependency(aExplicit, target, differentAspects))
         .addEqualityGroup(
             // base set but with null configuration and different aspects
-            new Dependency(a, (BuildConfiguration) null, differentAspects),
-            new Dependency(aExplicit, (BuildConfiguration) null, differentAspects))
+            new Dependency(a, null, differentAspects),
+            new Dependency(aExplicit, null, differentAspects))
         .addEqualityGroup(
             // inverse of base set: //b, target configuration, different aspects
             new Dependency(b, target, differentAspects))
         .addEqualityGroup(
             // inverse of base set: //b, null configuration, different aspects
-            new Dependency(b, (BuildConfiguration) null, differentAspects))
+            new Dependency(b, null, differentAspects))
         .testEquals();
   }
 }
