@@ -13,7 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -665,83 +668,71 @@ public class ValidationTests extends AbstractParserTestCase {
 
   @Test
   public void testParentWithSkylarkModule() throws Exception {
-    Class<?> emptyListClass = SkylarkList.EMPTY_LIST.getClass();
-    Class<?> simpleListClass = SkylarkList.list(Arrays.<Integer>asList(1, 2, 3), SkylarkType.INT)
-        .getClass();
-    Class<?> tupleClass = SkylarkList.tuple(Arrays.<Object>asList(1, "a", "b")).getClass();
-
-    assertThat(SkylarkList.class.isAnnotationPresent(SkylarkModule.class)).isTrue();
-    assertThat(EvalUtils.getParentWithSkylarkModule(SkylarkList.class))
-        .isEqualTo(SkylarkList.class);
-    assertThat(EvalUtils.getParentWithSkylarkModule(emptyListClass)).isEqualTo(SkylarkList.class);
-    assertThat(EvalUtils.getParentWithSkylarkModule(simpleListClass)).isEqualTo(SkylarkList.class);
-    // TODO(bazel-team): make a tuple not a list anymore.
-    assertThat(EvalUtils.getParentWithSkylarkModule(tupleClass)).isEqualTo(SkylarkList.class);
-
-    // TODO(bazel-team): fix that?
-    assertThat(ClassObject.class.isAnnotationPresent(SkylarkModule.class))
-        .isFalse();
-    assertThat(ClassObject.SkylarkClassObject.class.isAnnotationPresent(SkylarkModule.class))
-        .isTrue();
-    assertThat(EvalUtils.getParentWithSkylarkModule(ClassObject.SkylarkClassObject.class)
-        == ClassObject.SkylarkClassObject.class).isTrue();
-    assertThat(EvalUtils.getParentWithSkylarkModule(ClassObject.class))
-        .isNull();
+    assertTrue(SkylarkList.class.isAnnotationPresent(SkylarkModule.class));
+    assertEquals(SkylarkList.class,
+        EvalUtils.getParentWithSkylarkModule(SkylarkList.class));
+    assertEquals(SkylarkList.class,
+        EvalUtils.getParentWithSkylarkModule(SkylarkList.EMPTY_LIST.getClass()));
+    assertEquals(SkylarkList.class,
+        EvalUtils.getParentWithSkylarkModule(
+            SkylarkList.tuple(Arrays.<Object>asList(1, 2, 3)).getClass()));
+    // TODO(bazel-team): fix that!
+    assertFalse(ClassObject.class.isAnnotationPresent(SkylarkModule.class));
+    assertTrue(ClassObject.SkylarkClassObject.class
+        .isAnnotationPresent(SkylarkModule.class));
+    assertEquals(ClassObject.SkylarkClassObject.class,
+        EvalUtils.getParentWithSkylarkModule(ClassObject.SkylarkClassObject.class));
+    assertNull(EvalUtils.getParentWithSkylarkModule(ClassObject.class));
   }
 
   @Test
   public void testSkylarkTypeEquivalence() throws Exception {
     // All subclasses of SkylarkList are made equivalent
-    Class<?> emptyListClass = SkylarkList.EMPTY_LIST.getClass();
-    Class<?> simpleListClass = SkylarkList.list(Arrays.<Integer>asList(1, 2, 3), SkylarkType.INT)
-        .getClass();
-    Class<?> tupleClass = SkylarkList.tuple(Arrays.<Object>asList(1, "a", "b")).getClass();
-
-    assertThat(SkylarkType.of(SkylarkList.class)).isEqualTo(SkylarkType.LIST);
-    assertThat(SkylarkType.of(emptyListClass)).isEqualTo(SkylarkType.LIST);
-    assertThat(SkylarkType.of(simpleListClass)).isEqualTo(SkylarkType.LIST);
+    assertEquals(SkylarkType.LIST, SkylarkType.of(SkylarkList.class));
+    assertEquals(SkylarkType.LIST, SkylarkType.of(SkylarkList.EMPTY_LIST.getClass()));
+    assertEquals(SkylarkType.LIST, SkylarkType.of(
+        SkylarkList.list(Arrays.<Object>asList(1, 2, 3), SkylarkType.INT).getClass()));
     // TODO(bazel-team): make a tuple not a list anymore.
-    assertThat(SkylarkType.of(tupleClass)).isEqualTo(SkylarkType.LIST);
-
+    assertEquals(SkylarkType.LIST, SkylarkType.of(
+        SkylarkList.tuple(Arrays.<Object>asList(1, "a", "b")).getClass()));
 
     // Also for ClassObject
-    assertThat(SkylarkType.of(ClassObject.SkylarkClassObject.class))
-        .isEqualTo(SkylarkType.STRUCT);
-    // TODO(bazel-team): fix that?
-    assertThat(SkylarkType.of(ClassObject.class))
-        .isNotEqualTo(SkylarkType.STRUCT);
+    assertEquals(SkylarkType.of(ClassObject.SkylarkClassObject.class),
+        SkylarkType.of(ClassObject.SkylarkClassObject.class));
+    assertFalse(SkylarkType.of(ClassObject.class).equals(
+        SkylarkType.of(ClassObject.SkylarkClassObject.class)));
 
-    // Also test for these bazel classes, to avoid some regression.
+    // Also for these bazel classes, to avoid some regression.
     // TODO(bazel-team): move to some other place to remove dependency of syntax tests on Artifact?
-    assertThat(SkylarkType.of(Artifact.SpecialArtifact.class))
-        .isEqualTo(SkylarkType.of(Artifact.class));
-    assertThat(SkylarkType.of(RuleConfiguredTarget.class))
-        .isNotEqualTo(SkylarkType.STRUCT);
+    assertEquals(SkylarkType.of(Artifact.class), SkylarkType.of(Artifact.SpecialArtifact.class));
+    assertFalse(SkylarkType.of(RuleConfiguredTarget.class).equals(
+        SkylarkType.STRUCT));
   }
 
   @Test
   public void testSkylarkTypeInclusion() throws Exception {
-    assertThat(SkylarkType.INT.includes(SkylarkType.BOTTOM)).isTrue();
-    assertThat(SkylarkType.BOTTOM.includes(SkylarkType.INT)).isFalse();
-    assertThat(SkylarkType.TOP.includes(SkylarkType.INT)).isTrue();
+    assertTrue(SkylarkType.INT.includes(SkylarkType.BOTTOM));
+    assertFalse(SkylarkType.BOTTOM.includes(SkylarkType.INT));
+    assertTrue(SkylarkType.TOP.includes(SkylarkType.INT));
 
     SkylarkType combo1 = SkylarkType.Combination.of(SkylarkType.LIST, SkylarkType.INT);
-    assertThat(SkylarkType.LIST.includes(combo1)).isTrue();
+    assertTrue(SkylarkType.LIST.includes(combo1));
 
     SkylarkType union1 = SkylarkType.Union.of(
         SkylarkType.MAP, SkylarkType.LIST, SkylarkType.STRUCT);
-    assertThat(union1.includes(SkylarkType.MAP)).isTrue();
-    assertThat(union1.includes(SkylarkType.STRUCT)).isTrue();
-    assertThat(union1.includes(combo1)).isTrue();
-    assertThat(union1.includes(SkylarkType.STRING)).isFalse();
+    assertTrue(union1.includes(SkylarkType.MAP));
+    assertTrue(union1.includes(SkylarkType.LIST));
+    assertTrue(union1.includes(SkylarkType.STRUCT));
+    assertTrue(union1.includes(combo1));
+    assertFalse(union1.includes(SkylarkType.STRING));
 
     SkylarkType union2 = SkylarkType.Union.of(
         SkylarkType.LIST, SkylarkType.MAP, SkylarkType.STRING, SkylarkType.INT);
     SkylarkType inter1 = SkylarkType.intersection(union1, union2);
-    assertThat(inter1.includes(SkylarkType.MAP)).isTrue();
-    assertThat(inter1.includes(SkylarkType.LIST)).isTrue();
-    assertThat(inter1.includes(combo1)).isTrue();
-    assertThat(inter1.includes(SkylarkType.INT)).isFalse();
+    assertTrue(inter1.includes(SkylarkType.MAP));
+    assertTrue(inter1.includes(SkylarkType.LIST));
+    assertTrue(inter1.includes(combo1));
+    assertFalse(inter1.includes(SkylarkType.INT));
   }
 
   private void parse(String... lines) {
