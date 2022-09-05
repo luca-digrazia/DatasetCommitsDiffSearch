@@ -106,10 +106,7 @@ public final class LTOBackendArtifacts {
   }
 
   public void scheduleLTOBackendAction(
-      RuleContext ruleContext,
-      FeatureConfiguration featureConfiguration,
-      boolean usePic,
-      boolean generateDwo) {
+      RuleContext ruleContext, FeatureConfiguration featureConfiguration, boolean usePic) {
     LTOBackendAction.Builder builder = new LTOBackendAction.Builder();
     builder.addImportsInfo(bitcodeFiles, imports);
 
@@ -142,14 +139,6 @@ public final class LTOBackendArtifacts {
     if (autoFdoProfile != null) {
       builder.addInput(autoFdoProfile);
     }
-
-    if (generateDwo) {
-      Artifact dwoFile = ruleContext.getRelatedArtifact(objectFile.getRootRelativePath(), ".dwo");
-      builder.addOutput(dwoFile);
-      buildVariablesBuilder.addStringVariable(
-          "per_object_debug_info_file", dwoFile.getExecPathString());
-    }
-
     Variables buildVariables = buildVariablesBuilder.build();
     List<String> execArgs = new ArrayList<>();
     execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));
