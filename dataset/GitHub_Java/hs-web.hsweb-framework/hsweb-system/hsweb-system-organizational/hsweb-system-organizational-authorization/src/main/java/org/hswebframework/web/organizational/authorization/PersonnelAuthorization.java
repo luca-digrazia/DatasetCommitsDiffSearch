@@ -1,6 +1,7 @@
 package org.hswebframework.web.organizational.authorization;
 
 import org.hswebframework.web.authorization.Authentication;
+import org.hswebframework.web.organizational.authorization.relation.Relations;
 
 import java.io.Serializable;
 import java.util.List;
@@ -34,6 +35,33 @@ public interface PersonnelAuthorization extends Serializable {
     Personnel getPersonnel();
 
     /**
+     * 获取人员的关系信息
+     * <pre>
+     *     boolean isLeader = PersonnelAuthorization
+     *     .current().get()
+     *     .getRelations()
+     *     // 和张三的人员为leader关系, 我是张三的leader
+     *     .has("leader","人员","张三");
+     *     //我是开发部的leader
+     *     //.has("leader","部门","开发部");
+     *     //反转关系: 张三是我的leader
+     *     //.has("leader","人员","张三","PRE");
+     * </pre>
+     * <pre>
+     *     List<Relation> relations= PersonnelAuthorization.current()
+     *     //查找用户关系
+     *     .map(PersonnelAuthorization::getRelations)
+     *     .map(relations -> relations.findAll("leader"))
+     *     .orElse(null)
+     * </pre>
+     *
+     * @return 人员关系信息
+     * @see Relations
+     * @see org.hswebframework.web.organizational.authorization.relation.Relation
+     */
+    Relations getRelations();
+
+    /**
      * @return 人员所在行政区域ID, 只返回根节点, 永远不会返回{@code null}
      */
     Set<TreeNode<String>> getDistrictIds();
@@ -52,6 +80,17 @@ public interface PersonnelAuthorization extends Serializable {
      * @return 人员所在部门ID, 只返回根节点, 永远不会返回{@code null}
      */
     Set<TreeNode<String>> getDepartmentIds();
+
+    /**
+     * 获取人员的所有职位信息
+     *
+     * @return 职位信息
+     */
+    Set<Position> getPositions();
+
+    default Optional<Position> getPosition(String id) {
+        return getPositions().stream().filter(position -> position.getId().equals(id)).findFirst();
+    }
 
     /**
      * @return 根地区ID
