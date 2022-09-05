@@ -36,10 +36,10 @@ public class InstrumentedThreadFactory implements ThreadFactory
 
   private class InstrumentedRunnable implements Runnable
   {
-    private final Runnable task;
-    InstrumentedRunnable(Runnable task)
+    private final Runnable wrapee;
+    InstrumentedRunnable(Runnable wrapee)
     {
-      this.task = task;
+      this.wrapee = wrapee;
     }
 
     @Override
@@ -48,7 +48,7 @@ public class InstrumentedThreadFactory implements ThreadFactory
       running.inc();
       try
       {
-        task.run();
+        wrapee.run();
       }
       finally
       {

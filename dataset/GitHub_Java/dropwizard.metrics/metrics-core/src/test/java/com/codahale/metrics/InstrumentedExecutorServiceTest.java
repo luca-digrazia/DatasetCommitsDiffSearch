@@ -12,33 +12,28 @@ public class InstrumentedExecutorServiceTest
 {
   private final ExecutorService executor = Executors.newCachedThreadPool();
   private final MetricRegistry registry = new MetricRegistry();
-  private final InstrumentedExecutorService instrumentedExecutorService = new InstrumentedExecutorService(executor, registry, "xs");
+  private final InstrumentedExecutorService instrumentedExecutorService = new InstrumentedExecutorService(executor, registry);
 
   @Test
   public void reportsTasksInformation() throws Exception {
     Runnable fastOne = new FastRunnable();
     Runnable slowOne = new SlowRunnable();
-    Counter submitted = registry.counter("xs.submitted");
-    Counter running = registry.counter("xs.running");
-    Meter completed = registry.meter("xs.completed");
-    Timer duration = registry.timer("xs.duration");
 
-    assertThat(submitted.getCount()).isEqualTo(0);
-    assertThat(running.getCount()).isEqualTo(0);
-    assertThat(completed.getCount()).isEqualTo(0);
-    assertThat(duration.getCount()).isEqualTo(0);
+    assertThat(instrumentedExecutorService.submitted.getCount()).isEqualTo(0);
+    assertThat(instrumentedExecutorService.running.getCount()).isEqualTo(0);
+    assertThat(instrumentedExecutorService.completed.getCount()).isEqualTo(0);
+    assertThat(instrumentedExecutorService.duration.getCount()).isEqualTo(0);
 
     Future<?> fastFuture = instrumentedExecutorService.submit(fastOne);
     Future<?> slowFuture = instrumentedExecutorService.submit(slowOne);
 
-    assertThat(submitted.getCount()).isEqualTo(2);
+    assertThat(instrumentedExecutorService.submitted.getCount()).isEqualTo(2);
 
     fastFuture.get();
-    assertThat(running.getCount()).isEqualTo(1);
+    assertThat(instrumentedExecutorService.running.getCount()).isEqualTo(1);
 
     slowFuture.get();
-    assertThat(running.getCount()).isEqualTo(0);
-    assertThat(duration.getSnapshot().size()).isEqualTo(2);
+    assertThat(instrumentedExecutorService.running.getCount()).isEqualTo(0);
   }
 
   private static class FastRunnable implements Runnable
@@ -58,7 +53,7 @@ public class InstrumentedExecutorServiceTest
       try
       {
         // sleep a little, then die.
-        Thread.sleep(750);
+        Thread.sleep(500);
       }
       catch (Exception e)
       {
