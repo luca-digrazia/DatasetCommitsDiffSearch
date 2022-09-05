@@ -1,116 +1,91 @@
 package com.yammer.metrics.httpclient;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.TimerContext;
-import com.yammer.metrics.core.TimerMetric;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpRequest;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.ResponseHandler;
-import org.apache.http.client.methods.HttpUriRequest;
+import com.yammer.metrics.MetricRegistry;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.http.ConnectionReuseStrategy;
+import org.apache.http.client.*;
+import org.apache.http.conn.ClientConnectionManager;
+import org.apache.http.conn.ConnectionKeepAliveStrategy;
+import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.HttpParams;
-import org.apache.http.protocol.HttpContext;
+import org.apache.http.protocol.HttpProcessor;
+import org.apache.http.protocol.HttpRequestExecutor;
 
-import java.io.IOException;
+import static com.yammer.metrics.httpclient.HttpClientMetricNameStrategies.METHOD_ONLY;
 
 public class InstrumentedHttpClient extends DefaultHttpClient {
-    private final static String GET = "GET", POST = "POST", HEAD = "HEAD", PUT = "PUT",
-                                OPTIONS = "OPTIONS", DELETE = "DELETE", TRACE = "TRACE",
-                                CONNECT = "CONNECT", MOVE = "MOVE", PATCH = "PATCH";
+    private final Log log = LogFactory.getLog(getClass());
 
-    private static final TimerMetric GET_TIMER = Metrics.newTimer(HttpClient.class, "get-requests");
-    private static final TimerMetric POST_TIMER = Metrics.newTimer(HttpClient.class, "post-requests");
-    private static final TimerMetric HEAD_TIMER = Metrics.newTimer(HttpClient.class, "head-requests");
-    private static final TimerMetric PUT_TIMER = Metrics.newTimer(HttpClient.class, "put-requests");
-    private static final TimerMetric DELETE_TIMER = Metrics.newTimer(HttpClient.class, "delete-requests");
-    private static final TimerMetric OPTIONS_TIMER = Metrics.newTimer(HttpClient.class, "options-requests");
-    private static final TimerMetric TRACE_TIMER = Metrics.newTimer(HttpClient.class, "trace-requests");
-    private static final TimerMetric CONNECT_TIMER = Metrics.newTimer(HttpClient.class, "connect-requests");
-    private static final TimerMetric MOVE_TIMER = Metrics.newTimer(HttpClient.class, "move-requests");
-    private static final TimerMetric PATCH_TIMER = Metrics.newTimer(HttpClient.class, "patch-requests");
-    private static final TimerMetric OTHER_TIMER = Metrics.newTimer(HttpClient.class, "other-requests");
+    private final MetricRegistry registry;
+    private final String name;
+    private final HttpClientMetricNameStrategy metricNameStrategy;
 
-    public InstrumentedHttpClient(HttpParams params) {
-        super(new InstrumentedClientConnManager(), params);
+    public InstrumentedHttpClient(MetricRegistry registry,
+                                  InstrumentedClientConnManager manager,
+                                  HttpParams params,
+                                  String name,
+                                  HttpClientMetricNameStrategy metricNameStrategy) {
+        super(manager, params);
+        this.registry = registry;
+        this.name = name;
+        this.metricNameStrategy = metricNameStrategy;
     }
 
-    public InstrumentedHttpClient() {
-        super(new InstrumentedClientConnManager());
+    public InstrumentedHttpClient(MetricRegistry registry,
+                                  InstrumentedClientConnManager manager,
+                                  HttpParams params,
+                                  String name) {
+        this(registry, manager, params, name, METHOD_ONLY);
     }
 
-    @Override
-    public <T> T execute(HttpUriRequest request,
-                         ResponseHandler<? extends T> responseHandler) throws IOException {
-        final TimerContext context = timer(request).time();
-        try {
-            return super.execute(request, responseHandler);
-        } finally {
-            context.stop();
-        }
+    public InstrumentedHttpClient(MetricRegistry registry,
+                                  HttpParams params) {
+        this(registry, new InstrumentedClientConnManager(registry), params, null);
     }
 
-    @Override
-    public <T> T execute(HttpUriRequest request,
-                         ResponseHandler<? extends T> responseHandler,
-                         HttpContext ctxt) throws IOException {
-        final TimerContext context = timer(request).time();
-        try {
-            return super.execute(request, responseHandler, ctxt);
-        } finally {
-            context.stop();
-        }
+    public InstrumentedHttpClient(MetricRegistry registry) {
+        this(registry, new InstrumentedClientConnManager(registry), null, null);
+    }
+
+    public InstrumentedHttpClient(MetricRegistry registry, HttpClientMetricNameStrategy metricNameStrategy) {
+        this(registry, new InstrumentedClientConnManager(registry), null, null, metricNameStrategy);
+    }
+
+    public InstrumentedHttpClient(MetricRegistry registry, String name, HttpClientMetricNameStrategy metricNameStrategy) {
+        this(registry, new InstrumentedClientConnManager(registry), null, name, metricNameStrategy);
     }
 
     @Override
-    public <T> T execute(HttpHost target,
-                         HttpRequest request,
-                         ResponseHandler<? extends T> responseHandler) throws IOException {
-        final TimerContext context = timer(request).time();
-        try {
-            return super.execute(target, request, responseHandler);
-        } finally {
-            context.stop();
-        }
-    }
-
-    @Override
-    public <T> T execute(HttpHost target,
-                         HttpRequest request,
-                         ResponseHandler<? extends T> responseHandler,
-                         HttpContext ctxt) throws IOException {
-        final TimerContext context = timer(request).time();
-        try {
-            return super.execute(target, request, responseHandler, ctxt);
-        } finally {
-            context.stop();
-        }
-
-    }
-
-    private TimerMetric timer(HttpRequest request) {
-        final String method = request.getRequestLine().getMethod();
-        if (GET.equalsIgnoreCase(method)) {
-            return GET_TIMER;
-        } else if (POST.equalsIgnoreCase(method)) {
-            return POST_TIMER;
-        } else if (PUT.equalsIgnoreCase(method)) {
-            return PUT_TIMER;
-        } else if (HEAD.equalsIgnoreCase(method)) {
-            return HEAD_TIMER;
-        } else if (DELETE.equalsIgnoreCase(method)) {
-            return DELETE_TIMER;
-        } else if (OPTIONS.equalsIgnoreCase(method)) {
-            return OPTIONS_TIMER;
-        } else if (TRACE.equalsIgnoreCase(method)) {
-            return TRACE_TIMER;
-        } else if (CONNECT.equalsIgnoreCase(method)) {
-            return CONNECT_TIMER;
-        } else if (PATCH.equalsIgnoreCase(method)) {
-            return PATCH_TIMER;
-        } else if (MOVE.equalsIgnoreCase(method)) {
-            return MOVE_TIMER;
-        }
-        return OTHER_TIMER;
+    protected RequestDirector createClientRequestDirector(HttpRequestExecutor requestExec,
+                                                          ClientConnectionManager conman,
+                                                          ConnectionReuseStrategy reustrat,
+                                                          ConnectionKeepAliveStrategy kastrat,
+                                                          HttpRoutePlanner rouplan,
+                                                          HttpProcessor httpProcessor,
+                                                          HttpRequestRetryHandler retryHandler,
+                                                          RedirectStrategy redirectStrategy,
+                                                          AuthenticationStrategy targetAuthStrategy,
+                                                          AuthenticationStrategy proxyAuthStrategy,
+                                                          UserTokenHandler userTokenHandler,
+                                                          HttpParams params) {
+        return new InstrumentedRequestDirector(
+                registry,
+                name,
+                metricNameStrategy,
+                log,
+                requestExec,
+                conman,
+                reustrat,
+                kastrat,
+                rouplan,
+                httpProcessor,
+                retryHandler,
+                redirectStrategy,
+                targetAuthStrategy,
+                proxyAuthStrategy,
+                userTokenHandler,
+                params);
     }
 }
