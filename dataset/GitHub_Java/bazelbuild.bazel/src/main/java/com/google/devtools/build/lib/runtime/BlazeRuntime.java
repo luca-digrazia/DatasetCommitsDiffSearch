@@ -168,7 +168,6 @@ public final class BlazeRuntime {
   private Path workingDirectory;
   private long commandStartTime;
 
-  @Nullable
   private Range<Long> lastExecutionStartFinish = null;
 
   private final SkyframeExecutor skyframeExecutor;
@@ -409,10 +408,7 @@ public final class BlazeRuntime {
   }
 
   public void recordLastExecutionTime() {
-    long currentTimeMillis = clock.currentTimeMillis();
-    lastExecutionStartFinish = currentTimeMillis >= commandStartTime
-        ? Range.closed(commandStartTime, currentTimeMillis)
-        : null;
+    lastExecutionStartFinish = Range.closed(commandStartTime, clock.currentTimeMillis());
   }
 
   /**
@@ -1473,8 +1469,7 @@ public final class BlazeRuntime {
     }
 
     BlazeDirectories directories =
-        new BlazeDirectories(installBasePath, outputBasePath, workspaceDirectoryPath,
-                             startupOptions.installMD5);
+        new BlazeDirectories(installBasePath, outputBasePath, workspaceDirectoryPath);
 
     Clock clock = BlazeClock.instance();
 
