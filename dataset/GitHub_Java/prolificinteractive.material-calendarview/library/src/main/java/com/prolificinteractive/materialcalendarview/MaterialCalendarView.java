@@ -921,7 +921,6 @@ public class MaterialCalendarView extends ViewGroup {
         setTileSize(ss.tileSizePx);
         setTopbarVisible(ss.topbarVisible);
         setSelectionMode(ss.selectionMode);
-        setDynamicHeightEnabled(ss.dynamicHeightEnabled);
     }
 
     @Override
@@ -955,7 +954,6 @@ public class MaterialCalendarView extends ViewGroup {
         int tileSizePx = -1;
         boolean topbarVisible = true;
         int selectionMode = SELECTION_MODE_SINGLE;
-        boolean dynamicHeightEnabled = false;
 
         SavedState(Parcelable superState) {
             super(superState);
@@ -975,7 +973,6 @@ public class MaterialCalendarView extends ViewGroup {
             out.writeInt(tileSizePx);
             out.writeInt(topbarVisible ? 1 : 0);
             out.writeInt(selectionMode);
-            out.writeInt(dynamicHeightEnabled ? 1 : 0);
         }
 
         public static final Parcelable.Creator<SavedState> CREATOR
@@ -1003,7 +1000,6 @@ public class MaterialCalendarView extends ViewGroup {
             tileSizePx = in.readInt();
             topbarVisible = in.readInt() == 1;
             selectionMode = in.readInt();
-            dynamicHeightEnabled = in.readInt() == 1;
         }
     }
 
