@@ -3,7 +3,6 @@ package com.yammer.metrics.core;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -21,14 +20,14 @@ import static java.lang.Math.*;
  * Data Engineering (2009)</a>
  */
 public class ExponentiallyDecayingSample implements Sample {
-	private static final long RESCALE_THRESHOLD = TimeUnit.HOURS.toNanos(1);
+	private static final long RESCALE_THRESHOLD = 1800; // seconds, every 30min
 	private final ConcurrentSkipListMap<Double, Long> values;
 	private final ReentrantReadWriteLock lock;
 	private final double alpha;
 	private final int reservoirSize;
 	private final AtomicLong count = new AtomicLong(0);
+	private volatile long lastScaledAt;
 	private volatile long startTime;
-	private final AtomicLong nextScaleTime = new AtomicLong(0);
 
 	/**
 	 * Creates a new {@link ExponentiallyDecayingSample}.
@@ -51,7 +50,7 @@ public class ExponentiallyDecayingSample implements Sample {
 		values.clear();
 		count.set(0);
 		this.startTime = tick();
-		nextScaleTime.set(System.nanoTime() + RESCALE_THRESHOLD);
+		this.lastScaledAt = tick();
 	}
 
 	@Override
@@ -75,6 +74,7 @@ public class ExponentiallyDecayingSample implements Sample {
 		try {
 			final double priority = weight(timestamp - startTime) / random();
 			final long newCount = count.incrementAndGet();
+
 			if (newCount <= reservoirSize) {
 				values.put(priority, value);
 			} else {
@@ -92,21 +92,14 @@ public class ExponentiallyDecayingSample implements Sample {
 			lock.readLock().unlock();
 		}
 
-		final long now = System.nanoTime();
-		final long next = nextScaleTime.get();
-		if (now >= next) {
-			rescale(now, next);
+		if (tick() > lastScaledAt + RESCALE_THRESHOLD) {
+			rescale();
 		}
 	}
 
 	@Override
 	public List<Long> values() {
-		lock.readLock().lock();
-		try {
-			return new ArrayList<Long>(values.values());
-		} finally {
-			lock.readLock().unlock();
-		}
+		return new ArrayList<Long>(values.values());
 	}
 
 	private long tick() { return System.currentTimeMillis() / 1000; }
@@ -115,7 +108,8 @@ public class ExponentiallyDecayingSample implements Sample {
 		return exp(alpha * t);
 	}
 
-	/* "A common feature of the above techniques—indeed, the key technique that
+	/**
+	 * "A common feature of the above techniques—indeed, the key technique that
 	 * allows us to track the decayed weights efficiently—is that they maintain
 	 * counts and other quantities based on g(ti − L), and only scale by g(t − L)
 	 * at query time. But while g(ti −L)/g(t−L) is guaranteed to lie between zero
@@ -133,20 +127,20 @@ public class ExponentiallyDecayingSample implements Sample {
 	 * landmark L′ (and then use this new L′ at query time). This can be done with
 	 * a linear pass over whatever data structure is being used."
 	 */
-	private void rescale(long now, long next) {
-		if (nextScaleTime.compareAndSet(next, now + RESCALE_THRESHOLD)) {
-			lock.writeLock().lock();
-			try {
-				final long oldStartTime = startTime;
-				this.startTime = tick();
-				final ArrayList<Double> keys = new ArrayList<Double>(values.keySet());
-				for (Double key : keys) {
-					final Long value = values.remove(key);
-					values.put(key * exp(-alpha * (startTime - oldStartTime)), value);
-				}
-			} finally {
-				lock.writeLock().unlock();
+	private void rescale() {
+		lock.writeLock().lock();
+		try {
+			final long newTick = tick();
+			final long oldStartTime = startTime;
+			this.startTime = newTick;
+			final ArrayList<Double> keys = new ArrayList<Double>(values.keySet());
+			for (Double key : keys) {
+				final Long value = values.remove(key);
+				values.put(key * exp(-alpha * (startTime - oldStartTime)), value);
 			}
+			this.lastScaledAt = newTick;
+		} finally {
+			lock.writeLock().unlock();
 		}
 	}
 }
