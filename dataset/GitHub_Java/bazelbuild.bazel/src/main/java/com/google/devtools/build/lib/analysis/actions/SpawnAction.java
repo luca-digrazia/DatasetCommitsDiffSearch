@@ -65,9 +65,7 @@ import javax.annotation.Nullable;
 
 /** An Action representing an arbitrary subprocess to be forked and exec'd. */
 public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifier, CommandAction {
-
-  /** Sets extensions on ExtraActionInfo **/
-  protected static class ExtraActionInfoSupplier<T> {
+  private static class ExtraActionInfoSupplier<T> {
     private final GeneratedExtension<ExtraActionInfo, T> extension;
     private final T value;
 
@@ -246,8 +244,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    */
   protected void internalExecute(
       ActionExecutionContext actionExecutionContext) throws ExecException, InterruptedException {
-    getContext(actionExecutionContext.getExecutor())
-        .exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
+    getContext(actionExecutionContext.getExecutor()).exec(getSpawn(), actionExecutionContext);
   }
 
   @Override
@@ -290,21 +287,9 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   /**
    * Returns a Spawn that is representative of the command that this Action
    * will execute. This function must not modify any state.
-   *
-   * This method is final, as it is merely a shorthand use of the generic way to obtain a spawn,
-   * which also depends on the client environment. Subclasses that which to override the way to get
-   * a spawn should override {@link getSpawn(Map<String, String>)} instead.
    */
-  public final Spawn getSpawn() {
-    return getSpawn(null);
-  }
-
-  /**
-   * Return a spawn that is representative of the command that this Action will execute in the given
-   * client environment.
-   */
-  public Spawn getSpawn(Map<String, String> clientEnv) {
-    return new ActionSpawn(clientEnv);
+  public Spawn getSpawn() {
+    return new ActionSpawn();
   }
 
   @Override
@@ -418,9 +403,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
     private final List<Artifact> filesets = new ArrayList<>();
 
-    private final ImmutableMap<String, String> effectiveEnvironment;
-
-    public ActionSpawn(Map<String, String> clientEnv) {
+    public ActionSpawn() {
       super(ImmutableList.copyOf(argv.arguments()),
           ImmutableMap.<String, String>of(),
           executionInfo,
@@ -432,27 +415,11 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           filesets.add(input);
         }
       }
-      LinkedHashMap<String, String> env = new LinkedHashMap<>(SpawnAction.this.getEnvironment());
-      if (clientEnv != null) {
-        for (String var : SpawnAction.this.getClientEnvironmentVariables()) {
-          String value = clientEnv.get(var);
-          if (value == null) {
-            env.remove(var);
-          } else {
-            env.put(var, value);
-          }
-        }
-      }
-      effectiveEnvironment = ImmutableMap.copyOf(env);
-    }
-
-    public ActionSpawn() {
-      this(null);
     }
 
     @Override
     public ImmutableMap<String, String> getEnvironment() {
-      return effectiveEnvironment;
+      return ImmutableMap.copyOf(SpawnAction.this.getEnvironment());
     }
 
     @Override
@@ -487,7 +454,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private ImmutableMap<String, String> executionInfo = ImmutableMap.of();
     private boolean isShellCommand = false;
     private boolean useDefaultShellEnvironment = false;
-    protected boolean executeUnconditionally;
+    private boolean executeUnconditionally;
     private PathFragment executable;
     // executableArgs does not include the executable itself.
     private List<String> executableArgs;
@@ -497,7 +464,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private String progressMessage;
     private ParamFileInfo paramFileInfo = null;
     private String mnemonic = "Unknown";
-    protected ExtraActionInfoSupplier<?> extraActionInfoSupplier = null;
+    private ExtraActionInfoSupplier<?> extraActionInfoSupplier = null;
 
     /**
      * Creates a SpawnAction builder.
@@ -645,7 +612,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           tools,
           inputsAndTools,
           ImmutableList.copyOf(outputs),
-          resourceSet,
           actualCommandLine,
           ImmutableMap.copyOf(env),
           clientEnvironmentVariables,
@@ -655,13 +621,11 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           mnemonic);
     }
 
-    /** Creates a SpawnAction. */
-    protected SpawnAction createSpawnAction(
+    SpawnAction createSpawnAction(
         ActionOwner owner,
         NestedSet<Artifact> tools,
         NestedSet<Artifact> inputsAndTools,
         ImmutableList<Artifact> outputs,
-        ResourceSet resourceSet,
         CommandLine actualCommandLine,
         ImmutableMap<String, String> env,
         ImmutableSet<String> clientEnvironmentVariables,

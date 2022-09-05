@@ -73,11 +73,6 @@ public interface ActionAnalysisMetadata {
   /**
    * Returns the environment variables from the client environment that this action depends on. May
    * be empty.
-   *
-   * <p>Warning: For optimization reasons, the available environment variables are restricted to
-   * those white-listed on the command line. If actions want to specify additional client
-   * environment variables to depend on, that restriction must be lifted in
-   * {@link com.google.devtools.build.lib.runtime.CommandEnvironment}.
    */
   Iterable<String> getClientEnvironmentVariables();
 
@@ -86,22 +81,6 @@ public interface ActionAnalysisMetadata {
    * this action generates.  (It would not make sense for this to be empty.)
    */
   ImmutableSet<Artifact> getOutputs();
-
-  /**
-   * Returns input files that need to be present to allow extra_action rules to shadow this action
-   * correctly when run remotely. This is at least the normal inputs of the action, but may include
-   * other files as well. For example C(++) compilation may perform include file header scanning.
-   * This needs to be mirrored by the extra_action rule. Called by
-   * {@link com.google.devtools.build.lib.rules.extra.ExtraAction} at execution time for actions
-   * that return true for {link #discoversInputs()}.
-   *
-   * @param actionExecutionContext Services in the scope of the action, like the Out/Err streams.
-   * @throws ActionExecutionException only when code called from this method
-   *     throws that exception.
-   * @throws InterruptedException if interrupted
-   */
-  Iterable<Artifact> getInputFilesForExtraAction(ActionExecutionContext actionExecutionContext)
-      throws ActionExecutionException, InterruptedException;
 
   /**
    * Returns the set of output Artifacts that are required to be saved. This is
