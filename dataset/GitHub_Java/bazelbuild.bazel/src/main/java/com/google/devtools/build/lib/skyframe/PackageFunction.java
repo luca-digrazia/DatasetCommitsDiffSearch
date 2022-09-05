@@ -15,14 +15,14 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.common.cache.Cache;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.Globber;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
@@ -88,10 +89,15 @@ public class PackageFunction implements SkyFunction {
   private final AtomicInteger numPackagesLoaded;
   private final Profiler profiler = Profiler.instance();
 
-  private final PathFragment preludePath;
+  private static final PathFragment PRELUDE_FILE_FRAGMENT =
+      new PathFragment(Constants.PRELUDE_FILE_DEPOT_RELATIVE_PATH);
 
   static final String DEFAULTS_PACKAGE_NAME = "tools/defaults";
   public static final String EXTERNAL_PACKAGE_NAME = "external";
+
+  static {
+    Preconditions.checkArgument(!PRELUDE_FILE_FRAGMENT.isAbsolute());
+  }
 
   public PackageFunction(Reporter reporter, PackageFactory packageFactory,
       CachingPackageLocator pkgLocator, AtomicBoolean showLoadingProgress,
@@ -99,10 +105,6 @@ public class PackageFunction implements SkyFunction {
       AtomicInteger numPackagesLoaded) {
     this.reporter = reporter;
 
-    // Can be null in tests.
-    this.preludePath = packageFactory == null
-        ? null
-        : packageFactory.getRuleClassProvider().getPreludePath();
     this.packageFactory = packageFactory;
     this.packageLocator = pkgLocator;
     this.showLoadingProgress = showLoadingProgress;
@@ -420,8 +422,7 @@ public class PackageFunction implements SkyFunction {
     ASTFileLookupValue astLookupValue = null;
     SkyKey astLookupKey = null;
     try {
-      astLookupKey = ASTFileLookupValue.key(
-          PackageIdentifier.createInDefaultRepo(preludePath));
+      astLookupKey = ASTFileLookupValue.key(PRELUDE_FILE_FRAGMENT);
     } catch (ASTLookupInputException e) {
       // There's a static check ensuring that PRELUDE_FILE_FRAGMENT is relative.
       throw new IllegalStateException(e);
@@ -583,22 +584,13 @@ public class PackageFunction implements SkyFunction {
       BuildFileAST buildFileAST,
       Environment env)
       throws PackageFunctionException {
-    ImmutableMap<Location, PathFragment> imports = buildFileAST.getImports();
+    ImmutableCollection<PathFragment> imports = buildFileAST.getImports();
     Map<PathFragment, SkylarkEnvironment> importMap = new HashMap<>();
     ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
     try {
-      for (Map.Entry<Location, PathFragment> entry : imports.entrySet()) {
-        PathFragment importFile = entry.getValue();
-        // HACK: The prelude sometimes contains load() statements, which need to be resolved
-        // relative to the prelude file. However, we don't have a good way to tell "this should come
-        // from the main repository" in a load() statement, and we don't have a good way to tell if
-        // a load() statement comes from the prelude, since we just prepend those statements before
-        // the actual BUILD file. So we use this evil .endsWith() statement to figure it out.
-        RepositoryName repository =
-            entry.getKey().getPath().endsWith(preludePath)
-                ? PackageIdentifier.DEFAULT_REPOSITORY_NAME : packageId.getRepository();
-        SkyKey importsLookupKey = SkylarkImportLookupValue.key(
-            repository, buildFileFragment, importFile);
+      for (PathFragment importFile : imports) {
+        SkyKey importsLookupKey =
+            SkylarkImportLookupValue.key(packageId.getRepository(), buildFileFragment, importFile);
         SkylarkImportLookupValue importLookupValue = (SkylarkImportLookupValue)
             env.getValueOrThrow(importsLookupKey, SkylarkImportFailedException.class,
                 InconsistentFilesystemException.class, ASTLookupInputException.class,
@@ -746,8 +738,7 @@ public class PackageFunction implements SkyFunction {
       // The label does not cross a subpackage boundary.
       return false;
     }
-    if (!containingPkg.getPathFragment().startsWith(
-        label.getPackageIdentifier().getPathFragment())) {
+    if (!containingPkg.getPackageFragment().startsWith(label.getPackageFragment())) {
       // This label is referencing an imaginary package, because the containing package should
       // extend the label's package: if the label is //a/b:c/d, the containing package could be
       // //a/b/c or //a/b, but should never be //a. Usually such errors will be caught earlier, but
