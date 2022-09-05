@@ -92,7 +92,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -118,6 +117,7 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.rules.extra.ExtraAction;
 import com.google.devtools.build.lib.rules.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.runtime.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
@@ -985,15 +985,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Artifact getGenfilesArtifact(String packageRelativePath, ConfiguredTarget owner,
       Class<? extends ConfiguredAspectFactory> creatingAspectFactory) {
-    return getGenfilesArtifact(
-        packageRelativePath, owner, creatingAspectFactory, AspectParameters.EMPTY);
-  }
-
-  protected Artifact getGenfilesArtifact(
-      String packageRelativePath,
-      ConfiguredTarget owner,
-      Class<? extends ConfiguredAspectFactory> creatingAspectFactory,
-      AspectParameters params) {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
         owner.getConfiguration().getGenfilesDirectory(),
@@ -1003,7 +994,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
                     owner.getConfiguration(),
                     owner.getConfiguration(),
                     new NativeAspectClass(creatingAspectFactory),
-                    params)
+                    AspectParameters.EMPTY)
                 .argument());
   }
 

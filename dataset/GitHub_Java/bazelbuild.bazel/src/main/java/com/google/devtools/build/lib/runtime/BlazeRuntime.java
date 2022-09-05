@@ -234,7 +234,7 @@ public final class BlazeRuntime {
     return builder.build();
   }
 
-  @Nullable public CoverageReportActionFactory getCoverageReportActionFactory() {
+  @Nullable CoverageReportActionFactory getCoverageReportActionFactory() {
     CoverageReportActionFactory firstFactory = null;
     for (BlazeModule module : blazeModules) {
       CoverageReportActionFactory factory = module.getCoverageReportFactory();
@@ -738,7 +738,7 @@ public final class BlazeRuntime {
    * defaults package, which will not be reflected here.
    */
   public String getDefaultsPackageContent() {
-    return ruleClassProvider.getDefaultsPackageContent(getInvocationPolicy());
+    return ruleClassProvider.getDefaultsPackageContent();
   }
 
   /**
@@ -1133,7 +1133,6 @@ public final class BlazeRuntime {
     BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
     if (startupOptions.batch && startupOptions.oomMoreEagerly) {
       new OomSignalHandler();
-      new RetainedHeapLimiter(startupOptions.oomMoreEagerlyThreshold).install();
     }
     PathFragment workspaceDirectory = startupOptions.workspaceDirectory;
     PathFragment installBase = startupOptions.installBase;

@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -131,14 +130,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
   private void setUpSkyframe(PackageCacheOptions packageCacheOptions) {
     PathPackageLocator pkgLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
-    skyframeExecutor.preparePackageLoading(
-        pkgLocator,
-        packageCacheOptions.defaultVisibility,
-        true,
-        GLOBBING_THREADS,
-        ruleClassProvider.getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
-        UUID.randomUUID(),
-        new TimestampGranularityMonitor(BlazeClock.instance()));
+    skyframeExecutor.preparePackageLoading(pkgLocator,
+        packageCacheOptions.defaultVisibility, true,
+        GLOBBING_THREADS, ruleClassProvider.getDefaultsPackageContent(),
+        UUID.randomUUID(), new TimestampGranularityMonitor(BlazeClock.instance()));
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
   }
 
@@ -275,5 +270,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
   protected void invalidatePackages() throws InterruptedException {
     skyframeExecutor.invalidateFilesUnderPathForTesting(
         reporter, ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
+  }
+
+  protected String getErrorMsgNonEmptyList(String attrName, String ruleType, String ruleName) {
+    return "non empty attribute '" + attrName + "' in '" + ruleType
+        + "' rule '" + ruleName + "' has to have at least one value";
   }
 }

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 
@@ -49,6 +48,9 @@ import com.google.devtools.build.skyframe.DelegatingWalkableGraph;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
+
+import org.junit.Before;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,8 +58,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
-import org.junit.Before;
 
 abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCase {
   // Convenience constants, so test args are readable vs true/false
@@ -177,8 +179,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
    * loaded targets.
    */
   public static Set<Label> getVisitedLabels(
-      Iterable<Label> startingLabels, SkyframeExecutor skyframeExecutor)
-      throws InterruptedException {
+      Iterable<Label> startingLabels, SkyframeExecutor skyframeExecutor) {
     final WalkableGraph graph =
         new DelegatingWalkableGraph(
             ((InMemoryMemoizingEvaluator) skyframeExecutor.getEvaluatorForTesting())
@@ -192,7 +193,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
     while (!Iterables.isEmpty(nodesToVisit)) {
       List<SkyKey> existingNodes = new ArrayList<>();
       for (SkyKey key : nodesToVisit) {
-        if (exists(key, graph) && graph.getValue(key) != null && visitedNodes.add(key)) {
+        if (graph.exists(key) && graph.getValue(key) != null && visitedNodes.add(key)) {
           existingNodes.add(key);
         }
       }
@@ -280,7 +281,7 @@ abstract public class SkyframeLabelVisitorTestCase extends PackageLoadingTestCas
 
   @Before
   public final void initializeVisitor() throws Exception {
-    setUpSkyframe(ConstantRuleVisibility.PRIVATE, loadingMock.getDefaultsPackageContent());
+    setUpSkyframe(ConstantRuleVisibility.PRIVATE, ruleClassProvider.getDefaultsPackageContent());
     this.visitor = skyframeExecutor.pkgLoader();
   }
 

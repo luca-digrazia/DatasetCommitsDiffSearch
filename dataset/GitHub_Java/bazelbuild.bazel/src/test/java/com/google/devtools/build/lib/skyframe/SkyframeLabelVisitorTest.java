@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.util.SubincludePreprocessor;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -394,7 +393,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
     Collection<Event> warnings = assertNewBuildFileConflict();
     assertThat(warnings).hasSize(1);
     assertThat(warnings.iterator().next().toString())
-        .contains("errors encountered while loading target '//pkg:x'");
+        .contains("errors encountered while analyzing target '//pkg:x': it will not be built");
   }
 
   @Test
@@ -409,7 +408,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
             ConstantRuleVisibility.PRIVATE,
             true,
             7,
-            ruleClassProvider.getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
+            ruleClassProvider.getDefaultsPackageContent(),
             UUID.randomUUID(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
     this.visitor = getSkyframeExecutor().pkgLoader();
@@ -453,7 +452,7 @@ public class SkyframeLabelVisitorTest extends SkyframeLabelVisitorTestCase {
             ConstantRuleVisibility.PRIVATE,
             true,
             7,
-            ruleClassProvider.getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
+            ruleClassProvider.getDefaultsPackageContent(),
             UUID.randomUUID(),
             new TimestampGranularityMonitor(BlazeClock.instance()));
     this.visitor = getSkyframeExecutor().pkgLoader();

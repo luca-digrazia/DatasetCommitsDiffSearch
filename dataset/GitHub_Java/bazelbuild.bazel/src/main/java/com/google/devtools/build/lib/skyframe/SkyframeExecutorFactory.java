@@ -47,7 +47,6 @@ public interface SkyframeExecutorFactory {
    * @param extraSkyFunctions
    * @param extraPrecomputedValues
    * @param customDirtinessCheckers
-   * @param productName
    * @return an instance of the SkyframeExecutor
    * @throws AbruptExitException if the executor cannot be created
    */
@@ -62,7 +61,6 @@ public interface SkyframeExecutorFactory {
       Preprocessor.Factory.Supplier preprocessorFactorySupplier,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues,
-      Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
-      String productName)
+      Iterable<SkyValueDirtinessChecker> customDirtinessCheckers)
       throws AbruptExitException;
 }

@@ -19,6 +19,7 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -40,8 +41,7 @@ public class FileStateFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws FileStateFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws FileStateFunctionException {
     RootedPath rootedPath = (RootedPath) skyKey.argument();
 
     try {

@@ -24,7 +24,6 @@ import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionLogBufferPathGenerator;
@@ -119,7 +118,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     return action;
   }
 
-  protected Builder createBuilder(ActionCache actionCache) throws Exception {
+  protected Builder createBuilder(ActionCache actionCache) {
     return createBuilder(actionCache, 1, /*keepGoing=*/ false);
   }
 
@@ -128,7 +127,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
    * specified ActionCache.
    */
   protected Builder createBuilder(
-      ActionCache actionCache, final int threadCount, final boolean keepGoing) throws Exception {
+      final ActionCache actionCache, final int threadCount, final boolean keepGoing) {
     return createBuilder(actionCache, threadCount, keepGoing, null);
   }
 
@@ -136,13 +135,11 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
       final ActionCache actionCache,
       final int threadCount,
       final boolean keepGoing,
-      @Nullable EvaluationProgressReceiver evaluationProgressReceiver) throws Exception {
+      @Nullable EvaluationProgressReceiver evaluationProgressReceiver) {
     AtomicReference<PathPackageLocator> pkgLocator =
         new AtomicReference<>(new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)));
     AtomicReference<TimestampGranularityMonitor> tsgmRef = new AtomicReference<>(tsgm);
-    BlazeDirectories directories = new BlazeDirectories(rootDirectory, outputBase, rootDirectory);
-    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(
-        pkgLocator, false, directories);
+    ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(pkgLocator, false);
     differencer = new RecordingDifferencer();
 
     ActionExecutionStatusReporter statusReporter =
@@ -151,7 +148,6 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
         new SkyframeActionExecutor(
             ResourceManager.instance(), eventBusRef, new AtomicReference<>(statusReporter));
 
-    Path actionOutputBase = scratch.dir("/usr/local/google/_blaze_jrluser/FAKEMD5/action_out/");
     skyframeActionExecutor.setActionLogBufferPathGenerator(
         new ActionLogBufferPathGenerator(actionOutputBase));
 
@@ -178,7 +174,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
                     new WorkspaceFileFunction(
                         TestRuleClassProvider.getRuleClassProvider(),
                         new PackageFactory(TestRuleClassProvider.getRuleClassProvider()),
-                        directories))
+                        new BlazeDirectories(rootDirectory, outputBase, rootDirectory)))
                 .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
                 .build(),
             differencer,
@@ -190,9 +186,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
     return new Builder() {
       private void setGeneratingActions() {
         if (evaluator.getExistingValueForTesting(OWNER_KEY) == null) {
-          differencer.inject(ImmutableMap.of(
-              OWNER_KEY,
-              new ActionLookupValue(ImmutableList.<ActionAnalysisMetadata>copyOf(actions))));
+          differencer.inject(ImmutableMap.of(OWNER_KEY, new ActionLookupValue(actions)));
         }
       }
 
@@ -290,14 +284,14 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
   /**
    * Creates and returns a new "amnesiac" builder based on the amnesiac cache.
    */
-  protected Builder amnesiacBuilder() throws Exception {
+  protected Builder amnesiacBuilder() {
     return createBuilder(AMNESIAC_CACHE);
   }
 
   /**
    * Creates and returns a new caching builder based on the inMemoryCache.
    */
-  protected Builder cachingBuilder() throws Exception {
+  protected Builder cachingBuilder() {
     return createBuilder(inMemoryCache);
   }
 

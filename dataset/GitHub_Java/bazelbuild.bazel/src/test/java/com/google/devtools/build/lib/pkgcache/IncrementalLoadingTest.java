@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.testutil.ManualClock;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -469,8 +468,7 @@ public class IncrementalLoadingTest {
       skyframeExecutor =
           SequencedSkyframeExecutor.create(
               new PackageFactory(TestRuleClassProvider.getRuleClassProvider()),
-              new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace,
-                  TestConstants.PRODUCT_NAME),
+              new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace),
               null, /* BinTools */
               null, /* workspaceStatusActionFactory */
               TestRuleClassProvider.getRuleClassProvider().getBuildInfoFactories(),
@@ -479,8 +477,7 @@ public class IncrementalLoadingTest {
               supplier,
               ImmutableMap.<SkyFunctionName, SkyFunction>of(),
               ImmutableList.<PrecomputedValue.Injected>of(),
-              ImmutableList.<SkyValueDirtinessChecker>of(),
-              TestConstants.PRODUCT_NAME);
+              ImmutableList.<SkyValueDirtinessChecker>of());
       skyframeExecutor.preparePackageLoading(
           new PathPackageLocator(outputBase, ImmutableList.of(workspace)),
           ConstantRuleVisibility.PUBLIC, true, 7, "",

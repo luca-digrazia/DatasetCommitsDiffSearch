@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.skyframe.SkyframeExecutor.DEFAULT_THREAD_COUNT;
-import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -665,14 +664,8 @@ public class FileFunctionTest {
             ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
 
     assertTrue(result.hasError());
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
+    assertThat(result.getError(key).getException())
         .isInstanceOf(FileOutsidePackageRootsException.class);
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .hasMessage("Encountered reference to external mutable [/]/[outsideroot]");
   }
 
   @Test
@@ -687,45 +680,8 @@ public class FileFunctionTest {
             ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
 
     assertTrue(result.hasError());
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .isInstanceOf(SymlinkOutsidePackageRootsException.class);
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .hasMessage(
-            "Encountered symlink [/root]/[a] linking to external mutable [/]/[outsideroot]");
-  }
-
-  /**
-   * A slightly more complicated negative test to ensure that the error message contains the real
-   * symlink and external path instead of the path of the top-level skyframe file node. In other
-   * words, the error is bubbled up to the top-level node, but the error message stops getting
-   * updated once it enters the internal path boundary.
-   */
-  @Test
-  public void testAbsoluteSymlinksReferredByInternalFilesToFilesOutsideRootWhenExternalDisallowed()
-      throws Exception {
-    file("/outsideroot/src/foo/bar");
-    symlink("/root/src", "/outsideroot/src");
-
-    SequentialBuildDriver driver = makeDriver(/*errorOnExternalFiles=*/ true);
-    SkyKey key = skyKey("/root/src/foo/bar");
-    EvaluationResult<SkyValue> result =
-        driver.evaluate(
-            ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
-
-    assertTrue(result.hasError());
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .isInstanceOf(SymlinkOutsidePackageRootsException.class);
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .hasMessage(
-            "Encountered symlink [/root]/[src] linking to external mutable [/]/[outsideroot/src]");
+    assertThat(result.getError(key).getException())
+        .isInstanceOf(FileOutsidePackageRootsException.class);
   }
 
   @Test
@@ -737,17 +693,9 @@ public class FileFunctionTest {
     EvaluationResult<SkyValue> result =
         driver.evaluate(
             ImmutableList.of(key), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
-
     assertTrue(result.hasError());
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .isInstanceOf(SymlinkOutsidePackageRootsException.class);
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(key)
-        .hasExceptionThat()
-        .hasMessage(
-            "Encountered symlink [/root]/[a] linking to external mutable [/]/[outsideroot]");
+    assertThat(result.getError(key).getException())
+        .isInstanceOf(FileOutsidePackageRootsException.class);
   }
 
   @Test

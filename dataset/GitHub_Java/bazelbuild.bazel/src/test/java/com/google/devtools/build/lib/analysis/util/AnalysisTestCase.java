@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Target;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
+import com.google.devtools.build.lib.runtime.InvocationPolicyEnforcer;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
@@ -169,13 +169,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             analysisMock.getSkyFunctions(directories),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of());
-    skyframeExecutor.preparePackageLoading(
-        pkgLocator,
-        Options.getDefaults(PackageCacheOptions.class).defaultVisibility,
-        true,
-        3,
-        ruleClassProvider.getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
-        UUID.randomUUID(),
+    skyframeExecutor.preparePackageLoading(pkgLocator,
+        Options.getDefaults(PackageCacheOptions.class).defaultVisibility, true,
+        3, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
     packageManager = skyframeExecutor.getPackageManager();
     loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
@@ -255,13 +251,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     PathPackageLocator pathPackageLocator = PathPackageLocator.create(
         outputBase, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
-    skyframeExecutor.preparePackageLoading(
-        pathPackageLocator,
-        packageCacheOptions.defaultVisibility,
-        true,
-        7,
-        ruleClassProvider.getDefaultsPackageContent(TestConstants.TEST_INVOCATION_POLICY),
-        UUID.randomUUID(),
+    skyframeExecutor.preparePackageLoading(pathPackageLocator,
+        packageCacheOptions.defaultVisibility, true,
+        7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
     skyframeExecutor.invalidateFilesUnderPathForTesting(reporter,
         ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
@@ -283,7 +275,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             viewOptions,
             AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
             reporter,
-            eventBus);
+            eventBus,
+            isLoadingEnabled());
     return analysisResult;
   }
 
