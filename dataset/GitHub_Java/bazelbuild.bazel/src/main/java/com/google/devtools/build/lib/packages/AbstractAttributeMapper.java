@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -31,7 +30,6 @@ import javax.annotation.Nullable;
 public abstract class AbstractAttributeMapper implements AttributeMap {
 
   private static final PathFragment VISIBILITY = new PathFragment("visibility");
-  private static final PathFragment EXTERNAL = new PathFragment("external");
 
   private final Package pkg;
   private final RuleClass ruleClass;
@@ -158,7 +156,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
     Type<?> type = attribute.getType();
     Object value = get(attribute.getName(), type);
     if (value != null) { // null values are particularly possible for computed defaults.
-      for (Label label : extractLabels(type, value)) {
+      for (Label label : type.getLabels(value)) {
         Label absoluteLabel;
         if (attribute.isImplicit() || attribute.isLateBound()
           || !attributes.isAttributeValueExplicitlySpecified(attribute)) {
@@ -166,9 +164,8 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
           // generally tools, which go to the main repository.
           absoluteLabel = label;
         } else if (label.getPackageIdentifier().getRepository().isDefault()
-            && (VISIBILITY.equals(label.getPackageIdentifier().getPackageFragment())
-                || EXTERNAL.equals(label.getPackageIdentifier().getPackageFragment()))) {
-          // //visibility: and //external: labels must also be special-cased :(
+            && VISIBILITY.equals(label.getPackageIdentifier().getPackageFragment())) {
+          // //visibility: labels must also be special-cased :(
           absoluteLabel = label;
         } else {
           absoluteLabel = ruleLabel.resolveRepositoryRelative(label);
@@ -240,9 +237,5 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
   public boolean has(String attrName, Type<?> type) {
     Attribute attribute = ruleClass.getAttributeByNameMaybe(attrName);
     return attribute != null && attribute.getType() == type;
-  }
-
-  protected static Iterable<Label> extractLabels(Type type, Object value) {
-    return Iterables.filter(type.flatten(value), Label.class);
   }
 }
