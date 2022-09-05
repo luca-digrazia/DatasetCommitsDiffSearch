@@ -19,11 +19,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
-import com.google.devtools.build.android.AndroidResourceClassWriter;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
 import com.google.devtools.build.android.proto.SerializeFormat;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+
 import javax.annotation.concurrent.Immutable;
 import javax.xml.namespace.QName;
 import javax.xml.stream.XMLEventReader;
@@ -114,7 +115,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
     return of(
         ArrayType.valueOf(proto.getValueType()),
         proto.getListValueList(),
-        ImmutableMap.copyOf(proto.getAttribute()));
+        ImmutableMap.copyOf(proto.getMappedStringValue()));
   }
 
   @Override
@@ -138,8 +139,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
   }
 
   @Override
-  public int serializeTo(Path source, Namespaces namespaces, OutputStream output)
-      throws IOException {
+  public int serializeTo(Path source, OutputStream output) throws IOException {
     return XmlResourceValues.serializeProtoDataValue(
         output,
         XmlResourceValues.newSerializableDataValueBuilder(source)
@@ -147,8 +147,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
                 SerializeFormat.DataValueXml.newBuilder()
                     .addAllListValue(values)
                     .setType(SerializeFormat.DataValueXml.XmlType.ARRAY)
-                    .putAllNamespace(namespaces.asMap())
-                    .putAllAttribute(attributes)
+                    .putAllMappedStringValue(attributes)
                     .setValueType(arrayType.toString())));
   }
 
@@ -182,14 +181,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
     throw new IllegalArgumentException(this + " is not a combinable resource.");
   }
 
-  @Override
-  public void writeResourceToClass(FullyQualifiedName key,
-      AndroidResourceClassWriter resourceClassWriter) {
-    resourceClassWriter.writeSimpleResource(key.type(), key.name());
-  }
-
-  public static XmlResourceValue parseArray(
-      XMLEventReader eventReader, StartElement start, Namespaces.Collector namespacesCollector)
+  public static XmlResourceValue parseArray(XMLEventReader eventReader, StartElement start)
       throws XMLStreamException {
     List<String> values = new ArrayList<>();
     for (XMLEvent element = XmlResourceValues.nextTag(eventReader);
@@ -201,8 +193,7 @@ public class ArrayXmlResourceValue implements XmlResourceValue {
               String.format("Expected start element %s", element), element.getLocation());
         }
         String contents =
-            XmlResourceValues.readContentsAsString(
-                eventReader, element.asStartElement().getName(), namespacesCollector);
+            XmlResourceValues.readContentsAsString(eventReader, element.asStartElement().getName());
         values.add(contents != null ? contents : "");
       }
     }

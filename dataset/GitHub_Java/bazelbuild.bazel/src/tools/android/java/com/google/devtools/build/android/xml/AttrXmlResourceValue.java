@@ -25,7 +25,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Ordering;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
-import com.google.devtools.build.android.AndroidDataWritingVisitor.StartTag;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
@@ -305,7 +304,7 @@ public class AttrXmlResourceValue implements XmlResourceValue {
               .filter(not(equalTo(FLAGS)))
               .filter(not(equalTo(ENUM)))
               .toSortedList(Ordering.natural());
-      StartTag startTag =
+      ValuesResourceDefinition definition =
           mergedDataWriter
               .define(key)
               .derivedFrom(source)
@@ -314,18 +313,13 @@ public class AttrXmlResourceValue implements XmlResourceValue {
               .optional()
               .attribute("format")
               .setFrom(formatKeys)
-              .joinedBy("|");
-      ValuesResourceDefinition definition;
-      if (formats.keySet().contains(FLAGS) || formats.keySet().contains(ENUM)) {
-        definition = startTag.closeTag();
-        for (ResourceXmlAttrValue value : formats.values()) {
-          definition = value.writeTo(definition);
-        }
-        definition = definition.addCharactersOf("\n").endTag();
-      } else {
-        definition = startTag.closeUnaryTag();
+              .joinedBy("|")
+              .closeTag()
+              .addCharactersOf("\n");
+      for (ResourceXmlAttrValue value : formats.values()) {
+        definition = value.writeTo(definition);
       }
-      definition.save();
+      definition.endTag().save();
     }
   }
 
