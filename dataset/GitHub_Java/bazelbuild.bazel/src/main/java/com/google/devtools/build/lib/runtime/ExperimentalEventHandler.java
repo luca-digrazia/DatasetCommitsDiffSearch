@@ -24,10 +24,8 @@ import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressRecei
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
-import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.build.lib.util.io.AnsiTerminal;
-import com.google.devtools.build.lib.util.io.AnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.LineCountingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.LineWrappingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -42,42 +40,24 @@ import java.util.logging.Logger;
  */
 public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   private static Logger LOG = Logger.getLogger(ExperimentalEventHandler.class.getName());
-  /** Latest refresh of the progress bar, if contents other than time changed */
-  static final long MAXIMAL_UPDATE_DELAY_MILLIS = 200L;
-  /** Periodic update interval of a time-dependent progress bar if it can be updated in place */
-  static final long SHORT_REFRESH_MILLIS = 1000L;
-  /** Periodic update interval of a time-dependent progress bar if it cannot be updated in place */
-  static final long LONG_REFRESH_MILLIS = 5000L;
 
-  private final long minimalDelayMillis;
-  private final boolean cursorControl;
-  private final Clock clock;
   private final AnsiTerminal terminal;
   private final boolean debugAllEvents;
   private final ExperimentalStateTracker stateTracker;
-  private final long minimalUpdateInterval;
-  private long lastRefreshMillis;
   private int numLinesProgressBar;
   private boolean buildComplete;
   private boolean progressBarNeedsRefresh;
-  private Thread updateThread;
 
   public final int terminalWidth;
 
   public ExperimentalEventHandler(
       OutErr outErr, BlazeCommandEventHandler.Options options, Clock clock) {
     super(outErr, options);
-    this.cursorControl = options.useCursorControl();
     this.terminal = new AnsiTerminal(outErr.getErrorStream());
     this.terminalWidth = (options.terminalColumns > 0 ? options.terminalColumns : 80);
-    this.clock = clock;
     this.debugAllEvents = options.experimentalUiDebugAllEvents;
     this.stateTracker = new ExperimentalStateTracker(clock);
     this.numLinesProgressBar = 0;
-    this.minimalDelayMillis = Math.round(options.showProgressRateLimit * 1000);
-    this.minimalUpdateInterval = Math.max(this.minimalDelayMillis, MAXIMAL_UPDATE_DELAY_MILLIS);
-    // The progress bar has not been updated yet.
-    ignoreRefreshLimitOnce();
   }
 
   @Override
@@ -166,18 +146,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   @Subscribe
   public void buildStarted(BuildStartingEvent event) {
     stateTracker.buildStarted(event);
-    // As a new phase started, inform immediately.
-    ignoreRefreshLimitOnce();
     refresh();
-  }
-
-  @Subscribe
-  public void loadingStarted(LoadingPhaseStartedEvent event) {
-    stateTracker.loadingStarted(event);
-    // As a new phase started, inform immediately.
-    ignoreRefreshLimitOnce();
-    refresh();
-    startUpdateThread();
   }
 
   @Subscribe
@@ -195,24 +164,18 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   @Subscribe
   public void progressReceiverAvailable(ExecutionProgressReceiverAvailableEvent event) {
     stateTracker.progressReceiverAvailable(event);
-    // As this is the first time we have a progress message, update immediately.
-    ignoreRefreshLimitOnce();
-    startUpdateThread();
   }
 
   @Subscribe
   public void buildComplete(BuildCompleteEvent event) {
     stateTracker.buildComplete(event);
-    ignoreRefreshLimitOnce();
     refresh();
     buildComplete = true;
-    stopUpdateThread();
   }
 
   @Subscribe
   public void noBuild(NoBuildEvent event) {
     buildComplete = true;
-    stopUpdateThread();
   }
 
   @Subscribe
@@ -233,80 +196,15 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   }
 
   private synchronized void doRefresh() {
-    long nowMillis = clock.currentTimeMillis();
-    if (lastRefreshMillis + minimalDelayMillis < nowMillis) {
-      try {
-        if (progressBarNeedsRefresh || timeBasedRefresh()) {
-          progressBarNeedsRefresh = false;
-          lastRefreshMillis = nowMillis;
-          clearProgressBar();
-          addProgressBar();
-          terminal.flush();
-        }
-      } catch (IOException e) {
-        LOG.warning("IO Error writing to output stream: " + e);
+    try {
+      if (progressBarNeedsRefresh) {
+        progressBarNeedsRefresh = false;
+        clearProgressBar();
+        addProgressBar();
+        terminal.flush();
       }
-      if (!stateTracker.progressBarTimeDependent()) {
-        stopUpdateThread();
-      }
-    } else {
-      // We skipped an update due to rate limiting. If this however, turned
-      // out to be the last update for a long while, we need to show it in a
-      // timely manner, as it best describes the current state.
-      startUpdateThread();
-    }
-  }
-
-  /**
-   * Decide wheter the progress bar should be redrawn only for the reason
-   * that time has passed.
-   */
-  private synchronized boolean timeBasedRefresh () {
-    if (!stateTracker.progressBarTimeDependent()) {
-      return false;
-    }
-    long nowMillis = clock.currentTimeMillis();
-    long intervalMillis = cursorControl ? SHORT_REFRESH_MILLIS : LONG_REFRESH_MILLIS;
-    return lastRefreshMillis + intervalMillis < nowMillis;
-  }
-
-  private void ignoreRefreshLimitOnce() {
-    // Set refresh time variables in a state such that the next progress bar
-    // update will definitely be written out.
-    lastRefreshMillis = clock.currentTimeMillis() - minimalDelayMillis - 1;
-  }
-
-  private synchronized void startUpdateThread() {
-    if (updateThread == null) {
-      final ExperimentalEventHandler eventHandler = this;
-      updateThread =
-          new Thread(
-              new Runnable() {
-                @Override
-                public void run() {
-                  try {
-                    while (true) {
-                      Thread.sleep(minimalUpdateInterval);
-                      eventHandler.doRefresh();
-                    }
-                  } catch (InterruptedException e) {
-                    // Ignore
-                  }
-                }
-              });
-      updateThread.start();
-    }
-  }
-
-  private synchronized void stopUpdateThread() {
-    if (updateThread != null) {
-      updateThread.interrupt();
-      try {
-        updateThread.join();
-      } catch (InterruptedException e) {
-        // Ignore
-      }
-      updateThread = null;
+    } catch (IOException e) {
+      LOG.warning("IO Error writing to output stream: " + e);
     }
   }
 
@@ -319,9 +217,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   }
 
   private void clearProgressBar() throws IOException {
-    if (!cursorControl) {
-      return;
-    }
     for (int i = 0; i < numLinesProgressBar; i++) {
       terminal.cr();
       terminal.cursorUp(1);
@@ -336,14 +231,10 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   }
 
   private void addProgressBar() throws IOException {
-    LineCountingAnsiTerminalWriter countingTerminalWriter =
-        new LineCountingAnsiTerminalWriter(terminal);
-    AnsiTerminalWriter terminalWriter = countingTerminalWriter;
-    if (cursorControl) {
-      terminalWriter = new LineWrappingAnsiTerminalWriter(terminalWriter, terminalWidth - 1);
-    }
-    stateTracker.writeProgressBar(terminalWriter, /* shortVersion=*/ !cursorControl);
+    LineCountingAnsiTerminalWriter terminalWriter = new LineCountingAnsiTerminalWriter(terminal);
+    stateTracker.writeProgressBar(
+        new LineWrappingAnsiTerminalWriter(terminalWriter, terminalWidth - 1));
     terminalWriter.newline();
-    numLinesProgressBar = countingTerminalWriter.getWrittenLines();
+    numLinesProgressBar = terminalWriter.getWrittenLines();
   }
 }
