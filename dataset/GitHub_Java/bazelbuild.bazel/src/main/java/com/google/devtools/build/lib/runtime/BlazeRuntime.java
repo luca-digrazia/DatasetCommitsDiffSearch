@@ -27,6 +27,7 @@ import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.Uninterruptibles;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -141,6 +142,10 @@ public final class BlazeRuntime {
 
   private static final Logger LOG = Logger.getLogger(BlazeRuntime.class.getName());
 
+  // Pre-allocate memory for this object in case of an OOM.
+  private static final CommandCompleteEvent OOM_COMMAND_COMPLETE_EVENT =
+      new CommandCompleteEvent(ExitCode.OOM_ERROR.getNumericExitCode());
+
   private final Iterable<BlazeModule> blazeModules;
   private final Map<String, BlazeCommand> commandMap = new LinkedHashMap<>();
   private final Clock clock;
@@ -160,7 +165,6 @@ public final class BlazeRuntime {
   private final String defaultsPackageContent;
   private final QueryEnvironmentFactory queryEnvironmentFactory;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
-  private final String productName;
 
   // Workspace state (currently exactly one workspace per server)
   private BlazeWorkspace workspace;
@@ -172,8 +176,7 @@ public final class BlazeRuntime {
       OptionsProvider startupOptionsProvider, Iterable<BlazeModule> blazeModules,
       SubscriberExceptionHandler eventBusExceptionHandler,
       ProjectFile.Provider projectFileProvider,
-      InvocationPolicy invocationPolicy, Iterable<BlazeCommand> commands,
-      String productName) {
+      InvocationPolicy invocationPolicy, Iterable<BlazeCommand> commands) {
     // Server state
     this.blazeModules = blazeModules;
     overrideCommands(commands);
@@ -193,7 +196,6 @@ public final class BlazeRuntime {
         ruleClassProvider.getDefaultsPackageContent(getInvocationPolicy());
     CommandNameCache.CommandNameCacheInstance.INSTANCE.setCommandNameCache(
         new CommandNameCacheImpl(getCommandMap()));
-    this.productName = productName;
   }
 
   private static InvocationPolicy createInvocationPolicyFromModules(
@@ -515,7 +517,11 @@ public final class BlazeRuntime {
       // thread won the race (unlikely, but possible), this may be incorrectly logged as a success.
       return;
     }
-    workspace.getSkyframeExecutor().getEventBus().post(new CommandCompleteEvent(exitCode));
+    CommandCompleteEvent commandCompleteEvent =
+        exitCode == ExitCode.OOM_ERROR.getNumericExitCode()
+            ? OOM_COMMAND_COMPLETE_EVENT
+            : new CommandCompleteEvent(exitCode);
+    workspace.getSkyframeExecutor().getEventBus().post(commandCompleteEvent);
   }
 
   /**
@@ -988,8 +994,6 @@ public final class BlazeRuntime {
     }
 
     BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
-    String productName = startupOptions.productName.toLowerCase();
-
     if (startupOptions.oomMoreEagerlyThreshold != 100) {
       new RetainedHeapLimiter(startupOptions.oomMoreEagerlyThreshold).install();
     }
@@ -1014,7 +1018,7 @@ public final class BlazeRuntime {
     }
 
     PathFragment outputPathFragment = BlazeDirectories.outputPathFromOutputBase(
-        outputBase, workspaceDirectory, startupOptions.deepExecRoot, productName);
+        outputBase, workspaceDirectory, startupOptions.deepExecRoot, Constants.PRODUCT_NAME);
     FileSystem fs = null;
     for (BlazeModule module : blazeModules) {
       FileSystem moduleFs = module.getFileSystem(options, outputPathFragment);
@@ -1047,7 +1051,7 @@ public final class BlazeRuntime {
     BlazeDirectories directories =
         new BlazeDirectories(installBasePath, outputBasePath, workspaceDirectoryPath,
                              startupOptions.deepExecRoot, startupOptions.installMD5,
-                             productName);
+                             Constants.PRODUCT_NAME);
 
     Clock clock = BlazeClock.instance();
 
@@ -1060,9 +1064,7 @@ public final class BlazeRuntime {
           ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
     }
 
-    BlazeRuntime.Builder runtimeBuilder = new BlazeRuntime.Builder()
-        .setProductName(productName)
-        .setDirectories(directories)
+    BlazeRuntime.Builder runtimeBuilder = new BlazeRuntime.Builder().setDirectories(directories)
         .setStartupOptionsProvider(options)
         .setBinTools(binTools)
         .setClock(clock)
@@ -1164,7 +1166,7 @@ public final class BlazeRuntime {
   }
 
   public String getProductName() {
-    return productName;
+    return Constants.PRODUCT_NAME;
   }
 
   /**
@@ -1187,12 +1189,11 @@ public final class BlazeRuntime {
     private UUID instanceId;
     private final List<BlazeCommand> commands = new ArrayList<>();
     private InvocationPolicy invocationPolicy = InvocationPolicy.getDefaultInstance();
-    private String productName;
 
     public BlazeRuntime build() throws AbruptExitException {
-      Preconditions.checkNotNull(productName);
       Preconditions.checkNotNull(directories);
       Preconditions.checkNotNull(startupOptionsProvider);
+
       Clock clock = (this.clock == null) ? BlazeClock.instance() : this.clock;
       UUID instanceId =  (this.instanceId == null) ? UUID.randomUUID() : this.instanceId;
 
@@ -1303,14 +1304,9 @@ public final class BlazeRuntime {
       BlazeRuntime runtime = new BlazeRuntime(queryEnvironmentFactory, packageFactory,
           ruleClassProvider, configurationFactory, clock, startupOptionsProvider,
           ImmutableList.copyOf(blazeModules), eventBusExceptionHandler, projectFileProvider,
-          invocationPolicy, commands, productName);
+          invocationPolicy, commands);
       runtime.initWorkspace(directories, binTools);
       return runtime;
-    }
-
-    public Builder setProductName(String productName) {
-      this.productName = productName;
-      return this;
     }
 
     public Builder setBinTools(BinTools binTools) {

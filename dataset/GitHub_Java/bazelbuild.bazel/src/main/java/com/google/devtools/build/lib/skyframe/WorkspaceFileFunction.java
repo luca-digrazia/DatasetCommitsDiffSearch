@@ -17,12 +17,12 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.WorkspaceFactory;
+import com.google.devtools.build.lib.skyframe.PackageFunction.PackageFunctionException;
 import com.google.devtools.build.lib.skyframe.WorkspaceFileValue.WorkspaceFileKey;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
@@ -34,7 +34,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.io.IOException;
 
 /**
  * A SkyFunction to parse WORKSPACE files.
@@ -56,13 +55,13 @@ public class WorkspaceFileFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws WorkspaceFileFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws WorkspaceFileFunctionException,
+      InterruptedException {
 
     WorkspaceFileKey key = (WorkspaceFileKey) skyKey.argument();
     RootedPath workspaceRoot = key.getPath();
-    WorkspaceASTValue workspaceASTValue = (WorkspaceASTValue) env.getValue(
-        WorkspaceASTValue.key(workspaceRoot));
+    WorkspaceASTValue workspaceASTValue =
+        (WorkspaceASTValue) env.getValue(WorkspaceASTValue.key(workspaceRoot));
     if (workspaceASTValue == null) {
       return null;
     }
@@ -92,8 +91,9 @@ public class WorkspaceFileFunction implements SkyFunction {
               directories.getEmbeddedBinariesRoot(),
               directories.getWorkspace());
       if (key.getIndex() > 0) {
-        WorkspaceFileValue prevValue = (WorkspaceFileValue) env.getValue(
-            WorkspaceFileValue.key(key.getPath(), key.getIndex() - 1));
+        WorkspaceFileValue prevValue =
+            (WorkspaceFileValue)
+                env.getValue(WorkspaceFileValue.key(key.getPath(), key.getIndex() - 1));
         if (prevValue == null) {
           return null;
         }
@@ -103,15 +103,14 @@ public class WorkspaceFileFunction implements SkyFunction {
         parser.setParent(prevValue.getPackage(), prevValue.getImportMap(), prevValue.getBindings());
       }
       BuildFileAST ast = workspaceASTValue.getASTs().get(key.getIndex());
-      PackageFunction.SkylarkImportResult importResult = PackageFunction.fetchImportsFromBuildFile(
-          repoWorkspace, rootPackage, ast, env, null);
+      PackageFunction.SkylarkImportResult importResult =
+          PackageFunction.fetchImportsFromBuildFile(
+              repoWorkspace, rootPackage, ast, env, null);
       if (importResult == null) {
         return null;
       }
       parser.execute(ast, importResult.importMap);
-    } catch (NoSuchPackageException e) {
-      throw new WorkspaceFileFunctionException(e, Transience.PERSISTENT);
-    } catch (NameConflictException e) {
+    } catch (PackageFunctionException | NameConflictException e) {
       throw new WorkspaceFileFunctionException(e, Transience.PERSISTENT);
     }
 
@@ -130,16 +129,12 @@ public class WorkspaceFileFunction implements SkyFunction {
   }
 
   private static final class WorkspaceFileFunctionException extends SkyFunctionException {
-    WorkspaceFileFunctionException(NoSuchPackageException e, Transience transience) {
+    public WorkspaceFileFunctionException(Exception e, Transience transience) {
       super(e, transience);
     }
 
-    WorkspaceFileFunctionException(NameConflictException e, Transience transience) {
-      super(e, transience);
-    }
-
-    WorkspaceFileFunctionException(IOException e, Transience transience) {
-      super(e, transience);
+    public WorkspaceFileFunctionException(Exception e) {
+      super(e, Transience.PERSISTENT);
     }
   }
 }

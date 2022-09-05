@@ -274,7 +274,7 @@ public final class PackageFactory {
       this.globCache = globCache;
     }
 
-    private static class Token extends Globber.Token {
+    private class Token extends Globber.Token {
       public final List<String> includes;
       public final List<String> excludes;
       public final boolean excludeDirs;
@@ -935,11 +935,11 @@ public final class PackageFactory {
     if (val instanceof TriState) {
       switch ((TriState) val) {
         case AUTO:
-          return Integer.valueOf(-1);
+          return new Integer(-1);
         case YES:
-          return Integer.valueOf(1);
+          return new Integer(1);
         case NO:
-          return Integer.valueOf(0);
+          return new Integer(0);
       }
     }
 

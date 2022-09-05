@@ -85,8 +85,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     } else {
       ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
     }
-    packageFactory = TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
-        ruleClassProvider, getEnvironmentExtensions(), scratch.getFileSystem());
+    packageFactory = new PackageFactory(ruleClassProvider, getEnvironmentExtensions());
     skyframeExecutor = createSkyframeExecutor(getPreprocessorFactorySupplier());
     setUpSkyframe(parsePackageCacheOptions());
   }
