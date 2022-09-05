@@ -32,18 +32,16 @@ import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 public interface AndroidSemantics {
   /**
    * Adds transitive info providers for {@code android_binary} and {@code android_library} rules.
-   * @throws InterruptedException 
    */
   void addTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
       RuleContext ruleContext, JavaCommon javaCommon, AndroidCommon androidCommon,
       Artifact jarWithAllClasses, ResourceApk resourceApk, Artifact zipAlignedApk,
-      Iterable<Artifact> apksUnderTest) throws InterruptedException;
+      Iterable<Artifact> apksUnderTest);
 
   /**
    * Returns the manifest to be used when compiling a given rule.
-   * @throws InterruptedException 
    */
-  ApplicationManifest getManifestForRule(RuleContext ruleContext) throws InterruptedException;
+  ApplicationManifest getManifestForRule(RuleContext ruleContext);
 
   /**
    * Returns the name of the file in which the file names of native dependencies are listed.
@@ -73,9 +71,8 @@ public interface AndroidSemantics {
 
   /**
    * Add coverage instrumentation to the Java compilation of an Android binary.
-   * @throws InterruptedException 
    */
   void addCoverageSupport(RuleContext ruleContext, AndroidCommon common,
-      JavaSemantics javaSemantics, boolean forAndroidTest, JavaTargetAttributes.Builder attributes,
-      JavaCompilationArtifacts.Builder artifactsBuilder) throws InterruptedException;
+      JavaSemantics javaSemantics, boolean forAndroidTest,
+      JavaTargetAttributes.Builder attributes, JavaCompilationArtifacts.Builder artifactsBuilder);
 }
