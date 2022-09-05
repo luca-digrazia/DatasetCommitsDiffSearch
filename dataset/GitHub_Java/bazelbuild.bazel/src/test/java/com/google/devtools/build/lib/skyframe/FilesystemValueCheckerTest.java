@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.BasicFilesystemDirtinessChecker;
-import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -114,11 +113,8 @@ public class FilesystemValueCheckerTest {
         new FileSymlinkInfiniteExpansionUniquenessFunction());
     skyFunctions.put(SkyFunctions.PACKAGE,
         new PackageFunction(null, null, null, null, null, null, null));
-    skyFunctions.put(
-        SkyFunctions.PACKAGE_LOOKUP,
-        new PackageLookupFunction(
-            new AtomicReference<>(ImmutableSet.<PackageIdentifier>of()),
-            CrossRepositoryLabelViolationStrategy.ERROR));
+    skyFunctions.put(SkyFunctions.PACKAGE_LOOKUP,
+        new PackageLookupFunction(new AtomicReference<>(ImmutableSet.<PackageIdentifier>of())));
     skyFunctions.put(SkyFunctions.WORKSPACE_AST,
         new WorkspaceASTFunction(TestRuleClassProvider.getRuleClassProvider()));
     skyFunctions.put(SkyFunctions.WORKSPACE_FILE,

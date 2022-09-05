@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.ActionInputHelper.asTreeFileArtifacts;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Predicate;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -41,7 +40,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.EvaluationResult;
-import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -118,25 +116,6 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
   }
 
   @Test
-  public void testEqualTreeArtifacts() throws Exception {
-    Artifact treeArtifact = createTreeArtifact("out");
-    ImmutableList<PathFragment> children =
-        ImmutableList.of(new PathFragment("one"), new PathFragment("two"));
-    TreeArtifactValue valueOne = evaluateTreeArtifact(treeArtifact, children);
-    MemoizingEvaluator evaluator = driver.getGraphForTesting();
-    evaluator.delete(new Predicate<SkyKey>() {
-      @Override
-      public boolean apply(SkyKey key) {
-        // Delete action execution node to force our artifacts to be re-evaluated.
-        return actions.contains(key.argument());
-      }
-    });
-    TreeArtifactValue valueTwo = evaluateTreeArtifact(treeArtifact, children);
-    assertThat(valueOne.getDigest()).isNotSameAs(valueTwo.getDigest());
-    assertThat(valueOne).isEqualTo(valueTwo);
-  }
-
-  @Test
   public void testTreeArtifactsWithDigests() throws Exception {
     fastDigest = true;
     doTestTreeArtifacts(ImmutableList.of(new PathFragment("one")));
@@ -209,9 +188,10 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
     return output;
   }
 
-  private SkyValue evaluateArtifactValue(Artifact artifact, boolean mandatory) throws Exception {
-    SkyKey key = ArtifactSkyKey.key(artifact, mandatory);
-    EvaluationResult<SkyValue> result = evaluate(key);
+  private ArtifactValue evaluateArtifactValue(Artifact artifact, boolean mandatory)
+      throws Exception {
+    SkyKey key = ArtifactValue.key(artifact, mandatory);
+    EvaluationResult<ArtifactValue> result = evaluate(key);
     if (result.hasError()) {
       throw result.getError().getException();
     }
