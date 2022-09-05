@@ -47,9 +47,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
-import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -244,11 +241,11 @@ public final class ReleaseBundlingSupport {
     registerTransformAndCopyBreakpadFilesAction();
     registerSwiftStdlibActionsIfNecessary();
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     Artifact ipaOutput = ruleContext.getImplicitOutputArtifact(IPA);
 
     Artifact maybeSignedIpa;
-    if (appleConfiguration.getBundlingPlatform() == Platform.IOS_SIMULATOR) {
+    if (objcConfiguration.getBundlingPlatform() == Platform.IOS_SIMULATOR) {
       maybeSignedIpa = ipaOutput;
     } else if (attributes.provisioningProfile() == null) {
       throw new IllegalStateException(DEVICE_NO_PROVISIONING_PROFILE);
@@ -260,7 +257,7 @@ public final class ReleaseBundlingSupport {
     registerEnvironmentPlistAction();
 
     BundleMergeControlBytes bundleMergeControlBytes = new BundleMergeControlBytes(
-        bundling, maybeSignedIpa, appleConfiguration, bundleSupport.targetDeviceFamilies());
+        bundling, maybeSignedIpa, objcConfiguration, bundleSupport.targetDeviceFamilies());
     registerBundleMergeActions(
         maybeSignedIpa, bundling.getBundleContentArtifacts(), bundleMergeControlBytes);
 
@@ -306,7 +303,7 @@ public final class ReleaseBundlingSupport {
   }
 
   private void registerEnvironmentPlistAction() {
-    AppleConfiguration configuration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration configuration = ObjcRuleClasses.objcConfiguration(ruleContext);
     // Generates a .plist that contains environment values (such as the SDK used to build, the Xcode
     // version, etc), which are parsed from various .plist files of the OS, namely Xcodes' and
     // Platforms' plists.
@@ -407,7 +404,6 @@ public final class ReleaseBundlingSupport {
     ObjcProvider partialObjcProvider = new ObjcProvider.Builder()
         .addTransitiveAndPropagate(ObjcProvider.HEADER, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.INCLUDE, objcProvider)
-        .addTransitiveAndPropagate(ObjcProvider.DEFINE, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.SDK_DYLIB, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.SDK_FRAMEWORK, objcProvider)
         .addTransitiveAndPropagate(ObjcProvider.SOURCE, objcProvider)
@@ -472,8 +468,8 @@ public final class ReleaseBundlingSupport {
   private Bundling bundling(RuleContext ruleContext, ObjcProvider objcProvider,
       String bundleDirFormat, String bundleName, String minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    if (appleConfiguration.getBundlingPlatform() == Platform.IOS_DEVICE) {
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
+    if (objcConfiguration.getBundlingPlatform() == Platform.IOS_DEVICE) {
       extraBundleFiles = ImmutableList.of(new BundleableFile(
           new Attributes(ruleContext).provisioningProfile(),
           PROVISIONING_PROFILE_BUNDLE_FILE));
@@ -493,7 +489,7 @@ public final class ReleaseBundlingSupport {
     return new Bundling.Builder()
         .setName(bundleName)
         // Architecture that determines which nested bundles are kept.
-        .setArchitecture(appleConfiguration.getDependencySingleArchitecture())
+        .setArchitecture(objcConfiguration.getDependencySingleArchitecture())
         .setBundleDirFormat(bundleDirFormat)
         .addExtraBundleFiles(extraBundleFiles)
         .setObjcProvider(objcProvider)
@@ -515,7 +511,7 @@ public final class ReleaseBundlingSupport {
         .setMnemonic("ObjcCombiningArchitectures")
         .addTransitiveInputs(linkedBinaries)
         .addOutput(resultingLinkedBinary)
-        .setExecutable(CompilationSupport.xcrunwrapper(ruleContext))
+        .setExecutable(ObjcRuleClasses.XCRUN)
         .setCommandLine(CustomCommandLine.builder()
             .add(ObjcRuleClasses.LIPO)
             .addExecPaths("-create", linkedBinaries)
@@ -753,11 +749,11 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
         .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
-        .add("--platform").add(AppleToolchain.swiftPlatform(appleConfiguration))
+        .add("--platform").add(IosSdkCommands.swiftPlatform(objcConfiguration))
         .addExecPath("--scan-executable", intermediateArtifacts.combinedArchitectureBinary());
 
     ruleContext.registerAction(
@@ -767,10 +763,9 @@ public final class ReleaseBundlingSupport {
             .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
             .addInput(intermediateArtifacts.combinedArchitectureBinary())
-            // TODO(dmaclach): Adding realpath and xcrunwrapper should not be required once
+            // TODO(dmaclach): Adding realpath here should not be required once
             // https://github.com/google/bazel/issues/285 is fixed.
             .addInput(attributes.realpath())
-            .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
             .build(ruleContext));
   }
 
@@ -919,7 +914,7 @@ public final class ReleaseBundlingSupport {
                 prerequisiteProvider.get(ObjcProvider.BREAKPAD_FILE), null);
             if (sourceBreakpad != null) {
               String cpu =
-                  prerequisite.getConfiguration().getFragment(AppleConfiguration.class).getIosCpu();
+                  prerequisite.getConfiguration().getFragment(ObjcConfiguration.class).getIosCpu();
               results.put(cpu, sourceBreakpad);
             }
           }
@@ -943,7 +938,7 @@ public final class ReleaseBundlingSupport {
 
     @Override
     public final List<BuildOptions> split(BuildOptions buildOptions) {
-      List<String> iosMultiCpus = buildOptions.get(AppleCommandLineOptions.class).iosMultiCpus;
+      List<String> iosMultiCpus = buildOptions.get(ObjcCommandLineOptions.class).iosMultiCpus;
       if (iosMultiCpus.isEmpty()) {
         return defaultOptions(buildOptions);
       }
@@ -981,7 +976,7 @@ public final class ReleaseBundlingSupport {
 
     private void setArchitectureOptions(BuildOptions splitOptions, String iosCpu) {
       splitOptions.get(ObjcCommandLineOptions.class).iosSplitCpu = iosCpu;
-      splitOptions.get(AppleCommandLineOptions.class).iosCpu = iosCpu;
+      splitOptions.get(ObjcCommandLineOptions.class).iosCpu = iosCpu;
       if (splitOptions.get(ObjcCommandLineOptions.class).enableCcDeps) {
         // Only set the (CC-compilation) CPU for dependencies if explicitly required by the user.
         // This helps users of the iOS rules who do not depend on CC rules as these CPU values
