@@ -4,25 +4,24 @@ import javax.net.SocketFactory;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.nio.charset.Charset;
 import java.util.regex.Pattern;
 
 /**
- * A client to a Carbon server via TCP.
+ * A client to a Carbon server.
  */
-public class Graphite implements GraphiteSender {
+public class Graphite implements Closeable {
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]+");
     // this may be optimistic about Carbon/Graphite
-    private static final Charset UTF_8 = Charset.forName("UTF-8");
+    static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final InetSocketAddress address;
     private final SocketFactory socketFactory;
     private final Charset charset;
 
-    private Socket socket;
-    private Writer writer;
-    private int failures;
+    protected Socket socket;
+    protected Writer writer;
+    protected int failures;
 
     /**
      * Creates a new client which connects to the given address using the default
@@ -58,20 +57,29 @@ public class Graphite implements GraphiteSender {
         this.charset = charset;
     }
 
-    @Override
+    /**
+     * Connects to the server.
+     *
+     * @throws IllegalStateException if the client is already connected
+     * @throws IOException           if there is an error connecting
+     */
     public void connect() throws IllegalStateException, IOException {
         if (socket != null) {
             throw new IllegalStateException("Already connected");
-        }
-        if (address.getAddress() == null) {
-            throw new UnknownHostException(address.getHostName());
         }
 
         this.socket = socketFactory.createSocket(address.getAddress(), address.getPort());
         this.writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), charset));
     }
 
-    @Override
+    /**
+     * Sends the given measurement to the server.
+     *
+     * @param name      the name of the metric
+     * @param value     the value of the metric
+     * @param timestamp the timestamp of the metric
+     * @throws IOException if there was an error sending the metric
+     */
     public void send(String name, String value, long timestamp) throws IOException {
         try {
             writer.write(sanitize(name));
@@ -88,7 +96,11 @@ public class Graphite implements GraphiteSender {
         }
     }
 
-    @Override
+    /**
+     * Returns the number of failed writes to the server.
+     *
+     * @return the number of failed writes to the server
+     */
     public int getFailures() {
         return failures;
     }
