@@ -19,8 +19,10 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.Type.ConversionException;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -31,6 +33,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -526,6 +529,10 @@ public abstract class SkylarkType {
       return value instanceof BaseFunction;
     }
 
+    public static SkylarkFunctionType of(String name) {
+      return SkylarkFunctionType.of(name, TOP);
+    }
+
     public static SkylarkFunctionType of(String name, SkylarkType returnType) {
       return new SkylarkFunctionType(name, returnType);
     }
@@ -538,6 +545,17 @@ public abstract class SkylarkType {
 
 
   // Utility functions regarding types
+  /**
+   * For the purpose of type inference during validation,
+   * we upgrade the type for None as being Top, the type of everything,
+   * so None is compatible with anything as far as the validate method is concern.
+   *
+   * @param type a SkylarkType suitable for runtime type checking.
+   * @return the corresponding SkylarkType suitable for a type validation.
+   */
+  public static SkylarkType typeForInference(SkylarkType type) {
+    return type == NONE ? TOP : type;
+  }
 
   public static SkylarkType typeOf(Object value) {
     if (value == null) {
@@ -559,6 +577,28 @@ public abstract class SkylarkType {
     } else {
       return TOP;
     }
+  }
+
+  boolean isStruct() {
+    return ClassObject.class.isAssignableFrom(getType());
+  }
+
+  boolean isList() {
+    return SkylarkList.class.isAssignableFrom(getType());
+  }
+
+  boolean isDict() {
+    return Map.class.isAssignableFrom(getType());
+  }
+
+  boolean isSet() {
+    return Set.class.isAssignableFrom(getType());
+  }
+
+  boolean isNset() {
+    // TODO(bazel-team): NestedSets are going to be a bit strange with 2 type info (validation
+    // and execution time). That can be cleaned up once we have complete type inference.
+    return SkylarkNestedSet.class.isAssignableFrom(getType());
   }
 
   private static boolean isTypeAllowedInSkylark(Object object) {
@@ -629,22 +669,24 @@ public abstract class SkylarkType {
 
   /** Cast a List or SkylarkList object into an Iterable of the given type. null means empty List */
   public static <TYPE> Iterable<TYPE> castList(
-      Object obj, final Class<TYPE> type, final String what) throws EvalException {
+      Object obj, final Class<TYPE> type, final String what) throws ConversionException {
     if (obj == null) {
       return ImmutableList.of();
     }
-    List<TYPE> results = new ArrayList<>();
-    for (Object object : com.google.devtools.build.lib.packages.Type.LIST.convert(obj, what)) {
-      try {
-        results.add(type.cast(object));
-      } catch (ClassCastException e) {
-        throw new EvalException(null, String.format(
-            "Illegal argument: expected %s type for '%s' but got %s instead",
-            EvalUtils.getDataTypeNameFromClass(type), what,
-            EvalUtils.getDataTypeName(object)));
-      }
-    }
-    return results;
+    return Iterables.transform(com.google.devtools.build.lib.packages.Type.LIST.convert(obj, what),
+        new com.google.common.base.Function<Object, TYPE>() {
+          @Override
+          public TYPE apply(Object input) {
+            try {
+              return type.cast(input);
+            } catch (ClassCastException e) {
+              throw new IllegalArgumentException(String.format(
+                  "expected %s type for '%s' but got %s instead",
+                  EvalUtils.getDataTypeNameFromClass(type), what,
+                  EvalUtils.getDataTypeName(input)));
+            }
+          }
+    });
   }
 
   /**
@@ -656,22 +698,21 @@ public abstract class SkylarkType {
    */
   @SuppressWarnings("unchecked")
   public static <KEY_TYPE, VALUE_TYPE> Map<KEY_TYPE, VALUE_TYPE> castMap(Object obj,
-      Class<KEY_TYPE> keyType, Class<VALUE_TYPE> valueType, String what)
-      throws EvalException {
+      Class<KEY_TYPE> keyType, Class<VALUE_TYPE> valueType, String what) {
     if (obj == null) {
       return ImmutableMap.of();
     }
     if (!(obj instanceof Map<?, ?>)) {
-      throw new EvalException(null, String.format(
-          "Illegal argument: expected a dictionary for %s but got %s instead",
+      throw new IllegalArgumentException(String.format(
+          "expected a dictionary for %s but got %s instead",
           what, EvalUtils.getDataTypeName(obj)));
     }
 
     for (Map.Entry<?, ?> input : ((Map<?, ?>) obj).entrySet()) {
       if (!keyType.isAssignableFrom(input.getKey().getClass())
           || !valueType.isAssignableFrom(input.getValue().getClass())) {
-        throw new EvalException(null, String.format(
-            "Illegal argument: expected <%s, %s> type for '%s' but got <%s, %s> instead",
+        throw new IllegalArgumentException(String.format(
+            "expected <%s, %s> type for '%s' but got <%s, %s> instead",
             keyType.getSimpleName(), valueType.getSimpleName(), what,
             EvalUtils.getDataTypeName(input.getKey()),
             EvalUtils.getDataTypeName(input.getValue())));
