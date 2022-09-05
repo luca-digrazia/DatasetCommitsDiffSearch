@@ -13,25 +13,28 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.test.TestProvider;
-import com.google.devtools.build.lib.analysis.test.TestProvider.TestParams;
-import com.google.devtools.build.lib.analysis.test.TestResult;
-import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.TestTimeout;
+import com.google.devtools.build.lib.rules.test.TestProvider;
+import com.google.devtools.build.lib.rules.test.TestProvider.TestParams;
+import com.google.devtools.build.lib.rules.test.TestResult;
+import com.google.devtools.build.lib.rules.test.TestRunnerAction;
 import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSummaryOptions;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
 import com.google.devtools.common.options.OptionsParser;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -45,12 +48,12 @@ public class TestResultAnalyzerTest {
   
   @Before
   public final void createMocks() throws Exception  {
-    OptionsParser testSpecificOptions =
-        OptionsParser.builder()
-            .optionsClasses(TestSummaryOptions.class, ExecutionOptions.class)
-            .build();
+    Path mockPath = mock(Path.class);
+    OptionsParser testSpecificOptions = OptionsParser.newOptionsParser(
+        TestSummaryOptions.class, ExecutionOptions.class);
     EventBus mockBus = mock(EventBus.class);
     underTest = new TestResultAnalyzer(
+        mockPath,
         testSpecificOptions.getOptions(TestSummaryOptions.class),
         testSpecificOptions.getOptions(ExecutionOptions.class),
         mockBus);
@@ -59,8 +62,8 @@ public class TestResultAnalyzerTest {
   @Test
   public void testIncrementalAnalyzeSetsActionRanTrueWhenThereAreNonCachedResults() {
     TestSummary.Builder summaryBuilder = makeTestSummaryBuilder();
-    assertThat(summaryBuilder.peek().actionRan()).isFalse();
-
+    assertFalse(summaryBuilder.peek().actionRan());
+    
     TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(false).build();
     TestResult result = new TestResult(
         mock(TestRunnerAction.class),
@@ -68,14 +71,14 @@ public class TestResultAnalyzerTest {
         /*cached=*/false);
 
     TestSummary.Builder newSummaryBuilder = underTest.incrementalAnalyze(summaryBuilder, result);
-    assertThat(newSummaryBuilder.peek().actionRan()).isTrue();
+    assertTrue(newSummaryBuilder.peek().actionRan());
   }
 
   @Test
   public void testIncrementalAnalyzeSetsActionRanFalseForLocallyCachedTests() {
     TestSummary.Builder summaryBuilder = makeTestSummaryBuilder();
-    assertThat(summaryBuilder.peek().actionRan()).isFalse();
-
+    assertFalse(summaryBuilder.peek().actionRan());
+    
     TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(false).build();
     TestResult result = new TestResult(
         mock(TestRunnerAction.class),
@@ -83,14 +86,14 @@ public class TestResultAnalyzerTest {
         /*cached=*/true);
     
     TestSummary.Builder newSummaryBuilder = underTest.incrementalAnalyze(summaryBuilder, result);
-    assertThat(newSummaryBuilder.peek().actionRan()).isFalse();
+    assertFalse(newSummaryBuilder.peek().actionRan());
   }
 
   @Test
   public void testIncrementalAnalyzeSetsActionRanFalseForRemotelyCachedTests() {
     TestSummary.Builder summaryBuilder = makeTestSummaryBuilder();
-    assertThat(summaryBuilder.peek().actionRan()).isFalse();
-
+    assertFalse(summaryBuilder.peek().actionRan());
+    
     TestResultData testResultData = TestResultData.newBuilder().setRemotelyCached(true).build();
     TestResult result = new TestResult(
         mock(TestRunnerAction.class),
@@ -98,7 +101,7 @@ public class TestResultAnalyzerTest {
         /*cached=*/false);
 
     TestSummary.Builder newSummaryBuilder = underTest.incrementalAnalyze(summaryBuilder, result);
-    assertThat(newSummaryBuilder.peek().actionRan()).isFalse();
+    assertFalse(newSummaryBuilder.peek().actionRan());
   }
 
   @Test
@@ -112,7 +115,7 @@ public class TestResultAnalyzerTest {
         /*cached=*/true);
 
     TestSummary.Builder newSummaryBuilder = underTest.incrementalAnalyze(summaryBuilder, result);
-    assertThat(newSummaryBuilder.peek().actionRan()).isTrue();
+    assertTrue(newSummaryBuilder.peek().actionRan());
   }
 
   private TestSummary.Builder makeTestSummaryBuilder() {
