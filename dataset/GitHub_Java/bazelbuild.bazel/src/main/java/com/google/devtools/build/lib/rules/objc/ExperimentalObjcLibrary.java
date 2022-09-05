@@ -93,10 +93,6 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     Collection<Artifact> nonArcSources = Sets.newHashSet(compilationArtifacts.getNonArcSrcs());
     Collection<Artifact> privateHdrs = Sets.newHashSet(compilationArtifacts.getPrivateHdrs());
     Collection<Artifact> publicHdrs = Sets.newHashSet(compilationAttributes.hdrs());
-    Artifact pchHdr = ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET);
-    ImmutableList<Artifact> pchHdrList = (pchHdr != null)
-        ? ImmutableList.<Artifact>of(pchHdr)
-        : ImmutableList.<Artifact>of();
 
     CcLibraryHelper helper =
         new CcLibraryHelper(
@@ -110,7 +106,6 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
             .addDefines(common.getObjcProvider().get(DEFINE))
             .enableCompileProviders()
             .addPublicHeaders(publicHdrs)
-            .addPublicHeaders(pchHdrList)
             .addPrecompiledFiles(precompiledFiles)
             .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
             .addCopts(compilationSupport.getCompileRuleCopts())
