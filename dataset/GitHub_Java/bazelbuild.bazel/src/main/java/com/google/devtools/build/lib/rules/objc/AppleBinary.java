@@ -94,8 +94,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
     Iterable<ObjcProvider> dylibProviders =
         ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET, ObjcProvider.class);
-    Iterable<ObjcProtoProvider> dylibProtoProviders =
-        ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET, ObjcProtoProvider.class);
 
     BundleLoaderProvider bundleLoaderProvider =
         ruleContext.getPrerequisite(
@@ -117,7 +115,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             configToDepsCollectionMap,
             configurationToNonPropagatedObjcMap,
             dylibProviders,
-            dylibProtoProviders,
             bundleLoaderObjcProvider);
 
     multiArchBinarySupport.registerActions(
