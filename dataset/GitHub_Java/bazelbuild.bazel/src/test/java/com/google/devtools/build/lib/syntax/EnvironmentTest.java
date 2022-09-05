@@ -23,6 +23,7 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -173,7 +174,7 @@ public class EnvironmentTest extends EvaluationTestCase {
 
   @Test
   public void testLocked() throws Exception {
-    final Mutability mutability = Mutability.create("testLocked");
+    Mutability mutability = Mutability.create("testLocked");
     class DummyFreezable implements Mutability.Freezable {
       @Override
       public Mutability mutability() {
