@@ -79,7 +79,7 @@ public abstract class RepositoryFunction implements SkyFunction {
 
   private BlazeDirectories directories;
 
-  protected Path prepareLocalRepositorySymlinkTree(Rule rule, Environment env)
+  protected FileValue prepareLocalRepositorySymlinkTree(Rule rule, Environment env)
       throws RepositoryFunctionException {
     Path repositoryDirectory = getExternalRepositoryDirectory().getRelative(rule.getName());
     try {
@@ -88,10 +88,15 @@ public abstract class RepositoryFunction implements SkyFunction {
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
+    FileValue directoryValue = getRepositoryDirectory(repositoryDirectory, env);
+
+    if (directoryValue == null) {
+      return null;
+    }
 
     // Add x/WORKSPACE.
     createWorkspaceFile(repositoryDirectory, rule);
-    return repositoryDirectory;
+    return directoryValue;
   }
 
   protected void createWorkspaceFile(Path repositoryDirectory, Rule rule)
@@ -105,30 +110,30 @@ public abstract class RepositoryFunction implements SkyFunction {
     }
   }
 
-  protected RepositoryValue writeBuildFile(Path repositoryDirectory, String contents)
+  protected RepositoryValue writeBuildFile(FileValue directoryValue, String contents)
       throws RepositoryFunctionException {
-    Path buildFilePath = repositoryDirectory.getRelative("BUILD");
+    Path buildFilePath = directoryValue.realRootedPath().asPath().getRelative("BUILD");
     try {
       FileSystemUtils.writeContentAsLatin1(buildFilePath, contents);
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
-    return RepositoryValue.create(repositoryDirectory);
+    return RepositoryValue.create(directoryValue);
   }
 
   /**
    * Symlinks a BUILD file from the local filesystem into the external repository's root.
    * @param rule the rule that declares the build_file path.
    * @param workspaceDirectory the workspace root for the build.
-   * @param outputDirectory the directory of the remote repository
+   * @param directoryValue the FileValue corresponding to the external repository's root directory.
    * @param env the Skyframe environment.
    * @return the file value of the symlink created.
    * @throws RepositoryFunctionException if the BUILD file specified does not exist or cannot be
    *         linked.
    */
   protected RepositoryValue symlinkBuildFile(
-      Rule rule, Path workspaceDirectory, Path outputDirectory, Environment env)
+      Rule rule, Path workspaceDirectory, FileValue directoryValue, Environment env)
       throws RepositoryFunctionException {
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     PathFragment buildFile = new PathFragment(mapper.get("build_file", Type.STRING));
@@ -162,11 +167,11 @@ public abstract class RepositoryFunction implements SkyFunction {
           Transience.TRANSIENT);
     }
 
-    Path buildFilePath = outputDirectory.getRelative("BUILD");
+    Path buildFilePath = directoryValue.realRootedPath().asPath().getRelative("BUILD");
     if (createSymbolicLink(buildFilePath, buildFileTarget, env) == null) {
       return null;
     }
-    return RepositoryValue.createNew(outputDirectory, buildFileValue);
+    return RepositoryValue.createNew(directoryValue, buildFileValue);
   }
 
   protected static PathFragment getTargetPath(Rule rule) throws RepositoryFunctionException {
