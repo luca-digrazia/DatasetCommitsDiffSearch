@@ -8,8 +8,6 @@ import info.ganglia.gmetric4j.gmetric.GangliaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
@@ -128,20 +126,20 @@ public class GangliaReporter extends ScheduledReporter {
          * @param ganglia the client to use for announcing metrics
          * @return a {@link GangliaReporter}
          */
-        public GangliaReporter build(GMetric... gmetrics) {
-            return new GangliaReporter(registry, Arrays.asList(gmetrics), prefix, tMax, dMax, rateUnit, durationUnit, filter);
+        public GangliaReporter build(GMetric ganglia) {
+            return new GangliaReporter(registry, ganglia, prefix, tMax, dMax, rateUnit, durationUnit, filter);
         }
     }
 
     private static final Logger LOGGER = LoggerFactory.getLogger(GangliaReporter.class);
 
-    private final List<GMetric> gmetrics;
+    private final GMetric ganglia;
     private final String prefix;
     private final int tMax;
     private final int dMax;
 
     private GangliaReporter(MetricRegistry registry,
-                            List<GMetric> gmetrics,
+                            GMetric ganglia,
                             String prefix,
                             int tMax,
                             int dMax,
@@ -149,7 +147,7 @@ public class GangliaReporter extends ScheduledReporter {
                             TimeUnit durationUnit,
                             MetricFilter filter) {
         super(registry, "ganglia-reporter", filter, rateUnit, durationUnit);
-        this.gmetrics = gmetrics;
+        this.ganglia = ganglia;
         this.prefix = prefix;
         this.tMax = tMax;
         this.dMax = dMax;
@@ -272,28 +270,34 @@ public class GangliaReporter extends ScheduledReporter {
         final String group = group(name);
         final Object obj = gauge.getValue();
         try {
-            for(GMetric gmetric: gmetrics) {
-                gmetric.announce(name(prefix, name), String.valueOf(obj), detectType(obj), "",
-                    GMetricSlope.BOTH, tMax, dMax, group);
-            }
+            ganglia.announce(name(prefix, name), String.valueOf(obj), detectType(obj), "",
+                             GMetricSlope.BOTH, tMax, dMax, group);
         } catch (GangliaException e) {
             LOGGER.warn("Unable to report gauge {}", name, e);
         }
     }
 
     private void announce(String name, String group, double value, String units) throws GangliaException {
-        for (GMetric gmetric: gmetrics) {
-            gmetric.announce(name, Double.toString(value), GMetricType.DOUBLE, units, GMetricSlope.BOTH,
-                tMax, dMax, group);
-        }
+        ganglia.announce(name,
+                         Double.toString(value),
+                         GMetricType.DOUBLE,
+                         units,
+                         GMetricSlope.BOTH,
+                         tMax,
+                         dMax,
+                         group);
     }
 
     private void announce(String name, String group, long value, String units) throws GangliaException {
         final String v = Long.toString(value);
-        for(GMetric gmetric: gmetrics) {
-            gmetric.announce(name, v, GMetricType.DOUBLE, units, GMetricSlope.BOTH,
-                tMax, dMax, group);
-        }
+        ganglia.announce(name,
+                         v,
+                         GMetricType.DOUBLE,
+                         units,
+                         GMetricSlope.BOTH,
+                         tMax,
+                         dMax,
+                         group);
     }
 
     private GMetricType detectType(Object o) {
