@@ -470,13 +470,11 @@ public final class FuncallExpression extends Expression {
     // we'd still have to have a HashMap on the side for the sake of properly handling duplicates.
     Map<String, Object> kwargs = new HashMap<>();
 
-    final Object returnValue;
-    final Function function;
     if (obj != null) { // obj.func(...)
       Object objValue = obj.eval(env);
       // Strings, lists and dictionaries (maps) have functions that we want to use in MethodLibrary.
       // For other classes, we can call the Java methods.
-      function =
+      Function function =
           env.getFunction(EvalUtils.getSkylarkType(objValue.getClass()), func.getName());
       if (function != null) {
         if (!isNamespace(objValue.getClass())) {
@@ -484,8 +482,8 @@ public final class FuncallExpression extends Expression {
           posargs.add(objValue);
         }
         evalArguments(posargs, kwargs, env, function);
-        returnValue = function.call(
-            posargs.build(), ImmutableMap.<String, Object>copyOf(kwargs), this, env);
+        return EvalUtils.checkNotNull(this,
+            function.call(posargs.build(), ImmutableMap.<String, Object>copyOf(kwargs), this, env));
       } else if (env.isSkylarkEnabled()) {
         // Only allow native Java calls when using Skylark
         // When calling a Java method, the name is not in the Environment,
@@ -498,8 +496,7 @@ public final class FuncallExpression extends Expression {
                   func.getName(), objValue, EvalUtils.getDataTypeName(objValue)));
         }
         if (objValue instanceof Class<?>) {
-          // Static Java method call. We can return the value from here directly because
-          // invokeJavaMethod() has special checks.
+          // Static Java method call
           return invokeJavaMethod(null, (Class<?>) objValue, func.getName(), posargs.build());
         } else {
           return invokeJavaMethod(objValue, objValue.getClass(), func.getName(), posargs.build());
@@ -512,24 +509,16 @@ public final class FuncallExpression extends Expression {
     } else { // func(...)
       Object funcValue = func.eval(env);
       if ((funcValue instanceof Function)) {
-        function = (Function) funcValue;
+        Function function = (Function) funcValue;
         evalArguments(posargs, kwargs, env, function);
-        returnValue = function.call(
-            posargs.build(), ImmutableMap.<String, Object>copyOf(kwargs), this, env);
+        return EvalUtils.checkNotNull(this,
+            function.call(posargs.build(), ImmutableMap.<String, Object>copyOf(kwargs), this, env));
       } else {
         throw new EvalException(getLocation(),
             "'" + EvalUtils.getDataTypeName(funcValue)
             + "' object is not callable");
       }
     }
-
-    EvalUtils.checkNotNull(this, returnValue);
-    if (!env.isSkylarkEnabled()) {
-      // The call happens in the BUILD language. Note that accessing "BUILD language" functions in
-      // Skylark should never happen.
-      return SkylarkType.convertFromSkylark(returnValue);
-    }
-    return returnValue;
   }
 
   private ArgConversion getArgConversion(Function function) {

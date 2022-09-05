@@ -148,9 +148,9 @@ class Parser {
     this.eventHandler = eventHandler;
     this.parsePython = parsePython;
     this.tokens = lexer.getTokens().iterator();
-    this.comments = new ArrayList<>();
+    this.comments = new ArrayList<Comment>();
     this.locator = locator;
-    this.includedFiles = new ArrayList<>();
+    this.includedFiles = new ArrayList<Path>();
     this.includedFiles.add(lexer.getFilename());
     nextToken();
   }
@@ -330,19 +330,20 @@ class Parser {
   }
 
   // Convenience wrapper around ASTNode.setLocation that returns the node.
-  private <NODE extends ASTNode> NODE setLocation(NODE node, Location location) {
-    return ASTNode.<NODE>setLocation(location, node);
+  private <NODE extends ASTNode> NODE
+      setLocation(NODE node, int startOffset, int endOffset) {
+    node.setLocation(lexer.createLocation(startOffset, endOffset));
+    return node;
   }
 
   // Another convenience wrapper method around ASTNode.setLocation
-  private <NODE extends ASTNode> NODE setLocation(NODE node, int startOffset, int endOffset) {
-    return setLocation(node, lexer.createLocation(startOffset, endOffset));
+  private <NODE extends ASTNode> NODE setLocation(NODE node, Location location) {
+    node.setLocation(location);
+    return node;
   }
 
   // Convenience method that uses end offset from the last node.
   private <NODE extends ASTNode> NODE setLocation(NODE node, int startOffset, ASTNode lastNode) {
-    Preconditions.checkNotNull(lastNode, "can't extract end offset from a null node");
-    Preconditions.checkNotNull(lastNode.getLocation(), "lastNode doesn't have a location");
     return setLocation(node, startOffset, lastNode.getLocation().getEndOffset());
   }
 
@@ -764,7 +765,8 @@ class Parser {
         "null element in list in AST at %s:%s", token.left, token.right);
     switch (token.kind) {
       case RBRACKET: { // singleton List
-        ListLiteral literal = ListLiteral.makeList(Collections.singletonList(expression));
+        ListLiteral literal =
+            ListLiteral.makeList(Collections.singletonList(expression));
         setLocation(literal, start, token.right);
         nextToken();
         return literal;
@@ -910,23 +912,7 @@ class Parser {
   }
 
   private Expression parseExpression() {
-    int start = token.left;
-    Expression expr = parseExpression(0);
-    if (token.kind == TokenKind.IF) {
-      nextToken();
-      Expression condition = parseExpression(0);
-      if (token.kind == TokenKind.ELSE) {
-        nextToken();
-        Expression elseClause = parseExpression();
-        return setLocation(new ConditionalExpression(expr, condition, elseClause),
-            start, elseClause);
-      } else {
-        reportError(lexer.createLocation(start, token.left),
-            "missing else clause in conditional expression or semicolon before if");
-        return expr; // Try to recover from error: drop the if and the expression after it. Ouch.
-      }
-    }
-    return expr;
+    return parseExpression(0);
   }
 
   private Expression parseExpression(int prec) {

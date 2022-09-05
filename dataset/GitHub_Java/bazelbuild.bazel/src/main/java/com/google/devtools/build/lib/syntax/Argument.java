@@ -63,10 +63,6 @@ public abstract class Argument extends ASTNode {
     public Expression getValue() {
       return value;
     }
-    @Override
-    public void accept(SyntaxTreeVisitor visitor) {
-      visitor.visit(this);
-    }
   }
 
   /** positional argument: Expression */
@@ -178,5 +174,10 @@ public abstract class Argument extends ASTNode {
         hasKwArg = true;
       }
     }
+  }
+
+  @Override
+  public void accept(SyntaxTreeVisitor visitor) {
+    visitor.visit(this);
   }
 }

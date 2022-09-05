@@ -13,15 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -112,14 +109,6 @@ public abstract class MixedModeFunction extends AbstractFunction {
     this(name, FunctionSignature.WithValues.<Object, SkylarkType>create(signature), null);
   }
 
-  // TODO(bazel-team): find a home for this function, maybe a better implementation.
-  private static <E> ArrayList<E> listDifference (List<E> plus, List<E> minus) {
-    final ArrayList<E> list = new ArrayList<>();
-    list.addAll(plus);
-    list.removeAll(minus);
-    return list;
-  }
-
   @Override
   public Object call(List<Object> args,
                      Map<String, Object> kwargs,
@@ -129,7 +118,7 @@ public abstract class MixedModeFunction extends AbstractFunction {
 
     // ast is null when called from Java (as there's no Skylark call site).
     Location loc = ast == null ? location : ast.getLocation();
-    if (onlyNamedArguments && !args.isEmpty()) {
+    if (onlyNamedArguments && args.size() > 0) {
       throw new EvalException(loc,
           getSignature() + " does not accept positional arguments");
     }
@@ -158,12 +147,8 @@ public abstract class MixedModeFunction extends AbstractFunction {
       String keyword = entry.getKey();
       int pos = parameters.indexOf(keyword);
       if (pos == -1) {
-        List<String> unexpected =
-            listDifference(new ArrayList<>(kwargs.keySet()), parameters);
-        Collections.sort(unexpected); // issue stable error messages.
         throw new EvalException(loc,
-            "unexpected keyword" + (unexpected.size() > 1 ? "s" : "") + " '"
-            + Joiner.on("', '").join(unexpected)
+            "unexpected keyword '" + keyword
             + "' in call to " + getSignature());
       } else {
         if (namedArguments[pos] != null) {
@@ -227,7 +212,7 @@ public abstract class MixedModeFunction extends AbstractFunction {
    * Render this object in the form of an equivalent Python function signature.
    */
   public String getSignature() {
-    StringBuilder sb = new StringBuilder();
+    StringBuffer sb = new StringBuffer();
     sb.append(getName()).append('(');
     int ii = 0;
     int len = parameters.size();
