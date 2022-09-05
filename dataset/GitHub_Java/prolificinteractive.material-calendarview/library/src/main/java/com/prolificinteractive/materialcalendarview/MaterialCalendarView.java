@@ -1138,18 +1138,16 @@ public class MaterialCalendarView extends FrameLayout {
                 max = CalendarDay.from(worker);
             }
 
-            months.clear();
-
             Calendar worker = CalendarUtils.getInstance();
-            min.copyToMonthOnly(worker);
+            min.copyTo(worker);
+            CalendarUtils.setToFirstDay(worker);
+            months.clear();
             CalendarDay workingMonth = CalendarDay.from(worker);
             while (!max.isBefore(workingMonth)) {
                 months.add(CalendarDay.from(worker));
                 worker.add(Calendar.MONTH, 1);
-                worker.set(Calendar.DAY_OF_MONTH, 1);
                 workingMonth = CalendarDay.from(worker);
             }
-
             CalendarDay prevDate = selectedDate;
             notifyDataSetChanged();
             setSelectedDate(prevDate);
