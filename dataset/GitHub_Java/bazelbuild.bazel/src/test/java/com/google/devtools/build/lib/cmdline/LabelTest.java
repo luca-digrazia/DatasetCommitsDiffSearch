@@ -21,10 +21,12 @@ import static org.junit.Assert.fail;
 
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.regex.Pattern;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.regex.Pattern;
 
 /**
  * Tests for {@link Label}.
@@ -52,12 +54,6 @@ public class LabelTest {
       Label l = Label.parseAbsolute("//:bar");
       assertEquals("", l.getPackageName());
       assertEquals("bar", l.getName());
-    }
-    {
-      Label l = Label.parseAbsolute("@foo");
-      assertEquals("@foo", l.getPackageIdentifier().getRepository().getName());
-      assertEquals("", l.getPackageName());
-      assertEquals("foo", l.getName());
     }
   }
 
@@ -185,7 +181,7 @@ public class LabelTest {
 
     Label relative = base.getRelative("//conditions:default");
 
-    PackageIdentifier expected = PackageIdentifier.createInMainRepo("conditions");
+    PackageIdentifier expected = PackageIdentifier.createInDefaultRepo("conditions");
     assertEquals(expected.getRepository(), relative.getPackageIdentifier().getRepository());
     assertEquals(expected.getPackageFragment(), relative.getPackageFragment());
     assertEquals("default", relative.getName());
@@ -210,7 +206,7 @@ public class LabelTest {
     Label mainBase = Label.parseAbsolute("@//foo/bar:baz");
     Label externalTarget = Label.parseAbsolute("//external:target");
     Label l = defaultBase.resolveRepositoryRelative(externalTarget);
-    assertTrue(l.getPackageIdentifier().getRepository().isMain());
+    assertTrue(l.getPackageIdentifier().getRepository().isDefault());
     assertEquals("external", l.getPackageName());
     assertEquals("target", l.getName());
     assertEquals(l, repoBase.resolveRepositoryRelative(externalTarget));
@@ -245,17 +241,13 @@ public class LabelTest {
   @Test
   public void testToString() throws Exception {
     {
-      String s = "@//foo/bar:baz";
+      String s = "//foo/bar:baz";
       Label l = Label.parseAbsolute(s);
-      assertEquals("//foo/bar:baz", l.toString());
+      assertEquals(s, l.toString());
     }
     {
       Label l = Label.parseAbsolute("//foo/bar");
       assertEquals("//foo/bar:bar", l.toString());
-    }
-    {
-      Label l = Label.parseAbsolute("@foo");
-      assertEquals("@foo//:foo", l.toString());
     }
   }
 
@@ -398,17 +390,17 @@ public class LabelTest {
 
   @Test
   public void testSerializationSimple() throws Exception {
-    checkSerialization("//a", 93);
+    checkSerialization("//a", 92);
   }
 
   @Test
   public void testSerializationNested() throws Exception {
-    checkSerialization("//foo/bar:baz", 101);
+    checkSerialization("//foo/bar:baz", 100);
   }
 
   @Test
   public void testSerializationWithoutTargetName() throws Exception {
-    checkSerialization("//foo/bar", 101);
+    checkSerialization("//foo/bar", 100);
   }
 
   private void checkSerialization(String labelString, int expectedSize) throws Exception {
@@ -442,7 +434,7 @@ public class LabelTest {
           "invalid repository name 'foo': workspace names must start with '@'");
     }
   }
-
+  
   @Test
   public void testGetWorkspaceRoot() throws Exception {
     Label label = Label.parseAbsolute("//bar/baz");
