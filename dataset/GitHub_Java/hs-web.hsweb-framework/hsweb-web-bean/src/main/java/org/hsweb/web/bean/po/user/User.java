@@ -1,15 +1,18 @@
 package org.hsweb.web.bean.po.user;
 
+import org.hibernate.validator.constraints.Email;
 import org.hibernate.validator.constraints.NotEmpty;
+import org.hsweb.commons.MapUtils;
+import org.hsweb.commons.StringUtils;
 import org.hsweb.web.bean.po.GenericPo;
-import org.hsweb.web.bean.po.role.Role;
 import org.hsweb.web.bean.po.module.Module;
+import org.hsweb.web.bean.po.role.Role;
 import org.hsweb.web.bean.po.role.RoleModule;
 import org.hsweb.web.bean.po.role.UserRole;
-import org.webbuilder.utils.common.MapUtils;
 
 import javax.validation.constraints.NotNull;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 后台管理用户
@@ -32,6 +35,7 @@ public class User extends GenericPo<String> {
     private String name;
 
     //邮箱
+    @Email(message = "邮箱格式错误")
     private String email;
 
     //联系电话
@@ -41,10 +45,10 @@ public class User extends GenericPo<String> {
     private int status;
 
     //创建日期
-    private java.util.Date create_date;
+    private java.util.Date createDate;
 
     //修改日期
-    private java.util.Date update_date;
+    private java.util.Date updateDate;
 
     //用户角色绑定
     private List<UserRole> userRoles;
@@ -54,24 +58,32 @@ public class User extends GenericPo<String> {
     /**
      * 判断此用户是否拥有对指定模块的访问权限
      *
-     * @param mId    模块id
-     * @param levels 访问级别
+     * @param mId     模块id
+     * @param actions 访问级别
      * @return 是否能够访问
      */
-    public boolean hasAccessModuleLevel(String mId, String... levels) {
+    public boolean hasAccessModuleAction(String mId, String... actions) {
         if (!hasAccessModule(mId)) return false;
-        if (levels == null || levels.length == 0) return hasAccessModule(mId);
+        if (actions == null || actions.length == 0) return hasAccessModule(mId);
         Set<String> lv = roleInfo.get(getModule(mId));
         if (lv != null)
-            for (String level : levels) {
-                if (lv.contains(level)) return true;
+            for (String action : actions) {
+                if (StringUtils.isNullOrEmpty(action)) return true;
+                if (lv.contains(action)) return true;
             }
         return false;
     }
 
     public Module getModule(String mId) {
         for (Module module : getModules()) {
-            if (module.getU_id().equals(mId)) return module;
+            if (module.getId().equals(mId)) return module;
+        }
+        return null;
+    }
+
+    public Module getModuleByUri(String uri) {
+        for (Module module : getModules()) {
+            if (uri.equals(module.getUri())) return module;
         }
         return null;
     }
@@ -82,39 +94,29 @@ public class User extends GenericPo<String> {
     }
 
     public Set<Module> getModulesByPid(String pid) {
-        Set<Module> modules = new LinkedHashSet<>();
-        for (Module module : getModules()) {
-            if (pid.equals(module.getP_id())) {
-                modules.add(module);
-            }
-        }
+        Set<Module> modules = getModules()
+                .stream()
+                .filter(module -> pid.equals(module.getParentId()))
+                .collect(Collectors.toCollection(() -> new LinkedHashSet<>()));
         return modules;
     }
 
     public Set<Module> getModulesByPid(String pid, String level) {
-        Set<Module> modules = new LinkedHashSet<>();
-        for (Module module : getModules()) {
-            if (module.getP_id().equals(pid) && hasAccessModuleLevel(module.getU_id(), level)) {
-                modules.add(module);
-            }
-        }
+        Set<Module> modules = getModules().stream()
+                .filter(module -> module.getParentId().equals(pid) && hasAccessModuleAction(module.getId(), level))
+                .collect(Collectors.toCollection(() -> new LinkedHashSet<>()));
         return modules;
     }
 
     public boolean hasAccessRole(String rId) {
         if (getUserRoles() != null)
-            for (UserRole userRole : getUserRoles()) {
-                if (rId.equals(userRole.getRole_id())) return true;
-            }
+            return getUserRoles().stream().anyMatch(userRole -> userRole.getRoleId().equals(rId));
         return false;
     }
 
     public boolean hasAccessModule(String mId) {
         if (roleInfo == null) initRoleInfo();
-        for (Module module : roleInfo.keySet()) {
-            if (module.getU_id().equals(mId)) return true;
-        }
-        return false;
+        return roleInfo.keySet().stream().anyMatch(mdl -> mdl.getId().equals(mId));
     }
 
     /**
@@ -122,22 +124,23 @@ public class User extends GenericPo<String> {
      */
     public void initRoleInfo() {
         Map<Module, Set<String>> roleInfo_tmp = new LinkedHashMap<>();
-        for (UserRole userRole : getUserRoles()) {
-            Role role = userRole.getRole();
-            if (role == null) continue;
-            //角色可访问的路径
-            List<RoleModule> roleModules = role.getModules();
-            for (RoleModule roleModule : roleModules) {
-                Module module = roleModule.getModule();
-                if (module == null || module.getStatus() != 1) continue;
-                Set<String> levels = roleInfo_tmp.get(module);
-                if (levels == null)
-                    roleInfo_tmp.put(module, new HashSet<>(roleModule.getLevels()));
-                else {
-                    levels.addAll(roleModule.getLevels());
+        if (getUserRoles() != null)
+            for (UserRole userRole : getUserRoles()) {
+                Role role = userRole.getRole();
+                if (role == null) continue;
+                //角色可访问的路径
+                List<RoleModule> roleModules = role.getModules();
+                for (RoleModule roleModule : roleModules) {
+                    Module module = roleModule.getModule();
+                    if (module == null || module.getStatus() != 1) continue;
+                    Set<String> actions = roleInfo_tmp.get(module);
+                    if (actions == null)
+                        roleInfo_tmp.put(module, new HashSet<>(roleModule.getActions()));
+                    else {
+                        actions.addAll(roleModule.getActions());
+                    }
                 }
             }
-        }
         //排序
         roleInfo = MapUtils.sortMapByKey(roleInfo_tmp);
     }
@@ -254,15 +257,15 @@ public class User extends GenericPo<String> {
      *
      * @return java.util.Date 创建日期
      */
-    public java.util.Date getCreate_date() {
-        return this.create_date;
+    public java.util.Date getCreateDate() {
+        return this.createDate;
     }
 
     /**
      * 设置 创建日期
      */
-    public void setCreate_date(java.util.Date create_date) {
-        this.create_date = create_date;
+    public void setCreateDate(java.util.Date createDate) {
+        this.createDate = createDate;
     }
 
     /**
@@ -270,20 +273,18 @@ public class User extends GenericPo<String> {
      *
      * @return java.util.Date 修改日期
      */
-    public java.util.Date getUpdate_date() {
-        return this.update_date;
+    public java.util.Date getUpdateDate() {
+        return this.updateDate;
     }
 
     /**
      * 设置 修改日期
      */
-    public void setUpdate_date(java.util.Date update_date) {
-        this.update_date = update_date;
+    public void setUpdateDate(java.util.Date updateDate) {
+        this.updateDate = updateDate;
     }
 
     public List<UserRole> getUserRoles() {
-        if (userRoles == null)
-            userRoles = new ArrayList<>();
         return userRoles;
     }
 
