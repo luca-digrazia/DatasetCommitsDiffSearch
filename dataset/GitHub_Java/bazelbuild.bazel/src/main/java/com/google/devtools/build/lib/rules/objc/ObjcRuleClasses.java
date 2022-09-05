@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeConfigRule;
 import com.google.devtools.build.lib.rules.apple.Platform;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
@@ -62,15 +61,10 @@ import com.google.devtools.build.lib.util.FileTypeSet;
  * Shared rule classes and associated utility code for Objective-C rules.
  */
 public class ObjcRuleClasses {
-
-  /**
-   * Name of the attribute used for implicit dependency on the libtool wrapper.
-   */
-  public static final String LIBTOOL_ATTRIBUTE = "$libtool";
-
   static final String CLANG = "clang";
   static final String CLANG_PLUSPLUS = "clang++";
   static final String SWIFT = "swift";
+  static final String LIBTOOL = "libtool";
   static final String DSYMUTIL = "dsymutil";
   static final String LIPO = "lipo";
   static final String STRIP = "strip";
@@ -188,7 +182,7 @@ public class ObjcRuleClasses {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     return spawnAppleEnvActionBuilder(ruleContext,
-        Platform.forTarget(PlatformType.IOS, appleConfiguration.getIosCpu()));
+        Platform.forIosArch(appleConfiguration.getIosCpu()));
   }
 
   /**
@@ -264,8 +258,8 @@ public class ObjcRuleClasses {
       return builder
           /* <!-- #BLAZE_RULE($objc_opts_rule).ATTRIBUTE(copts) -->
           Extra flags to pass to the compiler.
-          Subject to <a href="${link make-variables}">"Make variable"</a> substitution and
-          <a href="${link common-definitions#sh-tokenization}">Bourne shell tokenization</a>.
+          Subject to <a href="make-variables.html">"Make variable"</a> substitution and
+          <a href="common-definitions.html#sh-tokenization">Bourne shell tokenization</a>.
           These flags will only apply to this target, and not those upon which
           it depends, or those which depend on it.
           <p>
@@ -626,10 +620,10 @@ public class ObjcRuleClasses {
           and <code>blaze-out/pkg/includedir</code>) are included in addition to the
           actual client root.
           <p>
-          Unlike <a href="${link objc_library.copts}">COPTS</a>, these flags are added for this rule
+          Unlike <a href="#objc_library.copts">COPTS</a>, these flags are added for this rule
           and every rule that depends on it. (Note: not the rules it depends upon!) Be
           very careful, since this may have far-reaching effects.  When in doubt, add
-          "-I" flags to <a href="${link objc_library.copts}">COPTS</a> instead.
+          "-I" flags to <a href="#objc_library.copts">COPTS</a> instead.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("includes", Type.STRING_LIST))
           /* <!-- #BLAZE_RULE($objc_compile_dependency_rule).ATTRIBUTE(sdk_includes) -->
@@ -730,8 +724,8 @@ public class ObjcRuleClasses {
            the form <code>KEY=VALUE</code> or simply <code>KEY</code> and are
            passed not only to the compiler for this target (as <code>copts</code>
            are) but also to all <code>objc_</code> dependers of this target.
-           Subject to <a href="${link make-variables}">"Make variable"</a> substitution and
-           <a href="${link common-definitions#sh-tokenization}">Bourne shell tokenization</a>.
+           Subject to <a href="make-variables.html">"Make variable"</a> substitution and
+           <a href="common-definitions.html#sh-tokenization">Bourne shell tokenization</a>.
            <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("defines", STRING_LIST))
           /* <!-- #BLAZE_RULE($objc_compiling_rule).ATTRIBUTE(enable_modules) -->
@@ -752,29 +746,7 @@ public class ObjcRuleClasses {
               BaseRuleClasses.RuleBase.class,
               CompileDependencyRule.class,
               CoptsRule.class,
-              LibtoolRule.class,
               XcrunRule.class)
-          .build();
-    }
-  }
-
-  /**
-   * Common attributes for {@code objc_*} rules that need to call libtool.
-   */
-  public static class LibtoolRule implements RuleDefinition {
-    @Override
-    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-      return builder
-          .add(attr(LIBTOOL_ATTRIBUTE, LABEL).cfg(HOST).exec()
-              .value(env.getToolsLabel("//tools/objc:libtool")))
-          .build();
-    }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_libtool_rule")
-          .type(RuleClassType.ABSTRACT)
-          .ancestors(XcrunRule.class)
           .build();
     }
   }
@@ -809,24 +781,9 @@ public class ObjcRuleClasses {
   }
 
   /**
-   * Protocol buffer related implicit attributes.
-   */
-  static final String PROTO_COMPILER_ATTR = "$googlemac_proto_compiler";
-  static final String PROTO_COMPILER_SUPPORT_ATTR = "$googlemac_proto_compiler_support";
-  static final String PROTO_LIB_ATTR = "$lib_protobuf";
-  static final String PROTOBUF_WELL_KNOWN_TYPES = "$protobuf_well_known_types";
-
-  /**
    * Common attributes for {@code objc_*} rules that link sources and dependencies.
    */
   public static class LinkingRule implements RuleDefinition {
-
-    private final ObjcProtoAspect objcProtoAspect;
-
-    public LinkingRule(ObjcProtoAspect objcProtoAspect) {
-      this.objcProtoAspect = objcProtoAspect;
-    }
-
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
@@ -843,24 +800,8 @@ public class ObjcRuleClasses {
                   .singleArtifact()
                   .value(env.getToolsLabel("//tools/objc:j2objc_dead_code_pruner")))
           .add(attr("$dummy_lib", LABEL).value(env.getToolsLabel("//tools/objc:dummy_lib")))
-          .add(
-              attr(PROTO_COMPILER_ATTR, LABEL)
-                  .allowedFileTypes(FileType.of(".py"))
-                  .cfg(HOST)
-                  .singleArtifact()
-                  .value(env.getToolsLabel("//tools/objc:protobuf_compiler")))
-          .add(
-              attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
-                  .legacyAllowAnyFileType()
-                  .cfg(HOST)
-                  .value(env.getToolsLabel("//tools/objc:protobuf_compiler_support")))
-          .add(
-              attr(PROTOBUF_WELL_KNOWN_TYPES, LABEL)
-                  .cfg(HOST)
-                  .value(env.getToolsLabel("//tools/objc:protobuf_well_known_types")))
-          .override(builder.copy("deps").aspect(objcProtoAspect))
           /* <!-- #BLAZE_RULE($objc_linking_rule).ATTRIBUTE(linkopts) -->
-          Extra flags to pass to the linker.
+          Extra flags to pass to the linker. 
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("linkopts", STRING_LIST))
           .build();
