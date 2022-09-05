@@ -99,11 +99,9 @@ public interface Action extends ActionMetadata, Describable {
 
   /**
    * Method used to find inputs before execution for an action that
-   * {@link ActionMetadata#discoversInputs}. Returns null if action's inputs will be discovered
-   * during execution proper.
+   * {@link ActionMetadata#discoversInputs}.
    */
-  @Nullable
-  Collection<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
+  void discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException;
 
   /**

@@ -516,7 +516,6 @@ public final class SkyframeActionExecutor {
    */
   ActionExecutionContext constructActionExecutionContext(final FileAndMetadataCache graphFileCache,
       MetadataHandler metadataHandler) {
-    // TODO(bazel-team): this should be closed explicitly somewhere.
     FileOutErr fileOutErr = actionLogBufferPathGenerator.generate();
     return new ActionExecutionContext(
         executorEngine,

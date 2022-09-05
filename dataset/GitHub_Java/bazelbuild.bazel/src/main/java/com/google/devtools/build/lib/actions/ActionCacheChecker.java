@@ -107,9 +107,9 @@ public class ActionCacheChecker {
     if (handler != null) {
       if (verboseExplanations) {
         String keyDescription = action.describeKey();
-        reportRebuild(handler, action, keyDescription == null
-            ? "action command has changed"
-            : "action command has changed.\nNew action: " + keyDescription);
+        reportRebuild(handler, action,
+            keyDescription == null ? "action command has changed" :
+            "action command has changed.\nNew action: " + keyDescription);
       } else {
         reportRebuild(handler, action,
             "action command has changed (try --verbose_explanations for more info)");
@@ -216,12 +216,10 @@ public class ActionCacheChecker {
       if (!key.equals(execPath)) {
         actionCache.remove(key);
       }
-      if (!metadataHandler.artifactOmitted(output)) {
-        // Output files *must* exist and be accessible after successful action execution.
-        Metadata metadata = metadataHandler.getMetadata(output);
-        Preconditions.checkState(metadata != null);
-        entry.addFile(output.getExecPath(), metadata);
-      }
+      // Output files *must* exist and be accessible after successful action execution.
+      Metadata metadata = metadataHandler.getMetadata(output);
+      Preconditions.checkState(metadata != null);
+      entry.addFile(output.getExecPath(), metadata);
     }
     for (Artifact input : action.getInputs()) {
       entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));

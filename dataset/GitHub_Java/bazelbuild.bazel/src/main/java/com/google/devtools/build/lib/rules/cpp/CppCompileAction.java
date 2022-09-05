@@ -68,7 +68,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1161,29 +1160,21 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
       // TODO(bazel-team): Extract combinations of options into sections in the CROSSTOOL file.
       if (CppFileTypes.CPP_MODULE_MAP.matches(sourceFile.getExecPath())) {
-        if (!featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)) {
-          options.add("-x");
-          options.add("c++");
-          options.add("-Xclang=-emit-module");
-          options.add("-Xcrosstool-module-compilation");
-        }
+        options.add("-x");
+        options.add("c++");
       } else if (CppFileTypes.CPP_HEADER.matches(sourceFile.getExecPath())) {
         // TODO(bazel-team): Read the compiler flag settings out of the CROSSTOOL file.
         // TODO(bazel-team): Handle C headers that probably don't work in C++ mode.
         if (features.contains(CppRuleClasses.PARSE_HEADERS)) {
-          if (!featureConfiguration.isEnabled(CppRuleClasses.PARSE_HEADERS)) {
-            options.add("-x");
-            options.add("c++-header");
-            // Specifying -x c++-header will make clang/gcc create precompiled
-            // headers, which we suppress with -fsyntax-only.
-            options.add("-fsyntax-only");
-          }
+          options.add("-x");
+          options.add("c++-header");
+          // Specifying -x c++-header will make clang/gcc create precompiled
+          // headers, which we suppress with -fsyntax-only.
+          options.add("-fsyntax-only");
         } else if (features.contains(CppRuleClasses.PREPROCESS_HEADERS)) {
-          if (!featureConfiguration.isEnabled(CppRuleClasses.PREPROCESS_HEADERS)) {
-            options.add("-E");
-            options.add("-x");
-            options.add("c++");
-          }
+          options.add("-E");
+          options.add("-x");
+          options.add("c++");
         } else {
           // CcCommon.collectCAndCppSources() ensures we do not add headers to
           // the compilation artifacts unless either 'parse_headers' or
@@ -1278,25 +1269,37 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       }
 
       if (cppModuleMap != null && (compileHeaderModules || enableLayeringCheck)) {
-        if (!featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAPS)) {
-          // TODO(bazel-team): Remove this path once all toolchains that support module map have
-          // their configuration updated; in that case, we do not need to add the flags here, as
-          // they will be added through the corresponding crosstool feature configuration.
-          options.add("-Xclang-only=-fmodule-maps");
-          options.add("-Xclang-only=-fmodule-name=" + cppModuleMap.getName());
-          options.add("-Xclang-only=-fmodule-map-file="
-              + cppModuleMap.getArtifact().getExecPathString());
-          options.add("-Xclang=-fno-modules-implicit-maps");
-        }
+        options.add("-Xclang-only=-fmodule-maps");
+        options.add("-Xclang-only=-fmodule-name=" + cppModuleMap.getName());
+        options.add("-Xclang-only=-fmodule-map-file="
+            + cppModuleMap.getArtifact().getExecPathString());
+        options.add("-Xclang=-fno-modules-implicit-maps");
               
-        if (compileHeaderModules
-            && !featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULES)) {
+        if (compileHeaderModules) {
           options.add("-Xclang-only=-fmodules");        
-          for (String headerModulePath : getHeaderModulePaths()) {
-            options.add("-Xclang=-fmodule-file=" + headerModulePath);            
+          if (CppFileTypes.CPP_MODULE_MAP.matches(sourceFilename)) {
+            options.add("-Xclang=-emit-module");
+            options.add("-Xcrosstool-module-compilation");
+          }
+          // Select .pcm inputs to pass on the command line depending on whether
+          // we are in pic or non-pic mode.
+          // TODO(bazel-team): We want to add these to the compile even if the
+          // current target is not built as a module; currently that implies
+          // passing -fmodules to the compiler, which is experimental; thus, we
+          // do not use the header modules files for now if the current
+          // compilation is not modules enabled on its own.
+          boolean pic = copts.contains("-fPIC");
+          for (Artifact source : context.getTopLevelHeaderModules()) {
+            // Depending on whether this specific compile action is pic or non-pic, select the
+            // corresponding header modules. Note that the compilation context might give us both
+            // from targets that are built in both modes.
+            if ((pic && source.getFilename().endsWith(".pic.pcm"))
+                || (!pic && !source.getFilename().endsWith(".pic.pcm"))) {
+              options.add("-Xclang=-fmodule-file=" + source.getExecPathString());
+            }
           }
         }
-        if (enableLayeringCheck && !featureConfiguration.isEnabled(CppRuleClasses.LAYERING_CHECK)) {
+        if (enableLayeringCheck) {
           options.add("-Xclang-only=-fmodules-strict-decluse");          
         }
       }
@@ -1312,47 +1315,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       if (cppConfiguration.useFission()) {
         options.add("-gsplit-dwarf");
       }
-
-      CcToolchainFeatures.Variables.Builder buildVariables =
-          new CcToolchainFeatures.Variables.Builder();
-      if (featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAPS)) {
-        buildVariables.addVariable("module_name", cppModuleMap.getName());
-        buildVariables.addVariable("module_map_file",
-            cppModuleMap.getArtifact().getExecPathString());
-      }
-      if (featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)) {
-        buildVariables.addSequenceVariable("module_files", getHeaderModulePaths());
-      }
-      options.addAll(featureConfiguration.getCommandLine(getActionName(), buildVariables.build()));
+      
+      options.addAll(featureConfiguration.getCommandLine(getActionName(),
+          new CcToolchainFeatures.Variables.Builder().build()));
       return options;
-    }
-
-    /**
-     * Select .pcm inputs to pass on the command line depending on whether we are in pic or non-pic
-     * mode.
-     */
-    private Collection<String> getHeaderModulePaths() {
-      Collection<String> result = new LinkedHashSet<>();
-      // TODO(bazel-team): Do not hard-code checking for -fPIC. Make it a toolchain feature
-      // instead.
-      boolean pic = copts.contains("-fPIC");
-      NestedSet<Artifact> artifacts = featureConfiguration.isEnabled(
-          CppRuleClasses.HEADER_MODULE_INCLUDES_DEPENDENCIES)
-          ? context.getTopLevelHeaderModules()
-          : context.getAdditionalInputs();
-      for (Artifact artifact : artifacts) {
-        String filename = artifact.getFilename();
-        if (!filename.endsWith(".pcm")) {
-          continue;
-        }
-        // Depending on whether this specific compile action is pic or non-pic, select the
-        // corresponding header modules. Note that the compilation context might give us both
-        // from targets that are built in both modes.
-        if (pic == filename.endsWith(".pic.pcm")) {
-          result.add(artifact.getExecPathString());
-        }          
-      }
-      return result;
     }
 
     // For each option in 'in', add it to 'out' unless it is matched by the 'coptsFilter' regexp.
