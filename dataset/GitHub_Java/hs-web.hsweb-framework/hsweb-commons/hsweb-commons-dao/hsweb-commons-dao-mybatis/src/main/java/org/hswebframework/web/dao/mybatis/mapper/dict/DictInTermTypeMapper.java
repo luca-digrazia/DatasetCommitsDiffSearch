@@ -9,20 +9,20 @@ import org.hswebframework.ezorm.rdb.render.dialect.Dialect;
 import org.hswebframework.ezorm.rdb.render.dialect.RenderPhase;
 import org.hswebframework.ezorm.rdb.render.dialect.function.SqlFunction;
 import org.hswebframework.ezorm.rdb.render.dialect.term.BoostTermTypeMapper;
-import org.hswebframework.web.dao.mybatis.mapper.AbstractSqlTermCustomer;
+import org.hswebframework.web.dao.mybatis.mapper.AbstractSqlTermCustomizer;
 import org.hswebframework.web.dao.mybatis.mapper.ChangedTermValue;
 import org.hswebframework.web.dict.EnumDict;
 
 import java.sql.JDBCType;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 /**
  * @author zhouhao
  * @since 3.0.0-RC
  */
-public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
+public class DictInTermTypeMapper extends AbstractSqlTermCustomizer {
 
     private boolean not;
 
@@ -34,13 +34,20 @@ public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
     }
 
     private boolean support(RDBColumnMetaData column) {
+        if(column.getJdbcType()== JDBCType.VARCHAR){
+            return false;
+        }
         Class type = column.getJavaType();
-        if (type.isArray()) {
+        if (type != null && type.isArray()) {
             type = type.getComponentType();
         }
-        return ((type.isEnum() && EnumDict.class.isAssignableFrom(type))
+
+        return ((type != null && type.isEnum()
+                && EnumDict.class.isAssignableFrom(type)
+                && column.getJavaType().isArray())
                 ||
-                (column.getProperty(USE_DICT_MASK_FLAG).isTrue() && column.getOptionConverter() != null));
+                (column.getProperty(USE_DICT_MASK_FLAG).isTrue()
+                        && column.getOptionConverter() != null));
     }
 
     @SuppressWarnings("all")
@@ -57,7 +64,7 @@ public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
 
         OptionConverter converter = column.getOptionConverter();
         if (converter == null) {
-            return Collections.emptyList();
+            return new ArrayList<>();
         }
 
         return (List) converter.getOptions();
@@ -98,7 +105,7 @@ public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
         } else {
             n = not ? "!=" : "=";
         }
-        return new SqlAppender().add(bitAnd, n, any ? "0" : where);
+        return new SqlAppender().add(bitAnd, n, any ? "0" : columnName);
 
     }
 
@@ -112,7 +119,7 @@ public class DictInTermTypeMapper extends AbstractSqlTermCustomer {
 
         String columnName = dialect.buildColumnName(tableAlias, column.getName());
         SqlAppender appender = new SqlAppender();
-        appender.add(columnName, not ? " NOT" : " ").add("IN(");
+        appender.add(columnName, not ? " NOT " : " ").add("IN(");
         for (int i = 0; i < values.size(); i++) {
             appender.add("#{", wherePrefix, ".value.value[", i, "]}", ",");
         }
