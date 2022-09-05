@@ -137,7 +137,6 @@ public final class JavaConfiguration extends Fragment {
   private final Label javacBootclasspath;
   private final Label javacExtdir;
   private final ImmutableList<String> javacOpts;
-  private final ImmutableList<Label> extraProguardSpecs;
   private final TriState bundleTranslations;
   private final ImmutableList<Label> translationTargets;
   private final String javaCpu;
@@ -165,7 +164,6 @@ public final class JavaConfiguration extends Fragment {
     this.javacBootclasspath = javaOptions.javacBootclasspath;
     this.javacExtdir = javaOptions.javacExtdir;
     this.javacOpts = ImmutableList.copyOf(javaOptions.javacOpts);
-    this.extraProguardSpecs = ImmutableList.copyOf(javaOptions.extraProguardSpecs);
     this.bundleTranslations = javaOptions.bundleTranslations;
     this.javaCpu = javaCpu;
     this.javaToolchain = javaToolchain;
@@ -293,13 +291,6 @@ public final class JavaConfiguration extends Fragment {
 
   public List<String> getJavacOpts() {
     return javacOpts;
-  }
-
-  /**
-   * Returns all labels provided with --extra_proguard_specs.
-   */
-  public List<Label> getExtraProguardSpecs() {
-    return extraProguardSpecs;
   }
 
   /**
