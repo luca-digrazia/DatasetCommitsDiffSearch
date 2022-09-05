@@ -1,80 +1,47 @@
 package org.nlpcn.es4sql;
 
-import java.io.IOException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.HashSet;
+import java.util.Set;
 
-import org.elasticsearch.action.search.SearchRequestBuilder;
-import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.ActionRequestBuilder;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.client.transport.TransportClient;
-import org.elasticsearch.common.transport.InetSocketTransportAddress;
-import org.elasticsearch.search.aggregations.Aggregation;
-import org.nlpcn.es4sql.domain.SearchResult;
-import org.nlpcn.es4sql.domain.Select;
 import org.nlpcn.es4sql.exception.SqlParseException;
-import org.nlpcn.es4sql.query.AggregationQuery;
-import org.nlpcn.es4sql.query.DefaultQuery;
-import org.nlpcn.es4sql.query.Query;
+import org.nlpcn.es4sql.query.ESActionFactory;
+import org.nlpcn.es4sql.query.QueryAction;
+
 
 public class SearchDao {
 
+	private static final Set<String> END_TABLE_MAP = new HashSet<>();
+
+	static {
+		END_TABLE_MAP.add("limit");
+		END_TABLE_MAP.add("order");
+		END_TABLE_MAP.add("where");
+		END_TABLE_MAP.add("group");
+
+	}
+
 	private Client client = null;
 
-	@SuppressWarnings("resource")
-	public SearchDao(String ip, int port) {
-		this.client = new TransportClient().addTransportAddress(new InetSocketTransportAddress(ip, port));
+
+	public SearchDao(Client client) {
+		this.client = client;
 	}
+
 
 	/**
-	 * 查询返回一个初步的封装结果
-	 * 
-	 * @param sql
-	 * @return
-	 * @throws IOException
+	 * Prepare action And transform sql
+	 * into ES ActionRequest
+	 * @param sql SQL query to execute.
+	 * @return ES request
 	 * @throws SqlParseException
 	 */
-	public SearchResult selectAsResult(String sql) throws IOException, SqlParseException {
-		Select select = new SqlParser().parseSelect(sql);
+	public ActionRequestBuilder explain(String sql) throws SqlParseException, SQLFeatureNotSupportedException {
 
-		Query query = select2Query(select);
-
-		SearchResponse resp = query.explan().execute().actionGet();
-
-		if (query instanceof DefaultQuery) {
-			return new SearchResult(resp);
-		} else if (query instanceof AggregationQuery) {
-			return new SearchResult(resp);
-		}
-		return null;
-
-	}
-
-	/**
-	 * 查询返回es的查询结果
-	 * 
-	 * @param sql
-	 * @return
-	 * @throws IOException
-	 * @throws SqlParseException
-	 */
-	public SearchResponse select(String sql) throws IOException, SqlParseException {
-
-		Select select = new SqlParser().parseSelect(sql);
-
-		Query query = select2Query(select);
-
-		return query.explan().execute().actionGet();
-	}
-
-	private Query select2Query(Select select) throws SqlParseException {
-
-		Query query = null;
-
-		if (select.isAgg) {
-			query = new AggregationQuery(client, select);
-		} else {
-			query = new DefaultQuery(client, select);
-		}
-		return query;
+		QueryAction query = ESActionFactory.create(client, sql);
+		return query.explain();
 	}
 
 }
