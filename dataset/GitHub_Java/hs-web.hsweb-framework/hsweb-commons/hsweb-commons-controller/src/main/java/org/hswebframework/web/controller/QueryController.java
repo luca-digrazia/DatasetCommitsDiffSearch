@@ -32,9 +32,6 @@ import org.hswebframework.web.service.QueryByEntityService;
 import org.hswebframework.web.service.QueryService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestParam;
-
-import java.util.List;
 
 import static org.hswebframework.web.controller.message.ResponseMessage.ok;
 
@@ -77,14 +74,6 @@ public interface QueryController<E, PK, Q extends Entity> {
     }
 
     @Authorize(action = Permission.ACTION_QUERY)
-    @GetMapping("/no-paging")
-    @AccessLogger("{dynamic_query}")
-    @ApiOperation(value = "不分页动态查询数据", responseReference = "get")
-    default ResponseMessage<List<E>> listNoPaging(Q param) {
-        return ok(getService().select(param));
-    }
-
-    @Authorize(action = Permission.ACTION_QUERY)
     @GetMapping("/count")
     @AccessLogger("{dynamic_query}")
     @ApiOperation(value = "根据动态条件统计数据", responseReference = "get")
@@ -101,18 +90,8 @@ public interface QueryController<E, PK, Q extends Entity> {
         return ok(assertNotNull(getService().selectByPk(id)));
     }
 
-    @Authorize(action = Permission.ACTION_GET)
-    @GetMapping(path = "/ids")
-    @AccessLogger("{get_by_id}")
-    @ApiOperation("根据主键查询多个数据")
-    default ResponseMessage<List<E>> getByPrimaryKey(@RequestParam List<PK> ids) {
-        return ok(assertNotNull(getService().selectByPk(ids)));
-    }
-
     static <T> T assertNotNull(T obj) {
-        if (null == obj) {
-            throw new NotFoundException("{data_not_exist}");
-        }
+        if (null == obj) throw new NotFoundException("{data_not_exist}");
         return obj;
     }
 
