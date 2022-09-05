@@ -250,24 +250,37 @@ public class DelegateClassLoader extends PathClassLoader {
 
     @Override
     protected Class<?> findClass(String className) throws ClassNotFoundException {
+        if(className.contains("dexmerge")){
+            Log.e("AtlasBridgeApplcation","find : "+className);
+        }
         Class<?> clazz = null;
-        if (Thread.currentThread().getId() != Looper.getMainLooper().getThread().getId()) {
-            BundleUtil.checkBundleStateSyncOnChildThread(className);
-        } else {
-            BundleUtil.checkBundleStateSyncOnUIThread(className);
-        }
-        clazz = loadFromInstalledBundles(className, true);
-        if (clazz != null)
-            return clazz;
+        try {
+            clazz = loadFromInstalledBundles(className,false);
+        }catch(Throwable e){
 
-        ComponentName comp = new ComponentName(RuntimeVariables.androidApplication.getPackageName(),className);
-        if (isProvider(comp)){
-            return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeProvider");
-        }else if(isReceiver(comp)){
-            return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeReceiver");
-        }
+        }finally {
+            if (clazz == null) {
+                if (Thread.currentThread().getId() != Looper.getMainLooper().getThread().getId()) {
+                    BundleUtil.checkBundleStateSyncOnChildThread(className);
+                } else {
+                    BundleUtil.checkBundleStateSyncOnUIThread(className);
+                }
+                clazz = loadFromInstalledBundles(className, true);
+                if (clazz != null)
+                    return clazz;
 
-        throw new ClassNotFoundException("Can't find class " + className + printExceptionInfo());
+                ComponentName comp = new ComponentName(RuntimeVariables.androidApplication.getPackageName(),className);
+                if (isProvider(comp)){
+                    return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeProvider");
+                }else if(isReceiver(comp)){
+                    return Atlas.class.getClassLoader().loadClass("android.taobao.atlas.util.FakeReceiver");
+                }
+
+                throw new ClassNotFoundException("Can't find class " + className + printExceptionInfo());
+            }else{
+                return clazz;
+            }
+        }
     }
     
     private String printExceptionInfo(){
@@ -304,20 +317,15 @@ public class DelegateClassLoader extends PathClassLoader {
             }
             bundle.startBundle();
             ClassLoader classloader = bundle.getClassLoader();
-            if (bundle != null && bundle.checkValidate()) {
-                try {
-                    if (classloader != null) {
-                        clazz = classloader.loadClass(className);
-                        if (clazz != null) {
-                            return clazz;
-                        }
+            try {
+                if (classloader != null) {
+                    clazz = classloader.loadClass(className);
+                    if (clazz != null) {
+                        return clazz;
                     }
-                } catch (ClassNotFoundException e) {
                 }
-            } else {
-
+            } catch (ClassNotFoundException e) {
             }
-
             if((Thread.currentThread().getId() == Looper.getMainLooper().getThread().getId())){
                 Throwable ex = new Throwable();
                 ex.fillInStackTrace();
