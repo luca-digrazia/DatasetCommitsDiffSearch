@@ -71,8 +71,8 @@ public final class BinaryOperatorExpression extends Expression {
     try {
       return ((Comparable<Object>) lval).compareTo(rval);
     } catch (ClassCastException e) {
-      throw new EvalException(getLocation(), "Cannot compare " + EvalUtils.getDataTypeName(lval)
-          + " with " + EvalUtils.getDataTypeName(rval));
+      throw new EvalException(getLocation(), "Cannot compare " + EvalUtils.getDatatypeName(lval)
+          + " with " + EvalUtils.getDatatypeName(rval));
     }
   }
 
@@ -117,9 +117,9 @@ public final class BinaryOperatorExpression extends Expression {
           List<?> rlist = (List<?>) rval;
           if (EvalUtils.isImmutable(llist) != EvalUtils.isImmutable(rlist)) {
             throw new EvalException(getLocation(), "can only concatenate "
-                + EvalUtils.getDataTypeName(rlist) + " (not \""
-                + EvalUtils.getDataTypeName(llist) + "\") to "
-                + EvalUtils.getDataTypeName(rlist));
+                + EvalUtils.getDatatypeName(rlist) + " (not \""
+                + EvalUtils.getDatatypeName(llist) + "\") to "
+                + EvalUtils.getDatatypeName(rlist));
           }
           if (llist instanceof GlobList<?> || rlist instanceof GlobList<?>) {
             return GlobList.concat(llist, rlist);
@@ -268,12 +268,10 @@ public final class BinaryOperatorExpression extends Expression {
       }
     } // endswitch
 
-    // NB: this message format is identical to that used by CPython 2.7.6 or 3.4.0,
-    // though python raises a TypeError.
-    // For more details, we'll hopefully have usable stack traces at some point.
     throw new EvalException(getLocation(),
-        String.format("unsupported operand type(s) for %s: '%s' and '%s'",
-            operator, EvalUtils.getDataTypeName(lval), EvalUtils.getDataTypeName(rval)));
+        "unsupported operand types for '" + operator + "': '"
+        + EvalUtils.getDatatypeName(lval) + "' and '"
+        + EvalUtils.getDatatypeName(rval) + "'");
   }
 
   @Override
@@ -406,12 +404,9 @@ public final class BinaryOperatorExpression extends Expression {
       }
     } // endswitch
 
-    // NB: this message format is identical to that used by CPython 2.7.6 or 3.4.0,
-    // though python raises a TypeError at runtime, whereas we issue an EvalException a bit earlier.
     if (ltype != SkylarkType.UNKNOWN && rtype != SkylarkType.UNKNOWN) {
       throw new EvalException(getLocation(),
-          String.format("unsupported operand type(s) for %s: '%s' and '%s'",
-              operator, lname, rname));
+          "unsupported operand types for '" + operator + "': '" + lname + "' and '" + rname + "'");
     }
     return SkylarkType.UNKNOWN;
   }

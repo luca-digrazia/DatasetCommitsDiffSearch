@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.runtime;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import java.time.Duration;
 
 /**
  * Aggregates all the critical path components in one object. This allows us to easily access the
@@ -24,16 +23,16 @@ import java.time.Duration;
  */
 public class AggregatedCriticalPath<T extends AbstractCriticalPathComponent<?>> {
 
-  private final Duration totalTime;
+  private final long totalTime;
   private final ImmutableList<T> criticalPathComponents;
 
-  protected AggregatedCriticalPath(Duration totalTime, ImmutableList<T> criticalPathComponents) {
+  protected AggregatedCriticalPath(long totalTime, ImmutableList<T> criticalPathComponents) {
     this.totalTime = totalTime;
     this.criticalPathComponents = criticalPathComponents;
   }
 
-  /** Total wall time spent running the critical path actions. */
-  public Duration totalTime() {
+  /** Total wall time in ms spent running the critical path actions. */
+  public long totalTime() {
     return totalTime;
   }
 
@@ -57,7 +56,8 @@ public class AggregatedCriticalPath<T extends AbstractCriticalPathComponent<?>> 
 
   private String toString(boolean summary) {
     StringBuilder sb = new StringBuilder("Critical Path: ");
-    sb.append(String.format("%.2f", totalTime.toMillis() / 1000.0));
+    double totalMillis = totalTime;
+    sb.append(String.format("%.2f", totalMillis / 1000.0));
     sb.append("s");
     if (summary || criticalPathComponents.isEmpty()) {
       return sb.toString();
