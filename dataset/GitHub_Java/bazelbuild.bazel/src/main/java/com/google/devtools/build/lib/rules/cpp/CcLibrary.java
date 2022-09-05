@@ -19,13 +19,14 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.AlwaysBuiltArtifactsProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -231,7 +232,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     CcLinkingOutputs linkedLibraries = info.getCcLinkingOutputsExcludingPrecompiledLibraries();
 
     NestedSet<Artifact> artifactsToForce =
-        collectHiddenTopLevelArtifacts(ruleContext, common, info.getCcCompilationOutputs());
+        collectArtifactsToForce(ruleContext, common, info.getCcCompilationOutputs());
 
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.stableOrder();
     filesBuilder.addAll(LinkerInputs.toLibraryArtifacts(linkedLibraries.getStaticLibraries()));
@@ -258,30 +259,29 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     targetBuilder
         .setFilesToBuild(filesToBuild)
         .addProviders(info.getProviders())
-        .addOutputGroups(info.getOutputGroups())
         .add(InstrumentedFilesProvider.class, instrumentedFilesProvider)
         .add(RunfilesProvider.class, RunfilesProvider.withData(staticRunfiles, sharedRunfiles))
         // Remove this?
         .add(CppRunfilesProvider.class, new CppRunfilesProvider(staticRunfiles, sharedRunfiles))
         .add(ImplementedCcPublicLibrariesProvider.class,
             new ImplementedCcPublicLibrariesProvider(getImplementedCcPublicLibraries(ruleContext)))
-        .addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL, artifactsToForce)
-        .addOutputGroup(OutputGroupProvider.BASELINE_COVERAGE, BaselineCoverageAction
-                .getBaselineCoverageArtifacts(ruleContext,
-                    instrumentedFilesProvider.getInstrumentedFiles()));
+        .add(AlwaysBuiltArtifactsProvider.class,
+            new AlwaysBuiltArtifactsProvider(artifactsToForce))
+        .addOutputGroup(TopLevelArtifactProvider.BASELINE_COVERAGE,
+            BaselineCoverageAction.getBaselineCoverageArtifacts(
+                ruleContext, instrumentedFilesProvider.getInstrumentedFiles()));
 
   }
 
-  private static NestedSet<Artifact> collectHiddenTopLevelArtifacts(RuleContext ruleContext,
+  private static NestedSet<Artifact> collectArtifactsToForce(RuleContext ruleContext,
       CcCommon common, CcCompilationOutputs ccCompilationOutputs) {
     // Ensure that we build all the dependencies, otherwise users may get confused.
     NestedSetBuilder<Artifact> artifactsToForceBuilder = NestedSetBuilder.stableOrder();
     artifactsToForceBuilder.addTransitive(
         NestedSetBuilder.wrap(Order.STABLE_ORDER, common.getFilesToCompile(ccCompilationOutputs)));
-    for (OutputGroupProvider dep :
-        ruleContext.getPrerequisites("deps", Mode.TARGET, OutputGroupProvider.class)) {
-      artifactsToForceBuilder.addTransitive(
-          dep.getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL));
+    for (AlwaysBuiltArtifactsProvider dep :
+        ruleContext.getPrerequisites("deps", Mode.TARGET, AlwaysBuiltArtifactsProvider.class)) {
+      artifactsToForceBuilder.addTransitive(dep.getArtifactsToAlwaysBuild());
     }
     return artifactsToForceBuilder.build();
   }
@@ -317,9 +317,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       }
     } else {
       if (!linkstaticAttribute && appearsToHaveNoObjectFiles(ruleContext.attributes())) {
-        Artifact element = Iterables.getFirst(
-            ccCompilationOutputs.getObjectFiles(false),
-            ccCompilationOutputs.getObjectFiles(true).get(0));
+        Artifact element = ccCompilationOutputs.getObjectFiles(false).isEmpty()
+            ? ccCompilationOutputs.getObjectFiles(true).get(0)
+            : ccCompilationOutputs.getObjectFiles(false).get(0);
         ruleContext.attributeWarning("srcs",
              "this library appears at first glance to have no object files, "
              + "but on closer inspection it does have something to link, e.g. "

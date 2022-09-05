@@ -24,13 +24,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -308,7 +308,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
         .addProvider(LipoContextProvider.class, new LipoContextProvider(
             cppCompilationContext, ImmutableMap.copyOf(scannableMap)))
         .addProvider(CppLinkAction.Context.class, linkContext)
-        .addOutputGroup(OutputGroupProvider.BASELINE_COVERAGE,
+        .addOutputGroup(TopLevelArtifactProvider.BASELINE_COVERAGE,
             createBaselineCoverageArtifacts(ruleContext, common, ccCompilationOutputs, fake))
         .build();
   }
@@ -436,7 +436,7 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
    * Returns "true" if the {@code linkshared} attribute exists and is set.
    */
   private static final boolean isLinkShared(RuleContext context) {
-    return context.attributes().has("linkshared", Type.BOOLEAN)
+    return context.getRule().getRuleClassObject().hasAttr("linkshared", Type.BOOLEAN)
         && context.attributes().get("linkshared", Type.BOOLEAN);
   }
 

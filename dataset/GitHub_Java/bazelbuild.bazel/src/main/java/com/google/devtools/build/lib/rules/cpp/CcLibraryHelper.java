@@ -17,17 +17,19 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.CompilationPrerequisitesProvider;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.FilesToCompileProvider;
 import com.google.devtools.build.lib.analysis.LanguageDependentFragment;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TempsProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -46,12 +48,12 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
@@ -83,21 +85,17 @@ public final class CcLibraryHelper {
    * context.
    */
   public static final class Info {
-    private final ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
-        providers;
-    private final ImmutableMap<String, NestedSet<Artifact>> outputGroups;
+    private final Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers;
     private final CcCompilationOutputs compilationOutputs;
     private final CcLinkingOutputs linkingOutputs;
     private final CcLinkingOutputs linkingOutputsExcludingPrecompiledLibraries;
     private final CppCompilationContext context;
 
     private Info(Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> providers,
-        Map<String, NestedSet<Artifact>> outputGroups,
         CcCompilationOutputs compilationOutputs, CcLinkingOutputs linkingOutputs,
         CcLinkingOutputs linkingOutputsExcludingPrecompiledLibraries,
         CppCompilationContext context) {
-      this.providers = ImmutableMap.copyOf(providers);
-      this.outputGroups = ImmutableMap.copyOf(outputGroups);
+      this.providers = Collections.unmodifiableMap(providers);
       this.compilationOutputs = compilationOutputs;
       this.linkingOutputs = linkingOutputs;
       this.linkingOutputsExcludingPrecompiledLibraries =
@@ -107,10 +105,6 @@ public final class CcLibraryHelper {
 
     public Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> getProviders() {
       return providers;
-    }
-
-    public ImmutableMap<String, NestedSet<Artifact>> getOutputGroups() {
-      return outputGroups;
     }
 
     public CcCompilationOutputs getCcCompilationOutputs() {
@@ -152,7 +146,6 @@ public final class CcLibraryHelper {
   private final CppSemantics semantics;
 
   private final List<Artifact> publicHeaders = new ArrayList<>();
-  private final List<Artifact> publicTextualHeaders = new ArrayList<>();
   private final List<Artifact> privateHeaders = new ArrayList<>();
   private final List<PathFragment> additionalExportedHeaders = new ArrayList<>();
   private final List<Pair<Artifact, Label>> sources = new ArrayList<>();
@@ -233,18 +226,6 @@ public final class CcLibraryHelper {
     return this;
   }
 
-  /**
-   * Add the corresponding files as public textual header files. These files will not be compiled
-   * into a target's header module, but will be made visible as textual includes to dependent rules.
-   */
-  public CcLibraryHelper addPublicTextualHeaders(Iterable<Artifact> textualHeaders) {
-    Iterables.addAll(this.publicTextualHeaders, textualHeaders);
-    for (Artifact header : textualHeaders) {
-      this.additionalExportedHeaders.add(header.getExecPath());
-    }
-    return this;
-  }
-  
   /**
    * Add the corresponding files as source files. These may also be header files, in which case
    * they will not be compiled, but also not made visible as includes to dependent rules.
@@ -557,8 +538,8 @@ public final class CcLibraryHelper {
   }
 
   /**
-   * Enables the output of the {@code files_to_compile} and {@code compilation_prerequisites}
-   * output groups.
+   * Enables the output of {@link FilesToCompileProvider} and {@link
+   * CompilationPrerequisitesProvider}.
    */
   // TODO(bazel-team): We probably need to adjust this for the multi-language rules.
   public CcLibraryHelper enableCompileProviders() {
@@ -660,11 +641,11 @@ public final class CcLibraryHelper {
     providers.put(CppDebugFileProvider.class, new CppDebugFileProvider(
         dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts()));
     providers.put(TransitiveLipoInfoProvider.class, collectTransitiveLipoInfo(ccOutputs));
-    Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
-    outputGroups.put(OutputGroupProvider.TEMP_FILES, getTemps(ccOutputs));
+    providers.put(TempsProvider.class, getTemps(ccOutputs));
     if (emitCompileProviders) {
-      outputGroups.put(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(ccOutputs));
-      outputGroups.put(OutputGroupProvider.COMPILATION_PREREQUISITES,
+      providers.put(FilesToCompileProvider.class, new FilesToCompileProvider(
+          getFilesToCompile(ccOutputs)));
+      providers.put(CompilationPrerequisitesProvider.class,
           CcCommon.collectCompilationPrerequisites(ruleContext, cppCompilationContext));
     }
 
@@ -685,7 +666,7 @@ public final class CcLibraryHelper {
       providers.put(CcLinkParamsProvider.class, new CcLinkParamsProvider(
           createCcLinkParamsStore(ccLinkingOutputs, cppCompilationContext, forcePic)));
     }
-    return new Info(providers, outputGroups, ccOutputs, ccLinkingOutputs, originalLinkingOutputs,
+    return new Info(providers, ccOutputs, ccLinkingOutputs, originalLinkingOutputs,
         cppCompilationContext);
   }
 
@@ -724,12 +705,9 @@ public final class CcLibraryHelper {
 
     // There are no ordering constraints for declared include dirs/srcs, or the pregrepped headers.
     contextBuilder.addDeclaredIncludeSrcs(publicHeaders);
-    contextBuilder.addDeclaredIncludeSrcs(publicTextualHeaders);
     contextBuilder.addDeclaredIncludeSrcs(privateHeaders);
     contextBuilder.addPregreppedHeaderMap(
         CppHelper.createExtractInclusions(ruleContext, publicHeaders));
-    contextBuilder.addPregreppedHeaderMap(
-        CppHelper.createExtractInclusions(ruleContext, publicTextualHeaders));
     contextBuilder.addPregreppedHeaderMap(
         CppHelper.createExtractInclusions(ruleContext, privateHeaders));
     contextBuilder.addCompilationPrerequisites(prerequisites);
@@ -884,16 +862,15 @@ public final class CcLibraryHelper {
         : new CcExecutionDynamicLibrariesProvider(builder.build());
   }
 
-  private NestedSet<Artifact> getTemps(CcCompilationOutputs compilationOutputs) {
+  private TempsProvider getTemps(CcCompilationOutputs compilationOutputs) {
     return ruleContext.getFragment(CppConfiguration.class).isLipoContextCollector()
-        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
-        : compilationOutputs.getTemps();
+        ? new TempsProvider(ImmutableList.<Artifact>of())
+        : new TempsProvider(compilationOutputs.getTemps());
   }
 
-  private NestedSet<Artifact> getFilesToCompile(CcCompilationOutputs compilationOutputs) {
+  private ImmutableList<Artifact> getFilesToCompile(CcCompilationOutputs compilationOutputs) {
     return ruleContext.getFragment(CppConfiguration.class).isLipoContextCollector()
-        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
-        : NestedSetBuilder.<Artifact>wrap(Order.STABLE_ORDER,
-            compilationOutputs.getObjectFiles(CppHelper.usePic(ruleContext, false)));
+        ? ImmutableList.<Artifact>of()
+        : compilationOutputs.getObjectFiles(CppHelper.usePic(ruleContext, false));
   }
 }

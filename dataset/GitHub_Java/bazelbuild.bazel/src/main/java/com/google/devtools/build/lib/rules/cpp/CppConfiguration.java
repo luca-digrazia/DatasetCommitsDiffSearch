@@ -26,7 +26,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
@@ -69,8 +68,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.zip.ZipException;
-
-import javax.annotation.Nullable;
 
 /**
  * This class represents the C/C++ parts of the {@link BuildConfiguration},
@@ -193,12 +190,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   public static final String FDO_STAMP_MACRO = "BUILD_FDO_TYPE";
 
   /**
-   * This file (found under the sysroot) may be unconditionally included in every C/C++ compilation.
-   */
-  private static final PathFragment BUILT_IN_INCLUDE_PATH_FRAGMENT =
-      new PathFragment("include/stdc-predef.h");
-
-  /**
    * Represents an optional flag that can be toggled using the package features mechanism.
    */
   @VisibleForTesting
@@ -268,7 +259,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final String toolchainIdentifier;
   private final String cacheKey;
 
-  private final CcToolchainFeatures toolchainFeatures;
+  private final CcToolchainFeatures toolchainFeatures; 
   private final boolean supportsGoldLinker;
   private final boolean supportsThinArchives;
   private final boolean supportsStartEndLib;
@@ -295,7 +286,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final PathFragment sysroot;
   private final PathFragment runtimeSysroot;
   private final List<PathFragment> builtInIncludeDirectories;
-  private Artifact builtInIncludeFile;
 
   private final Map<String, PathFragment> toolPaths;
   private final PathFragment ldExecutable;
@@ -672,7 +662,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     return result;
   }
-
+  
   private CToolchain addLegacyFeatures(CToolchain toolchain) {
     CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
     ImmutableSet.Builder<String> featuresBuilder = ImmutableSet.builder();
@@ -718,7 +708,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
         TextFormat.merge(""
             + "feature {"
             + "  name: 'use_module_maps'"
-            + "  requires: { feature: 'module_maps' }"
+            + "  implies: 'module_maps'"
             + "  flag_set {"
             + "    action: 'c-compile'"
             + "    action: 'c++-compile'"
@@ -980,7 +970,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   public String getAbiGlibcVersion() {
     return abiGlibcVersion;
   }
-
+  
   /**
    * Returns the configured features of the toolchain. Rules should not call this directly, but
    * instead use {@code CcToolchainProvider.getFeatures}.
@@ -989,14 +979,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return toolchainFeatures;
   }
   
-  /**
-   * Returns the configured current compilation mode. Rules should not call this directly, but
-   * instead use {@code CcToolchainProvider.getCompilationMode}.
-   */
-  public CompilationMode getCompilationMode() {
-    return compilationMode;
-  }
-
   /**
    * Returns whether the toolchain supports the gold linker.
    */
@@ -1102,15 +1084,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    */
   public List<PathFragment> getBuiltInIncludeDirectories() {
     return builtInIncludeDirectories;
-  }
-
-  /**
-   * Returns the built-in header automatically included by the toolchain compiler. All C++ files
-   * may implicitly include this file. May be null if {@link #getSysroot} is null.
-   */
-  @Nullable
-  public Artifact getBuiltInIncludeFile() {
-    return builtInIncludeFile;
   }
 
   /**
@@ -1722,8 +1695,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     // Deprecated variables
 
-    // TODO(bazel-team): delete all of these.
+    // TODO(bazel-team): (2009) These variables are so rarely used we should try to eliminate
+    // them entirely.  see: "cs -f=BUILD -noi GNU_TARGET" and "cs -f=build_defs -noi
+    // GNU_TARGET"
     globalMakeEnvBuilder.put("CROSSTOOLTOP", crosstoolTopPathFragment.getPathString());
+    globalMakeEnvBuilder.put("GLIBC", getTargetLibc());
     globalMakeEnvBuilder.put("GNU_TARGET", targetSystemName);
 
     globalMakeEnvBuilder.putAll(getAdditionalMakeVariables());
@@ -1744,15 +1720,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   @Override
   public void prepareHook(Path execRoot, ArtifactFactory artifactFactory, PathFragment genfilesPath,
       PackageRootResolver resolver) throws ViewCreationFailedException {
-    // TODO(bazel-team): Remove the "relative" guard. sysroot should always be relative, and this
-    // should be enforced in the creation of CppConfiguration.
-    if (getSysroot() != null && !getSysroot().isAbsolute()) {
-      Root sysrootRoot = Iterables.getOnlyElement(
-          resolver.findPackageRoots(ImmutableList.of(getSysroot())).entrySet()).getValue();
-      builtInIncludeFile = Preconditions.checkNotNull(artifactFactory.getSourceArtifact(
-              sysroot.getRelative(BUILT_IN_INCLUDE_PATH_FRAGMENT), sysrootRoot),
-          "%s %s", sysrootRoot, sysroot);
-    }
     try {
       getFdoSupport().prepareToBuild(execRoot, genfilesPath, artifactFactory, resolver);
     } catch (ZipException e) {

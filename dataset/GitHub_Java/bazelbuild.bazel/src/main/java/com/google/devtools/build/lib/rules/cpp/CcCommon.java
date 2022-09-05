@@ -22,11 +22,13 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
+import com.google.devtools.build.lib.analysis.CompilationPrerequisitesProvider;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.FilesToCompileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TempsProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -128,9 +130,9 @@ public final class CcCommon {
     linkopts = initLinkopts();
   }
 
-  NestedSet<Artifact> getTemps(CcCompilationOutputs compilationOutputs) {
+  ImmutableList<Artifact> getTemps(CcCompilationOutputs compilationOutputs) {
     return cppConfiguration.isLipoContextCollector()
-        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
+        ? ImmutableList.<Artifact>of()
         : compilationOutputs.getTemps();
   }
 
@@ -147,7 +149,7 @@ public final class CcCommon {
   }
 
   private boolean hasAttribute(String name, Type<?> type) {
-    return ruleContext.attributes().has(name, type);
+    return ruleContext.getRule().getRuleClassObject().hasAttr(name, type);
   }
 
   private static NestedSet<Artifact> collectExecutionDynamicLibraryArtifacts(
@@ -179,10 +181,10 @@ public final class CcCommon {
 
     deps.addAll(ruleContext.getPrerequisites("deps", Mode.TARGET));
 
-    if (ruleContext.attributes().has("malloc", Type.LABEL)) {
+    if (ruleContext.getRule().getRuleClassObject().hasAttr("malloc", Type.LABEL)) {
       deps.add(CppHelper.mallocForTarget(ruleContext));
     }
-    if (ruleContext.attributes().has("implementation", Type.LABEL_LIST)) {
+    if (ruleContext.getRule().getRuleClassObject().hasAttr("implementation", Type.LABEL_LIST)) {
       deps.addAll(ruleContext.getPrerequisites("implementation", Mode.TARGET));
     }
 
@@ -592,18 +594,18 @@ public final class CcCommon {
   /**
    * Collects compilation prerequisite artifacts.
    */
-  static NestedSet<Artifact> collectCompilationPrerequisites(
+  static CompilationPrerequisitesProvider collectCompilationPrerequisites(
       RuleContext ruleContext, CppCompilationContext context) {
     // TODO(bazel-team): Use context.getCompilationPrerequisites() instead.
     NestedSetBuilder<Artifact> prerequisites = NestedSetBuilder.stableOrder();
-    if (ruleContext.attributes().has("srcs", Type.LABEL_LIST)) {
+    if (ruleContext.getRule().getRuleClassObject().hasAttr("srcs", Type.LABEL_LIST)) {
       for (FileProvider provider : ruleContext
           .getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
         prerequisites.addAll(FileType.filter(provider.getFilesToBuild(), SOURCE_TYPES));
       }
     }
     prerequisites.addTransitive(context.getDeclaredIncludeSrcs());
-    return prerequisites.build();
+    return new CompilationPrerequisitesProvider(prerequisites.build());
   }
 
   /**
@@ -667,9 +669,6 @@ public final class CcCommon {
       unsupportedFeaturesBuilder.add(CppRuleClasses.PARSE_HEADERS);
       unsupportedFeaturesBuilder.add(CppRuleClasses.PREPROCESS_HEADERS);
     }
-    if (toolchain.getCppCompilationContext().getCppModuleMap() == null) {
-      unsupportedFeaturesBuilder.add(CppRuleClasses.MODULE_MAPS);
-    }
     Set<String> unsupportedFeatures = unsupportedFeaturesBuilder.build();
     ImmutableSet.Builder<String> requestedFeatures = ImmutableSet.builder();
     for (String feature : Iterables.concat(DEFAULT_FEATURES, ruleContext.getFeatures())) {
@@ -712,13 +711,13 @@ public final class CcCommon {
             collectTransitiveCcNativeLibraries(ruleContext, linkingOutputs.getDynamicLibraries())))
         .add(InstrumentedFilesProvider.class, getInstrumentedFilesProvider(
             instrumentedObjectFiles))
+        .add(FilesToCompileProvider.class, new FilesToCompileProvider(
+            getFilesToCompile(ccCompilationOutputs)))
+        .add(CompilationPrerequisitesProvider.class,
+            collectCompilationPrerequisites(ruleContext, cppCompilationContext))
+        .add(TempsProvider.class, new TempsProvider(getTemps(ccCompilationOutputs)))
         .add(CppDebugFileProvider.class, new CppDebugFileProvider(
-            dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts()))
-        .addOutputGroup(OutputGroupProvider.TEMP_FILES, getTemps(ccCompilationOutputs))
-        .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE,
-            NestedSetBuilder.wrap(Order.STABLE_ORDER, getFilesToCompile(ccCompilationOutputs)))
-        .addOutputGroup(OutputGroupProvider.COMPILATION_PREREQUISITES,
-            collectCompilationPrerequisites(ruleContext, cppCompilationContext));
-
+            dwoArtifacts.getDwoArtifacts(),
+            dwoArtifacts.getPicDwoArtifacts()));
   }
 }

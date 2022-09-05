@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
@@ -75,8 +74,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       ImmutableList<String> pluginOpts,
       Predicate<String> nocopts,
       ImmutableList<PathFragment> extraSystemIncludePrefixes,
-      @Nullable String fdoBuildStamp,
-      RuleContext ruleContext) {
+      @Nullable String fdoBuildStamp) {
     super(owner, features, featureConfiguration, sourceFile, sourceLabel, mandatoryInputs,
         outputFile, dotdFile, null, null, null,
         configuration, cppConfiguration,
@@ -90,7 +88,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         CppCompilationContext.disallowUndeclaredHeaders(context), null, copts, pluginOpts, nocopts,
         extraSystemIncludePrefixes, fdoBuildStamp, VOID_INCLUDE_RESOLVER,
         ImmutableList.<IncludeScannable>of(),
-        GUID, /*usePic=*/false, ruleContext);
+        GUID, /*usePic=*/false);
     this.tempOutputFile = Preconditions.checkNotNull(tempOutputFile);
   }
 

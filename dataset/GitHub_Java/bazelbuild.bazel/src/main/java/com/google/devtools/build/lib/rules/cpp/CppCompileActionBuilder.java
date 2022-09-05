@@ -77,7 +77,6 @@ public class CppCompileActionBuilder {
   private Class<? extends CppCompileActionContext> actionContext;
   private CppConfiguration cppConfiguration;
   private ImmutableMap<Artifact, IncludeScannable> lipoScannableMap;
-  private RuleContext ruleContext = null;
   // New fields need to be added to the copy constructor.
 
   /**
@@ -95,7 +94,6 @@ public class CppCompileActionBuilder {
     this.mandatoryInputsBuilder = NestedSetBuilder.stableOrder();
     this.pluginInputsBuilder = NestedSetBuilder.stableOrder();
     this.lipoScannableMap = getLipoScannableMap(ruleContext);
-    this.ruleContext = ruleContext;
 
     features.addAll(ruleContext.getFeatures());
   }
@@ -113,11 +111,7 @@ public class CppCompileActionBuilder {
 
   /**
    * Creates a builder for an owner that is not required to be rule.
-   * 
-   * <p>If errors are found when creating the {@code CppCompileAction}, builders constructed
-   * this way will throw a runtime exception.
    */
-  @VisibleForTesting
   public CppCompileActionBuilder(
       ActionOwner owner, AnalysisEnvironment analysisEnvironment, Artifact sourceFile,
       Label sourceLabel, BuildConfiguration configuration) {
@@ -165,7 +159,6 @@ public class CppCompileActionBuilder {
     this.fdoBuildStamp = other.fdoBuildStamp;
     this.usePic = other.usePic;
     this.lipoScannableMap = other.lipoScannableMap;
-    this.ruleContext = other.ruleContext;
   }
 
   public PathFragment getTempOutputFile() {
@@ -264,7 +257,7 @@ public class CppCompileActionBuilder {
           sourceFile, sourceLabel, realMandatoryInputsBuilder.build(), outputFile, tempOutputFile,
           dotdFile, configuration, cppConfiguration, context, ImmutableList.copyOf(copts),
           ImmutableList.copyOf(pluginOpts), getNocoptPredicate(nocopts),
-          extraSystemIncludePrefixes, fdoBuildStamp, ruleContext);
+          extraSystemIncludePrefixes, fdoBuildStamp);
     } else {
       NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
 
@@ -277,7 +270,7 @@ public class CppCompileActionBuilder {
           getNocoptPredicate(nocopts),
           extraSystemIncludePrefixes, fdoBuildStamp,
           includeResolver, getLipoScannables(realMandatoryInputs), actionClassId,
-          usePic, ruleContext);
+          usePic);
     }
   }
   
@@ -373,7 +366,8 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  public CppCompileActionBuilder setDotdFile(PathFragment outputName, String extension) {
+  public CppCompileActionBuilder setDotdFile(PathFragment outputName, String extension,
+      RuleContext ruleContext) {
     if (configuration.getFragment(CppConfiguration.class).getInmemoryDotdFiles()) {
       // Just set the path, no artifact is constructed
       PathFragment file = FileSystemUtils.replaceExtension(outputName, extension);

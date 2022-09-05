@@ -335,7 +335,7 @@ public final class CppModel {
       CppCompileActionBuilder builder) {
     builder
         .setOutputFile(ruleContext.getRelatedArtifact(outputName, ".h.processed"))
-        .setDotdFile(outputName, ".h.d")
+        .setDotdFile(outputName, ".h.d", ruleContext)
         // If we generate pic actions, we prefer the header actions to use the pic artifacts.
         .setPicMode(this.getGeneratePicActions());
     semantics.finalizeCompileActionBuilder(ruleContext, builder);
@@ -373,7 +373,7 @@ public final class CppModel {
           FileSystemUtils.replaceExtension(outputFile.getExecPath(), ".temp" + outputExtension);
       builder
           .setOutputFile(outputFile)
-          .setDotdFile(outputName, dependencyFileExtension)
+          .setDotdFile(outputName, dependencyFileExtension, ruleContext)
           .setTempOutputFile(tempOutputName);
       semantics.finalizeCompileActionBuilder(ruleContext, builder);
       CppCompileAction action = builder.build();
@@ -423,7 +423,7 @@ public final class CppModel {
       if (generateNoPicAction) {
         builder
             .setOutputFile(ruleContext.getRelatedArtifact(outputName, outputExtension))
-            .setDotdFile(outputName, dependencyFileExtension);
+            .setDotdFile(outputName, dependencyFileExtension, ruleContext);
         // Create non-PIC compile actions
         cppConfiguration.getFdoSupport().configureCompilation(builder, ruleContext, env,
             ruleContext.getLabel(), ccRelativeName, nocopts, /*usePic=*/false,
@@ -622,7 +622,7 @@ public final class CppModel {
     picBuilder
         .setPicMode(true)
         .setOutputFile(ruleContext.getRelatedArtifact(outputName, ".pic" + outputExtension))
-        .setDotdFile(outputName, ".pic" + dependencyFileExtension);
+        .setDotdFile(outputName, ".pic" + dependencyFileExtension, ruleContext);
     return picBuilder;
   }
 
@@ -650,14 +650,14 @@ public final class CppModel {
 
     dBuilder
         .setOutputFile(ruleContext.getRelatedArtifact(outputName, picExt + iExt))
-        .setDotdFile(outputName, picExt + iExt + ".d");
+        .setDotdFile(outputName, picExt + iExt + ".d", ruleContext);
     semantics.finalizeCompileActionBuilder(ruleContext, dBuilder);
     CppCompileAction dAction = dBuilder.build();
     ruleContext.registerAction(dAction);
 
     sdBuilder
         .setOutputFile(ruleContext.getRelatedArtifact(outputName, picExt + ".s"))
-        .setDotdFile(outputName, picExt + ".s.d");
+        .setDotdFile(outputName, picExt + ".s.d", ruleContext);
     semantics.finalizeCompileActionBuilder(ruleContext, sdBuilder);
     CppCompileAction sdAction = sdBuilder.build();
     ruleContext.registerAction(sdAction);
