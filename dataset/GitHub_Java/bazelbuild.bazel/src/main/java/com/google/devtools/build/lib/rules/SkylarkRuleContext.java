@@ -359,22 +359,22 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(name = "configuration", structField = true,
-      doc = "Returns the default configuration. See the <a href=\"#modules.configuration\">"
-          + "configuration</a> type for more details.")
+      doc = "Returns the default configuration. See the <code>configuration</code> type for "
+          + "more details.")
   public BuildConfiguration getConfiguration() {
     return ruleContext.getConfiguration();
   }
 
   @SkylarkCallable(name = "host_configuration", structField = true,
-      doc = "Returns the host configuration. See the <a href=\"#modules.configuration\">"
-          + "configuration</a> type for more details.")
+      doc = "Returns the host configuration. See the <code>configuration</code> type for "
+          + "more details.")
   public BuildConfiguration getHostConfiguration() {
     return ruleContext.getHostConfiguration();
   }
 
   @SkylarkCallable(name = "data_configuration", structField = true,
-      doc = "Returns the data configuration. See the <a href=\"#modules.configuration\">"
-          + "configuration</a> type for more details.")
+      doc = "Returns the data configuration. See the <code>configuration</code> type for "
+          + "more details.")
   public BuildConfiguration getDataConfiguration() {
     return ruleContext.getConfiguration().getConfiguration(ConfigurationTransition.DATA);
   }
@@ -407,7 +407,7 @@ public final class SkylarkRuleContext {
     return ruleContext.getLabel().toString();
   }
 
-  @SkylarkCallable(doc = "Splits a shell command to a list of tokens.", documented = false)
+  @SkylarkCallable(doc = "Splits a shell command to a list of tokens.", hidden = true)
   public List<String> tokenize(String optionString) throws FuncallException {
     List<String> options = new ArrayList<>();
     try {
@@ -421,7 +421,7 @@ public final class SkylarkRuleContext {
   @SkylarkCallable(doc =
       "Expands all references to labels embedded within a string for all files using a mapping "
     + "from definition labels (i.e. the label in the output type attribute) to files. Deprecated.",
-      documented = false)
+      hidden = true)
   public String expand(@Nullable String expression,
       List<Artifact> artifacts, Label labelResolver) throws FuncallException {
     try {
@@ -446,7 +446,7 @@ public final class SkylarkRuleContext {
   }
 
   // Kept for compatibility with old code.
-  @SkylarkCallable(documented = false)
+  @SkylarkCallable(hidden = true, doc = "")
   public Artifact newFile(Root root, String filename) {
     PathFragment fragment = ruleContext.getLabel().getPackageFragment();
     for (String pathFragmentString : filename.split("/")) {
@@ -465,19 +465,19 @@ public final class SkylarkRuleContext {
   }
 
   // Kept for compatibility with old code.
-  @SkylarkCallable(documented = false)
+  @SkylarkCallable(hidden = true, doc = "")
   public Artifact newFile(Root root, Artifact baseArtifact, String suffix) {
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(original.getBaseName() + suffix);
     return ruleContext.getAnalysisEnvironment().getDerivedArtifact(fragment, root);
   }
 
-  @SkylarkCallable(documented = false)
+  @SkylarkCallable(doc = "", hidden = true)
   public NestedSet<Artifact> middleMan(String attribute) {
     return AnalysisUtils.getMiddlemanFor(ruleContext, attribute);
   }
 
-  @SkylarkCallable(documented = false)
+  @SkylarkCallable(doc = "", hidden = true)
   public boolean checkPlaceholders(String template, List<String> allowedPlaceholders) {
     List<String> actualPlaceHolders = new LinkedList<>();
     Set<String> allowedPlaceholderSet = ImmutableSet.copyOf(allowedPlaceholders);
@@ -527,14 +527,14 @@ public final class SkylarkRuleContext {
     return executableRunfilesMap.get(executable);
   }
 
-  @SkylarkCallable(name = "info_file", structField = true, documented = false,
+  @SkylarkCallable(name = "info_file", structField = true, hidden = true,
       doc = "Returns the file that is used to hold the non-volatile workspace status for the " 
           + "current build request.")
   public Artifact getStableWorkspaceStatus() {
     return ruleContext.getAnalysisEnvironment().getStableWorkspaceStatusArtifact();
   }
 
-  @SkylarkCallable(name = "version_file", structField = true, documented = false,
+  @SkylarkCallable(name = "version_file", structField = true, hidden = true,
       doc = "Returns the file that is used to hold the volatile workspace status for the "
           + "current build request.")
   public Artifact getVolatileWorkspaceStatus() {
