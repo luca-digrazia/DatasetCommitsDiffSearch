@@ -197,11 +197,10 @@ public abstract class HealthCheck {
             if (details != null) {
                 Iterator<Map.Entry<String, Object>> it = details.entrySet().iterator();
                 while (it.hasNext()) {
-                    builder.append(", ");
                     Map.Entry<String, Object> e = it.next();
                     builder.append(e.getKey())
                             .append("=")
-                            .append(String.valueOf(e.getValue()));
+                            .append(e.getValue().toString());
                 }
             }
             builder.append('}');
