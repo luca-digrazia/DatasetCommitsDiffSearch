@@ -29,7 +29,6 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -107,18 +106,9 @@ public class AbstractQueueVisitor {
    */
   private final boolean concurrent;
 
-  /**
-   * An object used in the manner of a {@link java.util.concurrent.locks.Condition} object, for the
-   * condition {@code remainingTasks.get() == 0}.
-   * TODO(bazel-team): Replace with an actual {@link java.util.concurrent.locks.Condition} object.
-   */
+  // Condition variable for remainingTasks==0, and a lock for it.
   private final Object zeroRemainingTasks = new Object();
-
-  /**
-   * If {@link #concurrent} is {@code true}, then this is a counter of the number of {@link
-   * Runnable}s {@link #enqueue}-d that have not finished evaluation.
-   */
-  private final AtomicLong remainingTasks = new AtomicLong(0);
+  private long remainingTasks = 0;
 
   // Map of thread ==> number of jobs executing in the thread.
   // Currently used only for interrupt handling.
@@ -363,7 +353,7 @@ public class AbstractQueueVisitor {
    *        if a worker throws a critical error (see {@link #isCriticalError(Throwable)}). If
    *        false, just wait for them to terminate normally.
    */
-  protected final void work(boolean interruptWorkers) throws InterruptedException {
+  protected void work(boolean interruptWorkers) throws InterruptedException {
     if (concurrent) {
       awaitTermination(interruptWorkers);
     } else {
@@ -377,18 +367,10 @@ public class AbstractQueueVisitor {
    * Schedules a call.
    * Called in a worker thread if concurrent.
    */
-  protected final void enqueue(Runnable runnable) {
+  protected void enqueue(Runnable runnable) {
     if (concurrent) {
       AtomicBoolean ranTask = new AtomicBoolean(false);
       try {
-        // It's impossible for this increment to result in remainingTasks.get <= 0 because
-        // remainingTasks is never negative. Therefore it isn't necessary to check its value for
-        // the purpose of updating zeroRemainingTasks.
-        long tasks = remainingTasks.incrementAndGet();
-        Preconditions.checkState(
-            tasks > 0,
-            "Incrementing remaining tasks counter resulted in impossible non-positive number %s",
-            tasks);
         pool.execute(wrapRunnable(runnable, ranTask));
       } catch (Throwable e) {
         if (!ranTask.get()) {
@@ -424,22 +406,10 @@ public class AbstractQueueVisitor {
     }
   }
 
-  /**
-   * Wraps {@param runnable} in a newly constructed {@link Runnable} {@code r} that:
-   * <ul>
-   *   <li>Sets {@param ranTask} to {@code true} as soon as {@code r} starts to be evaluated,
-   *   <li>Records the thread evaluating {@code r} in {@link #jobs} while {@code r} is evaluated,
-   *   <li>Prevents {@param runnable} from being invoked if {@link #blockNewActions} returns
-   *   {@code true},
-   *   <li>Synchronously invokes {@code runnable.run()},
-   *   <li>Catches any {@link Throwable} thrown by {@code runnable.run()}, and if it is the first
-   *   {@link Throwable} seen by this {@link AbstractQueueVisitor}, assigns it to {@link
-   *   #unhandled}, and calls {@link #markToStopAllJobsIfNeeded} to set {@link #jobsMustBeStopped}
-   *   if necessary,
-   *   <li>And, lastly, calls {@link #decrementRemainingTasks}.
-   * </ul>
-   */
   private Runnable wrapRunnable(final Runnable runnable, final AtomicBoolean ranTask) {
+    synchronized (zeroRemainingTasks) {
+      remainingTasks++;
+    }
     return new Runnable() {
       @Override
       public void run() {
@@ -504,15 +474,8 @@ public class AbstractQueueVisitor {
   }
 
   private void decrementRemainingTasks() {
-    // This decrement statement may result in remainingTasks.get() == 0, so it must be checked
-    // and the zeroRemainingTasks condition object notified if that condition is obtained.
-    long tasks = remainingTasks.decrementAndGet();
-    Preconditions.checkState(
-        tasks >= 0,
-        "Decrementing remaining tasks counter resulted in impossible negative number %s",
-        tasks);
-    if (tasks == 0) {
-      synchronized (zeroRemainingTasks) {
+    synchronized (zeroRemainingTasks) {
+      if (--remainingTasks == 0) {
         zeroRemainingTasks.notify();
       }
     }
@@ -550,7 +513,7 @@ public class AbstractQueueVisitor {
    * Get the value of the interrupted flag.
    */
   @ThreadSafety.ThreadSafe
-  protected final boolean isInterrupted() {
+  protected boolean isInterrupted() {
     return threadInterrupted;
   }
 
@@ -559,8 +522,10 @@ public class AbstractQueueVisitor {
    * if running tasks submit further jobs.
    */
   @VisibleForTesting
-  protected final long getTaskCount() {
-    return remainingTasks.get();
+  protected long getTaskCount() {
+    synchronized (zeroRemainingTasks) {
+      return remainingTasks;
+    }
   }
 
   /**
@@ -573,7 +538,7 @@ public class AbstractQueueVisitor {
     Throwables.propagateIfPossible(catastrophe);
     try {
       synchronized (zeroRemainingTasks) {
-        while (remainingTasks.get() != 0 && !jobsMustBeStopped) {
+        while (remainingTasks != 0 && !jobsMustBeStopped) {
           zeroRemainingTasks.wait();
         }
       }
@@ -616,7 +581,7 @@ public class AbstractQueueVisitor {
 
     Throwables.propagateIfPossible(catastrophe);
     synchronized (zeroRemainingTasks) {
-      while (remainingTasks.get() != 0) {
+      while (remainingTasks != 0) {
         try {
           zeroRemainingTasks.wait();
         } catch (InterruptedException e) {
