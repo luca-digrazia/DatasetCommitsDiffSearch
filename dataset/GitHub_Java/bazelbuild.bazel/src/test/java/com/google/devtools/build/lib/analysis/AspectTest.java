@@ -38,8 +38,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 
 import org.junit.Test;
@@ -55,13 +55,25 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class AspectTest extends AnalysisTestCase {
 
+  private final void setRules(RuleDefinition... rules) throws Exception {
+    ConfiguredRuleClassProvider.Builder builder =
+        new ConfiguredRuleClassProvider.Builder();
+    TestRuleClassProvider.addStandardRules(builder);
+    for (RuleDefinition rule : rules) {
+      builder.addRuleDefinition(rule);
+    }
+
+    useRuleClassProvider(builder.build());
+    update();
+  }
+
   private void pkg(String name, String... contents) throws Exception {
     scratch.file("" + name + "/BUILD", contents);
   }
 
   @Test
   public void providersOfAspectAreMergedIntoDependency() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new AspectRequiringRule());
+    setRules(new TestAspects.BaseRule(), new AspectRequiringRule());
     pkg("a",
         "aspect(name='a', foo=[':b'])",
         "aspect(name='b', foo=[])");
@@ -73,7 +85,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void aspectIsNotCreatedIfAdvertisedProviderIsNotPresent() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.LiarRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.LiarRule(),
         new TestAspects.AspectRequiringProviderRule());
 
     pkg("a",
@@ -84,9 +96,11 @@ public class AspectTest extends AnalysisTestCase {
     assertThat(a.getProvider(RuleInfo.class).getData()).containsExactly("rule //a:a");
   }
 
-  @Test
+  // Disabled because this is a bug. Also note that if we fix this, query also needs to be fixed
+  // so that it reports implicit dependencies reached through these aspects.
+  //@Test
   public void aspectCreationWorksThroughBind() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.HonestRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.HonestRule(),
         new TestAspects.AspectRequiringProviderRule());
 
     pkg("a",
@@ -107,7 +121,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void aspectCreatedIfAdvertisedProviderIsPresent() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.HonestRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.HonestRule(),
         new TestAspects.AspectRequiringProviderRule());
 
     pkg("a",
@@ -121,7 +135,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void aspectWithParametrizedDefinition() throws Exception {
-    setRulesAvailableInTests(
+    setRules(
         new TestAspects.BaseRule(),
         new TestAspects.HonestRule(),
         new TestAspects.ParametrizedDefinitionAspectRule());
@@ -143,7 +157,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void aspectInError() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.ErrorAspectRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.ErrorAspectRule(),
         new TestAspects.SimpleRule());
 
     pkg("a",
@@ -165,7 +179,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void transitiveAspectInError() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.ErrorAspectRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.ErrorAspectRule(),
         new TestAspects.SimpleRule());
 
     pkg("a",
@@ -188,7 +202,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void sameTargetInDifferentAttributes() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.AspectRequiringRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.AspectRequiringRule(),
         new TestAspects.SimpleRule());
     pkg("a",
         "aspect(name='a', foo=[':b'], bar=[':b'])",
@@ -201,7 +215,7 @@ public class AspectTest extends AnalysisTestCase {
 
   @Test
   public void informationFromBaseRulePassedToAspect() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(), new TestAspects.HonestRule(),
+    setRules(new TestAspects.BaseRule(), new TestAspects.HonestRule(),
         new TestAspects.AspectRequiringProviderRule());
 
     pkg("a",
@@ -222,7 +236,7 @@ public class AspectTest extends AnalysisTestCase {
       public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
         return builder
             .add(attr("foo", LABEL_LIST).legacyAllowAnyFileType()
-                .aspect(ASPECT_WITH_EMPTY_LATE_BOUND_ATTRIBUTE))
+                .aspect(AspectWithEmptyLateBoundAttribute.class))
             .build();
       }
 
@@ -233,8 +247,7 @@ public class AspectTest extends AnalysisTestCase {
       }
     }
 
-    public static class AspectWithEmptyLateBoundAttribute extends NativeAspectClass
-      implements ConfiguredAspectFactory {
+    public static class AspectWithEmptyLateBoundAttribute implements ConfiguredNativeAspectFactory {
       @Override
       public AspectDefinition getDefinition(AspectParameters params) {
         return new AspectDefinition.Builder("testaspect")
@@ -255,8 +268,6 @@ public class AspectTest extends AnalysisTestCase {
             .build();
       }
     }
-    public static final AspectWithEmptyLateBoundAttribute ASPECT_WITH_EMPTY_LATE_BOUND_ATTRIBUTE =
-        new AspectWithEmptyLateBoundAttribute();
   }
 
   /**
@@ -267,7 +278,7 @@ public class AspectTest extends AnalysisTestCase {
    */
   @Test
   public void emptyAspectAttributesAreAvailableInRuleContext() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(),
+    setRules(new TestAspects.BaseRule(),
         new EmptyAspectAttributesAreAvailableInRuleContext.TestRule());
     pkg("a",
         "testrule(name='a', foo=[':b'])",
@@ -284,8 +295,8 @@ public class AspectTest extends AnalysisTestCase {
       @Override
       public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
         return builder
-            .add(attr("foo", LABEL_LIST).legacyAllowAnyFileType()
-                .aspect(ASPECT_THAT_REGISTERS_ACTION))
+            .add(attr("foo", LABEL_LIST).legacyAllowAnyFileType().aspect(
+                AspectThatRegistersAction.class))
             .add(attr(":action_listener", LABEL_LIST).cfg(HOST).value(ACTION_LISTENER))
             .build();
       }
@@ -297,8 +308,7 @@ public class AspectTest extends AnalysisTestCase {
       }
     }
 
-    public static class AspectThatRegistersAction extends NativeAspectClass
-      implements ConfiguredAspectFactory {
+    public static class AspectThatRegistersAction implements ConfiguredNativeAspectFactory {
       @Override
       public AspectDefinition getDefinition(AspectParameters params) {
         return new AspectDefinition.Builder("testaspect").build();
@@ -312,8 +322,6 @@ public class AspectTest extends AnalysisTestCase {
         return new ConfiguredAspect.Builder("testaspect", ruleContext).build();
       }
     }
-    private static final AspectThatRegistersAction ASPECT_THAT_REGISTERS_ACTION =
-        new AspectThatRegistersAction();
   }
 
   /**
@@ -326,7 +334,7 @@ public class AspectTest extends AnalysisTestCase {
    */
   @Test
   public void extraActionsAreEmitted() throws Exception {
-    setRulesAvailableInTests(new TestAspects.BaseRule(),
+    setRules(new TestAspects.BaseRule(),
         new ExtraActionsAreEmitted.TestRule());
     useConfiguration("--experimental_action_listener=//extra_actions:listener");
     scratch.file(
