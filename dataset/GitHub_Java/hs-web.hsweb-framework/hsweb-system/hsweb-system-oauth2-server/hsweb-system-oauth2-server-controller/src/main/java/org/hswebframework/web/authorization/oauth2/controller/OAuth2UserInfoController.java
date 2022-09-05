@@ -20,6 +20,7 @@ package org.hswebframework.web.authorization.oauth2.controller;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.AuthenticationHolder;
 import org.hswebframework.web.authorization.exception.AccessDenyException;
@@ -37,7 +38,7 @@ import javax.annotation.Resource;
  * @author zhouhao
  */
 @RestController
-@Api(tags = "OAuth2.0-获取用户信息", value = "OAuth2.0")
+@Api(tags = "OAuth2.0-服务-获取用户信息", value = "OAuth2.0-服务-获取用户信息")
 @RequestMapping("${hsweb.web.mappings.oauth2-auth-info:oauth2/user-auth-info}")
 public class OAuth2UserInfoController {
 
@@ -64,10 +65,14 @@ public class OAuth2UserInfoController {
         if (null == auth2AccessEntity) {
             throw new GrantTokenException(ErrorType.EXPIRED_TOKEN);
         }
-        if (auth2AccessEntity.getScope() == null || !auth2AccessEntity.getScope().contains("user-info")) {
-            throw new GrantTokenException(ErrorType.UNSUPPORTED_GRANT_TYPE);
+        if (auth2AccessEntity.getScope() == null ||(!auth2AccessEntity.getScope().contains("*")&&!auth2AccessEntity.getScope().contains("user:get"))) {
+            throw new GrantTokenException(ErrorType.UNAUTHORIZED_CLIENT);
         }
-        return ResponseMessage.ok(AuthenticationHolder.get(userId));
+        Authentication info=  AuthenticationHolder.get(userId);
+        if(info==null){
+            throw new NotFoundException("user:"+userId+" not found");
+        }
+        return ResponseMessage.ok(info);
     }
 
 }
