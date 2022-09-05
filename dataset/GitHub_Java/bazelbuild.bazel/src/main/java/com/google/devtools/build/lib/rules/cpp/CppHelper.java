@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
@@ -40,6 +41,7 @@ import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.IncludeScanningUtil;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 
@@ -297,16 +299,15 @@ public class CppHelper {
   }
 
   /**
-   * Returns the linked artifact.
+   * Returns the workspace-relative filename for the linked artifact.
    */
-  public static Artifact getLinkedArtifact(RuleContext ruleContext, LinkTargetType linkType) {
-    PathFragment name = new PathFragment(ruleContext.getLabel().getName());
-    if (linkType != LinkTargetType.EXECUTABLE) {
-      name = name.replaceName("lib" + name.getBaseName() + linkType.getExtension());
-    }
-
-    return ruleContext.getPackageRelativeArtifact(
-        name, ruleContext.getConfiguration().getBinDirectory());
+  public static PathFragment getLinkedFilename(RuleContext ruleContext,
+      LinkTargetType linkType) {
+    PathFragment relativePath = Util.getWorkspaceRelativePath(ruleContext.getTarget());
+    PathFragment linkedFileName = (linkType == LinkTargetType.EXECUTABLE) ?
+        relativePath :
+        relativePath.replaceName("lib" + relativePath.getBaseName() + linkType.getExtension());
+    return linkedFileName;
   }
 
   /**
@@ -403,10 +404,11 @@ public class CppHelper {
   public static CppModuleMap addCppModuleMapToContext(RuleContext ruleContext,
       CppCompilationContext.Builder contextBuilder) {
     // Create the module map artifact as a genfile.
-    Artifact mapFile = ruleContext.getPackageRelativeArtifact(
-        ruleContext.getLabel().getName()
-            + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
-        ruleContext.getConfiguration().getGenfilesDirectory());    CppModuleMap moduleMap =
+    PathFragment mapPath = FileSystemUtils.appendExtension(ruleContext.getLabel().toPathFragment(),
+        Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()));
+    Artifact mapFile = ruleContext.getAnalysisEnvironment().getDerivedArtifact(mapPath,
+        ruleContext.getConfiguration().getGenfilesDirectory());
+    CppModuleMap moduleMap =
         new CppModuleMap(mapFile, ruleContext.getLabel().toString());
     contextBuilder.setCppModuleMap(moduleMap);
     return moduleMap;
@@ -458,9 +460,8 @@ public class CppHelper {
       artifacts = symlinkedArtifacts;
       purpose += "_with_solib";
     }
-    return ImmutableList.of(
-        factory.createMiddlemanAllowMultiple(env, actionOwner, ruleContext.getPackageDirectory(),
-            purpose, artifacts, configuration.getMiddlemanDirectory()));
+    return ImmutableList.of(factory.createMiddlemanAllowMultiple(
+        env, actionOwner, purpose, artifacts, configuration.getMiddlemanDirectory()));
   }
 
   /**

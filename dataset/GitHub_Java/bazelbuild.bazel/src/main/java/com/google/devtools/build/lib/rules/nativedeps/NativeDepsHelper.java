@@ -150,10 +150,9 @@ public abstract class NativeDepsHelper {
             linkopts, linkstamps.keySet(), buildInfoArtifacts,
             ruleContext.getFeatures())
         : nativeDepsPath;
-    Artifact sharedLibrary = ruleContext.getAnalysisEnvironment().getDerivedArtifact(
-        linkerOutputPath, configuration.getBinDirectory());
+
     CppLinkAction.Builder builder = new CppLinkAction.Builder(
-        ruleContext, sharedLibrary, configuration, toolchain);
+        ruleContext, linkerOutputPath, configuration, toolchain);
     CppLinkAction linkAction = builder
         .setCrosstoolInputs(toolchain.getLink())
         .addLibraries(linkerInputs)
@@ -195,6 +194,15 @@ public abstract class NativeDepsHelper {
     }
 
     return new NativeDepsRunfiles(linkerOutput, runtimeSymlinks);
+  }
+
+  /**
+   * Returns the path, relative to the runfiles prefix, of the native executable
+   * for the specified rule, i.e. "<package>/<rule><NATIVE_DEPS_LIB_SUFFIX>"
+   */
+  public static PathFragment getExecutablePath(RuleContext ruleContext) {
+    PathFragment relativePath = Util.getWorkspaceRelativePath(ruleContext.getRule());
+    return relativePath.replaceName(relativePath.getBaseName() + Constants.NATIVE_DEPS_LIB_SUFFIX);
   }
 
   /**

@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
+import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -31,6 +32,7 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.Util;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -159,16 +161,27 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     LinkTargetType linkType =
         isLinkShared(ruleContext) ? LinkTargetType.DYNAMIC_LIBRARY : LinkTargetType.EXECUTABLE;
 
-    CcLibraryHelper helper =
-        new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
-            .fromCommon(common)
-            .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
-            .addPrivateHeaders(
-                FileType.filter(
-                    ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list(),
-                    CppFileTypes.CPP_HEADER))
-            .setFake(fake)
-            .setLinkType(linkType);
+    CcLibraryHelper helper = new CcLibraryHelper(ruleContext, semantics, featureConfiguration)
+        .setLinkType(linkType)
+        .setHeadersCheckingMode(common.determineHeadersCheckingMode())
+        .addCopts(common.getCopts())
+        .setNoCopts(common.getNoCopts())
+        .addDefines(common.getDefines())
+        .addCompilationPrerequisites(common.getSharedLibrariesFromSrcs())
+        .addCompilationPrerequisites(common.getStaticLibrariesFromSrcs())
+        .addSources(common.getCAndCppSources())
+        .addPrivateHeaders(FileType.filter(
+            ruleContext.getPrerequisiteArtifacts("srcs", Mode.TARGET).list(),
+            CppFileTypes.CPP_HEADER))
+        .addObjectFiles(common.getObjectFilesFromSrcs(false))
+        .addPicObjectFiles(common.getObjectFilesFromSrcs(true))
+        .addPicIndependentObjectFiles(common.getLinkerScripts())
+        .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
+        .addDeps(ImmutableList.of(CppHelper.mallocForTarget(ruleContext)))
+        .addSystemIncludeDirs(common.getSystemIncludeDirs())
+        .addIncludeDirs(common.getIncludeDirs())
+        .addLooseIncludeDirs(common.getLooseIncludeDirs())
+        .setFake(fake);
 
     CcLibraryHelper.Info info = helper.build();
     CppCompilationContext cppCompilationContext = info.getCppCompilationContext();
@@ -178,10 +191,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // linkopt "-shared", which causes the result of linking to be a shared
     // library. In this case, the name of the executable target should end
     // in ".so".
-    PathFragment executableName =
-        ruleContext
-            .getPackageDirectory()
-            .getRelative(ruleContext.getTarget().getName() + OsUtils.executableExtension());
+    PathFragment executableName = Util.getWorkspaceRelativePath(
+        ruleContext.getTarget(), "", OsUtils.executableExtension());
     CppLinkAction.Builder linkActionBuilder = determineLinkerArguments(
         ruleContext, common, cppConfiguration, ccCompilationOutputs,
         cppCompilationContext.getCompilationPrerequisites(), fake, executableName);
@@ -532,7 +543,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
 
       for (SpawnAction.Builder packager : packagers) {
         Artifact intermediateOutput =
-            getIntermediateDwpFile(context, dwpOutput, intermediateDwpCount++);
+            getIntermediateDwpFile(
+                context.getAnalysisEnvironment(), dwpOutput, intermediateDwpCount++);
         context.registerAction(packager
             .addArgument("-o")
             .addOutputArgument(intermediateOutput)
@@ -562,13 +574,14 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
   /**
    * Creates an intermediate dwp file keyed off the name and path of the final output.
    */
-  private static Artifact getIntermediateDwpFile(RuleContext ruleContext, Artifact dwpOutput,
+  private static Artifact getIntermediateDwpFile(AnalysisEnvironment env, Artifact dwpOutput,
       int orderNumber) {
     PathFragment outputPath = dwpOutput.getRootRelativePath();
     PathFragment intermediatePath =
         FileSystemUtils.appendWithoutExtension(outputPath, "-" + orderNumber);
-    return ruleContext.getPackageRelativeArtifact(
-        new PathFragment(INTERMEDIATE_DWP_DIR + "/" + intermediatePath.getPathString()),
+    return env.getDerivedArtifact(
+        outputPath.getParentDirectory().getRelative(
+            INTERMEDIATE_DWP_DIR + "/" + intermediatePath.getPathString()),
         dwpOutput.getRoot());
   }
 

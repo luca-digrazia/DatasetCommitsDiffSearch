@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.actions.ParamFileHelper;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.CollectionUtils;
@@ -434,16 +433,12 @@ public final class CppLinkAction extends AbstractAction {
   /**
    * Determines whether or not this link should output a symbol counts file.
    */
-  public static boolean enableSymbolsCounts(
-      CppConfiguration cppConfiguration, boolean fake, LinkTargetType linkType) {
+  private static boolean enableSymbolsCounts(CppConfiguration cppConfiguration, boolean fake,
+      LinkTargetType linkType) {
     return cppConfiguration.getSymbolCounts()
         && cppConfiguration.supportsGoldLinker()
         && linkType == LinkTargetType.EXECUTABLE
         && !fake;
-  }
-
-  public static PathFragment symbolCountsFileName(PathFragment binaryName) {
-    return binaryName.replaceName(binaryName.getBaseName() + ".sc");
   }
 
   /**
@@ -454,12 +449,11 @@ public final class CppLinkAction extends AbstractAction {
     // Null when invoked from tests (e.g. via createTestBuilder).
     @Nullable private final RuleContext ruleContext;
     private final AnalysisEnvironment analysisEnvironment;
-    private final Artifact output;
+    private final PathFragment outputPath;
 
     // can be null for CppLinkAction.createTestBuilder()
     @Nullable private final CcToolchainProvider toolchain;
-    private Artifact interfaceOutput;
-    private Artifact symbolCounts;
+    private PathFragment interfaceOutputPath;
     private PathFragment runtimeSolibDir;
     protected final BuildConfiguration configuration;
     private final CppConfiguration cppConfiguration;
@@ -486,10 +480,11 @@ public final class CppLinkAction extends AbstractAction {
      * Creates a builder that builds {@link CppLinkAction} instances.
      *
      * @param ruleContext the rule that owns the action
-     * @param output the output artifact
+     * @param outputPath the path of the ELF file to be created, relative to the
+     *        'bin' directory
      */
-    public Builder(RuleContext ruleContext, Artifact output) {
-      this(ruleContext, output, ruleContext.getConfiguration(),
+    public Builder(RuleContext ruleContext, PathFragment outputPath) {
+      this(ruleContext, outputPath, ruleContext.getConfiguration(),
           ruleContext.getAnalysisEnvironment(), CppHelper.getToolchain(ruleContext));
     }
 
@@ -497,11 +492,12 @@ public final class CppLinkAction extends AbstractAction {
      * Creates a builder that builds {@link CppLinkAction} instances.
      *
      * @param ruleContext the rule that owns the action
-     * @param output the output artifact
+     * @param outputPath the path of the ELF file to be created, relative to the
+     *        'bin' directory
      */
-    public Builder(RuleContext ruleContext, Artifact output,
+    public Builder(RuleContext ruleContext, PathFragment outputPath,
         BuildConfiguration configuration, CcToolchainProvider toolchain) {
-      this(ruleContext, output, configuration,
+      this(ruleContext, outputPath, configuration,
           ruleContext.getAnalysisEnvironment(), toolchain);
     }
 
@@ -509,16 +505,17 @@ public final class CppLinkAction extends AbstractAction {
      * Creates a builder that builds {@link CppLinkAction}s.
      *
      * @param ruleContext the rule that owns the action
-     * @param output the output artifact
+     * @param outputPath the path of the ELF file to be created, relative to the
+     *        'bin' directory
      * @param configuration the configuration used to determine the tool chain
      *        and the default link options
      */
-    private Builder(@Nullable RuleContext ruleContext, Artifact output,
+    private Builder(@Nullable RuleContext ruleContext, PathFragment outputPath,
         BuildConfiguration configuration, AnalysisEnvironment analysisEnvironment,
         CcToolchainProvider toolchain) {
       this.ruleContext = ruleContext;
       this.analysisEnvironment = Preconditions.checkNotNull(analysisEnvironment);
-      this.output = Preconditions.checkNotNull(output);
+      this.outputPath = Preconditions.checkNotNull(outputPath);
       this.configuration = Preconditions.checkNotNull(configuration);
       this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
       this.toolchain = toolchain;
@@ -531,14 +528,15 @@ public final class CppLinkAction extends AbstractAction {
      * Given a Context, creates a Builder that builds {@link CppLinkAction}s.
      * Note well: Keep the Builder->Context and Context->Builder transforms consistent!
      * @param ruleContext the rule that owns the action
-     * @param output the output artifact
+     * @param outputPath the path of the ELF file to be created, relative to the
+     *        'bin' directory
      * @param linkContext an immutable CppLinkAction.Context from the original builder
      */
-    public Builder(RuleContext ruleContext, Artifact output, Context linkContext,
+    public Builder(RuleContext ruleContext, PathFragment outputPath, Context linkContext,
         BuildConfiguration configuration) {
       // These Builder-only fields get set in the constructor:
       //   ruleContext, analysisEnvironment, outputPath, configuration, runtimeSolibDir
-      this(ruleContext, output, configuration, ruleContext.getAnalysisEnvironment(),
+      this(ruleContext, outputPath, configuration, ruleContext.getAnalysisEnvironment(),
           CppHelper.getToolchain(ruleContext));
       Preconditions.checkNotNull(linkContext);
 
@@ -568,7 +566,7 @@ public final class CppLinkAction extends AbstractAction {
           // We currently can't split dynamic library links if they have interface outputs. That was
           // probably an unintended side effect of the change that introduced interface outputs.
         case DYNAMIC_LIBRARY:
-          return interfaceOutput == null;
+          return (interfaceOutputPath == null);
         case EXECUTABLE:
         case STATIC_LIBRARY:
         case PIC_STATIC_LIBRARY:
@@ -587,14 +585,24 @@ public final class CppLinkAction extends AbstractAction {
      * <p>This method may only be called once.
      */
     public CppLinkAction build() {
-      if (interfaceOutput != null && (fake || linkType != LinkTargetType.DYNAMIC_LIBRARY)) {
+      if (interfaceOutputPath != null && (fake || linkType != LinkTargetType.DYNAMIC_LIBRARY)) {
         throw new RuntimeException("Interface output can only be used "
                                    + "with non-fake DYNAMIC_LIBRARY targets");
       }
 
+      final Artifact output = createArtifact(outputPath);
+      final Artifact interfaceOutput = (interfaceOutputPath != null)
+          ? createArtifact(interfaceOutputPath)
+          : null;
+
       final ImmutableList<Artifact> buildInfoHeaderArtifacts = !linkstamps.isEmpty()
           ? ruleContext.getBuildInfo(CppBuildInfo.KEY)
           : ImmutableList.<Artifact>of();
+
+      final Artifact symbolCountOutput = enableSymbolsCounts(cppConfiguration, fake, linkType)
+          ? createArtifact(output.getRootRelativePath().replaceName(
+              output.getExecPath().getBaseName() + ".sc"))
+          : null;
 
       boolean needWholeArchive = wholeArchive || needWholeArchive(
           linkStaticness, linkType, linkopts, isNativeDeps, cppConfiguration);
@@ -626,19 +634,20 @@ public final class CppLinkAction extends AbstractAction {
               outputLibrary.getArtifact(),
               linkstampMap.values(),
               interfaceOutputLibrary == null ? null : interfaceOutputLibrary.getArtifact(),
-              symbolCounts);
+              symbolCountOutput);
 
       @Nullable
-      final Artifact paramFile = canSplitCommandLine()
-          ? ParamFileHelper.getParamsFile(
-          analysisEnvironment, configuration, outputLibrary.getArtifact())
-          : null;
+      final Artifact paramFile =
+          canSplitCommandLine()
+              ? createArtifact(
+                  ParameterFile.derivePath(outputLibrary.getArtifact().getRootRelativePath()))
+              : null;
 
       LinkCommandLine linkCommandLine =
           new LinkCommandLine.Builder(configuration, getOwner(), ruleContext)
               .setOutput(outputLibrary.getArtifact())
               .setInterfaceOutput(interfaceOutput)
-              .setSymbolCountsOutput(symbolCounts)
+              .setSymbolCountsOutput(symbolCountOutput)
               .setBuildInfoHeaderArtifacts(buildInfoHeaderArtifacts)
               .setLinkerInputs(linkerInputs)
               .setRuntimeInputs(
@@ -739,7 +748,7 @@ public final class CppLinkAction extends AbstractAction {
      */
     public static ImmutableMap<Artifact, Artifact> mapLinkstampsToOutputs(
         Collection<Artifact> linkstamps, RuleContext ruleContext, Artifact outputBinary) {
- ImmutableMap.Builder<Artifact, Artifact> mapBuilder = ImmutableMap.builder();
+      ImmutableMap.Builder<Artifact, Artifact> mapBuilder = ImmutableMap.builder();
 
       PathFragment outputBinaryPath = outputBinary.getRootRelativePath();
       PathFragment stampOutputDirectory = outputBinaryPath.getParentDirectory().
@@ -749,15 +758,19 @@ public final class CppLinkAction extends AbstractAction {
         PathFragment stampOutputPath = stampOutputDirectory.getRelative(
             FileSystemUtils.replaceExtension(linkstamp.getRootRelativePath(), ".o"));
         mapBuilder.put(linkstamp,
-            // Note that link stamp actions can be shared between link actions that output shared
-            // native dep libraries.
             ruleContext.getAnalysisEnvironment().getDerivedArtifact(
                 stampOutputPath, outputBinary.getRoot()));
       }
-      return mapBuilder.build();    }
+      return mapBuilder.build();
+    }
 
     protected ActionOwner getOwner() {
       return ruleContext.getActionOwner();
+    }
+
+    protected Artifact createArtifact(PathFragment rootRelativePath) {
+      return analysisEnvironment.getDerivedArtifact(
+          rootRelativePath, configuration.getBinDirectory());
     }
 
     protected Artifact getInterfaceSoBuilder() {
@@ -787,13 +800,8 @@ public final class CppLinkAction extends AbstractAction {
      * only be provided if the link type is {@code DYNAMIC_LIBRARY}
      * and fake is false.
      */
-    public Builder setInterfaceOutput(Artifact interfaceOutput) {
-      this.interfaceOutput = interfaceOutput;
-      return this;
-    }
-
-    public Builder setSymbolCountsOutput(Artifact symbolCounts) {
-      this.symbolCounts = symbolCounts;
+    public Builder setInterfaceOutputPath(PathFragment path) {
+      this.interfaceOutputPath = path;
       return this;
     }
 
@@ -1016,8 +1024,14 @@ public final class CppLinkAction extends AbstractAction {
     @VisibleForTesting
     public static Builder createTestBuilder(
         final ActionOwner owner, final AnalysisEnvironment analysisEnvironment,
-        final Artifact output, BuildConfiguration config) {
-      return new Builder(null, output, config, analysisEnvironment, null) {
+        final PathFragment outputPath, BuildConfiguration config) {
+      return new Builder(null, outputPath, config, analysisEnvironment, null) {
+        @Override
+        protected Artifact createArtifact(PathFragment path) {
+          return new Artifact(configuration.getBinDirectory().getPath().getRelative(path),
+              configuration.getBinDirectory(), configuration.getBinFragment().getRelative(path),
+              analysisEnvironment.getOwner());
+        }
         @Override
         protected ActionOwner getOwner() {
           return owner;
