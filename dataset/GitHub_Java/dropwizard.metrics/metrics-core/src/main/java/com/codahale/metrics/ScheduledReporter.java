@@ -9,9 +9,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * The abstract base class for all scheduled reporters (i.e., reporters which process a registry's
  * metrics periodically).
@@ -21,9 +18,6 @@ import org.slf4j.LoggerFactory;
  * @see Slf4jReporter
  */
 public abstract class ScheduledReporter implements Closeable, Reporter {
-
-    private static final Logger LOG = LoggerFactory.getLogger(ScheduledReporter.class);
-
     /**
      * A simple named thread factory.
      */
@@ -92,11 +86,7 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
         executor.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
-                try {
-                    report();
-                } catch (RuntimeException ex) {
-                    LOG.error("RuntimeException thrown from {}#report. Exception was suppressed.", ScheduledReporter.this.getClass().getSimpleName(), ex);
-                }
+                report();
             }
         }, period, period, unit);
     }
