@@ -59,7 +59,6 @@ public final class BlazeDirectories {
   // in a profiler.
   private final Path outputPath;
   private final Path localOutputPath;
-  private final String productName;
 
   public BlazeDirectories(
       ServerDirectories serverDirectories,
@@ -81,7 +80,6 @@ public final class BlazeDirectories {
     String relativeOutputPath = getRelativeOutputPath(productName);
     this.outputPath = execRoot.getRelative(relativeOutputPath);
     this.localOutputPath = outputBase.getRelative(relativeOutputPath);
-    this.productName = productName;
   }
 
   @VisibleForTesting
@@ -190,10 +188,6 @@ public final class BlazeDirectories {
   */
   public HashCode getInstallMD5() {
     return serverDirectories.getInstallMD5();
-  }
-
-  public String getRelativeOutputPath() {
-    return BlazeDirectories.getRelativeOutputPath(productName);
   }
 
   /**
