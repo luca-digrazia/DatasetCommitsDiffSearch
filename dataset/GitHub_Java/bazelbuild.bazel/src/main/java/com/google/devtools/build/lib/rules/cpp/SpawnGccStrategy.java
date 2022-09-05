@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import java.util.Collection;
 
 /**
  * A context for C++ compilation that calls into a {@link SpawnActionContext}.
@@ -56,10 +57,8 @@ public class SpawnGccStrategy implements CppCompileActionContext {
   }
 
   @Override
-  public Iterable<Artifact> findAdditionalInputs(
-      CppCompileAction action,
-      ActionExecutionContext actionExecutionContext,
-      IncludeProcessing includeProcessing)
+  public Collection<Artifact> findAdditionalInputs(
+      CppCompileAction action, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     return null;
   }

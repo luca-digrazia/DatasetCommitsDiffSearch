@@ -526,21 +526,14 @@ public class CppCompileAction extends AbstractAction
     }
 
     if (initialResult == null) {
-      NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
-      if (useHeaderModules) {
-        // Here, we cannot really know what the top-level modules are, so we just mark all
-        // transitive modules as "top level".
-        topLevelModules = Sets.newLinkedHashSet(context.getTransitiveModules(usePic)
-            .toCollection());
-        result.addTransitive(context.getTransitiveModules(usePic));
-      }
-      result.addTransitive(includesExemptFromDiscovery);
-      additionalInputs = result.build();
-      return result.build();
+      // We will find inputs during execution. Store an empty list to show we did try to discover
+      // inputs and return null to inform the caller that inputs will be discovered later.
+      this.additionalInputs = ImmutableList.of();
+      return null;
     }
 
     Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
-
+    Iterables.addAll(initialResultSet, includesExemptFromDiscovery);
     if (shouldPruneModules) {
       usedModules = Sets.newLinkedHashSet();
       topLevelModules = null;
@@ -613,6 +606,20 @@ public class CppCompileAction extends AbstractAction
             .build();
     this.usedModules = null;
     return additionalModules;
+  }
+
+  @Override
+  public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
+    NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
+    if (useHeaderModules) {
+      // Here, we cannot really know what the top-level modules are, so we just mark all
+      // transitive modules as "top level".
+      topLevelModules = Sets.newLinkedHashSet(context.getTransitiveModules(usePic).toCollection());
+      result.addTransitive(context.getTransitiveModules(usePic));
+    }
+    result.addTransitive(includesExemptFromDiscovery);
+    additionalInputs = result.build();
+    return result.build();
   }
 
   @Override

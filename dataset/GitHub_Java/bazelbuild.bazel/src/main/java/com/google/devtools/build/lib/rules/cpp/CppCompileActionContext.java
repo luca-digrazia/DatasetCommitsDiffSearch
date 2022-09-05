@@ -20,7 +20,10 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.actions.ResourceSet;
+
 import java.io.IOException;
+import java.util.Collection;
+
 import javax.annotation.Nullable;
 
 /**
@@ -42,12 +45,11 @@ public interface CppCompileActionContext extends ActionContext {
    * Does include scanning to find the list of files needed to execute the action.
    *
    * <p>Returns null if additional inputs will only be found during action execution, not before.
+   * </p>
    */
   @Nullable
-  public Iterable<Artifact> findAdditionalInputs(
-      CppCompileAction action,
-      ActionExecutionContext actionExecutionContext,
-      IncludeProcessing includeProcessing)
+  public Collection<Artifact> findAdditionalInputs(CppCompileAction action,
+      ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException, ActionExecutionException;
 
   /**
