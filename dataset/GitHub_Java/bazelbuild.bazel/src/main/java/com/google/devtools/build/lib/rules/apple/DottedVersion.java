@@ -20,7 +20,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Ordering;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
@@ -68,10 +67,9 @@ import java.util.regex.Pattern;
   name = "DottedVersion",
   category = SkylarkModuleCategory.NONE,
   doc =
-      "A value representing a version with multiple components, separated by periods, such as "
+      "A value representing a version with multiple components, seperated by periods, such as "
           + "1.2.3.4."
 )
-@Immutable
 public final class DottedVersion implements Comparable<DottedVersion> {
   private static final Splitter DOT_SPLITTER = Splitter.on('.');
   private static final Pattern COMPONENT_PATTERN = Pattern.compile("(\\d+)(?:([a-z]+)(\\d*))?");
@@ -149,7 +147,7 @@ public final class DottedVersion implements Comparable<DottedVersion> {
   @Override
   @SkylarkCallable(name = "compare_to", 
     doc = "Compares based on most signifigant (first) not-matching version component. "
-        + "So, for example, 1.2.3 < 1.2.4")
+        + "So, for example, 1.2.3 > 1.2.4")
   public int compareTo(DottedVersion other) {
     int maxComponents = Math.max(components.size(), other.components.size());
     for (int componentIndex = 0; componentIndex < maxComponents; componentIndex++) {
