@@ -38,7 +38,7 @@ public interface CrudController<E, PK, Q extends Entity, M>
         extends QueryController<E, PK, Q>
         , UpdateController<E, PK, M>
         , CreateController<E, PK, M>
-        , DeleteController<E,PK> {
+        , DeleteController<PK> {
 
     @Override
     @SuppressWarnings("unchecked")
