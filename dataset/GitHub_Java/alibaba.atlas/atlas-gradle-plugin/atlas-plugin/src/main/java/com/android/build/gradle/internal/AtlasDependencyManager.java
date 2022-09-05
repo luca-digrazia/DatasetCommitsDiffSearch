@@ -265,7 +265,10 @@ public class AtlasDependencyManager extends DependencyManager {
     @Override
     public Set<AndroidDependency> resolveDependencies(@NonNull VariantDependencies variantDeps,
                                                       @Nullable String testedProjectPath) {
-        this.apDependencies = resolveApDependencies(variantDeps);
+        ApDependencies apDependencies = resolveApDependencies(variantDeps);
+        if (apDependencies != null) {
+            this.apDependencies = apDependencies;
+        }
 
         AtlasDependencyTree atlasDependencyTree = new AtlasDepTreeParser(project, extraModelInfo, this.apDependencies)
             .parseDependencyTree(variantDeps);

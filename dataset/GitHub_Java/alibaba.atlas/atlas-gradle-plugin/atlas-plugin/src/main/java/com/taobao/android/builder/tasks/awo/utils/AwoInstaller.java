@@ -406,8 +406,7 @@ public class AwoInstaller {
         //        List<String> startCmd = Arrays.asList("shell", "am", "start", packageNameForPatch + "/" +
         // launcherActivityForPatch);
         List<String> patchCmd = Arrays.asList("shell", "am", "broadcast", "-a", "com.taobao.atlas.intent.PATCH_APP",
-                                              "-e", "pkg", patchPkg, "-n",
-                                              patchPkg + "/com.taobao.atlas.update.AwoPatchReceiver");
+                                              "-e", "pkg", patchPkg);
         try {
             executor.executeCommand(androidBuilder.getSdkInfo().getAdb().getAbsolutePath(), patchCmd, false);
         } catch (Exception e) {

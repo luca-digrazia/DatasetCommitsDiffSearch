@@ -215,7 +215,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 
-import com.android.build.gradle.internal.TaskManager;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.scope.ConventionMappingHelper;
 import com.android.build.gradle.internal.tasks.BaseTask;
@@ -234,7 +233,7 @@ import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.TaskAction;
 
 /**
- * the patch Install the phone on your phone
+ * 把 patch 安装到手机上的任务
  */
 public class AwoInstallTask extends BaseTask {
 
@@ -255,17 +254,7 @@ public class AwoInstallTask extends BaseTask {
     @TaskAction
     public void doTask() throws IOException, SigningException {
 
-        File mainDexFile = getMainDexFile();
-        Collection<File> awbApkFiles = getAwbApkFiles();
-        int size = awbApkFiles.size();
-        if (mainDexFile != null) {
-            size++;
-        }
-
-        if (size > 1) {
-            throw new IllegalStateException("Multi bundle is not supported yet.");
-        }
-        AwoInstaller.installAwoSo(getBuilder(), mainDexFile, awbApkFiles, getPackageName(), getLogger());
+        AwoInstaller.installAwoSo(getBuilder(), getMainDexFile(), getAwbApkFiles(), getPackageName(), getLogger());
     }
 
     @InputFile
@@ -314,7 +303,6 @@ public class AwoInstallTask extends BaseTask {
 
             task.setAndroidBuilder(scope.getGlobalScope().getAndroidBuilder());
             task.setVariantName(appVariantContext.getVariantName());
-            task.setGroup(TaskManager.INSTALL_GROUP);
 
             String buildType = appVariantContext.getScope().getVariantConfiguration().getBuildType().getName();
             if (!atlasExtension.getBundleConfig().isAwoDynDeploy()) {
