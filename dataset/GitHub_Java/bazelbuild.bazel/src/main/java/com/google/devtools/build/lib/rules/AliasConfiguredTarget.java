@@ -117,9 +117,9 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
 
   @Override
   public Object getValue(String name) {
-    if (name.equals(LABEL_FIELD)) {
+    if (name.equals("label")) {
       return getLabel();
-    } else if (name.equals(FILES_FIELD)) {
+    } else if (name.equals("files")) {
       // A shortcut for files to build in Skylark. FileConfiguredTarget and RuleConfiguredTarget
       // always has FileProvider and Error- and PackageGroupConfiguredTarget-s shouldn't be
       // accessible in Skylark.

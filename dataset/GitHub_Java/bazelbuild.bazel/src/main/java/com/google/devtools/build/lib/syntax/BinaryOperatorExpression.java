@@ -268,7 +268,6 @@ public final class BinaryOperatorExpression extends Expression {
 
   /**
    * Compile a comparison oer
-   *
    * @param debugAccessors
    * @param code
    * @param leftCompiled
@@ -279,7 +278,8 @@ public final class BinaryOperatorExpression extends Expression {
       AstAccessors debugAccessors,
       List<ByteCodeAppender> code,
       ByteCodeAppender leftCompiled,
-      ByteCodeAppender rightCompiled) {
+      ByteCodeAppender rightCompiled)
+      throws Error {
     PrimitiveComparison byteCodeOperator = PrimitiveComparison.forOperator(operator);
     code.add(leftCompiled);
     code.add(rightCompiled);
@@ -408,7 +408,7 @@ public final class BinaryOperatorExpression extends Expression {
       // Java:   -7/3 = -2
       // Python: -7/3 = -3
       // We want to follow Python semantics, so we use float division and round down.
-      return (int) Math.floor(Double.valueOf((Integer) lval) / (Integer) rval);
+      return (int) Math.floor(new Double((Integer) lval) / (Integer) rval);
     }
     throw typeException(lval, rval, Operator.DIVIDE, location);
   }
