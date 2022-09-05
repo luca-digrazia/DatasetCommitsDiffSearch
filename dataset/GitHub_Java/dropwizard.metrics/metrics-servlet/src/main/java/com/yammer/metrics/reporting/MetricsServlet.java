@@ -4,7 +4,7 @@ import com.yammer.metrics.HealthChecks;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.core.HealthCheck.Result;
-import com.yammer.metrics.stats.Snapshot;
+import com.yammer.metrics.core.VirtualMachineMetrics.GarbageCollector;
 import org.codehaus.jackson.JsonEncoding;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
@@ -29,7 +29,6 @@ import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
 public class MetricsServlet extends HttpServlet implements MetricProcessor<MetricsServlet.Context> {
-    private static final long serialVersionUID = 1363903248255082791L;
     private static final Logger LOGGER = LoggerFactory.getLogger(MetricsServlet.class);
     public static final String ATTR_NAME_METRICS_REGISTRY = MetricsServlet.class.getSimpleName() + ":" + MetricsRegistry.class.getSimpleName();
     public static final String ATTR_NAME_HEALTHCHECK_REGISTRY = MetricsServlet.class.getSimpleName() + ":" + HealthCheckRegistry.class.getSimpleName();
@@ -298,8 +297,8 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         {
             json.writeStringField("type", "histogram");
             json.writeNumberField("count", histogram.count());
-            writeSummarizable(histogram, json);
-            writeSampling(histogram, json);
+            writeSummarized(histogram, json);
+            writeQuantized(histogram, json);
 
             if (context.showFullSamples) {
                 json.writeObjectField("values", histogram.values());
@@ -395,11 +394,11 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             json.writeFieldName("garbage-collectors");
             json.writeStartObject();
             {
-                for (Entry<String, VirtualMachineMetrics.GarbageCollectorStats> entry : vm.garbageCollectors().entrySet()) {
+                for (Entry<String, GarbageCollector> entry : vm.garbageCollectors().entrySet()) {
                     json.writeFieldName(entry.getKey());
                     json.writeStartObject();
                     {
-                        final VirtualMachineMetrics.GarbageCollectorStats gc = entry.getValue();
+                        final GarbageCollector gc = entry.getValue();
                         json.writeNumberField("runs", gc.getRuns());
                         json.writeNumberField("time", gc.getTime(TimeUnit.MILLISECONDS));
                     }
@@ -433,8 +432,8 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             json.writeStartObject();
             {
                 json.writeStringField("unit", timer.durationUnit().toString().toLowerCase());
-                writeSummarizable(timer, json);
-                writeSampling(timer, json);
+                writeSummarized(timer,json);
+                writeQuantized(timer, json);
                 if (context.showFullSamples) {
                     json.writeObjectField("values", timer.values());
                 }
@@ -451,21 +450,21 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         json.writeEndObject();
     }
 
-    private static void writeSummarizable(Summarizable metric, JsonGenerator json) throws IOException {
+    private static void writeSummarized(Summarized metric, JsonGenerator json) throws IOException {
         json.writeNumberField("min", metric.min());
         json.writeNumberField("max", metric.max());
         json.writeNumberField("mean", metric.mean());
         json.writeNumberField("std_dev", metric.stdDev());
     }
     
-    private static void writeSampling(Sampling metric, JsonGenerator json) throws IOException {
-        final Snapshot snapshot = metric.getSnapshot();
-        json.writeNumberField("median", snapshot.getMedian());
-        json.writeNumberField("p75", snapshot.get75thPercentile());
-        json.writeNumberField("p95", snapshot.get95thPercentile());
-        json.writeNumberField("p98", snapshot.get98thPercentile());
-        json.writeNumberField("p99", snapshot.get99thPercentile());
-        json.writeNumberField("p999",snapshot.get999thPercentile());
+    private static void writeQuantized(Quantized metric, JsonGenerator json) throws IOException {
+        final Double[] quantiles = metric.quantiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
+        json.writeNumberField("median", quantiles[0]);
+        json.writeNumberField("p75", quantiles[1]);
+        json.writeNumberField("p95", quantiles[2]);
+        json.writeNumberField("p98", quantiles[3]);
+        json.writeNumberField("p99", quantiles[4]);
+        json.writeNumberField("p999", quantiles[5]);
     }
     
     private static void writeMeteredFields(Metered metered, JsonGenerator json) throws IOException {
