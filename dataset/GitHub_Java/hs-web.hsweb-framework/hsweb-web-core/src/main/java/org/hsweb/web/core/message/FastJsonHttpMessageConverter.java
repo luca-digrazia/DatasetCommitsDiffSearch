@@ -74,7 +74,7 @@ public class FastJsonHttpMessageConverter extends AbstractHttpMessageConverter<O
             }
         }
         byte[] bytes = baos.toByteArray();
-        if (clazz == String.class) return new String(bytes,charset);
+        if (clazz == String.class) return new String(bytes);
         return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), clazz);
     }
 
