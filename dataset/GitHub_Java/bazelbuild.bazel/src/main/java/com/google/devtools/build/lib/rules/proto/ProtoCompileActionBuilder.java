@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.proto;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.Iterables.isEmpty;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.rules.proto.ProtoCommon.areDepsStrict;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -288,15 +287,12 @@ public class ProtoCompileActionBuilder {
 
     result.add(ruleContext.getFragment(ProtoConfiguration.class).protocOpts());
 
-    boolean areDepsStrict = areDepsStrict(ruleContext);
-
     // Add include maps
     result.add(
         new ProtoCommandLineArgv(
-            areDepsStrict ? supportData.getProtosInDirectDeps() : null,
-            supportData.getTransitiveImports()));
+            supportData.getProtosInDirectDeps(), supportData.getTransitiveImports()));
 
-    if (areDepsStrict) {
+    if (supportData.getProtosInDirectDeps() != null) {
       // Note: the %s in the line below is used by proto-compiler. That is, the string we create
       // here should have a literal %s in it.
       result.add(
@@ -416,7 +412,7 @@ public class ProtoCompileActionBuilder {
       List<ToolchainInvocation> toolchainInvocations,
       Iterable<Artifact> protosToCompile,
       NestedSet<Artifact> transitiveSources,
-      NestedSet<Artifact> protosInDirectDeps,
+      @Nullable NestedSet<Artifact> protosInDirectDeps,
       String ruleLabel,
       Iterable<Artifact> outputs,
       String flavorName,
@@ -451,7 +447,7 @@ public class ProtoCompileActionBuilder {
                 toolchainInvocations,
                 protosToCompile,
                 transitiveSources,
-                areDepsStrict(ruleContext) ? protosInDirectDeps : null,
+                protosInDirectDeps,
                 ruleLabel,
                 allowServices,
                 ruleContext.getFragment(ProtoConfiguration.class).protocOpts()))
