@@ -84,7 +84,7 @@ class Parser {
   }
 
   private static final EnumSet<TokenKind> STATEMENT_TERMINATOR_SET =
-      EnumSet.of(TokenKind.EOF, TokenKind.NEWLINE, TokenKind.SEMI);
+      EnumSet.of(TokenKind.EOF, TokenKind.NEWLINE);
 
   private static final EnumSet<TokenKind> LIST_TERMINATOR_SET =
     EnumSet.of(TokenKind.EOF, TokenKind.RBRACKET, TokenKind.SEMI);
@@ -1483,20 +1483,11 @@ class Parser {
         token.right);
   }
 
-  // return_stmt ::= RETURN [expr]
+  // return_stmt ::= RETURN expr
   private ReturnStatement parseReturnStatement() {
     int start = token.left;
-    int end = token.right;
     expect(TokenKind.RETURN);
-    
-    Expression expression;
-    if (STATEMENT_TERMINATOR_SET.contains(token.kind)) {
-        // this None makes the AST not correspond to the source exactly anymore
-        expression = new Identifier("None");
-        setLocation(expression, start, end);
-    } else {
-        expression = parseExpression();
-    }
+    Expression expression = parseExpression();
     return setLocation(new ReturnStatement(expression), start, expression);
   }
 
