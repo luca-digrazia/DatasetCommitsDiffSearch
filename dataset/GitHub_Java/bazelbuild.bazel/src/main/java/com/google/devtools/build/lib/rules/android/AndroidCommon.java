@@ -241,7 +241,7 @@ public class AndroidCommon {
       JavaCompilationArtifacts.Builder artifactsBuilder,
       JavaTargetAttributes.Builder attributes,
       NestedSet<ResourceContainer> resourceContainers,
-      ResourceContainer updatedResources) throws InterruptedException {
+      ResourceContainer updatedResources) {
       Artifact binaryResourcesJar =
           ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_CLASS_JAR);
       compileResourceJar(javaSemantics, binaryResourcesJar, updatedResources.getJavaSourceJar());
@@ -335,7 +335,7 @@ public class AndroidCommon {
       JavaSemantics javaSemantics, AndroidSemantics androidSemantics,
       ResourceApk resourceApk, AndroidIdlProvider transitiveIdlImportData,
       boolean addCoverageSupport, boolean collectJavaCompilationArgs,
-      SafeImplicitOutputsFunction genClassJarImplicitOutput) throws InterruptedException {
+      SafeImplicitOutputsFunction genClassJarImplicitOutput) {
     ImmutableList<Artifact> extraSources =
         resourceApk.isLegacy() || resourceApk.getResourceJavaSrcJar() == null
             ? ImmutableList.<Artifact>of()
@@ -427,8 +427,7 @@ public class AndroidCommon {
     return (strict != DEFAULT && strict != STRICT) ? strict : ERROR;
   }
 
-  JackCompilationHelper initJack(JavaTargetAttributes attributes, JavaSemantics javaSemantics)
-      throws InterruptedException {
+  JackCompilationHelper initJack(JavaTargetAttributes attributes, JavaSemantics javaSemantics) {
     Map<PathFragment, Artifact> resourcesMap = new LinkedHashMap<>();
     for (Artifact resource : attributes.getResources()) {
       resourcesMap.put(javaSemantics.getJavaResourcePath(resource.getRootRelativePath()), resource);
@@ -460,7 +459,7 @@ public class AndroidCommon {
       JavaCompilationArtifacts.Builder javaArtifactsBuilder,
       boolean collectJavaCompilationArgs,
       @Nullable Artifact additionalSourceJar,
-      SafeImplicitOutputsFunction genClassJarImplicitOutput) throws InterruptedException {
+      SafeImplicitOutputsFunction genClassJarImplicitOutput) {
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.<Artifact>stableOrder();
     if (additionalSourceJar != null) {
       filesBuilder.add(additionalSourceJar);

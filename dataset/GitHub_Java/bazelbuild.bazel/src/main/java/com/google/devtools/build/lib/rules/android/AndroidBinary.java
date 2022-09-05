@@ -78,7 +78,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   protected abstract AndroidSemantics createAndroidSemantics();
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
+  public ConfiguredTarget create(RuleContext ruleContext) {
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
     if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
@@ -118,7 +118,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       AndroidCommon androidCommon,
       JavaSemantics javaSemantics,
       AndroidSemantics androidSemantics,
-      List<String> depsAttributes) throws InterruptedException {
+      List<String> depsAttributes) {
     // TODO(bazel-team): Find a way to simplify this code.
     // treeKeys() means that the resulting map sorts the entries by key, which is necessary to
     // ensure determinism.
@@ -297,7 +297,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ResourceApk splitResourceApk,
       JavaTargetAttributes resourceClasses,
       ImmutableList<Artifact> apksUnderTest,
-      Artifact proguardMapping) throws InterruptedException {
+      Artifact proguardMapping) {
 
     ImmutableList<Artifact> proguardSpecs =
         getTransitiveProguardSpecs(
@@ -712,7 +712,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       Artifact deployJarArtifact,
       NestedSetBuilder<Artifact> filesBuilder,
       ImmutableList<Artifact> proguardSpecs,
-      Artifact proguardMapping) throws InterruptedException {
+      Artifact proguardMapping) {
     Artifact proguardOutputJar =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_PROGUARD_JAR);
 
@@ -731,8 +731,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         proguardSpecs, proguardMapping, sdk.getAndroidJar(), proguardOutputJar, filesBuilder);
   }
 
-  private static ProguardOutput createEmptyProguardAction(RuleContext ruleContext,
-      Artifact proguardOutputJar, Artifact deployJarArtifact) throws InterruptedException {
+  private static ProguardOutput createEmptyProguardAction(
+      RuleContext ruleContext, Artifact proguardOutputJar, Artifact deployJarArtifact) {
     ImmutableList.Builder<Artifact> failures =
         ImmutableList.<Artifact>builder().add(proguardOutputJar);
     if (ruleContext.attributes().get("proguard_generate_mapping", Type.BOOLEAN)) {
@@ -751,7 +751,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       FilesToRunProvider proguard,
       Artifact jar, ImmutableList<Artifact> proguardSpecs,
       Artifact proguardMapping, Artifact androidJar, Artifact proguardOutputJar,
-      NestedSetBuilder<Artifact> filesBuilder) throws InterruptedException {
+      NestedSetBuilder<Artifact> filesBuilder) {
     Iterable<Artifact> libraryJars = NestedSetBuilder.<Artifact>naiveLinkOrder()
         .add(androidJar)
         .addTransitive(common.getTransitiveNeverLinkLibraries())
@@ -837,7 +837,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   /** Dexes the ProguardedJar to generate ClassesDex that has a reference classes.dex. */
   static DexingOutput dex(RuleContext ruleContext, MultidexMode multidexMode, List<String> dexopts,
       Artifact deployJar,  Artifact proguardedJar, AndroidCommon common,
-      JavaTargetAttributes attributes) throws InterruptedException {
+      JavaTargetAttributes attributes) {
     String classesDexFileName = getMultidexMode(ruleContext).getOutputDexFilename();
     Artifact classesDex = AndroidBinary.getDxArtifact(ruleContext, classesDexFileName);
     if (!AndroidBinary.supportsMultidexMode(ruleContext, multidexMode)) {
