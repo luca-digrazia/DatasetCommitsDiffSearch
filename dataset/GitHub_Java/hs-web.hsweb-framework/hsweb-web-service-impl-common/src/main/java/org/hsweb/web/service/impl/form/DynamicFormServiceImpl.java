@@ -1,6 +1,8 @@
 package org.hsweb.web.service.impl.form;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import org.hsweb.concurrent.lock.annotation.LockName;
 import org.hsweb.concurrent.lock.annotation.ReadLock;
 import org.hsweb.concurrent.lock.annotation.WriteLock;
@@ -9,7 +11,6 @@ import org.hsweb.web.bean.po.GenericPo;
 import org.hsweb.web.bean.po.form.Form;
 import org.hsweb.web.bean.po.history.History;
 import org.hsweb.web.core.Install;
-import org.hsweb.web.core.authorize.ExpressionScopeBean;
 import org.hsweb.web.core.exception.BusinessException;
 import org.hsweb.web.core.exception.NotFoundException;
 import org.hsweb.web.service.form.DynamicFormDataValidator;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.Assert;
 import org.webbuilder.office.excel.ExcelIO;
 import org.webbuilder.office.excel.config.Header;
 import org.webbuilder.sql.*;
@@ -28,8 +30,11 @@ import org.webbuilder.sql.exception.CreateException;
 import org.webbuilder.sql.exception.TriggerException;
 import org.webbuilder.sql.param.ExecuteCondition;
 import org.webbuilder.sql.trigger.TriggerResult;
-import org.webbuilder.utils.common.StringUtils;
+import org.webbuilder.utils.script.engine.DynamicScriptEngine;
+import org.webbuilder.utils.script.engine.DynamicScriptEngineFactory;
+import org.webbuilder.utils.script.engine.ExecuteResult;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -40,9 +45,9 @@ import java.util.*;
  */
 @Service("dynamicFormService")
 @Transactional(rollbackFor = Throwable.class)
-public class DynamicFormServiceImpl implements DynamicFormService, ExpressionScopeBean {
+public class DynamicFormServiceImpl implements DynamicFormService {
 
-    protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     @Autowired(required = false)
     protected FormParser formParser;
@@ -58,9 +63,6 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
 
     @Autowired(required = false)
     protected List<DynamicFormDataValidator> dynamicFormDataValidator;
-
-    @Autowired(required = false)
-    protected Map<String, ExpressionScopeBean> expressionScopeBeanMap;
 
     protected void initDefaultField(TableMetaData metaData) {
         String dataType;
@@ -275,34 +277,16 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         Table table = getTableByName(name);
         TableMetaData metaData = table.getMetaData();
         List<Header> headers = new LinkedList<>();
-        Map<String, Object> sample = dataList.isEmpty() ? new HashMap<>() : (Map) dataList.get(0);
-        int[] index = new int[1];
-        index[0] = 1;
         metaData.getFields().forEach(fieldMetaData -> {
-            ValueWrapper valueWrapper = fieldMetaData.attrWrapper("export-excel", false);
+            ValueWrapper valueWrapper = fieldMetaData.attrWrapper("exportExcel", true);
             if (valueWrapper.toBoolean()) {
-                String title = fieldMetaData.attrWrapper("export-header", fieldMetaData.getComment()).toString();
-                if (StringUtils.isNullOrEmpty(title)) {
-                    title = "字段" + index[0]++;
-                }
+                String title = fieldMetaData.attrWrapper("excelHeader", fieldMetaData.getComment()).toString();
                 String field = fieldMetaData.getName();
-                Set<String> includes = param.getIncludes();
-                Set<String> excludes = param.getExcludes();
-                if (!includes.isEmpty()) {
-                    if (!includes.contains(field)) return;
-                }
-                if (!excludes.isEmpty()) {
-                    if (excludes.contains(field)) return;
-                }
-                if (sample.get(field + "_cn") != null)
-                    field = field + "_cn";
                 headers.add(new Header(title, field));
             }
         });
         if (metaData.triggerSupport("export.excel")) {
             Map<String, Object> var = new HashMap<>();
-            if (expressionScopeBeanMap != null)
-                var.putAll(expressionScopeBeanMap);
             var.put("dataList", dataList);
             var.put("headers", headers);
             metaData.on("export.excel", var);
@@ -339,25 +323,20 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
             var.put("headerMapper", headerMapper);
             var.put("excelData", excelData);
             var.put("dataList", dataList);
-            if (expressionScopeBeanMap != null)
-                var.putAll(expressionScopeBeanMap);
-            TriggerResult triggerResult = metaData.on("export.import.before", var);
-            if (!triggerResult.isSuccess()) {
-                throw new TriggerException(triggerResult.getMessage());
-            }
-        }
-        excelData.forEach(data -> {
-            Map<String, Object> newData = new HashMap<>();
-            data.forEach((k, v) -> {
-                String field = headerMapper.get(k);
-                if (field != null) {
-                    newData.put(field, v);
-                } else {
-                    newData.put(k, v);
-                }
+            metaData.on("export.import.before", var);
+        } else
+            excelData.forEach(data -> {
+                Map<String, Object> newData = new HashMap<>();
+                data.forEach((k, v) -> {
+                    String field = headerMapper.get(k);
+                    if (field != null) {
+                        newData.put(field, v);
+                    } else {
+                        newData.put(k, v);
+                    }
+                });
+                dataList.add(newData);
             });
-            dataList.add(newData);
-        });
         List<Map<String, Object>> errorMessage = new LinkedList<>();
         int index = 0, success = 0;
         for (Map<String, Object> map : dataList) {
@@ -368,9 +347,6 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
                     var.put("headerMapper", headerMapper);
                     var.put("excelData", excelData);
                     var.put("dataList", dataList);
-                    var.put("data", map);
-                    if (expressionScopeBeanMap != null)
-                        var.putAll(expressionScopeBeanMap);
                     TriggerResult triggerResult = metaData.on("export.import.each", var);
                     if (!triggerResult.isSuccess()) {
                         throw new TriggerException(triggerResult.getMessage());
