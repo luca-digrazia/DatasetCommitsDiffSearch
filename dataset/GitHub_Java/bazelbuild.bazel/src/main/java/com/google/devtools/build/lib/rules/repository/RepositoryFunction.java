@@ -236,8 +236,7 @@ public abstract class RepositoryFunction {
     try {
       Path workspaceFile = repositoryDirectory.getRelative("WORKSPACE");
       FileSystemUtils.writeContent(workspaceFile, Charset.forName("UTF-8"),
-          String.format("# DO NOT EDIT: automatically generated WORKSPACE file for %s\n"
-              + "workspace(name = \"%s\")", rule, rule.getName()));
+          String.format("# DO NOT EDIT: automatically generated WORKSPACE file for %s\n", rule));
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
