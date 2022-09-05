@@ -191,12 +191,14 @@ class TreeArtifactValue implements SkyValue {
             pathToExplode.getChild(subpath.getBaseName()), valuesBuilder);
       } else if (subpath.isSymbolicLink()) {
         PathFragment linkTarget = subpath.readSymbolicLinkUnchecked();
-        valuesBuilder.add(canonicalSubpathFragment);
         if (linkTarget.isAbsolute()) {
-          // We tolerate absolute symlinks here. They will probably be dangling if any downstream
-          // consumer tries to read them, but let that be downstream's problem.
-          continue;
+          String errorMessage = String.format(
+              "A TreeArtifact may not contain absolute symlinks, found %s pointing to %s.",
+              subpath,
+              linkTarget);
+          throw new IOException(errorMessage);
         }
+
         // We visit each path segment of the link target to catch any path traversal outside of the
         // TreeArtifact root directory. For example, for TreeArtifact a/b/c, it is possible to have
         // a symlink, a/b/c/sym_link that points to ../outside_dir/../c/link_target. Although this
@@ -214,6 +216,7 @@ class TreeArtifactValue implements SkyValue {
             throw new IOException(errorMessage);
           }
         }
+        valuesBuilder.add(canonicalSubpathFragment);
       } else if (subpath.isFile()) {
         valuesBuilder.add(canonicalSubpathFragment);
       } else {
