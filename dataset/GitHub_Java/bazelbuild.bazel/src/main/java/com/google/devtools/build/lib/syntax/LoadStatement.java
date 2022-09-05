@@ -72,16 +72,15 @@ public final class LoadStatement extends Statement {
   void doExec(Environment env) throws EvalException, InterruptedException {
     for (Map.Entry<Identifier, String> entry : symbols.entrySet()) {
       try {
-        Identifier name = entry.getKey();
-        Identifier declared = new Identifier(entry.getValue());
+        Identifier current = entry.getKey();
 
-        if (declared.isPrivate()) {
-          throw new EvalException(getLocation(),
-              "symbol '" + declared.getName() + "' is private and cannot be imported.");
+        if (current.isPrivate()) {
+          throw new EvalException(
+              getLocation(), "symbol '" + current + "' is private and cannot be imported.");
         }
         // The key is the original name that was used to define the symbol
         // in the loaded bzl file.
-        env.importSymbol(imp.getImportString(), name, declared.getName());
+        env.importSymbol(imp.getImportString(), current, entry.getValue());
       } catch (Environment.NoSuchVariableException | Environment.LoadFailedException e) {
         throw new EvalException(getLocation(), e.getMessage());
       }
