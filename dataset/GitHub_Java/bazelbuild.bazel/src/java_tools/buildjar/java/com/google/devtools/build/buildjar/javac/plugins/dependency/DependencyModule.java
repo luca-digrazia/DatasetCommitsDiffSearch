@@ -21,9 +21,11 @@ import com.google.devtools.build.lib.view.proto.Deps.Dependency.Kind;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Collection;
@@ -255,8 +257,7 @@ public final class DependencyModule {
    * Computes a reduced compile-time classpath from the union of direct dependencies and their
    * dependencies, as listed in the associated .deps artifacts.
    */
-  public String computeStrictClasspath(String originalClasspath, String classDir)
-      throws IOException {
+  public String computeStrictClasspath(String originalClasspath, String classDir) {
     if (!strictClasspathMode) {
       return originalClasspath;
     }
@@ -288,18 +289,32 @@ public final class DependencyModule {
 
   /**
    * Updates {@link #requiredClasspath} to include dependencies from the given output artifact.
+   *
+   * During the .deps migration from text to proto format, this method will try to handle both.
+   * Blaze can thus switch the .deps artifacts independently.
    */
-  private void collectDependenciesFromArtifact(String path) throws IOException {
+  private void collectDependenciesFromArtifact(String path) {
+    // Try reading in proto format first
     try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(path))) {
       Deps.Dependencies deps = Deps.Dependencies.parseFrom(bis);
-      // Sanity check to make sure we have a valid proto.
+      // Sanity check to make sure we have a valid proto, not a text file that happened to match.
       if (!deps.hasRuleLabel()) {
-        throw new IOException("Could not parse Deps.Dependencies message from proto.");
+        throw new IOException("Text file");
       }
       for (Deps.Dependency dep : deps.getDependencyList()) {
         if (dep.getKind() == Kind.EXPLICIT || dep.getKind() == Kind.IMPLICIT) {
           requiredClasspath.add(dep.getPath());
         }
+      }
+    } catch (IOException ex) {
+      // TODO(bazel-team): Remove this fallback to text format when Blaze is ready.
+      try (BufferedReader reader = new BufferedReader(new FileReader(path))) {
+        for (String dep = reader.readLine(); dep != null; dep = reader.readLine()) {
+          requiredClasspath.add(dep);
+        }
+      } catch (IOException exc) {
+        // At this point we can give up altogether
+        exc.printStackTrace();
       }
     }
   }
