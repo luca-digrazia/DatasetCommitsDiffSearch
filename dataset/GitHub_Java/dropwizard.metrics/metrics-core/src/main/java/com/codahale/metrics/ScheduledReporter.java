@@ -1,6 +1,5 @@
 package com.codahale.metrics;
 
-import java.io.Closeable;
 import java.util.Locale;
 import java.util.SortedMap;
 import java.util.concurrent.Executors;
@@ -17,7 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @see CsvReporter
  * @see Slf4jReporter
  */
-public abstract class ScheduledReporter implements Closeable {
+public abstract class ScheduledReporter {
     /**
      * A simple named thread factory.
      */
@@ -99,14 +98,6 @@ public abstract class ScheduledReporter implements Closeable {
         } catch (InterruptedException ignored) {
             // do nothing
         }
-    }
-
-    /**
-     * Stops the reporter and shuts down its thread of execution.
-     */
-    @Override
-    public void close() {
-        stop();
     }
 
     /**
