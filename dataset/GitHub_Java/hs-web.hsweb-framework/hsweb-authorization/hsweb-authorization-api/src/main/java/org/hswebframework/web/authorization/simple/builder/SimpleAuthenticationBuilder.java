@@ -19,6 +19,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
 public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
@@ -53,14 +55,14 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
                 .id(user.get("id"))
                 .username(user.get("username"))
                 .name(user.get("name"))
-                .userType(user.get("type"))
+                .type(user.get("type"))
                 .build());
         return this;
     }
 
     @Override
     public AuthenticationBuilder role(List<Role> role) {
-        authentication.getDimensions().addAll(role);
+        authentication.setRoles(role);
         return this;
     }
 
@@ -104,13 +106,13 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
 
     @Override
     public AuthenticationBuilder attributes(String attributes) {
-        authentication.getAttributes().putAll(JSON.<Map<String, Serializable>>parseObject(attributes, Map.class));
+        authentication.setAttributes(JSON.<Map<String, Serializable>>parseObject(attributes, Map.class));
         return this;
     }
 
     @Override
     public AuthenticationBuilder attributes(Map<String, Serializable> permission) {
-        authentication.getAttributes().putAll(permission);
+        authentication.setAttributes(permission);
         return this;
     }
 
@@ -118,12 +120,8 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
     public AuthenticationBuilder json(String json) {
         JSONObject jsonObject = JSON.parseObject(json);
         user(jsonObject.getObject("user", SimpleUser.class));
-        if(jsonObject.containsKey("roles")){
-            role(jsonObject.getJSONArray("roles").toJSONString());
-        }
-        if(jsonObject.containsKey("permissions")){
-            permission(jsonObject.getJSONArray("permissions").toJSONString());
-        }
+        role(jsonObject.getJSONArray("roles").toJSONString());
+        permission(jsonObject.getJSONArray("permissions").toJSONString());
         return this;
     }
 

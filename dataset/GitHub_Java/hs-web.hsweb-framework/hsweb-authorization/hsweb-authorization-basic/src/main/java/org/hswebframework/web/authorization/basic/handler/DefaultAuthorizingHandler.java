@@ -201,10 +201,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
             Function<Predicate<Role>, Boolean> func = logicalIsOr
                     ? authentication.getRoles().stream()::anyMatch
                     : authentication.getRoles().stream()::allMatch;
-
-            access = logicalIsOr
-                    ? access || func.apply(role -> rolesDef.contains(role.getId()))
-                    : access && func.apply(role -> rolesDef.contains(role.getId()));
+            access = func.apply(role -> rolesDef.contains(role.getId()));
         }
         //控制用户
         if (!usersDef.isEmpty()) {
@@ -214,10 +211,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
             Function<Predicate<String>, Boolean> func = logicalIsOr
                     ? usersDef.stream()::anyMatch
                     : usersDef.stream()::allMatch;
-            access = logicalIsOr
-                    ? access || func.apply(authentication.getUser().getUsername()::equals)
-                    : access && func.apply(authentication.getUser().getUsername()::equals);
-
+            access = func.apply(authentication.getUser().getUsername()::equals);
         }
         if (!access) {
             throw new AccessDenyException(definition.getMessage());
