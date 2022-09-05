@@ -820,7 +820,7 @@ public final class ReleaseBundlingSupport {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     new LipoSupport(ruleContext).registerCombineArchitecturesAction(linkedBinaries(),
-        resultingLinkedBinary, appleConfiguration.getPlatform(PlatformType.IOS));
+        resultingLinkedBinary, appleConfiguration.getIosCpuPlatform());
   }
 
   private NestedSet<Artifact> linkedBinaries() {
