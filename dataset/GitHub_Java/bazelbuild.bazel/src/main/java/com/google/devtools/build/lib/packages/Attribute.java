@@ -1048,7 +1048,8 @@ public final class Attribute implements Comparable<Attribute> {
    * <p>Implementations of this interface must be immutable.
    */
   public abstract static class ComputedDefault {
-    private final ImmutableList<String> dependencies;
+    private final List<String> dependencies;
+    List<String> dependencies() { return dependencies; }
 
     /**
      * Create a computed default that can read all non-configurable attribute values and no
@@ -1072,11 +1073,6 @@ public final class Attribute implements Comparable<Attribute> {
      */
     public ComputedDefault(String depAttribute1, String depAttribute2) {
       dependencies = ImmutableList.of(depAttribute1, depAttribute2);
-    }
-
-    /** The list of configurable attributes this ComputedDefault declares it may read. */
-    public ImmutableList<String> dependencies() {
-      return dependencies;
     }
 
     public abstract Object getDefault(AttributeMap rule);
