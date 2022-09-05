@@ -23,7 +23,7 @@ public class ScopeByUserDataAccessConfig extends AbstractDataAccessConfig implem
 
     private String scopeTypeName;
 
-    private Set<Object> scope;
+    private Set<String> scope;
 
     private boolean children;
 
@@ -42,5 +42,8 @@ public class ScopeByUserDataAccessConfig extends AbstractDataAccessConfig implem
         return obj instanceof ScopeByUserDataAccessConfig && obj.hashCode() == hashCode();
     }
 
+    public Set<Object> getScope(){
+        return ((Set) scope);
+    }
 
 }
