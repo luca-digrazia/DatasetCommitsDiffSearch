@@ -30,7 +30,6 @@ import com.taobao.android.differ.dex.PatchException;
 import com.taobao.android.object.BuildPatchInfos;
 import com.taobao.android.object.PatchBundleInfo;
 import com.taobao.android.object.PatchInfo;
-import com.taobao.android.reader.*;
 import com.taobao.android.tpatch.utils.JarSplitUtils;
 import com.taobao.android.tpatch.utils.MD5Util;
 import com.taobao.android.tpatch.utils.PathUtils;
@@ -401,18 +400,6 @@ public class PatchFileBuilder {
                             }
                         } else {
                             downloadTPathAndUnzip(hisPatchInfo.getDownloadUrl(), hisTPatchFile, hisTPatchUnzipFolder);
-                            File mainDexFile = new File(hisTPatchUnzipFolder,"libcom_taobao_maindex.so");
-                            if (mainDexFile.exists()){
-                                try {
-                                    System.out.println("start put bundleInfos for version:"+hisPatchInfo.getPatchVersion()+"......");
-                                    TPatchTool.bundleInfos.put(hisPatchInfo.getPatchVersion(),new AtlasFrameworkPropertiesReader(
-                                                                                                new MethodReader(
-                                                                                                new ClassReader(
-                                                                                                new DexReader(mainDexFile))),TPatchTool.bundleInfos.get(currentBuildPatchInfo.getPatchVersion())).read("Landroid/taobao/atlas/framework/FrameworkProperties;","<clinit>"));
-                                } catch (Exception e) {
-                                    e.printStackTrace();
-                                }
-                            }
                         }
                     }
                     if (!hisBundleFolder.exists()) {
@@ -430,8 +417,7 @@ public class PatchFileBuilder {
                             if (patchBundleInfo.getUnitTag().equals(patchBundleInfo.getSrcUnitTag())) {
                                 addToPatch = false;
                             }else {
-//                                throw new PatchException(patchName+"patch中:"+patchBundleInfo.getPkgName()+"的srcunittag和unittag不一致,"+patchBundleInfo.getUnitTag()+","+patchBundleInfo.getSrcUnitTag()+"但是无任何变更,无法动态部署，请重新集成!");
-                                patchBundleInfo.setInherit(true);
+                                throw new PatchException(patchName+"patch中:"+patchBundleInfo.getPkgName()+"的srcunittag和unittag不一致,"+patchBundleInfo.getUnitTag()+","+patchBundleInfo.getSrcUnitTag()+"但是无任何变更,无法动态部署，请重新集成!");
                             }
                         }
                     }

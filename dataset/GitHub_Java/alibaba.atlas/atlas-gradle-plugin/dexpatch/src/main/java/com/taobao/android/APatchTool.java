@@ -232,8 +232,8 @@ import java.util.Map;
 
 
 /**
- * this is tool for generate apatch.jar
- *
+ * 生成Andfix的patch包的工具类
+ * Created by shenghua.nish on 2016-03-19 下午6:25.
  */
 public class APatchTool extends BasePatchTool {
 
@@ -270,7 +270,7 @@ public class APatchTool extends BasePatchTool {
     }
 
     /**
-     * set resources no include in patch
+     * 设置不需要在patch包里出现的资源的列表
      *
      * @param notIncludeFiles
      */
@@ -280,7 +280,7 @@ public class APatchTool extends BasePatchTool {
 
 
     /**
-     * method for generate patch file
+     * 生成patch文件
      *
      * @param outPatchFile
      * @param projectArtifactId
@@ -296,17 +296,17 @@ public class APatchTool extends BasePatchTool {
         File adiffJsonFile = new File(outPatchFile.getParentFile(), "apatch-diff.json");
         FileUtils.deleteQuietly(adiffFile);
         adiffFile.createNewFile();
-        // unzip apk
+        // 解压apk
         File unzipFolder = unzipApk(patchTmpDir);
         final File newApkUnzipFolder = new File(unzipFolder, NEW_APK_UNZIP_NAME);
         final File baseApkUnzipFolder = new File(unzipFolder, BASE_APK_UNZIP_NAME);
 
-        // first generate main bundle patch file
+        // 生成主bundle的tpatch文件
         List<File> aPatches = createBundleAPatch(newApkUnzipFolder, baseApkUnzipFolder, patchTmpDir,
                 andfixMainBundleName, adiffFile, adiffJsonFile);
 
-        // second generate common bundle patch file
-        //
+        // 生成bundle的tpatch文件
+        // 判断主bundle的so和awb的插件
         Collection<File> soFiles = FileUtils.listFiles(newApkUnzipFolder, new String[]{"so"}, true);
         if (splitDiffBundle!= null) {
             for (Pair<BundleBO, BundleBO> bundle : splitDiffBundle) {
@@ -329,7 +329,7 @@ public class APatchTool extends BasePatchTool {
                 continue;
             }
             File baseSoFile = new File(baseApkUnzipFolder, relativePath);
-            if (PatchUtils.isBundleFile(soFile)) { // if bundle file
+            if (PatchUtils.isBundleFile(soFile)) { // 如果是bundle文件
                 List<File> aPatchFiles = processBundleFiles(soFile, baseSoFile, patchTmpDir, adiffFile, adiffJsonFile);
                 if (null != aPatchFiles) {
                     for (File aPatchFile : aPatchFiles) {
@@ -345,7 +345,8 @@ public class APatchTool extends BasePatchTool {
             throw new Exception("No apatch files! No classes modify!");
         }
 
-        // merge apatch file
+        // 合并aPatch文件
+        // 4. 合并apatch文件
         File[] aPatchFiles = new File[aPatches.size()];
         aPatchFiles = aPatches.toArray(aPatchFiles);
         File mergePatchFile = null;
@@ -363,7 +364,7 @@ public class APatchTool extends BasePatchTool {
     }
 
     /**
-     *
+     * 生成bundle的apatch文件
      *
      * @param newBundleFile
      * @param baseBundleFile
@@ -383,7 +384,7 @@ public class APatchTool extends BasePatchTool {
         final File baseBundleUnzipFolder = new File(baseBundleFile.getParentFile(), bundleName);
 
         if (null != baseBundleFile && baseBundleFile.isFile() && baseBundleFile.exists()) {
-            // unzip apk
+            // 解压文件
             ZipUtils.unzip(newBundleFile, newBundleUnzipFolder.getAbsolutePath());
             ZipUtils.unzip(baseBundleFile, baseBundleUnzipFolder.getAbsolutePath());
             // String patchBundleName = getBundleName(newBundleFile.getName());
@@ -403,7 +404,7 @@ public class APatchTool extends BasePatchTool {
 
 
     /**
-     * create bundle apatch file
+     * 得到bundle的Apatch文件
      *
      * @param newApkUnzipFolder
      * @param baseApkUnzipFolder
