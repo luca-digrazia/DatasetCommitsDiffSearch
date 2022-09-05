@@ -223,17 +223,7 @@ public class MetricRegistry {
      * @return all the gauges in the registry
      */
     public SortedMap<String, Gauge> getGauges() {
-        return getGauges(MetricFilter.ALL);
-    }
-
-    /**
-     * Returns a map of all the gauges in the registry and their names which match the given filter.
-     *
-     * @param filter    the metric filter to match
-     * @return all the gauges in the registry
-     */
-    public SortedMap<String, Gauge> getGauges(MetricFilter filter) {
-        return getMetrics(Gauge.class, filter);
+        return getMetrics(Gauge.class);
     }
 
     /**
@@ -242,18 +232,7 @@ public class MetricRegistry {
      * @return all the counters in the registry
      */
     public SortedMap<String, Counter> getCounters() {
-        return getCounters(MetricFilter.ALL);
-    }
-
-    /**
-     * Returns a map of all the counters in the registry and their names which match the given
-     * filter.
-     *
-     * @param filter    the metric filter to match
-     * @return all the counters in the registry
-     */
-    public SortedMap<String, Counter> getCounters(MetricFilter filter) {
-        return getMetrics(Counter.class, filter);
+        return getMetrics(Counter.class);
     }
 
     /**
@@ -262,18 +241,7 @@ public class MetricRegistry {
      * @return all the histograms in the registry
      */
     public SortedMap<String, Histogram> getHistograms() {
-        return getHistograms(MetricFilter.ALL);
-    }
-
-    /**
-     * Returns a map of all the histograms in the registry and their names which match the given
-     * filter.
-     *
-     * @param filter    the metric filter to match
-     * @return all the histograms in the registry
-     */
-    public SortedMap<String, Histogram> getHistograms(MetricFilter filter) {
-        return getMetrics(Histogram.class, filter);
+        return getMetrics(Histogram.class);
     }
 
     /**
@@ -282,17 +250,7 @@ public class MetricRegistry {
      * @return all the meters in the registry
      */
     public SortedMap<String, Meter> getMeters() {
-        return getMeters(MetricFilter.ALL);
-    }
-
-    /**
-     * Returns a map of all the meters in the registry and their names which match the given filter.
-     *
-     * @param filter    the metric filter to match
-     * @return all the meters in the registry
-     */
-    public SortedMap<String, Meter> getMeters(MetricFilter filter) {
-        return getMetrics(Meter.class, filter);
+        return getMetrics(Meter.class);
     }
 
     /**
@@ -301,17 +259,7 @@ public class MetricRegistry {
      * @return all the timers in the registry
      */
     public SortedMap<String, Timer> getTimers() {
-        return getTimers(MetricFilter.ALL);
-    }
-
-    /**
-     * Returns a map of all the timers in the registry and their names which match the given filter.
-     *
-     * @param filter    the metric filter to match
-     * @return all the timers in the registry
-     */
-    public SortedMap<String, Timer> getTimers(MetricFilter filter) {
-        return getMetrics(Timer.class, filter);
+        return getMetrics(Timer.class);
     }
 
     Clock getClock() {
@@ -337,11 +285,10 @@ public class MetricRegistry {
     }
 
     @SuppressWarnings("unchecked")
-    private <T extends Metric> SortedMap<String, T> getMetrics(Class<T> klass, MetricFilter filter) {
+    private <T extends Metric> SortedMap<String, T> getMetrics(Class<T> klass) {
         final TreeMap<String, T> timers = new TreeMap<String, T>();
         for (Map.Entry<String, Metric> entry : metrics.entrySet()) {
-            if (klass.isInstance(entry.getValue()) && filter.matches(entry.getKey(),
-                                                                     entry.getValue())) {
+            if (klass.isInstance(entry.getValue())) {
                 timers.put(entry.getKey(), (T) entry.getValue());
             }
         }
