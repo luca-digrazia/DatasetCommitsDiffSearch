@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection.Transitions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -59,7 +58,6 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.util.CPU;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.Path;
@@ -446,12 +444,12 @@ public final class BuildConfiguration {
     }
 
     @Option(
-        name = "define",
-        converter = Converters.AssignmentConverter.class,
-        defaultValue = "",
-        category = "semantics",
-        allowMultiple = true,
-        help = "Each --define option specifies an assignment for a build variable."
+      name = "define",
+      converter = Converters.AssignmentConverter.class,
+      defaultValue = "",
+      category = "semantics",
+      allowMultiple = true,
+      help = "Each --define option specifies an assignment for a build variable."
     )
     public List<Map.Entry<String, String>> commandLineBuildVariables;
 
@@ -559,7 +557,7 @@ public final class BuildConfiguration {
         defaultValue = "fastbuild",
         category = "semantics", // Should this be "flags"?
         help = "Specify the mode the binary will be built in. "
-            + "Values: 'fastbuild', 'dbg', 'opt'.")
+               + "Values: 'fastbuild', 'dbg', 'opt'.")
     public CompilationMode compilationMode;
 
     /**
@@ -592,24 +590,8 @@ public final class BuildConfiguration {
             + "will be read from the Bazel client environment, or by the name=value pair. "
             + "This option can be used multiple times to specify several variables. "
             + "Used only by the 'bazel test' command."
-    )
+        )
     public List<Map.Entry<String, String>> testEnvironment;
-
-    @Option(
-      name = "action_env",
-      converter = Converters.OptionalAssignmentConverter.class,
-      allowMultiple = true,
-      defaultValue = "",
-      category = "semantics",
-      help =
-          "Specifies the set of environment variables available available to actions. "
-              + "Variables can be either specified by name, in which case the value will be "
-              + "taken from the invocation environment, or by the name=value pair which sets "
-              + "the value independent of the invocation environment. This option can be used "
-              + "multiple times; for options given for the same variable, the latest wins, options "
-              + "for different variables accumulate."
-    )
-    public List<Map.Entry<String, String>> actionEnvironment;
 
     @Option(name = "collect_code_coverage",
         defaultValue = "false",
@@ -618,7 +600,7 @@ public final class BuildConfiguration {
             + "possible) and will collect coverage information during tests. Only targets that "
             + " match --instrumentation_filter will be affected. Usually this option should "
             + " not be specified directly - 'bazel coverage' command should be used instead."
-    )
+        )
     public boolean collectCodeCoverage;
 
     @Option(name = "microcoverage",
@@ -629,7 +611,7 @@ public final class BuildConfiguration {
             + "--instrumentation_filter will be affected. Usually this option should not be "
             + "specified directly - 'blaze coverage --microcoverage' command should be used "
             + "instead."
-    )
+        )
     public boolean collectMicroCoverage;
 
     @Option(name = "coverage_support",
@@ -648,14 +630,6 @@ public final class BuildConfiguration {
             + "currently be a filegroup that contains a single file, the binary. Defaults to "
             + "'//tools/test:coverage_report_generator'.")
     public Label coverageReportGenerator;
-
-    @Option(name = "experimental_use_llvm_covmap",
-        defaultValue = "false",
-        category = "experimental",
-        help = "If specified, Bazel will generate llvm-cov coverage map information rather than "
-            + "gcov when collect_code_coverage is enabled."
-    )
-    public boolean useLLVMCoverageMapFormat;
 
     @Option(name = "cache_test_results",
         defaultValue = "auto",
@@ -730,7 +704,7 @@ public final class BuildConfiguration {
             + "executable. Can be used multiple times to specify several arguments. "
             + "If multiple tests are executed, each of them will receive identical arguments. "
             + "Used only by the 'bazel test' command."
-    )
+        )
     public List<String> testArguments;
 
     @Option(name = "test_filter",
@@ -753,31 +727,31 @@ public final class BuildConfiguration {
     public boolean checkFilesetDependenciesRecursively;
 
     @Option(
-        name = "experimental_skyframe_native_filesets",
-        defaultValue = "false",
-        category = "experimental",
-        help =
-            "If true, Blaze will use the skyframe-native implementation of the Fileset rule."
-                + " This offers improved performance in incremental builds of Filesets as well as"
-                + " correct incremental behavior, but is not yet stable. The default is false,"
-                + " meaning Blaze uses the legacy impelementation of Fileset."
+      name = "experimental_skyframe_native_filesets",
+      defaultValue = "false",
+      category = "experimental",
+      help =
+          "If true, Blaze will use the skyframe-native implementation of the Fileset rule."
+              + " This offers improved performance in incremental builds of Filesets as well as"
+              + " correct incremental behavior, but is not yet stable. The default is false,"
+              + " meaning Blaze uses the legacy impelementation of Fileset."
     )
     public boolean skyframeNativeFileset;
 
     @Option(
-        name = "run_under",
-        category = "run",
-        defaultValue = "null",
-        converter = RunUnderConverter.class,
-        help =
-            "Prefix to insert in front of command before running. "
-                + "Examples:\n"
-                + "\t--run_under=valgrind\n"
-                + "\t--run_under=strace\n"
-                + "\t--run_under='strace -c'\n"
-                + "\t--run_under='valgrind --quiet --num-callers=20'\n"
-                + "\t--run_under=//package:target\n"
-                + "\t--run_under='//package:target --options'\n"
+      name = "run_under",
+      category = "run",
+      defaultValue = "null",
+      converter = RunUnderConverter.class,
+      help =
+          "Prefix to insert in front of command before running. "
+              + "Examples:\n"
+              + "\t--run_under=valgrind\n"
+              + "\t--run_under=strace\n"
+              + "\t--run_under='strace -c'\n"
+              + "\t--run_under='valgrind --quiet --num-callers=20'\n"
+              + "\t--run_under=//package:target\n"
+              + "\t--run_under='//package:target --options'\n"
     )
     public RunUnder runUnder;
 
@@ -815,13 +789,13 @@ public final class BuildConfiguration {
     public boolean checkLicenses;
 
     @Option(
-        name = "enforce_constraints",
-        defaultValue = "true",
-        category = "undocumented",
-        help =
-            "Checks the environments each target is compatible with and reports errors if any "
-                + "target has dependencies that don't support the same environments",
-        oldName = "experimental_enforce_constraints"
+      name = "enforce_constraints",
+      defaultValue = "true",
+      category = "undocumented",
+      help =
+          "Checks the environments each target is compatible with and reports errors if any "
+              + "target has dependencies that don't support the same environments",
+      oldName = "experimental_enforce_constraints"
     )
     public boolean enforceConstraints;
 
@@ -875,18 +849,18 @@ public final class BuildConfiguration {
     public boolean useDynamicConfigurations;
 
     @Option(
-        name = "experimental_enable_runfiles",
-        defaultValue = "auto",
-        category = "undocumented",
-        help = "Enable runfiles; off on Windows, on on other platforms"
+      name = "experimental_enable_runfiles",
+      defaultValue = "auto",
+      category = "undocumented",
+      help = "Enable runfiles; off on Windows, on on other platforms"
     )
     public TriState enableRunfiles;
 
     @Option(
-        name = "build_python_zip",
-        defaultValue = "auto",
-        category = "undocumented",
-        help = "Build python executable zip; on on Windows, off on other platforms"
+      name = "build_python_zip",
+      defaultValue = "auto",
+      category = "undocumented",
+      help = "Build python executable zip; on on Windows, off on other platforms"
     )
     public TriState buildPythonZip;
 
@@ -1071,7 +1045,6 @@ public final class BuildConfiguration {
   private final ImmutableMap<String, String> globalMakeEnv;
 
   private final ImmutableMap<String, String> localShellEnvironment;
-  private final ImmutableSet<String> envVariables;
   private final BuildOptions buildOptions;
   private final Options options;
 
@@ -1180,8 +1153,8 @@ public final class BuildConfiguration {
         == TestActionBuilder.TestShardingStrategy.EXPERIMENTAL_HEURISTIC) {
       reporter.handle(Event.warn(
           "Heuristic sharding is intended as a one-off experimentation tool for determing the "
-              + "benefit from sharding certain tests. Please don't keep this option in your "
-              + ".blazerc or continuous build"));
+          + "benefit from sharding certain tests. Please don't keep this option in your "
+          + ".blazerc or continuous build"));
     }
 
     if (options.useDynamicConfigurations && !options.useDistinctHostConfiguration) {
@@ -1190,33 +1163,12 @@ public final class BuildConfiguration {
     }
   }
 
-  /**
-   * Compute the shell environment, which, at configuration level, is a pair consisting of the
-   * statically set environment variables with their values and the set of environment variables to
-   * be inherited from the client environment.
-   */
-  private Pair<ImmutableMap<String, String>, ImmutableSet<String>> setupShellEnvironment() {
+  private ImmutableMap<String, String> setupShellEnvironment() {
     ImmutableMap.Builder<String, String> builder = new ImmutableMap.Builder<>();
     for (Fragment fragment : fragments.values()) {
       fragment.setupShellEnvironment(builder);
     }
-    // Shell environment variables specified via options take precedence over the
-    // ones inherited from the fragments. In the long run, these fragments will
-    // be replaced by appropriate default rc files anyway.
-    Map<String, String> shellEnv = new HashMap(builder.build());
-    for (Map.Entry<String, String> entry : options.actionEnvironment) {
-      shellEnv.put(entry.getKey(), entry.getValue());
-    }
-    Map<String, String> fixedShellEnv = new HashMap(shellEnv);
-    Set<String> variableShellEnv = new HashSet();
-    for (Map.Entry<String, String> entry : shellEnv.entrySet()) {
-      if (entry.getValue() == null) {
-        String key = entry.getKey();
-        fixedShellEnv.remove(key);
-        variableShellEnv.add(key);
-      }
-    }
-    return Pair.of(ImmutableMap.copyOf(fixedShellEnv), ImmutableSet.copyOf(variableShellEnv));
+    return builder.build();
   }
 
   /**
@@ -1288,10 +1240,7 @@ public final class BuildConfiguration {
         ? outputRoots
         : new OutputRoots(directories, outputDirName);
 
-    Pair<ImmutableMap<String, String>, ImmutableSet<String>> shellEnvironment =
-        setupShellEnvironment();
-    this.localShellEnvironment = shellEnvironment.getFirst();
-    this.envVariables = shellEnvironment.getSecond();
+    this.localShellEnvironment = setupShellEnvironment();
 
     this.transitiveOptionsMap = computeOptionsMap(buildOptions, fragments.values());
 
@@ -1307,8 +1256,8 @@ public final class BuildConfiguration {
     globalMakeEnvBuilder.put("COMPILATION_MODE", options.compilationMode.toString());
     globalMakeEnvBuilder.put("BINMODE", "-"
         + ((options.compilationMode == CompilationMode.FASTBUILD)
-        ? "dbg"
-        : options.compilationMode.toString()));
+            ? "dbg"
+            : options.compilationMode.toString()));
     /*
      * Attention! Document these in the build-encyclopedia
      */
@@ -1402,7 +1351,7 @@ public final class BuildConfiguration {
               if (lateBoundDefaults.containsKey(option.name())) {
                 value = lateBoundDefaults.get(option.name());
               } else if (!option.defaultValue().equals("null")) {
-                // See {@link Option#defaultValue} for an explanation of default "null" strings.
+                 // See {@link Option#defaultValue} for an explanation of default "null" strings.
                 value = option.defaultValue();
               }
             }
@@ -1520,10 +1469,10 @@ public final class BuildConfiguration {
    */
   public interface TransitionApplier {
     /**
-     * Creates a new instance of this transition applier bound to the specified source
-     * configuration.
-     */
-    TransitionApplier create(BuildConfiguration config);
+      * Creates a new instance of this transition applier bound to the specified source
+      * configuration.
+      */
+     TransitionApplier create(BuildConfiguration config);
 
     /**
      * Accepts the given configuration transition. The implementation decides how to turn
@@ -1861,7 +1810,7 @@ public final class BuildConfiguration {
    */
   @VisibleForTesting
   static Map<String, String> getMapping(List<String> variables,
-      Map<String, String> environment) {
+                                        Map<String, String> environment) {
     Map<String, String> result = new HashMap<>();
     for (String var : variables) {
       if (environment.containsKey(var)) {
@@ -1919,7 +1868,7 @@ public final class BuildConfiguration {
   /**
    * Returns the output directory for this build configuration.
    */
-  public Root getOutputDirectory(RepositoryName repositoryName) {
+  public Root getOutputDirectory() {
     return outputRoots.outputDirectory;
   }
 
@@ -1933,18 +1882,6 @@ public final class BuildConfiguration {
   }
 
   /**
-   * TODO(kchodorow): This (and the other get*Directory functions) won't work with external
-   * repositories without changes to how ArtifactFactory resolves derived roots. This is not an
-   * issue right now because it only effects Blaze's include scanning (internal) and Bazel's
-   * repositories (external) but will need to be fixed.
-   * TODO(kchodorow): Use the repository name to derive the bin directory.
-   */
-  @SuppressWarnings("unused")
-  public Root getBinDirectory(RepositoryName repositoryName) {
-    return getBinDirectory();
-  }
-
-  /**
    * Returns a relative path to the bin directory at execution time.
    */
   public PathFragment getBinFragment() {
@@ -1953,10 +1890,8 @@ public final class BuildConfiguration {
 
   /**
    * Returns the include directory for this build configuration.
-   * TODO(kchodorow): Use the repository name to derive the include directory.
    */
-  @SuppressWarnings("unused")
-  public Root getIncludeDirectory(RepositoryName repositoryName) {
+  public Root getIncludeDirectory() {
     return outputRoots.includeDirectory;
   }
 
@@ -1969,29 +1904,19 @@ public final class BuildConfiguration {
     return outputRoots.genfilesDirectory;
   }
 
-  // TODO(kchodorow): Use the repository name to derive the genfiles directory.
-  @SuppressWarnings("unused")
-  public Root getGenfilesDirectory(RepositoryName repositoryName) {
-    return getGenfilesDirectory();
-  }
-
   /**
    * Returns the directory where coverage-related artifacts and metadata files
    * should be stored. This includes for example uninstrumented class files
    * needed for Jacoco's coverage reporting tools.
-   * TODO(kchodorow): Use the repository name to derive the coverage directory.
    */
-  @SuppressWarnings("unused")
-  public Root getCoverageMetadataDirectory(RepositoryName repositoryName) {
+  public Root getCoverageMetadataDirectory() {
     return outputRoots.coverageMetadataDirectory;
   }
 
   /**
    * Returns the testlogs directory for this build configuration.
-   * TODO(kchodorow): Use the repository name to derive the test directory.
    */
-  @SuppressWarnings("unused")
-  public Root getTestLogsDirectory(RepositoryName repositoryName) {
+  public Root getTestLogsDirectory() {
     return outputRoots.testLogsDirectory;
   }
 
@@ -2017,10 +1942,8 @@ public final class BuildConfiguration {
 
   /**
    * Returns the internal directory (used for middlemen) for this build configuration.
-   * TODO(kchodorow): Use the repository name to derive the middleman directory.
    */
-  @SuppressWarnings("unused")
-  public Root getMiddlemanDirectory(RepositoryName repositoryName) {
+  public Root getMiddlemanDirectory() {
     return outputRoots.middlemanDirectory;
   }
 
@@ -2057,15 +1980,12 @@ public final class BuildConfiguration {
     name = "default_shell_env",
     structField = true,
     doc =
-        "A dictionary representing the static local shell environment. It maps variables "
-            + "to their values (strings)."
+        "A dictionary representing the local shell environment. It maps variables "
+            + "to their values (strings).  The local shell environment contains settings that are "
+            + "machine specific, therefore its use should be avoided in rules meant to be hermetic."
   )
   public ImmutableMap<String, String> getLocalShellEnvironment() {
     return localShellEnvironment;
-  }
-
-  public ImmutableSet<String> getVariableShellEnvironment() {
-    return envVariables;
   }
 
   /**
@@ -2245,10 +2165,6 @@ public final class BuildConfiguration {
     return options.collectMicroCoverage;
   }
 
-  public boolean isLLVMCoverageMapFormatEnabled() {
-    return options.useLLVMCoverageMapFormat;
-  }
-
   public boolean isActionsEnabled() {
     return actionsEnabled;
   }
@@ -2347,9 +2263,9 @@ public final class BuildConfiguration {
     // Configuration-specific roots.
     roots.add(getBinDirectory());
     roots.add(getGenfilesDirectory());
-    roots.add(getIncludeDirectory(RepositoryName.MAIN));
-    roots.add(getMiddlemanDirectory(RepositoryName.MAIN));
-    roots.add(getTestLogsDirectory(RepositoryName.MAIN));
+    roots.add(getIncludeDirectory());
+    roots.add(getMiddlemanDirectory());
+    roots.add(getTestLogsDirectory());
 
     return ImmutableList.copyOf(roots);
   }

@@ -35,9 +35,11 @@ import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses.LipoTransition;
+
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -51,8 +53,7 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       Cache<String, BuildConfiguration> cache,
       PackageProviderForConfigurations packageProvider,
       BuildOptions buildOptions,
-      EventHandler eventHandler)
-      throws InvalidConfigurationException, InterruptedException {
+      EventHandler eventHandler) throws InvalidConfigurationException {
     // Target configuration
     BuildConfiguration targetConfiguration = configurationFactory.getConfiguration(
         packageProvider, buildOptions, false, cache);
@@ -113,28 +114,29 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
   }
 
   /**
-   * Gets the correct host configuration for this build. The behavior depends on the value of the
-   * --distinct_host_configuration flag.
+   * Gets the correct host configuration for this build. The behavior
+   * depends on the value of the --distinct_host_configuration flag.
    *
-   * <p>With --distinct_host_configuration=false, we use identical configurations for the host and
-   * target, and you can ignore everything below. But please note: if you're cross-compiling for k8
-   * on a piii machine, your build will fail. This is a stopgap measure.
+   * <p>With --distinct_host_configuration=false, we use identical configurations
+   * for the host and target, and you can ignore everything below.  But please
+   * note: if you're cross-compiling for k8 on a piii machine, your build will
+   * fail.  This is a stopgap measure.
    *
-   * <p>Currently, every build is (in effect) a cross-compile, in the strict sense that host and
-   * target configurations are unequal, thus we do not issue a "cross-compiling" warning. (Perhaps
-   * we should?) *
-   *
-   * @param requestConfig the requested target (not host!) configuration for this build.
+   * <p>Currently, every build is (in effect) a cross-compile, in the strict
+   * sense that host and target configurations are unequal, thus we do not
+   * issue a "cross-compiling" warning.  (Perhaps we should?)
+   *   *
+   * @param requestConfig the requested target (not host!) configuration for
+   *   this build.
    * @param buildOptions the configuration options used for the target configuration
    */
   @Nullable
-  private static BuildConfiguration getHostConfigurationFromRequest(
+  private BuildConfiguration getHostConfigurationFromRequest(
       ConfigurationFactory configurationFactory,
       PackageProviderForConfigurations loadedPackageProvider,
-      BuildConfiguration requestConfig,
-      BuildOptions buildOptions,
+      BuildConfiguration requestConfig, BuildOptions buildOptions,
       Cache<String, BuildConfiguration> cache)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
     BuildConfiguration.Options commonOptions = buildOptions.get(BuildConfiguration.Options.class);
     if (!commonOptions.useDistinctHostConfiguration) {
       return requestConfig;
@@ -184,6 +186,14 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
     }
 
     for (BuildConfiguration config : allConfigurations) {
+      Transitions outgoingTransitions =
+          new BazelTransitions(config, transitionBuilder.row(config),
+              // Split transitions must not have their own split transitions because then they
+              // would be applied twice due to a quirk in DependencyResolver. See the comment in
+              // DependencyResolver.resolveLateBoundAttributes().
+              splitTransitionsTable.values().contains(config)
+                  ? ImmutableListMultimap.<SplitTransition<?>, BuildConfiguration>of()
+                  : splitTransitionsTable);
       // We allow host configurations to be shared between target configurations. In that case, the
       // transitions may already be set.
       // TODO(bazel-team): Check that the transitions are identical, or even better, change the
@@ -192,23 +202,6 @@ public class BazelConfigurationCollection implements ConfigurationCollectionFact
       if (config.isHostConfiguration() && config.getTransitions() != null) {
         continue;
       }
-      boolean isSplitConfig = splitTransitionsTable.values().contains(config);
-      // When --experimental_multi_cpu is set, we create multiple target configurations that only
-      // differ by --cpu. We may therefore end up with multiple identical split configurations, if
-      // the split transition overwrites the cpu, which it usually does.
-      if (isSplitConfig && config.getTransitions() != null) {
-        continue;
-      }
-      Transitions outgoingTransitions =
-          new BazelTransitions(
-              config,
-              transitionBuilder.row(config),
-              // Split transitions must not have their own split transitions because then they
-              // would be applied twice due to a quirk in DependencyResolver. See the comment in
-              // DependencyResolver.resolveLateBoundAttributes().
-              isSplitConfig
-                  ? ImmutableListMultimap.<SplitTransition<?>, BuildConfiguration>of()
-                  : splitTransitionsTable);
       config.setConfigurationTransitions(outgoingTransitions);
     }
 

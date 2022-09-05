@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertEventCount;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertEventCountAtLeast;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -49,7 +48,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.testutil.Suite;
 import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -61,6 +59,7 @@ import com.google.devtools.build.skyframe.NotifyingHelper.Listener;
 import com.google.devtools.build.skyframe.NotifyingHelper.Order;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.TrackingAwaiter;
+
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.concurrent.CountDownLatch;
@@ -152,10 +151,7 @@ public class BuildViewTest extends BuildViewTestBase {
     OutputFileConfiguredTarget outputCT = (OutputFileConfiguredTarget)
         getConfiguredTarget("//pkg:a.out");
     Artifact outputArtifact = outputCT.getArtifact();
-    assertEquals(
-        outputCT.getConfiguration().getBinDirectory(
-            outputCT.getTarget().getLabel().getPackageIdentifier().getRepository()),
-        outputArtifact.getRoot());
+    assertEquals(outputCT.getConfiguration().getBinDirectory(), outputArtifact.getRoot());
     assertEquals(outputCT.getConfiguration().getBinFragment().getRelative("pkg/a.out"),
         outputArtifact.getExecPath());
     assertEquals(new PathFragment("pkg/a.out"), outputArtifact.getRootRelativePath());
@@ -437,6 +433,8 @@ public class BuildViewTest extends BuildViewTestBase {
   }
 
   // Regression test: cycle node depends on error.
+  // Note that this test can have nondeterministic behavior in Skyframe, depending on if the cycle
+  // is detected during the bubbling-up phase.
   @Test
   public void testErrorBelowCycle() throws Exception {
     scratch.file("foo/BUILD",
@@ -447,12 +445,6 @@ public class BuildViewTest extends BuildViewTestBase {
         "sh_library(name = 'cycle2', deps = ['cycle1'])");
     scratch.file("badbuild/BUILD", "");
     reporter.removeHandler(failFastHandler);
-    injectGraphListenerForTesting(
-        new Listener() {
-          @Override
-          public void accept(SkyKey key, EventType type, Order order, Object context) {}
-        },
-        /*deterministic=*/ true);
     try {
       update("//foo:top");
       fail();
@@ -462,9 +454,11 @@ public class BuildViewTest extends BuildViewTestBase {
     assertContainsEvent("no such target '//badbuild:isweird': target 'isweird' not declared in "
         + "package 'badbuild'");
     assertContainsEvent("and referenced by '//foo:bad'");
-    assertContainsEvent("in sh_library rule //foo");
-    assertContainsEvent("cycle in dependency graph");
-    assertEventCountAtLeast(2, eventCollector);
+    if (eventCollector.count() > 1) {
+      assertContainsEvent("in sh_library rule //foo");
+      assertContainsEvent("cycle in dependency graph");
+      assertEventCount(3, eventCollector);
+    }
   }
 
   @Test
@@ -1271,18 +1265,12 @@ public class BuildViewTest extends BuildViewTestBase {
     scratch.file("foo/BUILD",
         "rule_with_latebound_split(",
         "    name = 'foo')",
-        "rule_with_test_fragment(",
-        "    name = 'latebound_dep')");
+        "sh_binary(",
+        "    name = 'latebound_dep',",
+        "    srcs = ['latebound_dep.sh'])");
     update("//foo:foo");
     assertNotNull(getConfiguredTarget("//foo:foo"));
-    Iterable<ConfiguredTarget> deps = SkyframeExecutorTestUtils.getExistingConfiguredTargets(
-        skyframeExecutor, Label.parseAbsolute("//foo:latebound_dep"));
-    assertThat(deps).hasSize(2);
-    assertThat(
-        ImmutableList.of(
-            LateBoundSplitUtil.getOptions(Iterables.get(deps, 0).getConfiguration()).fooFlag,
-            LateBoundSplitUtil.getOptions(Iterables.get(deps, 1).getConfiguration()).fooFlag))
-        .containsExactly("one", "two");
+    // TODO(bazel-team): also check that the dep is created in each expected configuration.
   }
 
   /** Runs the same test with the reduced loading phase. */

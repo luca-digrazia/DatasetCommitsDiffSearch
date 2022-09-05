@@ -34,7 +34,7 @@ import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.UnknownRuleConfiguredTarget;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
+
 import java.util.List;
 
 /**
@@ -44,11 +44,11 @@ public class LateBoundSplitUtil {
   /**
    * A custom {@link FragmentOptions} with the option to be split.
    */
-  public static class TestOptions extends FragmentOptions { // public for options loader
+  public static class Options extends FragmentOptions { // public for options loader
     @Option(
       name = "foo",
       defaultValue = "",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
+      category = "undocumented"
     )
     public String fooFlag;
 
@@ -66,9 +66,9 @@ public class LateBoundSplitUtil {
     @Override
     public List<BuildOptions> split(BuildOptions buildOptions) {
       BuildOptions split1 = buildOptions.clone();
-      split1.get(TestOptions.class).fooFlag = "one";
+      split1.get(Options.class).fooFlag = "one";
       BuildOptions split2 = buildOptions.clone();
-      split2.get(TestOptions.class).fooFlag = "two";
+      split2.get(Options.class).fooFlag = "two";
       return ImmutableList.<BuildOptions>of(split1, split2);
     }
 
@@ -81,7 +81,7 @@ public class LateBoundSplitUtil {
   /**
    * The {@link BuildConfiguration.Fragment} that contains the options.
    */
-  private static class TestFragment extends BuildConfiguration.Fragment {
+  private static class Fragment extends BuildConfiguration.Fragment {
   }
 
   /**
@@ -92,17 +92,17 @@ public class LateBoundSplitUtil {
     public BuildConfiguration.Fragment create(ConfigurationEnvironment env,
         BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      return new TestFragment();
+      return new Fragment();
     }
 
     @Override
     public Class<? extends BuildConfiguration.Fragment> creates() {
-     return TestFragment.class;
+     return Fragment.class;
     }
 
     @Override
     public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
-      return ImmutableSet.<Class<? extends FragmentOptions>>of(TestOptions.class);
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(Options.class);
     }
   }
 
@@ -129,7 +129,7 @@ public class LateBoundSplitUtil {
               .allowedRuleClasses(Attribute.ANY_RULE)
               .cfg(SIMPLE_SPLIT)
               .value(SIMPLE_LATEBOUND_RESOLVER))
-          .requiresConfigurationFragments(TestFragment.class)
+          .requiresConfigurationFragments(Fragment.class)
           .build();
     }
 
@@ -144,43 +144,14 @@ public class LateBoundSplitUtil {
   }
 
   /**
-   * A custom rule that requires {@link TestFragment}.
-   */
-  static class RuleWithTestFragment implements RuleDefinition {
-    @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
-      return builder
-          .requiresConfigurationFragments(TestFragment.class)
-          .build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("rule_with_test_fragment")
-          .ancestors(BaseRuleClasses.RuleBase.class)
-          .factoryClass(UnknownRuleConfiguredTarget.class)
-          .build();
-    }
-  }
-
-  /**
    * Returns a rule class provider with standard test setup plus the above rules/configs.
    */
   static ConfiguredRuleClassProvider getRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
     builder.addRuleDefinition(new RuleWithLateBoundSplitAttribute());
-    builder.addRuleDefinition(new RuleWithTestFragment());
     builder.addConfigurationFragment(new FragmentLoader());
-    builder.addConfigurationOptions(TestOptions.class);
+    builder.addConfigurationOptions(Options.class);
     return builder.build();
-  }
-
-  /**
-   * Returns the {@link TestOptions} from the given configuration.
-   */
-  static TestOptions getOptions(BuildConfiguration config) {
-    return config.getOptions().get(TestOptions.class);
   }
 }

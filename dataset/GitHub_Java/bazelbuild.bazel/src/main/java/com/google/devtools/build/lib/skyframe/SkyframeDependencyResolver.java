@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -32,10 +31,12 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -45,8 +46,7 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
 
   private final Environment env;
 
-  public SkyframeDependencyResolver(Environment env, DynamicTransitionMapper transitionMapper) {
-    super(transitionMapper);
+  public SkyframeDependencyResolver(Environment env) {
     this.env = env;
   }
 
@@ -65,8 +65,7 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
   }
 
   @Override
-  protected void missingEdgeHook(Target from, Label to, NoSuchThingException e)
-      throws InterruptedException {
+  protected void missingEdgeHook(Target from, Label to, NoSuchThingException e) {
     if (e instanceof NoSuchTargetException) {
       NoSuchTargetException nste = (NoSuchTargetException) e;
       if (to.equals(nste.getLabel())) {
@@ -88,8 +87,7 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
 
   @Nullable
   @Override
-  protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses)
-      throws InterruptedException {
+  protected Target getTarget(Target from, Label label, NestedSetBuilder<Label> rootCauses) {
     SkyKey key = PackageValue.key(label.getPackageIdentifier());
     PackageValue packageValue;
     try {
@@ -127,8 +125,7 @@ public final class SkyframeDependencyResolver extends DependencyResolver {
   @Override
   protected List<BuildConfiguration> getConfigurations(
       Set<Class<? extends BuildConfiguration.Fragment>> fragments,
-      Iterable<BuildOptions> buildOptions)
-      throws InvalidConfigurationException, InterruptedException {
+      Iterable<BuildOptions> buildOptions) throws InvalidConfigurationException {
     List<SkyKey> keys = new ArrayList<>();
     for (BuildOptions options : buildOptions) {
       keys.add(BuildConfigurationValue.key(fragments, options));
