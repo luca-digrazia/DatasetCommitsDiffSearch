@@ -31,6 +31,7 @@ import org.junit.runners.JUnit4;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 
 /**
  * This class tests the FilesystemUtils class.
@@ -105,7 +106,7 @@ public class FilesystemUtilsTest {
     try {
       FilesystemUtils.setWritable(foo);
       fail("Expected FilePermissionException, but wasn't thrown.");
-    } catch (FilePermissionException e) {
+    } catch (IOException e) {
       assertThat(e).hasMessage(foo + " (Operation not permitted)");
     }
   }
