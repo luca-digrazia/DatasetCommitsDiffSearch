@@ -17,7 +17,7 @@ import com.google.common.base.MoreObjects;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.StartTag;
 import com.google.devtools.build.android.AndroidResourceClassWriter;
-import com.google.devtools.build.android.DataSource;
+import com.google.devtools.build.android.DataResourceXml;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
@@ -27,6 +27,7 @@ import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml.XmlT
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.file.Path;
 import java.util.Objects;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -64,11 +65,11 @@ public class IdXmlResourceValue implements XmlResourceValue {
 
   @Override
   public void write(
-      FullyQualifiedName key, DataSource source, AndroidDataWritingVisitor mergedDataWriter) {
-    if (!source.isInValuesFolder()) {
+      FullyQualifiedName key, Path source, AndroidDataWritingVisitor mergedDataWriter) {
+    if (!DataResourceXml.isInValuesFolder(source)) {
       /* Don't write IDs that were never defined in values, into the merged values.xml, to preserve
        * the way initializers are assigned in the R class. Depends on
-       * DataSource#combine to accurately determine when a value is ever defined in a
+       * DataResourceXml#combineSources to accurately determine when a value is ever defined in a
        * values file.
        */
       return;

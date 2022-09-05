@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.ide.common.res2.MergingException;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.Iterables;
@@ -22,9 +21,15 @@ import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.android.ParsedAndroidData.Builder;
 import com.google.devtools.build.android.ParsedAndroidData.ParsedAndroidDataBuildingPathWalker;
+
+import com.android.ide.common.res2.MergingException;
+
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributeView;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -47,12 +52,12 @@ public class AndroidDataMerger {
 
     private final AndroidDataSerializer serializer;
 
-    private final SerializedAndroidData dependency;
+    private final DependencyAndroidData dependency;
 
     private final Builder targetBuilder;
 
     private ParseDependencyDataTask(
-        AndroidDataSerializer serializer, SerializedAndroidData dependency, Builder targetBuilder) {
+        AndroidDataSerializer serializer, DependencyAndroidData dependency, Builder targetBuilder) {
       this.serializer = serializer;
       this.dependency = dependency;
       this.targetBuilder = targetBuilder;
@@ -65,12 +70,13 @@ public class AndroidDataMerger {
         dependency.deserialize(serializer, parsedDataBuilder.consumers());
       } catch (DeserializationException e) {
         if (!e.isLegacy()) {
-          throw MergingException.wrapException(e).build();
+          throw new MergingException(e);
         }
+        //TODO(corysmith): List the offending target here.
         logger.fine(
             String.format(
                 "\u001B[31mDEPRECATION:\u001B[0m Legacy resources used for %s",
-                dependency.getLabel()));
+                dependency.getManifest()));
         // Legacy android resources -- treat them as direct dependencies.
         dependency.walk(ParsedAndroidDataBuildingPathWalker.create(parsedDataBuilder));
       }
@@ -87,7 +93,7 @@ public class AndroidDataMerger {
 
   /** Interface for comparing paths. */
   interface SourceChecker {
-    boolean checkEquality(DataSource one, DataSource two) throws IOException;
+    boolean checkEquality(Path one, Path two) throws IOException;
   }
 
   /** Compares two paths by the contents of the files. */
@@ -98,13 +104,13 @@ public class AndroidDataMerger {
     }
 
     @Override
-    public boolean checkEquality(DataSource one, DataSource two) throws IOException {
+    public boolean checkEquality(Path one, Path two) throws IOException {
       // TODO(corysmith): Is there a filesystem hash we can use?
-      if (one.getFileSize() != two.getFileSize()) {
+      if (getFileSize(one) != getFileSize(two)) {
         return false;
       }
-      try (final InputStream oneStream = one.newBufferedInputStream();
-          final InputStream twoStream = two.newBufferedInputStream()) {
+      try (final InputStream oneStream = new BufferedInputStream(Files.newInputStream(one));
+          final InputStream twoStream = new BufferedInputStream(Files.newInputStream(two))) {
         int bytesRead = 0;
         while (true) {
           int oneByte = oneStream.read();
@@ -118,7 +124,11 @@ public class AndroidDataMerger {
               logger.severe(
                   String.format(
                       "Filesystem size of %s (%s) or %s (%s) is inconsistant with bytes read %s.",
-                      one, one.getFileSize(), two, two.getFileSize(), bytesRead));
+                      one,
+                      getFileSize(one),
+                      two,
+                      getFileSize(two),
+                      bytesRead));
               return false;
             }
           }
@@ -129,6 +139,9 @@ public class AndroidDataMerger {
       }
     }
 
+    private long getFileSize(Path path) throws IOException {
+      return Files.getFileAttributeView(path, BasicFileAttributeView.class).readAttributes().size();
+    }
   }
 
   static class NoopSourceChecker implements SourceChecker {
@@ -137,7 +150,7 @@ public class AndroidDataMerger {
     }
 
     @Override
-    public boolean checkEquality(DataSource one, DataSource two) {
+    public boolean checkEquality(Path one, Path two) {
       return false;
     }
   }
@@ -174,17 +187,15 @@ public class AndroidDataMerger {
   }
 
   /**
-   * Loads a list of dependency {@link SerializedAndroidData} and merge with the primary {@link
-   * ParsedAndroidData}.
+   * Merges a list of {@link DependencyAndroidData} with a {@link UnvalidatedAndroidData}.
    *
    * @see AndroidDataMerger#merge(ParsedAndroidData, ParsedAndroidData, UnvalidatedAndroidData,
-   *     boolean) for details.
+   *    boolean) for details.
    */
-  UnwrittenMergedAndroidData loadAndMerge(
-      List<? extends SerializedAndroidData> transitive,
-      List<? extends SerializedAndroidData> direct,
-      ParsedAndroidData primary,
-      Path primaryManifest,
+  UnwrittenMergedAndroidData merge(
+      List<DependencyAndroidData> transitive,
+      List<DependencyAndroidData> direct,
+      UnvalidatedAndroidData primary,
       boolean allowPrimaryOverrideAll)
       throws MergingException {
     Stopwatch timer = Stopwatch.createStarted();
@@ -193,12 +204,12 @@ public class AndroidDataMerger {
       final ParsedAndroidData.Builder transitiveBuilder = ParsedAndroidData.Builder.newBuilder();
       final AndroidDataSerializer serializer = AndroidDataSerializer.create();
       final List<ListenableFuture<Boolean>> tasks = new ArrayList<>();
-      for (final SerializedAndroidData dependency : direct) {
+      for (final DependencyAndroidData dependency : direct) {
         tasks.add(
             executorService.submit(
                 new ParseDependencyDataTask(serializer, dependency, directBuilder)));
       }
-      for (final SerializedAndroidData dependency : transitive) {
+      for (final DependencyAndroidData dependency : transitive) {
         tasks.add(
             executorService.submit(
                 new ParseDependencyDataTask(serializer, dependency, transitiveBuilder)));
@@ -211,12 +222,8 @@ public class AndroidDataMerger {
       logger.fine(
           String.format("Merged dependencies read in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
       timer.reset().start();
-      return doMerge(
-          transitiveBuilder.build(),
-          directBuilder.build(),
-          primary,
-          primaryManifest,
-          allowPrimaryOverrideAll);
+      return merge(
+          transitiveBuilder.build(), directBuilder.build(), primary, allowPrimaryOverrideAll);
     } finally {
       logger.fine(String.format("Resources merged in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
     }
@@ -281,7 +288,7 @@ public class AndroidDataMerger {
    * @return An UnwrittenMergedAndroidData, containing DataResource objects that can be written to
    *    disk for aapt processing or serialized for future merge passes.
    * @throws MergingException if there are merge conflicts or issues with parsing resources from
-   *    primaryData.
+   *    Primary.
    */
   UnwrittenMergedAndroidData merge(
       ParsedAndroidData transitive,
@@ -289,30 +296,18 @@ public class AndroidDataMerger {
       UnvalidatedAndroidData primaryData,
       boolean allowPrimaryOverrideAll)
       throws MergingException {
+
     try {
       // Extract the primary resources.
       ParsedAndroidData parsedPrimary = ParsedAndroidData.from(primaryData);
-      return doMerge(
-          transitive, direct, parsedPrimary, primaryData.getManifest(), allowPrimaryOverrideAll);
-    } catch (IOException e) {
-      throw MergingException.wrapException(e).build();
-    }
-  }
 
-  private UnwrittenMergedAndroidData doMerge(
-      ParsedAndroidData transitive,
-      ParsedAndroidData direct,
-      ParsedAndroidData parsedPrimary,
-      Path primaryManifest,
-      boolean allowPrimaryOverrideAll)
-      throws MergingException {
-    try {
       // Create the builders for the final parsed data.
       final ParsedAndroidData.Builder primaryBuilder = ParsedAndroidData.Builder.newBuilder();
       final ParsedAndroidData.Builder transitiveBuilder = ParsedAndroidData.Builder.newBuilder();
       final KeyValueConsumers transitiveConsumers = transitiveBuilder.consumers();
       final KeyValueConsumers primaryConsumers = primaryBuilder.consumers();
 
+      
       final Set<MergeConflict> conflicts = new HashSet<>();
       conflicts.addAll(parsedPrimary.conflicts());
       for (MergeConflict conflict : Iterables.concat(direct.conflicts(), transitive.conflicts())) {
@@ -425,11 +420,11 @@ public class AndroidDataMerger {
       }
 
       return UnwrittenMergedAndroidData.of(
-          primaryManifest,
+          primaryData.getManifest(),
           primaryBuilder.build(),
           transitiveBuilder.build());
     } catch (IOException e) {
-      throw MergingException.wrapException(e).build();
+      throw new MergingException(e);
     }
   }
 }

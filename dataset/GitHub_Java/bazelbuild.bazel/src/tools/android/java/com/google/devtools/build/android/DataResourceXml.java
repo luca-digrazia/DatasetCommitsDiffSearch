@@ -17,6 +17,7 @@ import static com.android.resources.ResourceType.DECLARE_STYLEABLE;
 import static com.android.resources.ResourceType.ID;
 import static com.android.resources.ResourceType.PUBLIC;
 
+import com.android.SdkConstants;
 import com.android.resources.ResourceType;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
@@ -133,8 +134,7 @@ public class DataResourceXml implements DataResource {
   }
 
   @SuppressWarnings("deprecation")
-  // TODO(corysmith): Update proto to use get<>Map
-  public static DataValue from(SerializeFormat.DataValue protoValue, DataSource source)
+  public static DataValue from(SerializeFormat.DataValue protoValue, Path source)
       throws InvalidProtocolBufferException {
     DataValueXml xmlValue = protoValue.getXmlValue();
     return createWithNamespaces(
@@ -225,37 +225,32 @@ public class DataResourceXml implements DataResource {
     return ResourceType.getEnum(start.getName().getLocalPart());
   }
 
-  private final DataSource source;
+  private final Path source;
   private final XmlResourceValue xml;
   private final Namespaces namespaces;
 
-  private DataResourceXml(DataSource source, XmlResourceValue xmlValue, Namespaces namespaces) {
+  private DataResourceXml(Path source, XmlResourceValue xmlValue, Namespaces namespaces) {
     this.source = source;
     this.xml = xmlValue;
     this.namespaces = namespaces;
   }
 
-  public static DataResourceXml createWithNoNamespace(Path sourcePath, XmlResourceValue xml) {
-    return createWithNamespaces(sourcePath, xml, ImmutableMap.<String, String>of());
+  public static DataResourceXml createWithNoNamespace(Path source, XmlResourceValue xml) {
+    return createWithNamespaces(source, xml, ImmutableMap.<String, String>of());
   }
 
   public static DataResourceXml createWithNamespaces(
-      Path sourcePath, XmlResourceValue xml, ImmutableMap<String, String> prefixToUri) {
-    return createWithNamespaces(sourcePath, xml, Namespaces.from(prefixToUri));
+      Path source, XmlResourceValue xml, ImmutableMap<String, String> prefixToUri) {
+    return createWithNamespaces(source, xml, Namespaces.from(prefixToUri));
   }
 
   public static DataResourceXml createWithNamespaces(
-      DataSource source, XmlResourceValue xml, Namespaces namespaces) {
+      Path source, XmlResourceValue xml, Namespaces namespaces) {
     return new DataResourceXml(source, xml, namespaces);
   }
 
-  public static DataResourceXml createWithNamespaces(
-      Path sourcePath, XmlResourceValue xml, Namespaces namespaces) {
-    return createWithNamespaces(DataSource.of(sourcePath), xml, namespaces);
-  }
-
   @Override
-  public DataSource source() {
+  public Path source() {
     return source;
   }
 
@@ -316,7 +311,23 @@ public class DataResourceXml implements DataResource {
         namespaces.union(xmlResource.namespaces));
   }
 
-  private DataSource combineSources(DataSource otherSource) {
-    return source.combine(otherSource);
+  private Path combineSources(Path otherSource) {
+    // TODO(corysmith): Combine the sources so that we know both of the originating files.
+    // For now, prefer sources that have explicit definitions (values/ and not layout/), since the
+    // values are ultimately written out to a merged values.xml. Sources from layout/menu, etc.
+    // can come from "@+id" definitions.
+    boolean thisInValuesFolder = isInValuesFolder(source);
+    boolean otherInValuesFolder = isInValuesFolder(otherSource);
+    if (thisInValuesFolder && !otherInValuesFolder) {
+      return source;
+    }
+    if (!thisInValuesFolder && otherInValuesFolder) {
+      return otherSource;
+    }
+    return source;
+  }
+
+  public static boolean isInValuesFolder(Path source) {
+    return source.getParent().getFileName().toString().startsWith(SdkConstants.FD_RES_VALUES);
   }
 }

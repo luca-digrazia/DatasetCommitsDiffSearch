@@ -85,8 +85,7 @@ public class ParsedAndroidData {
     private void checkForErrors() throws MergingException {
       if (!errors.isEmpty()) {
         MergingException mergingException =
-             MergingException
-                 .withMessage(String.format("%s Parse Error(s)", errors.size())).build();
+            new MergingException(String.format("%s Parse Error(s)", errors.size()));
         for (Exception e : errors) {
           mergingException.addSuppressed(e);
         }
@@ -176,15 +175,10 @@ public class ParsedAndroidData {
     @Override
     public void consume(K key, V value) {
       if (target.containsKey(key)) {
-        V other = target.get(key);
-        conflicts.add(MergeConflict.between(key, value, other));
-        if (!other.source().hasOveridden(value.source())) {
-          // Only replace it if the previous value has explicitly replaced the current.
-          target.put(key, value);
-        }
-      } else {
-        target.put(key, value);
+        conflicts.add(MergeConflict.between(key, value, target.get(key)));
       }
+      // Always record the value, conflict or not, to maintain backwards compatibility.
+      target.put(key, value);
     }
   }
 
@@ -277,8 +271,7 @@ public class ParsedAndroidData {
     @Override
     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs)
         throws IOException {
-      final String[] dirNameAndQualifiers = dir.getFileName().toString().split(
-          SdkConstants.RES_QUALIFIER_SEP);
+      final String[] dirNameAndQualifiers = dir.getFileName().toString().split("-");
       folderType = ResourceFolderType.getTypeByName(dirNameAndQualifiers[0]);
       if (folderType == null) {
         return FileVisitResult.CONTINUE;
@@ -468,7 +461,7 @@ public class ParsedAndroidData {
     return assets;
   }
 
-  public boolean containsOverwritable(DataKey name) {
+  boolean containsOverwritable(DataKey name) {
     return overwritingResources.containsKey(name);
   }
 
@@ -476,45 +469,11 @@ public class ParsedAndroidData {
     return combiningResources.containsKey(key);
   }
 
-  public DataResource getOverwritable(DataKey name) {
-    return overwritingResources.get(name);
-  }
-
-  void writeResourcesTo(AndroidResourceClassWriter writer) {
-    for (Entry<DataKey, DataResource> resource : iterateDataResourceEntries()) {
-      resource.getValue().writeResourceToClass((FullyQualifiedName) resource.getKey(), writer);
-    }
-  }
-
-  void writeResourcesTo(AndroidDataWriter writer) throws MergingException {
-    for (Entry<DataKey, DataResource> resource : iterateDataResourceEntries()) {
-      resource.getValue().writeResource((FullyQualifiedName) resource.getKey(), writer);
-    }
-  }
-  
-  void serializeResourcesTo(AndroidDataSerializer serializer) {
-    for (Entry<DataKey, DataResource> resource : iterateDataResourceEntries()) {
-      serializer.queueForSerialization(resource.getKey(), resource.getValue());
-    }
-  }
-
-  void writeAssetsTo(AndroidDataWriter writer) throws IOException {
-    for (Entry<DataKey, DataAsset> resource : iterateAssetEntries()) {
-      resource.getValue().writeAsset((RelativeAssetPath) resource.getKey(), writer);
-    }
-  }
- 
-  void serializeAssetsTo(AndroidDataSerializer serializer) {
-    for (Entry<DataKey, DataAsset> resource : iterateAssetEntries()) {
-      serializer.queueForSerialization(resource.getKey(), resource.getValue());
-    }
-  }
-
   Iterable<Entry<DataKey, DataResource>> iterateOverwritableEntries() {
     return overwritingResources.entrySet();
   }
 
-  private Iterable<Entry<DataKey, DataResource>> iterateDataResourceEntries() {
+  Iterable<Entry<DataKey, DataResource>> iterateDataResourceEntries() {
     return Iterables.concat(overwritingResources.entrySet(), combiningResources.entrySet());
   }
 
@@ -541,9 +500,5 @@ public class ParsedAndroidData {
 
   ImmutableSet<MergeConflict> conflicts() {
     return conflicts;
-  }
-
-  public DataAsset getAsset(DataKey key) {
-    return assets.get(key);
   }
 }
