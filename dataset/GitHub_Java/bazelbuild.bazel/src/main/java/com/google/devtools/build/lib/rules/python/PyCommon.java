@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -275,13 +274,13 @@ public final class PyCommon {
   }
 
   private NestedSet<Artifact> getTransitivePythonSourcesFromSkylarkProvider(
-      TransitiveInfoCollection dep) {
+          TransitiveInfoCollection dep) {
     SkylarkClassObject pythonSkylarkProvider = null;
     SkylarkProviders skylarkProviders = dep.getProvider(SkylarkProviders.class);
     try {
       if (skylarkProviders != null) {
         pythonSkylarkProvider = skylarkProviders.getValue(PYTHON_SKYLARK_PROVIDER_NAME,
-            SkylarkClassObject.class);
+                SkylarkClassObject.class);
       }
 
       if (pythonSkylarkProvider != null) {
@@ -293,11 +292,11 @@ public final class PyCommon {
           errorType = EvalUtils.getDataTypeNameFromClass(sourceFiles.getClass());
         }
         String errorMsg = "Illegal Argument: attribute '%s' in provider '%s' is "
-            + "of unexpected type. Should be a set, but got a '%s'";
+                + "of unexpected type. Should be a set, but got a '%s'";
         NestedSet<Artifact> pythonSourceFiles = SkylarkType.cast(
-            sourceFiles, SkylarkNestedSet.class, Artifact.class, null,
-            errorMsg, TRANSITIVE_PYTHON_SRCS, PYTHON_SKYLARK_PROVIDER_NAME, errorType)
-            .getSet(Artifact.class);
+                sourceFiles, SkylarkNestedSet.class, Artifact.class, null,
+                errorMsg, TRANSITIVE_PYTHON_SRCS, PYTHON_SKYLARK_PROVIDER_NAME, errorType)
+                .getSet(Artifact.class);
         return pythonSourceFiles;
       }
     } catch (EvalException e) {
@@ -561,8 +560,7 @@ public final class PyCommon {
   }
 
   // Used purely to set the legacy ActionType of the ExtraActionInfo.
-  @Immutable
-  private static final class PyPseudoAction extends PseudoAction<PythonInfo> {
+  private static class PyPseudoAction extends PseudoAction<PythonInfo> {
     private static final UUID ACTION_UUID = UUID.fromString("8d720129-bc1a-481f-8c4c-dbe11dcef319");
 
     public PyPseudoAction(ActionOwner owner,
@@ -570,6 +568,11 @@ public final class PyCommon {
         String mnemonic, GeneratedExtension<ExtraActionInfo, PythonInfo> infoExtension,
         PythonInfo info) {
       super(ACTION_UUID, owner, inputs, outputs, mnemonic, infoExtension, info);
+    }
+
+    @Override
+    public ExtraActionInfo.Builder getExtraActionInfo() {
+      return super.getExtraActionInfo();
     }
   }
 }
