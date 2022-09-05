@@ -809,16 +809,6 @@ public class ObjcRuleClasses {
          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("infoplist", LABEL)
             .allowedFileTypes(PLIST_TYPE))
-        /* <!-- #BLAZE_RULE($objc_bundling_rule).ATTRIBUTE(families) -->
-        The device families to which this bundle or binary is targeted.
-        ${SYNOPSIS}
-
-        This is known as the <code>TARGETED_DEVICE_FAMILY</code> build setting
-        in Xcode project files. It is a list of one or more of the strings
-        <code>"iphone"</code> and <code>"ipad"</code>.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-        .add(attr("families", STRING_LIST)
-             .value(ImmutableList.of(TargetDeviceFamily.IPHONE.getNameInRule())))
         .add(attr("$momczip_deploy", LABEL).cfg(HOST)
             .value(env.getLabel("//tools/objc:momczip_deploy.jar")))
         .build();
@@ -911,9 +901,7 @@ public class ObjcRuleClasses {
           The bundle ID (reverse-DNS path followed by app name) of the binary.
           ${SYNOPSIS}
 
-          If specified, it will override the bundle ID specified in the associated plist file. If
-          no bundle ID is specified on either this attribute or in the plist file, a junk value
-          will be used.
+          If none is specified, a junk value will be used.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("bundle_id", STRING)
               .value(new Attribute.ComputedDefault() {
@@ -924,6 +912,16 @@ public class ObjcRuleClasses {
                   return "example." + rule.getName();
                 }
               }))
+          /* <!-- #BLAZE_RULE($objc_release_bundling_rule).ATTRIBUTE(families) -->
+          The device families to which this binary is targeted.
+          ${SYNOPSIS}
+
+          This is known as the <code>TARGETED_DEVICE_FAMILY</code> build setting
+          in Xcode project files. It is a list of one or more of the strings
+          <code>"iphone"</code> and <code>"ipad"</code>.
+          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
+          .add(attr("families", STRING_LIST)
+              .value(ImmutableList.of(TargetDeviceFamily.IPHONE.getNameInRule())))
           .add(attr("$bundlemerge", LABEL).cfg(HOST).exec()
               .value(env.getLabel("//tools/objc:bundlemerge")))
           .build();

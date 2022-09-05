@@ -130,10 +130,6 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
         .addNonPropagatedDependencies(
             xcodeProviderBuilder, new Attribute("non_propagated_deps", Mode.TARGET))
         .addFilesToBuild(filesToBuild);
-
-    if (productType != XcodeProductType.LIBRARY_STATIC) {
-        xcodeSupport.generateCompanionLibXcodeTarget(xcodeProviderBuilder);
-    }
     XcodeProvider xcodeProvider = xcodeProviderBuilder.build();
     xcodeSupport.registerActions(xcodeProvider);
 

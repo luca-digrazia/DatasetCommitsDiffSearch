@@ -81,8 +81,7 @@ final class ObjcActionsBuilder {
   }
 
   private static ByteSource xcodegenControlFileBytes(
-      final Artifact pbxproj, final XcodeProvider.Project project,
-      final ObjcConfiguration objcConfiguration) {
+      final Artifact pbxproj, final XcodeProvider.Project project, final String minimumOs) {
     return new ByteSource() {
       @Override
       public InputStream openStream() {
@@ -91,11 +90,7 @@ final class ObjcActionsBuilder {
             .addAllTarget(project.targets())
             .addBuildSetting(XcodeGenProtos.XcodeprojBuildSetting.newBuilder()
                 .setName("IPHONEOS_DEPLOYMENT_TARGET")
-                .setValue(objcConfiguration.getMinimumOs())
-                .build())
-            .addBuildSetting(XcodeGenProtos.XcodeprojBuildSetting.newBuilder()
-                .setName("DEBUG_INFORMATION_FORMAT")
-                .setValue(objcConfiguration.generateDebugSymbols() ? "dwarf-with-dsym" : "dwarf")
+                .setValue(minimumOs)
                 .build())
             .build()
             .toByteString()
@@ -113,7 +108,7 @@ final class ObjcActionsBuilder {
     register(new BinaryFileWriteAction(
         context.getActionOwner(),
         controlFile,
-        xcodegenControlFileBytes(pbxproj, project, objcConfiguration),
+        xcodegenControlFileBytes(pbxproj, project, objcConfiguration.getMinimumOs()),
         /*makeExecutable=*/false));
     register(new SpawnAction.Builder()
         .setMnemonic("GenerateXcodeproj")
