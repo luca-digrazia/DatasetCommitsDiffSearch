@@ -240,7 +240,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(cppLinkInfo.getBuildInfoHeaderArtifactList())
         .containsExactlyElementsIn(buildInfoHeaderArtifacts);
     assertThat(cppLinkInfo.getLinkOptList())
-        .containsExactlyElementsIn(action.getLinkCommandLine().getRawLinkArgv());
+        .containsExactlyElementsIn(action.getLinkCommandLine().getLinkopts());
   }
 
   @Test
@@ -262,6 +262,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         LinkerInputs.toLibraryArtifacts(action.getLinkCommandLine().getLinkerInputs()));
     assertThat(cppLinkInfo.getInputFileList()).containsExactlyElementsIn(inputs);
     assertEquals(action.getPrimaryOutput().getExecPathString(), cppLinkInfo.getOutputFile());
+    Artifact interfaceOutput = action.getLinkCommandLine().getInterfaceOutput();
+    assertEquals(interfaceOutput.getExecPathString(), cppLinkInfo.getInterfaceOutputFile());
     assertEquals(action.getLinkCommandLine().getLinkTargetType().name(),
         cppLinkInfo.getLinkTargetType());
     assertEquals(action.getLinkCommandLine().getLinkStaticness().name(),
@@ -274,7 +276,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     assertThat(cppLinkInfo.getBuildInfoHeaderArtifactList())
         .containsExactlyElementsIn(buildInfoHeaderArtifacts);
     assertThat(cppLinkInfo.getLinkOptList())
-        .containsExactlyElementsIn(action.getLinkCommandLine().getRawLinkArgv());
+        .containsExactlyElementsIn(action.getLinkCommandLine().getLinkopts());
   }
 
   /**
@@ -366,7 +368,9 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
       fail("Should fail");
     } catch (AssertionError e) {
       assertThat(e.getMessage())
-          .contains("Invalid toolchain configuration: Cannot find variable named 'bad_variable'");
+          .contains(
+              "Invalid toolchain configuration: unknown variable 'bad_variable' "
+                  + "can not be expanded.");
     }
   }
 
