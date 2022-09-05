@@ -32,6 +32,7 @@ import com.google.common.eventbus.SubscriberExceptionContext;
 import com.google.common.eventbus.SubscriberExceptionHandler;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.Uninterruptibles;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.CompactPersistentActionCache;
 import com.google.devtools.build.lib.actions.cache.NullActionCache;
@@ -70,7 +71,6 @@ import com.google.devtools.build.lib.runtime.commands.RunCommand;
 import com.google.devtools.build.lib.runtime.commands.ShutdownCommand;
 import com.google.devtools.build.lib.runtime.commands.TestCommand;
 import com.google.devtools.build.lib.runtime.commands.VersionCommand;
-import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.server.RPCServer;
 import com.google.devtools.build.lib.server.ServerCommand;
 import com.google.devtools.build.lib.server.signal.InterruptSignalHandler;
@@ -168,8 +168,6 @@ public final class BlazeRuntime {
   private final BinTools binTools;
   private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
   private final ProjectFile.Provider projectFileProvider;
-  @Nullable
-  private final InvocationPolicy invocationPolicy;
 
   // Workspace state (currently exactly one workspace per server)
   private final BlazeDirectories directories;
@@ -189,7 +187,7 @@ public final class BlazeRuntime {
       TimestampGranularityMonitor timestampGranularityMonitor,
       SubscriberExceptionHandler eventBusExceptionHandler,
       BinTools binTools, ProjectFile.Provider projectFileProvider,
-      InvocationPolicy invocationPolicy, Iterable<BlazeCommand> commands) {
+      Iterable<BlazeCommand> commands) {
     // Server state
     this.blazeModules = blazeModules;
     overrideCommands(commands);
@@ -198,7 +196,6 @@ public final class BlazeRuntime {
     this.packageFactory = pkgFactory;
     this.binTools = binTools;
     this.projectFileProvider = projectFileProvider;
-    this.invocationPolicy = invocationPolicy;
 
     this.ruleClassProvider = ruleClassProvider;
     this.configurationFactory = configurationFactory;
@@ -216,21 +213,6 @@ public final class BlazeRuntime {
       writeDoNotBuildHereFile();
     }
     setupExecRoot();
-  }
-
-  private static InvocationPolicy createInvocationPolicyFromModules(
-      InvocationPolicy initialInvocationPolicy,
-      Iterable<BlazeModule> modules) {
-    InvocationPolicy.Builder builder = InvocationPolicy.newBuilder();
-    builder.mergeFrom(initialInvocationPolicy);
-    // Merge the policies from the modules
-    for (BlazeModule module : modules) {
-      InvocationPolicy modulePolicy = module.getInvocationPolicy();
-      if (modulePolicy != null) {
-        builder.mergeFrom(module.getInvocationPolicy());
-      }
-    }
-    return builder.build();
   }
 
   @Nullable CoverageReportActionFactory getCoverageReportActionFactory() {
@@ -282,11 +264,6 @@ public final class BlazeRuntime {
     // EventBus does not have an unregister() method, so this is how we release memory associated
     // with handlers.
     skyframeExecutor.setEventBus(null);
-  }
-
-  @Nullable
-  public InvocationPolicy getInvocationPolicy() {
-    return invocationPolicy;
   }
 
   /**
@@ -937,7 +914,7 @@ public final class BlazeRuntime {
 
     new InterruptSignalHandler() {
       @Override
-      protected void onSignal() {
+      public void run() {
         LOG.info("User interrupt");
         OutErr.SYSTEM_OUT_ERR.printErrLn("Blaze received an interrupt");
         mainThread.interrupt();
@@ -1131,9 +1108,6 @@ public final class BlazeRuntime {
     }
 
     BlazeServerStartupOptions startupOptions = options.getOptions(BlazeServerStartupOptions.class);
-    if (startupOptions.batch && startupOptions.oomMoreEagerly) {
-      new OomSignalHandler();
-    }
     PathFragment workspaceDirectory = startupOptions.workspaceDirectory;
     PathFragment installBase = startupOptions.installBase;
     PathFragment outputBase = startupOptions.outputBase;
@@ -1267,13 +1241,25 @@ public final class BlazeRuntime {
    * telemetry and the proper exit code is reported.
    */
   private static void setupUncaughtHandler(final String[] args) {
-    Thread.setDefaultUncaughtExceptionHandler(
-        new Thread.UncaughtExceptionHandler() {
-          @Override
-          public void uncaughtException(Thread thread, Throwable throwable) {
-            BugReport.handleCrash(throwable, args);
-          }
-        });
+    Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+      @Override
+      public void uncaughtException(Thread thread, Throwable throwable) {
+        try {
+          BugReport.handleCrash(throwable, args);
+        } catch (Throwable t) {
+          System.err.println("An exception was caught in " + Constants.PRODUCT_NAME + "'s "
+              + "UncaughtExceptionHandler, a bug report may not have been filed.");
+
+          System.err.println("Original uncaught exception:");
+          throwable.printStackTrace(System.err);
+
+          System.err.println("Exception encountered during UncaughtExceptionHandler:");
+          t.printStackTrace(System.err);
+
+          Runtime.getRuntime().halt(BugReport.getExitCodeForThrowable(throwable));
+        }
+      }
+    });
   }
 
 
@@ -1319,7 +1305,6 @@ public final class BlazeRuntime {
     private BinTools binTools;
     private UUID instanceId;
     private final List<BlazeCommand> commands = new ArrayList<>();
-    private InvocationPolicy invocationPolicy = InvocationPolicy.getDefaultInstance();
 
     public BlazeRuntime build() throws AbruptExitException {
       Preconditions.checkNotNull(directories);
@@ -1468,22 +1453,14 @@ public final class BlazeRuntime {
         }
       }
 
-      invocationPolicy = createInvocationPolicyFromModules(invocationPolicy, blazeModules);
-
       return new BlazeRuntime(directories, workspaceStatusActionFactory, skyframeExecutor,
           pkgFactory, ruleClassProvider, configurationFactory,
           clock, startupOptionsProvider, ImmutableList.copyOf(blazeModules),
-          timestampMonitor, eventBusExceptionHandler, binTools, projectFileProvider,
-          invocationPolicy, commands);
+          timestampMonitor, eventBusExceptionHandler, binTools, projectFileProvider, commands);
     }
 
     public Builder setBinTools(BinTools binTools) {
       this.binTools = binTools;
-      return this;
-    }
-
-    public Builder setInvocationPolicy(InvocationPolicy invocationPolicy) {
-      this.invocationPolicy = invocationPolicy;
       return this;
     }
 
