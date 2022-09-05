@@ -51,9 +51,9 @@ public class PathFragmentFilter implements Serializable {
 
       for (String piece : Splitter.on(',').split(input)) {
         if (piece.length() > 1 && piece.startsWith("-")) {
-          exclusionList.add(PathFragment.create(piece.substring(1)));
+          exclusionList.add(new PathFragment(piece.substring(1)));
         } else if (piece.length() > 0) {
-          inclusionList.add(PathFragment.create(piece));
+          inclusionList.add(new PathFragment(piece));
         }
       }
 
