@@ -25,8 +25,8 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -247,12 +247,10 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
   private CcLibraryHelper createCcLibraryHelper(ObjcProvider objcProvider,
       VariablesExtension extension) {
     PrecompiledFiles precompiledFiles = new PrecompiledFiles(ruleContext);
-    Collection<Artifact> arcSources = ImmutableSortedSet.copyOf(compilationArtifacts.getSrcs());
-    Collection<Artifact> nonArcSources =
-        ImmutableSortedSet.copyOf(compilationArtifacts.getNonArcSrcs());
-    Collection<Artifact> privateHdrs =
-        ImmutableSortedSet.copyOf(compilationArtifacts.getPrivateHdrs());
-    Collection<Artifact> publicHdrs = ImmutableSortedSet.copyOf(attributes.hdrs());
+    Collection<Artifact> arcSources = Sets.newHashSet(compilationArtifacts.getSrcs());
+    Collection<Artifact> nonArcSources = Sets.newHashSet(compilationArtifacts.getNonArcSrcs());
+    Collection<Artifact> privateHdrs = Sets.newHashSet(compilationArtifacts.getPrivateHdrs());
+    Collection<Artifact> publicHdrs = Sets.newHashSet(attributes.hdrs());
     Artifact pchHdr = ruleContext.getPrerequisiteArtifact("pch", Mode.TARGET);
     ImmutableList<Artifact> pchHdrList =
         (pchHdr != null) ? ImmutableList.<Artifact>of(pchHdr) : ImmutableList.<Artifact>of();
@@ -276,7 +274,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
         .addCopts(ruleContext.getFragment(ObjcConfiguration.class).getCoptsForCompilationMode())
         .addSystemIncludeDirs(objcProvider.get(INCLUDE_SYSTEM))
         .setCppModuleMap(intermediateArtifacts.moduleMap())
-        .setPropagateModuleMapToCompileAction(false)
         .addVariableExtension(extension);
   }
 
