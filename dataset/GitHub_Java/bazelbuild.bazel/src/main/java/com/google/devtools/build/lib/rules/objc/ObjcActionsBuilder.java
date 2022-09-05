@@ -325,7 +325,7 @@ final class ObjcActionsBuilder {
     ImmutableList.Builder<Action> result = new ImmutableList.Builder<>();
     for (Artifact original : xibFiles) {
       Artifact zipOutput = intermediateArtifacts.compiledXibFileZip(original);
-      String archiveRoot = BundleableFile.flatBundlePath(
+      String archiveRoot = BundleableFile.bundlePath(
           FileSystemUtils.replaceExtension(original.getExecPath(), ".nib"));
       result.add(ibtoolzipAction(baseTools, "XibCompile", original, zipOutput, archiveRoot));
     }
@@ -406,7 +406,7 @@ final class ObjcActionsBuilder {
   }
 
   void registerIbtoolzipAction(ObjcRuleClasses.Tools tools, Artifact input, Artifact outputZip) {
-    String archiveRoot = BundleableFile.flatBundlePath(input.getExecPath()) + "c";
+    String archiveRoot = BundleableFile.bundlePath(input.getExecPath()) + "c";
     register(ibtoolzipAction(tools, "StoryboardCompile", input, outputZip, archiveRoot));
   }
 
@@ -609,7 +609,8 @@ final class ObjcActionsBuilder {
   }
 
   /**
-   * Registers actions for resource conversion.
+   * Registers actions for resource conversion that are needed by all rules that inherit from
+   * {@link ObjcBase}.
    */
   void registerResourceActions(ObjcRuleClasses.Tools baseTools, StringsFiles stringsFiles,
       XibFiles xibFiles, Iterable<Xcdatamodel> datamodels) {
