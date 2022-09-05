@@ -38,9 +38,7 @@ import java.util.Set;
 
 @Configuration
 @ComponentScan("org.hswebframework.web.dao.mybatis")
-@MapperScan(value = "org.hswebframework.web.dao"
-        , markerInterface = Dao.class
-        ,sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(value = "org.hswebframework.web.dao", markerInterface = Dao.class)
 @AutoConfigureAfter(MyBatisAutoConfiguration.class)
 @EnableConfigurationProperties(MybatisProperties.class)
 public class MybatisDaoAutoConfiguration {
