@@ -1186,7 +1186,7 @@ public final class BuildConfiguration {
               + ".blazerc or continuous build"));
     }
 
-    if (trimConfigurations() && !options.useDistinctHostConfiguration) {
+    if (useDynamicConfigurations() && !options.useDistinctHostConfiguration) {
       reporter.handle(Event.error(
           "--nodistinct_host_configuration does not currently work with dynamic configurations"));
     }
