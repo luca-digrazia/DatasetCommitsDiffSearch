@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.Package.LegacyBuilder;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
@@ -41,15 +40,11 @@ import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.vfs.Path;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import javax.annotation.Nullable;
 
@@ -58,7 +53,6 @@ import javax.annotation.Nullable;
  */
 public class WorkspaceFactory {
   public static final String BIND = "bind";
-  private static final Pattern LEGAL_WORKSPACE_NAME = Pattern.compile("^\\p{Alpha}\\w*$");
 
   private final LegacyBuilder builder;
   
@@ -167,40 +161,23 @@ public class WorkspaceFactory {
     localReporter.clear();
   }
 
-  private static void checkWorkspaceName(String name, FuncallExpression ast) throws EvalException {
-    Matcher matcher = LEGAL_WORKSPACE_NAME.matcher(name);
-    if (!matcher.matches()) {
-      throw new EvalException(ast.getLocation(), name + " is not a legal workspace name");
-    }
-  }
-
-  @SkylarkSignature(name = "workspace", objectType = Object.class, returnType = SkylarkList.class,
-      doc = "Sets the name for this workspace. Workspace names should be a Java-package-style "
-          + "description of the project, using underscores as separators, e.g., "
-          + "github.com/bazelbuild/bazel should use com_github_bazelbuild_bazel. Names must start "
-          + "with a letter and can only contain letters, numbers, and underscores.",
-      mandatoryPositionals = {
-          @SkylarkSignature.Param(name = "name", type = String.class,
-              doc = "the name of the workspace.")},
-      documented = true, useAst = true, useEnvironment = true)
-  private static final BuiltinFunction.Factory newWorkspaceFunction =
-      new BuiltinFunction.Factory("workspace") {
-        public BuiltinFunction create() {
-          return new BuiltinFunction(
-              "workspace", FunctionSignature.namedOnly("name"), BuiltinFunction.USE_AST_ENV) {
-            public Object invoke(String name, FuncallExpression ast, Environment env)
-                throws EvalException {
-              checkWorkspaceName(name, ast);
-              String errorMessage = LabelValidator.validateTargetName(name);
-              if (errorMessage != null) {
-                throw new EvalException(ast.getLocation(), errorMessage);
-              }
-              PackageFactory.getContext(env, ast).pkgBuilder.setWorkspaceName(name);
-              return NONE;
-            }
-          };
+  // TODO(bazel-team): use @SkylarkSignature annotations on a BuiltinFunction.Factory
+  // for signature + documentation of this and other functions in this file.
+  private static BuiltinFunction newWorkspaceNameFunction() {
+    return new BuiltinFunction(
+        "workspace", FunctionSignature.namedOnly("name"), BuiltinFunction.USE_AST_ENV) {
+      public Object invoke(String name, FuncallExpression ast, Environment env)
+          throws EvalException {
+        String errorMessage = LabelValidator.validateTargetName(name);
+        if (errorMessage != null) {
+          throw new EvalException(ast.getLocation(), errorMessage);
         }
-      };
+
+        PackageFactory.getContext(env, ast).pkgBuilder.setWorkspaceName(name);
+        return NONE;
+      }
+    };
+  }
 
   private static BuiltinFunction newBindFunction(final RuleFactory ruleFactory) {
     return new BuiltinFunction(
@@ -250,10 +227,9 @@ public class WorkspaceFactory {
           Builder builder = PackageFactory.getContext(env, ast).pkgBuilder;
           RuleClass ruleClass = ruleFactory.getRuleClass(ruleClassName);
           RuleClass bindRuleClass = ruleFactory.getRuleClass("bind");
-          Rule rule = builder
+          builder
               .externalPackageData()
               .createAndAddRepositoryRule(builder, ruleClass, bindRuleClass, kwargs, ast);
-          checkWorkspaceName(rule.getName(), ast);
         } catch (
             RuleFactory.InvalidRuleException | Package.NameConflictException | LabelSyntaxException
                 e) {
@@ -280,7 +256,7 @@ public class WorkspaceFactory {
 
   private void addWorkspaceFunctions(Environment workspaceEnv, StoredEventHandler localReporter) {
     try {
-      workspaceEnv.setup("workspace", newWorkspaceFunction.apply());
+      workspaceEnv.update("workspace", newWorkspaceNameFunction());
       for (Map.Entry<String, BaseFunction> function : workspaceFunctions.entrySet()) {
         workspaceEnv.update(function.getKey(), function.getValue());
       }
@@ -319,9 +295,5 @@ public class WorkspaceFactory {
 
   public static ClassObject newNativeModule(RuleClassProvider ruleClassProvider) {
     return newNativeModule(createWorkspaceFunctions(ruleClassProvider));
-  }
-
-  static {
-    SkylarkSignatureProcessor.configureSkylarkFunctions(WorkspaceFactory.class);
   }
 }

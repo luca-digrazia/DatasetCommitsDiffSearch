@@ -14,49 +14,28 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
-import java.util.List;
-
 /**
- * A SkyValue that stores the parsed WORKSPACE file as a list of AST. Each AST contains the part
- * of the WORKSPACE file between the first load statement of a series of load statements and the
- * last statement before the next load statement. As example, the comment indicate where the next
- * file would be split:
- *
- * <p><code>
- * # First AST
- * load('//foo:bar.bzl', 'foobar')
- * foo_bar = 1
- *
- * # Second AST
- * load('//foo:baz.bzl', 'foos')
- * load('//bar:foo.bzl', 'bars')
- * foos()
- * bars()
- *
- * # Third AST
- * load('//:bleh.bzl', 'bleh')
- * </code>
+ * A SkyValue that stores the parsed WORKSPACE file as an AST.
  */
 public class WorkspaceASTValue implements SkyValue {
 
-  private final ImmutableList<BuildFileAST> asts;
+  private final BuildFileAST ast;
 
-  public WorkspaceASTValue(List<BuildFileAST> asts) {
-    Preconditions.checkNotNull(asts);
-    this.asts = ImmutableList.copyOf(asts);
+  public WorkspaceASTValue(BuildFileAST ast) {
+    Preconditions.checkNotNull(ast);
+    this.ast = ast;
   }
 
-  public ImmutableList<BuildFileAST> getASTs() {
-    return asts;
+  public BuildFileAST getAST() {
+    return ast;
   }
 
-  public static SkyKey key(RootedPath path) {
+  public SkyKey key(RootedPath path) {
     return new SkyKey(SkyFunctions.WORKSPACE_AST, path);
   }
 }

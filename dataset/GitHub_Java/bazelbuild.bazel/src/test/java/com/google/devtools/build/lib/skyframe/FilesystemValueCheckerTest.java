@@ -119,7 +119,6 @@ public class FilesystemValueCheckerTest {
         new WorkspaceFileFunction(TestRuleClassProvider.getRuleClassProvider(),
             new PackageFactory(TestRuleClassProvider.getRuleClassProvider()),
             new BlazeDirectories(pkgRoot, pkgRoot, pkgRoot)));
-    skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
 
     differencer = new RecordingDifferencer();
     evaluator = new InMemoryMemoizingEvaluator(skyFunctions.build(), differencer);

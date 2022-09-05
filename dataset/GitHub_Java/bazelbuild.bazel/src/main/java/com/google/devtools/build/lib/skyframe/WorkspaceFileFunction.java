@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.WorkspaceFactory;
 import com.google.devtools.build.lib.skyframe.PackageFunction.PackageFunctionException;
-import com.google.devtools.build.lib.skyframe.WorkspaceFileValue.WorkspaceFileKey;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.vfs.Path;
@@ -54,7 +53,7 @@ public class WorkspaceFileFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env) throws WorkspaceFileFunctionException,
       InterruptedException {
 
-    RootedPath workspaceRoot = ((WorkspaceFileKey) skyKey.argument()).getPath();
+    RootedPath workspaceRoot = (RootedPath) skyKey.argument();
     WorkspaceASTValue workspaceASTValue =
         (WorkspaceASTValue) env.getValue(new SkyKey(SkyFunctions.WORKSPACE_AST, workspaceRoot));
     if (workspaceASTValue == null) {
@@ -89,7 +88,7 @@ public class WorkspaceFileFunction implements SkyFunction {
       }
     }
 
-    return new WorkspaceFileValue(builder.build(), workspaceRoot, 0, false);
+    return new PackageValue(builder.build());
   }
 
   @Override
