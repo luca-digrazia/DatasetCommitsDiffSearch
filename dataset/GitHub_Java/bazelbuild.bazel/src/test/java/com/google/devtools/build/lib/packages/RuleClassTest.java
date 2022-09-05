@@ -25,11 +25,6 @@ import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import static com.google.devtools.build.lib.syntax.Type.INTEGER;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -51,14 +46,9 @@ import com.google.devtools.build.lib.packages.Attribute.ValidityPredicate;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.Package.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.util.PackageLoadingTestCaseForJunit4;
+import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.Path;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -74,8 +64,7 @@ import java.util.Set;
 /**
  * Tests for {@link RuleClass}.
  */
-@RunWith(JUnit4.class)
-public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
+public class RuleClassTest extends PackageLoadingTestCase {
   private static final RuleClass.ConfiguredTargetFactory<Object, Object>
       DUMMY_CONFIGURED_TARGET_FACTORY = new RuleClass.ConfiguredTargetFactory<Object, Object>() {
         @Override
@@ -118,7 +107,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         MissingFragmentPolicy.FAIL_ANALYSIS, true, attributes.toArray(new Attribute[0]));
   }
 
-  @Test
   public void testRuleClassBasics() throws Exception {
     RuleClass ruleClassA = createRuleClassA();
 
@@ -164,7 +152,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
                  ruleClassA.getAttribute(6).getDefaultValue(null));
   }
 
-  @Test
   public void testRuleClassInheritance() throws Exception {
     RuleClass ruleClassA = createRuleClassA();
     RuleClass ruleClassB = createRuleClassB(ruleClassA);
@@ -210,8 +197,9 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
   private Path testBuildfilePath;
   private Location testRuleLocation;
 
-  @Before
-  public final void setRuleLocation() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
     testBuildfilePath = scratch.resolve("/home/user/workspace/testpackage/BUILD");
     testRuleLocation = Location.fromPathAndStartColumn(
         testBuildfilePath.asFragment(), 0, 0, new LineAndColumn(TEST_RULE_DEFINED_AT_LINE, 0));
@@ -223,7 +211,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         .setMakeEnv(new MakeEnvironment.Builder());
   }
 
-  @Test
   public void testDuplicatedDeps() throws Exception {
     RuleClass depsRuleClass = new RuleClass("ruleDeps", false, false, false, false, false, false,
         ImplicitOutputsFunction.NONE, RuleClass.NO_CHANGE, DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -254,7 +241,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         label, attrName, ruleName));
   }
 
-  @Test
   public void testCreateRuleWithLegacyPublicVisibility() throws Exception {
     RuleClass ruleClass = new RuleClass("ruleVis", false, false, false, false, false, false,
         ImplicitOutputsFunction.NONE, RuleClass.NO_CHANGE, DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -274,7 +260,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     assertContainsEvent("//visibility:legacy_public only allowed in package declaration");
   }
 
-  @Test
   public void testCreateRule() throws Exception {
     RuleClass ruleClassA = createRuleClassA();
 
@@ -339,7 +324,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     }
   }
 
-  @Test
   public void testImplicitOutputs() throws Exception {
     RuleClass ruleClassC = new RuleClass("ruleC", false, false, false, false, false, false,
         ImplicitOutputsFunction.fromTemplates("foo-%{name}.bar",
@@ -364,7 +348,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         "stuff-explicit_out-bar", "explicit_out");
   }
 
-  @Test
   public void testImplicitOutsWithBasenameDirname() throws Exception {
     RuleClass ruleClass = new RuleClass("ruleClass", false, false, false, false, false, false,
         ImplicitOutputsFunction.fromTemplates("%{dirname}lib%{basename}.bar"), RuleClass.NO_CHANGE,
@@ -433,7 +416,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
   /**
    * Tests computed default values are computed as expected.
    */
-  @Test
   public void testComputedDefault() throws Exception {
     Attribute computedDefault =
         attr("$result", BOOLEAN).value(new Attribute.ComputedDefault("condition") {
@@ -453,7 +435,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
    * Tests that computed defaults can only read attribute values for configurable attributes that
    * have been explicitly declared.
    */
-  @Test
   public void testComputedDefaultDeclarations() throws Exception {
     checkValidComputedDefault(
         Boolean.FALSE,
@@ -518,7 +499,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
    * Tests that computed defaults *can* read attribute values for non-configurable attributes
    * without needing to explicitly declare them.
    */
-  @Test
   public void testComputedDefaultWithNonConfigurableAttributes() throws Exception {
     checkValidComputedDefault(
         Boolean.FALSE,
@@ -531,7 +511,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         ImmutableMap.<String, Object>of());
   }
 
-  @Test
   public void testOutputsAreOrdered() throws Exception {
     RuleClass ruleClassC = new RuleClass("ruleC", false, false, false, false, false, false,
         ImplicitOutputsFunction.fromTemplates("first-%{name}", "second-%{name}", "out-%{outs}"),
@@ -556,7 +535,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         "second-myrule", "out-third", "out-fourth", "third", "fourth").inOrder();
   }
 
-  @Test
   public void testSubstitutePlaceholderIntoTemplate() throws Exception {
     RuleClass ruleClass = new RuleClass("ruleA", false, false, false, false, false, false,
         ImplicitOutputsFunction.NONE, RuleClass.NO_CHANGE, DUMMY_CONFIGURED_TARGET_FACTORY,
@@ -590,7 +568,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     assertThat(substitutePlaceholderIntoTemplate("x%{a}y%{empty}", rule)).isEmpty();
   }
 
-  @Test
   public void testOrderIndependentAttribute() throws Exception {
     RuleClass ruleClassA = createRuleClassA();
 
@@ -614,7 +591,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
                  attributes.get("my-sorted-stringlist-attr", Type.STRING_LIST));
   }
 
-  @Test
   public void testNonEmptyGood() throws Exception {
     RuleClass mneRuleClass = setupNonEmpty(
         attr("list1", LABEL_LIST).mandatory().legacyAllowAnyFileType().build(),
@@ -629,7 +605,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     createRule(mneRuleClass, "ruleTestMNE", attributeValues, testRuleLocation);
   }
 
-  @Test
   public void testNonEmptyFail() throws Exception {
     RuleClass mandNonEmptyRuleClass = setupNonEmpty(
         attr("list", LABEL_LIST).nonEmpty().legacyAllowAnyFileType().build());
@@ -655,7 +630,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     return mandNonEmptyRuleClass;
   }
 
-  @Test
   public void testNonEmptyWrongDefVal() throws Exception {
     List<Label> emptyList = ImmutableList.of();
     RuleClass mandNonEmptyRuleClass = new RuleClass(
@@ -689,7 +663,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
          reporter, null, location);
   }
 
-  @Test
   public void testOverrideWithWrongType() {
     try {
       RuleClass parentRuleClass = createParentRuleClass();
@@ -704,7 +677,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     }
   }
 
-  @Test
   public void testOverrideWithRightType() {
     RuleClass parentRuleClass = createParentRuleClass();
 
@@ -713,7 +685,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
       childRuleClassBuilder.override(attr("attr", STRING));
   }
 
-  @Test
   public void testCopyAndOverrideAttribute() throws Exception {
     RuleClass parentRuleClass = createParentRuleClass();
     RuleClass childRuleClass = createChildRuleClass(parentRuleClass);
@@ -725,7 +696,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     createRule(childRuleClass, "child_rule", childValues, testRuleLocation);
   }
 
-  @Test
   public void testCopyAndOverrideAttributeMandatoryMissing() throws Exception {
     RuleClass parentRuleClass = createParentRuleClass();
     RuleClass childRuleClass = createChildRuleClass(parentRuleClass);
@@ -739,7 +709,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
         + "attribute 'attr' in 'child_rule' rule");
   }
 
-  @Test
   public void testRequiredFragmentInheritance() throws Exception {
     RuleClass parentRuleClass = createParentRuleClass();
     RuleClass childRuleClass = createChildRuleClass(parentRuleClass);
@@ -770,7 +739,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
           .build();
   }
 
-  @Test
   public void testValidityChecker() throws Exception {
     RuleClass depClass = new RuleClass.Builder("dep", RuleClassType.NORMAL, false)
         .factory(DUMMY_CONFIGURED_TARGET_FACTORY)
@@ -816,7 +784,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
    * Tests structure for making certain rules "preferential choices" for certain files
    * under --compile_one_dependency.
    */
-  @Test
   public void testPreferredDependencyChecker() throws Exception {
     final String cppFile = "file.cc";
     final String textFile = "file.txt";
@@ -848,7 +815,6 @@ public class RuleClassTest extends PackageLoadingTestCaseForJunit4 {
     assertFalse(cppRule.getRuleClassObject().isPreferredDependency(textFile));
   }
 
-  @Test
   public void testBadRuleClassNames() {
     expectError(RuleClassType.NORMAL, "8abc");
     expectError(RuleClassType.NORMAL, "!abc");
