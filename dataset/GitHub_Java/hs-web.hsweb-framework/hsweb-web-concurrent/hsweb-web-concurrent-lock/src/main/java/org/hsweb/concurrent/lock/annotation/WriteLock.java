@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 @Target({ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
-public @interface Lock {
+public @interface WriteLock {
     String value() default "";
 
     String condition() default "";
