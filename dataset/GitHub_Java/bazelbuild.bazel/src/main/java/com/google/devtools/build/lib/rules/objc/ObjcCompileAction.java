@@ -62,10 +62,10 @@ public class ObjcCompileAction extends SpawnAction {
   private final DotdFile dotdFile;
   private final Artifact sourceFile;
   private final NestedSet<Artifact> mandatoryInputs;
-  private final HeaderDiscovery.DotdPruningMode dotdPruningPlan;
+
 
   private static final String GUID = "a00d5bac-a72c-4f0f-99a7-d5fdc6072137";
-
+  
   private ObjcCompileAction(
       ActionOwner owner,
       Iterable<Artifact> tools,
@@ -82,8 +82,7 @@ public class ObjcCompileAction extends SpawnAction {
       ExtraActionInfoSupplier<?> extraActionInfoSupplier,
       DotdFile dotdFile,
       Artifact sourceFile,
-      NestedSet<Artifact> mandatoryInputs,
-      HeaderDiscovery.DotdPruningMode dotdPruningPlan) {
+      NestedSet<Artifact> mandatoryInputs) {
     super(
         owner,
         tools,
@@ -103,13 +102,6 @@ public class ObjcCompileAction extends SpawnAction {
     this.dotdFile = dotdFile;
     this.sourceFile = sourceFile;
     this.mandatoryInputs = mandatoryInputs;
-    this.dotdPruningPlan = dotdPruningPlan;
-  }
-
-  /** Returns the DotdPruningPlan for this compile */
-  @VisibleForTesting
-  public HeaderDiscovery.DotdPruningMode getDotdPruningPlan() {
-    return dotdPruningPlan;
   }
 
   @Override
@@ -128,15 +120,12 @@ public class ObjcCompileAction extends SpawnAction {
       throws ActionExecutionException, InterruptedException {
     super.execute(actionExecutionContext);
 
-    if (dotdPruningPlan == HeaderDiscovery.DotdPruningMode.USE) {
-      Executor executor = actionExecutionContext.getExecutor();
-      IncludeScanningContext scanningContext = executor.getContext(IncludeScanningContext.class);
-      NestedSet<Artifact> discoveredInputs =
-          discoverInputsFromDotdFiles(
-              executor.getExecRoot(), scanningContext.getArtifactResolver());
+    Executor executor = actionExecutionContext.getExecutor();
+    IncludeScanningContext scanningContext = executor.getContext(IncludeScanningContext.class);
+    NestedSet<Artifact> discoveredInputs =
+        discoverInputsFromDotdFiles(executor.getExecRoot(), scanningContext.getArtifactResolver());
 
-      updateActionInputs(discoveredInputs);
-    }
+    updateActionInputs(discoveredInputs);
   }
 
   @VisibleForTesting
@@ -208,7 +197,6 @@ public class ObjcCompileAction extends SpawnAction {
     f.addString(GUID);
     f.addString(super.computeKey());
     f.addBoolean(dotdFile.artifact() == null);
-    f.addBoolean(dotdPruningPlan == HeaderDiscovery.DotdPruningMode.USE);
     f.addPath(dotdFile.getSafeExecPath());
     return f.hexDigestAndReset();
   }
@@ -219,7 +207,6 @@ public class ObjcCompileAction extends SpawnAction {
     private DotdFile dotdFile;
     private Artifact sourceFile;
     private final NestedSetBuilder<Artifact> mandatoryInputs = new NestedSetBuilder<>(STABLE_ORDER);
-    private HeaderDiscovery.DotdPruningMode dotdPruningPlan;
 
     /**
      * Creates a new compile action builder with apple environment variables set that are typically
@@ -281,13 +268,6 @@ public class ObjcCompileAction extends SpawnAction {
       return this;
     }
 
-    /** Indicates that this compile action should perform .d pruning */
-    public Builder setDotdPruningPlan(HeaderDiscovery.DotdPruningMode dotdPruningPlan) {
-      Preconditions.checkNotNull(dotdPruningPlan);
-      this.dotdPruningPlan = dotdPruningPlan;
-      return this;
-    }
-
     @Override
     protected SpawnAction createSpawnAction(
         ActionOwner owner,
@@ -318,8 +298,7 @@ public class ObjcCompileAction extends SpawnAction {
           extraActionInfoSupplier,
           dotdFile,
           sourceFile,
-          mandatoryInputs.build(),
-          dotdPruningPlan);
+          mandatoryInputs.build());
     }
   }
 }
