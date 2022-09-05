@@ -151,6 +151,11 @@ public class BazelJavaSemantics implements JavaSemantics {
   }
 
   @Override
+  public Iterable<Artifact> getInstrumentationJars(RuleContext context) {
+    return ImmutableList.of();
+  }
+
+  @Override
   public void buildJavaCommandLine(Collection<Artifact> outputs, BuildConfiguration configuration,
       CustomCommandLine.Builder result) {
   }
