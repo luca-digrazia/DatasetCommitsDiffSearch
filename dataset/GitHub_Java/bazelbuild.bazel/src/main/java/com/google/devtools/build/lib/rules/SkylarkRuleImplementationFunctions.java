@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules;
 
+import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
+
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -50,7 +52,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
@@ -142,8 +143,8 @@ public class SkylarkRuleImplementationFunctions {
         defaultValue = "None",
         doc =
             "shell command to execute. It is usually preferable to "
-                + "use <code>executable</code> instead. "
-                + "Arguments are available with <code>$1</code>, <code>$2</code>, etc."
+                + "use <code>executable</code> instead. Arguments are available with "
+                + "<code>$1</code>, <code>$2</code>, etc."
       ),
       @Param(
         name = "progress_message",
@@ -162,14 +163,14 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "env",
-        type = SkylarkDict.class,
+        type = Map.class,
         noneable = true,
         defaultValue = "None",
         doc = "sets the dictionary of environment variables"
       ),
       @Param(
         name = "execution_requirements",
-        type = SkylarkDict.class,
+        type = Map.class,
         noneable = true,
         defaultValue = "None",
         doc =
@@ -178,7 +179,7 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "input_manifests",
-        type = SkylarkDict.class,
+        type = Map.class,
         noneable = true,
         defaultValue = "None",
         doc =
@@ -271,9 +272,7 @@ public class SkylarkRuleImplementationFunctions {
           }
           if (envUnchecked != Runtime.NONE) {
             builder.setEnvironment(
-                ImmutableMap.copyOf(
-                    SkylarkDict.castSkylarkDictOrNoneToDict(
-                        envUnchecked, String.class, String.class, "env")));
+                ImmutableMap.copyOf(castMap(envUnchecked, String.class, String.class, "env")));
           }
           if (progressMessage != Runtime.NONE) {
             builder.setProgressMessage((String) progressMessage);
@@ -284,7 +283,7 @@ public class SkylarkRuleImplementationFunctions {
           if (executionRequirementsUnchecked != Runtime.NONE) {
             builder.setExecutionInfo(
                 ImmutableMap.copyOf(
-                    SkylarkDict.castSkylarkDictOrNoneToDict(
+                    castMap(
                         executionRequirementsUnchecked,
                         String.class,
                         String.class,
@@ -292,12 +291,12 @@ public class SkylarkRuleImplementationFunctions {
           }
           if (inputManifestsUnchecked != Runtime.NONE) {
             for (Map.Entry<PathFragment, Artifact> entry :
-                     SkylarkDict.castSkylarkDictOrNoneToDict(
-                         inputManifestsUnchecked,
-                         PathFragment.class,
-                         Artifact.class,
-                         "input manifest file map")
-                     .entrySet()) {
+                castMap(
+                        inputManifestsUnchecked,
+                        PathFragment.class,
+                        Artifact.class,
+                        "input manifest file map")
+                    .entrySet()) {
               builder.addInputManifest(entry.getValue(), entry.getKey());
             }
           }
@@ -460,7 +459,7 @@ public class SkylarkRuleImplementationFunctions {
             doc = "the template file"),
         @Param(name = "output", type = Artifact.class,
             doc = "the output file"),
-        @Param(name = "substitutions", type = SkylarkDict.class,
+        @Param(name = "substitutions", type = Map.class,
             doc = "substitutions to make when expanding the template")},
       optionalNamedOnly = {
         @Param(name = "executable", type = Boolean.class,
@@ -468,23 +467,23 @@ public class SkylarkRuleImplementationFunctions {
   private static final BuiltinFunction createTemplateAction =
       new BuiltinFunction("template_action", Arrays.<Object>asList(false)) {
         public TemplateExpansionAction invoke(SkylarkRuleContext ctx, Artifact template,
-            Artifact output, SkylarkDict<?, ?> substitutionsUnchecked, Boolean executable)
+            Artifact output, Map<?, ?> substitutionsUnchecked, Boolean executable)
             throws EvalException, ConversionException {
-          ImmutableList.Builder<Substitution> substitutionsBuilder = ImmutableList.builder();
-          for (Map.Entry<String, String> substitution : substitutionsUnchecked.getContents(
-              String.class, String.class, "substitutions").entrySet()) {
+          ImmutableList.Builder<Substitution> substitutions = ImmutableList.builder();
+          for (Map.Entry<String, String> substitution : castMap(
+              substitutionsUnchecked, String.class, String.class, "substitutions").entrySet()) {
             // ParserInputSource.create(Path) uses Latin1 when reading BUILD files, which might
             // contain UTF-8 encoded symbols as part of template substitution.
             // As a quick fix, the substitution values are corrected before being passed on.
             // In the long term, fixing ParserInputSource.create(Path) would be a better approach.
-            substitutionsBuilder.add(Substitution.of(
+            substitutions.add(Substitution.of(
                 substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
           }
           TemplateExpansionAction action = new TemplateExpansionAction(
               ctx.getRuleContext().getActionOwner(),
               template,
               output,
-              substitutionsBuilder.build(),
+              substitutions.build(),
               executable);
           ctx.getRuleContext().registerAction(action);
           return action;
@@ -575,8 +574,7 @@ public class SkylarkRuleImplementationFunctions {
 
   // TODO(bazel-team): find a better way to typecheck this argument.
   @SuppressWarnings("unchecked")
-  private static Map<Label, Iterable<Artifact>> checkLabelDict(
-      Map<?, ?> labelDict, Location loc)
+  private static Map<Label, Iterable<Artifact>> checkLabelDict(Map<?, ?> labelDict, Location loc)
       throws EvalException {
     for (Map.Entry<?, ?> entry : labelDict.entrySet()) {
       Object key = entry.getKey();
@@ -635,7 +633,7 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "make_variables",
-        type = SkylarkDict.class, // dict(string, string)
+        type = Map.class, // dict(string, string)
         noneable = true,
         doc = "make variables to expand, or None"
       ),
@@ -648,7 +646,7 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "label_dict",
-        type = SkylarkDict.class,
+        type = Map.class,
         defaultValue = "{}",
         doc =
             "dictionary of resolved labels and the corresponding list of Files "
@@ -656,7 +654,7 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "execution_requirements",
-        type = SkylarkDict.class,
+        type = Map.class,
         defaultValue = "{}",
         doc =
             "information for scheduling the action to resolve this command."
@@ -668,15 +666,15 @@ public class SkylarkRuleImplementationFunctions {
   private static final BuiltinFunction resolveCommand =
       new BuiltinFunction("resolve_command") {
         @SuppressWarnings("unchecked")
-        public Tuple<Object> invoke(
+        public Tuple invoke(
             SkylarkRuleContext ctx,
             String command,
             Object attributeUnchecked,
             Boolean expandLocations,
             Object makeVariablesUnchecked,
             SkylarkList tools,
-            SkylarkDict<?, ?> labelDictUnchecked,
-            SkylarkDict<?, ?> executionRequirementsUnchecked,
+            Map<?, ?> labelDictUnchecked,
+            Map<?, ?> executionRequirementsUnchecked,
             Location loc,
             Environment env)
             throws ConversionException, EvalException {
@@ -702,11 +700,12 @@ public class SkylarkRuleImplementationFunctions {
           inputs.addAll(helper.getResolvedTools());
 
           ImmutableMap<String, String> executionRequirements = ImmutableMap.copyOf(
-              SkylarkDict.castSkylarkDictOrNoneToDict(
+                castMap(
                     executionRequirementsUnchecked,
                     String.class,
                     String.class,
                     "execution_requirements"));
+          
           List<String> argv =
               helper.buildCommandLine(command, inputs, SCRIPT_SUFFIX, executionRequirements);
           return Tuple.<Object>of(
