@@ -20,7 +20,9 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /**
@@ -39,14 +41,14 @@ public final class SkyframePackageRootResolver implements PackageRootResolver {
 
   @Override
   public Map<PathFragment, Root> findPackageRootsForFiles(Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException, InterruptedException {
+      throws PackageRootResolutionException {
     return executor.getArtifactRootsForFiles(eventHandler, execPaths);
   }
   
   @Override
   @Nullable
   public Map<PathFragment, Root> findPackageRoots(Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException, InterruptedException {
+      throws PackageRootResolutionException {
     return executor.getArtifactRoots(eventHandler, execPaths);
   }
 }
