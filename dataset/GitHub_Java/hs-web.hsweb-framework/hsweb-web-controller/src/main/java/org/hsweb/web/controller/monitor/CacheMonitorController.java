@@ -16,7 +16,6 @@
 
 package org.hsweb.web.controller.monitor;
 
-import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.core.authorize.annotation.Authorize;
 import org.hsweb.web.core.cache.monitor.MonitorCache;
 import org.hsweb.web.core.exception.NotFoundException;
@@ -98,8 +97,7 @@ public class CacheMonitorController {
                                     @PathVariable("cacheName") String cacheName,
                                     @PathVariable("key") String key) {
         Cache.ValueWrapper val = getCache(managerName, cacheName).get(key);
-        if (val != null) return ResponseMessage.ok(val.get())
-                .exclude(User.class, "password", "modules", "userRoles");
+        if (val != null) return ResponseMessage.ok(val.get());
         throw new NotFoundException("值不存在");
     }
 
