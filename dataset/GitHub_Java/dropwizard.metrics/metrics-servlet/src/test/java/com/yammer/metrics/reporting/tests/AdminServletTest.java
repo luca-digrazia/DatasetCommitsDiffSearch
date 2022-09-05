@@ -42,9 +42,10 @@ public class AdminServletTest {
 
     @Before
     public void setUp() throws Exception {
+        when(request.getContextPath()).thenReturn("/context");
+
         when(config.getServletContext()).thenReturn(context);
 
-        when(request.getContextPath()).thenReturn("/context");
         when(request.getMethod()).thenReturn("GET");
         when(request.getServletPath()).thenReturn("/admin");
         when(response.getWriter()).thenReturn(new PrintWriter(new OutputStreamWriter(output)));
@@ -102,7 +103,6 @@ public class AdminServletTest {
                               "</ul>\n</body>\n</html>\n"));
     }
 
-    @Test
     public void displaysServiceNameIfSet() throws Exception {
         when(request.getPathInfo()).thenReturn("/");
 
