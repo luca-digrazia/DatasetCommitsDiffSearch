@@ -16,6 +16,7 @@ package com.google.devtools.build.xcode.xcodegen;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.devtools.build.xcode.common.BuildOptionsUtil.DEFAULT_OPTIONS_NAME;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -29,6 +30,7 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.xcode.common.XcodeprojPath;
 import com.google.devtools.build.xcode.util.Containing;
 import com.google.devtools.build.xcode.util.Equaling;
+import com.google.devtools.build.xcode.util.Interspersing;
 import com.google.devtools.build.xcode.util.Mapping;
 import com.google.devtools.build.xcode.xcodegen.LibraryObjects.BuildPhaseBuilder;
 import com.google.devtools.build.xcode.xcodegen.SourceFile.BuildType;
@@ -82,7 +84,6 @@ public class XcodeprojGeneration {
   public static final String FILE_TYPE_WRAPPER_APPLICATION = "wrapper.application";
   public static final String FILE_TYPE_WRAPPER_BUNDLE = "wrapper.cfbundle";
   public static final String FILE_TYPE_APP_EXTENSION = "wrapper.app-extension";
-  private static final String DEFAULT_OPTIONS_NAME = "Debug";
 
   @VisibleForTesting
   static final String APP_NEEDS_SOURCE_ERROR =
@@ -272,8 +273,6 @@ public class XcodeprojGeneration {
     }
   }
 
-  // TODO(bazel-team): Make this a no-op once the released version of Bazel sends the label to
-  // xcodegen pre-processed.
   private static String labelToXcodeTargetName(String label) {
     String pathFromWorkspaceRoot =  label.replace("//", "").replace(':', '/');
     List<String> components = Splitter.on('/').splitToList(pathFromWorkspaceRoot);
@@ -331,10 +330,8 @@ public class XcodeprojGeneration {
   private static PBXFrameworksBuildPhase buildLibraryInfo(
       LibraryObjects libraryObjects, TargetControl target) {
     BuildPhaseBuilder builder = libraryObjects.newBuildPhase();
-    if (Containing.item(PRODUCT_TYPES_THAT_HAVE_A_BINARY, productType(target))) {
-      for (String dylib : target.getSdkDylibList()) {
-        builder.addDylib(dylib);
-      }
+    for (String dylib : target.getSdkDylibList()) {
+      builder.addDylib(dylib);
     }
     for (String sdkFramework : target.getSdkFrameworkList()) {
       builder.addSdkFramework(sdkFramework);
@@ -350,9 +347,8 @@ public class XcodeprojGeneration {
     ImmutableList.Builder<String> flags = new ImmutableList.Builder<>();
     flags.addAll(givenFlags);
     if (!Equaling.of(ProductType.STATIC_LIBRARY, productType(targetControl))) {
-      for (String importedLibrary : targetControl.getImportedLibraryList()) {
-        flags.add("$(WORKSPACE_ROOT)/" + importedLibrary);
-      }
+      flags.addAll(Interspersing.prependEach(
+          "$(WORKSPACE_ROOT)/", targetControl.getImportedLibraryList()));
     }
     return flags.build();
   }
