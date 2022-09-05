@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -44,7 +43,6 @@ import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -706,28 +704,26 @@ public final class RuleContext extends TargetContext
     checkAttribute(attributeName, Mode.SPLIT);
 
     Attribute attributeDefinition = getAttribute(attributeName);
-    @SuppressWarnings("unchecked") // Attribute.java doesn't have the BuildOptions symbol.
-    SplitTransition<BuildOptions> transition =
-        (SplitTransition<BuildOptions>) attributeDefinition.getSplitTransition(rule);
-    List<ConfiguredTarget> deps = targetMap.get(attributeName);
-
-    List<BuildOptions> splitOptions = transition.split(getConfiguration().getOptions());
-    if (splitOptions.isEmpty()) {
+    SplitTransition<?> transition = attributeDefinition.getSplitTransition(rule);
+    List<BuildConfiguration> configurations =
+        getConfiguration().getTransitions().getSplitConfigurationsNoSelf(transition);
+    if (configurations.isEmpty()) {
       // The split transition is not active. Defer the decision on which CPU to use.
-      return ImmutableMap.of(Optional.<String>absent(), deps);
+      return ImmutableMap.of(Optional.<String>absent(), targetMap.get(attributeName));
     }
 
     Set<String> cpus = new HashSet<>();
-    for (BuildOptions options : splitOptions) {
+    for (BuildConfiguration config : configurations) {
       // This method should only be called when the split config is enabled on the command line, in
       // which case this cpu can't be null.
-      cpus.add(Verify.verifyNotNull(options.get(BuildConfiguration.Options.class).getCpu()));
+      Preconditions.checkNotNull(config.getCpu());
+      cpus.add(config.getCpu());
     }
 
     // Use an ImmutableListMultimap.Builder here to preserve ordering.
     ImmutableListMultimap.Builder<Optional<String>, TransitiveInfoCollection> result =
         ImmutableListMultimap.builder();
-    for (TransitiveInfoCollection t : deps) {
+    for (TransitiveInfoCollection t : targetMap.get(attributeName)) {
       if (t.getConfiguration() != null) {
         result.put(Optional.of(t.getConfiguration().getCpu()), t);
       } else {
