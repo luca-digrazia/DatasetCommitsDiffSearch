@@ -141,8 +141,11 @@ public class EnvironmentTest extends EvaluationTestCase {
             "range",
             "repr",
             "reversed",
+            "select",
+            "set",
             "sorted",
             "str",
+            "type",
             "zip"),
         outerEnv.getVariableNames());
     assertEquals(
@@ -173,8 +176,11 @@ public class EnvironmentTest extends EvaluationTestCase {
             "range",
             "repr",
             "reversed",
+            "select",
+            "set",
             "sorted",
             "str",
+            "type",
             "zip"),
         innerEnv.getVariableNames());
   }
@@ -295,7 +301,7 @@ public class EnvironmentTest extends EvaluationTestCase {
       env.eval("special_var = 41");
       throw new AssertionError("failed to fail");
     } catch (IllegalArgumentException e) {
-      assertThat(e.getMessage()).contains("ERROR 1:1: Variable special_var is read only");
+      assertThat(e).hasMessage("ERROR 1:1: Variable special_var is read only");
     }
 
     try {
