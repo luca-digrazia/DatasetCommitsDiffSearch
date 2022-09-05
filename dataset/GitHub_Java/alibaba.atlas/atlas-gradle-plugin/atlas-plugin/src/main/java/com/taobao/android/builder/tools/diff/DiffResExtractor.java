@@ -209,16 +209,24 @@
 
 package com.taobao.android.builder.tools.diff;
 
-import com.taobao.android.builder.tools.MD5Util;
-import com.taobao.android.builder.tools.zip.ZipUtils;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.TrueFileFilter;
-
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Collection;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.android.build.gradle.internal.api.AppVariantContext;
+import com.taobao.android.builder.AtlasBuildContext;
+import com.taobao.android.builder.tools.MD5Util;
+import com.taobao.android.builder.tools.zip.ZipUtils;
+import groovy.lang.Closure;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.TrueFileFilter;
+import org.gradle.api.file.CopySpec;
+
+import static com.taobao.android.builder.tools.xml.XmlHelper.removeStringValue;
 
 /**
  * Created by wuzhong on 2016/9/30.
@@ -226,9 +234,10 @@ import java.util.regex.Pattern;
 public class DiffResExtractor {
 
     /**
-     * assets : 直接通过比较apk
-     * res : 通过diffResFiles ， 再去apk 验证
+     * assets : Compare apk directly
+     * res : Through diffResFiles , Go to apk validation
      *
+     * @param appVariantContext
      * @param diffResFiles
      * @param currentApk
      * @param baseApk
@@ -236,12 +245,12 @@ public class DiffResExtractor {
      * @param destDir
      * @throws IOException
      */
-    public static void extractDiff(Set<String> diffResFiles, File currentApk, File baseApk, File fullResDir, File destDir) throws IOException {
+    public static void extractDiff(AppVariantContext appVariantContext, Set<String> diffResFiles, File currentApk,
+                                   File baseApk, File fullResDir, File destDir, boolean fullValues) throws IOException {
 
         if (!currentApk.exists() || !baseApk.exists() || !fullResDir.exists()) {
             return;
         }
-
 
         FileUtils.deleteDirectory(destDir);
         destDir.mkdirs();
@@ -249,7 +258,6 @@ public class DiffResExtractor {
         File tmpFolder = new File(destDir.getParentFile(), "tmp-diffRes");
         FileUtils.deleteDirectory(tmpFolder);
         tmpFolder.mkdirs();
-
 
         File apkDir = new File(tmpFolder, "newApkDir");
         File baseApkDir = new File(tmpFolder, "baseApkDir");
@@ -262,9 +270,9 @@ public class DiffResExtractor {
 
         int basePathLength = apkDir.getAbsolutePath().length();
 
-        List<String> diffResPath = new ArrayList<String>();
+        //List<String> diffResPath = new ArrayList<String>();
 
-        //计算assets
+        //Calculate the assets
         for (File file : files) {
 
             String relativePath = file.getAbsolutePath().substring(basePathLength);
@@ -274,26 +282,19 @@ public class DiffResExtractor {
             }
 
             File baseFile = new File(baseApkDir, relativePath);
-            if (!baseFile.exists()) {
-                diffResPath.add(relativePath);
-                continue;
-            }
-
-            if (!MD5Util.getFileMD5(file).equals(MD5Util.getFileMD5(baseFile))) {
-
-                File rawFile = new File(apkDir, relativePath);
-                FileUtils.copyFile(rawFile, new File(destDir, relativePath));
-
+            if (!baseFile.exists() || !MD5Util.getFileMD5(file).equals(MD5Util.getFileMD5(baseFile))) {
+                FileUtils.copyFile(file, new File(destDir, relativePath));
             }
         }
 
-        //计算res
+        //Calculate the res
         for (String diffFile : diffResFiles) {
 
             File baseFile = new File(baseApkDir, diffFile);
             File currentFile = new File(apkDir, diffFile);
 
-            if (baseFile.exists() && currentFile.exists() && MD5Util.getFileMD5(baseFile).equals(MD5Util.getFileMD5(currentFile))) {
+            if (baseFile.exists() && currentFile.exists() && MD5Util.getFileMD5(baseFile).equals(MD5Util.getFileMD5(
+                currentFile))) {
                 continue;
             }
 
@@ -302,19 +303,50 @@ public class DiffResExtractor {
             if (rawFile.exists()) {
                 FileUtils.copyFile(rawFile, new File(destDir, diffFile));
             }
-
         }
 
-        //必须生成resource.arsc
-        File assetsDir = new File(destDir, "assets");
+        // //Resource. Arsc must be generated
         File resDir = new File(destDir, "res");
-        if (assetsDir.exists() && !resDir.exists()) {
-            File valuesDir = new File(resDir, "values");
+        File valuesDir = new File(resDir, "values");
+        if (fullValues) {
             FileUtils.forceMkdir(valuesDir);
-            File stringsFile = new File(valuesDir, "strings.xml");
-            UUID uuid = UUID.randomUUID();
-            FileUtils.writeStringToFile(stringsFile, String.format("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string name=\"%s\">%s</string>\n</resources>\n", uuid, uuid), "UTF-8", false);
+            appVariantContext.getProject().copy(new Closure(DiffResExtractor.class) {
+                public Object doCall(CopySpec cs) {
+                    cs.from(fullResDir);
+                    cs.into(destDir);
+                    cs.include("res/values*/**");
 
+                    return cs;
+                }
+            });
+
+            // FileUtils.copyFile(new File(fullResDir, "res/values/values.xml"),
+            //                    new File(destDir, "res/values/values.xml"));
+        } else {
+            if (!resDir.exists()) {
+                FileUtils.forceMkdir(valuesDir);
+                File stringsFile = new File(valuesDir, "strings.xml");
+                UUID uuid = UUID.randomUUID();
+                FileUtils.writeStringToFile(stringsFile,
+                                            String.format(
+                                                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources>\n    <string "
+                                                    + "name=\"%s\">%s</string>\n</resources>\n",
+                                                uuid,
+                                                uuid),
+                                            "UTF-8",
+                                            false);
+            }
+        }
+
+        //XML Settings values.
+        File valuesXml = new File(resDir, "values/values.xml");
+
+        AtlasBuildContext.sBuilderAdapter.apkInjectInfoCreator.injectTpatchValuesRes(appVariantContext, valuesXml);
+        try {
+            removeStringValue(valuesXml, "ttid");
+            removeStringValue(valuesXml, "config_channel");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
 
         final Pattern densityOnlyPattern = Pattern.compile("[a-zA-Z]+-[a-zA-Z]+dpi");
@@ -324,12 +356,10 @@ public class DiffResExtractor {
                 for (File file : resDirs) {
                     Matcher m = densityOnlyPattern.matcher(file.getName());
                     if (m.matches()) {
-                        FileUtils.moveDirectory(file, new File(file.getAbsolutePath() + "-v4"));
+                        FileUtils.moveDirectory(file, new File(file.getAbsolutePath() + "-v3"));
                     }
                 }
             }
         }
-
     }
-
 }
