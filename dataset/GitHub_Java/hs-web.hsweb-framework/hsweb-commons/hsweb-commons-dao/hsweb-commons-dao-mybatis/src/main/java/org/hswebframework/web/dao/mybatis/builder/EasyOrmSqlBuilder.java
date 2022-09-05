@@ -23,9 +23,6 @@ import org.apache.commons.beanutils.BeanUtilsBean;
 import org.apache.commons.beanutils.PropertyUtilsBean;
 import org.apache.ibatis.mapping.ResultMap;
 import org.apache.ibatis.mapping.ResultMapping;
-import org.apache.ibatis.type.JdbcType;
-import org.apache.ibatis.type.TypeHandler;
-import org.apache.ibatis.type.TypeHandlerRegistry;
 import org.hswebframework.ezorm.core.ValueConverter;
 import org.hswebframework.ezorm.core.param.*;
 import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
@@ -41,11 +38,9 @@ import org.hswebframework.ezorm.rdb.render.dialect.*;
 import org.hswebframework.ezorm.rdb.render.support.simple.CommonSqlRender;
 import org.hswebframework.ezorm.rdb.render.support.simple.SimpleWhereSqlBuilder;
 import org.hswebframework.web.BusinessException;
-import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.dao.mybatis.builder.jpa.JpaAnnotationParser;
-import org.hswebframework.web.dao.mybatis.handler.NumberBooleanTypeHandler;
 import org.hswebframework.web.dao.mybatis.plgins.pager.Pager;
 import org.hswebframework.web.dao.mybatis.MybatisUtils;
 import org.hswebframework.utils.StringUtils;
@@ -150,49 +145,6 @@ public class EasyOrmSqlBuilder {
 
     }
 
-    private List<RDBColumnMetaData> createColumn(String prefix, String columnName, ResultMapping resultMapping) {
-        List<RDBColumnMetaData> metaData = new ArrayList<>();
-        if (resultMapping.getNestedQueryId() == null) {
-
-            if (resultMapping.getNestedResultMapId() != null) {
-                ResultMap nests = MybatisUtils.getResultMap(resultMapping.getNestedResultMapId());
-                Set<ResultMapping> resultMappings = new HashSet<>(nests.getResultMappings());
-                resultMappings.addAll(nests.getIdResultMappings());
-                for (ResultMapping mapping : resultMappings) {
-                    metaData.addAll(createColumn(resultMapping.getProperty(),
-                            org.springframework.util.StringUtils.hasText(resultMapping.getColumn())
-                                    ? resultMapping.getColumn()
-                                    : resultMapping.getProperty(),
-                            mapping));
-                }
-                return metaData;
-            }
-
-            JDBCType jdbcType = JDBCType.VARCHAR;
-            try {
-                jdbcType = JDBCType.valueOf(resultMapping.getJdbcType().name());
-            } catch (Exception e) {
-                log.warn("can not parse jdbcType:{}", resultMapping.getJdbcType());
-            }
-            RDBColumnMetaData column = new RDBColumnMetaData();
-            column.setJdbcType(jdbcType);
-            column.setName(org.springframework.util.StringUtils.hasText(columnName)
-                    ? columnName.concat(".").concat(resultMapping.getColumn()) : resultMapping.getColumn());
-            column.setJavaType(resultMapping.getJavaType());
-
-            if (resultMapping.getTypeHandler() != null) {
-                column.setProperty("typeHandler", resultMapping.getTypeHandler().getClass().getName());
-            }
-            if (!StringUtils.isNullOrEmpty(resultMapping.getProperty())) {
-                column.setAlias(org.springframework.util.StringUtils.hasText(prefix)
-                        ? prefix.concat(".").concat(resultMapping.getProperty()) : resultMapping.getProperty());
-            }
-            column.setProperty("resultMapping", resultMapping);
-            metaData.add(column);
-        }
-        return metaData;
-    }
-
     protected RDBTableMetaData createMeta(String tableName, String resultMapId) {
 //        tableName = getRealTableName(tableName);
         RDBDatabaseMetaData active = getActiveDatabase();
@@ -217,14 +169,43 @@ public class EasyOrmSqlBuilder {
 
         List<ResultMapping> resultMappings = new ArrayList<>(resultMaps.getResultMappings());
         resultMappings.addAll(resultMaps.getIdResultMappings());
-
-        resultMappings.stream()
-                .map(mapping -> this.createColumn(null, null, mapping))
-                .flatMap(Collection::stream)
-                .forEach(rdbTableMetaData::addColumn);
+        for (ResultMapping resultMapping : resultMappings) {
+            if (resultMapping.getNestedQueryId() == null) {
+                RDBColumnMetaData column = new RDBColumnMetaData();
+                column.setJdbcType(JDBCType.valueOf(resultMapping.getJdbcType().name()));
+                column.setName(resultMapping.getColumn());
+                if (resultMapping.getTypeHandler() != null) {
+                    column.setProperty("typeHandler", resultMapping.getTypeHandler().getClass().getName());
+                }
+                if (!StringUtils.isNullOrEmpty(resultMapping.getProperty())) {
+                    column.setAlias(resultMapping.getProperty());
+                }
+                column.setJavaType(resultMapping.getJavaType());
+                column.setProperty("resultMapping", resultMapping);
+                //时间
+                if (column.getJdbcType() == JDBCType.DATE || column.getJdbcType() == JDBCType.TIMESTAMP) {
+                    ValueConverter dateConvert = new DateTimeConverter("yyyy-MM-dd HH:mm:ss", column.getJavaType()) {
+                        @Override
+                        public Object getData(Object value) {
+                            if (value instanceof Number) {
+                                return new Date(((Number) value).longValue());
+                            }
+                            return super.getData(value);
+                        }
+                    };
+                    column.setValueConverter(dateConvert);
+                } else if (column.getJavaType() == boolean.class || column.getJavaType() == Boolean.class) {
+                    column.setValueConverter(new BooleanValueConverter(column.getJdbcType()));
+                } else if (TypeUtils.isNumberType(column)) { //数字
+                    //数字
+                    column.setValueConverter(new NumberValueConverter(column.getJavaType()));
+                }
+                rdbTableMetaData.addColumn(column);
+            }
+        }
 
         if (useJpa) {
-            Class<?> type = entityFactory == null ? resultMaps.getType() : entityFactory.getInstanceType(resultMaps.getType());
+            Class type = entityFactory == null ? resultMaps.getType() : entityFactory.getInstanceType(resultMaps.getType());
             RDBTableMetaData parseResult = JpaAnnotationParser.parseMetaDataFromEntity(type);
             if (parseResult != null) {
                 for (RDBColumnMetaData columnMetaData : parseResult.getColumns()) {
@@ -234,36 +215,6 @@ public class EasyOrmSqlBuilder {
                         rdbTableMetaData.addColumn(columnMetaData);
                     }
                 }
-            }
-        }
-        for (RDBColumnMetaData column : rdbTableMetaData.getColumns()) {
-            //fix 150
-            TypeHandler<?> handler = MybatisUtils.getSqlSession().getConfiguration().getTypeHandlerRegistry()
-                    .getTypeHandler(column.getJavaType(), JdbcType.forCode(column.getJdbcType().getVendorTypeNumber()));
-            if (handler != null) {
-                column.setProperty("typeHandler", handler.getClass().getName());
-            }
-            //时间
-            if (column.getJdbcType() == JDBCType.DATE || column.getJdbcType() == JDBCType.TIMESTAMP) {
-                ValueConverter dateConvert = new DateTimeConverter("yyyy-MM-dd HH:mm:ss", column.getJavaType()) {
-                    @Override
-                    public Object getData(Object value) {
-                        if (value instanceof Number) {
-                            return new Date(((Number) value).longValue());
-                        }
-                        return super.getData(value);
-                    }
-                };
-                column.setValueConverter(dateConvert);
-            } else if (column.getJavaType() == boolean.class || column.getJavaType() == Boolean.class) {
-                column.setValueConverter(new BooleanValueConverter(column.getJdbcType()));
-                column.setProperty("typeHandler", NumberBooleanTypeHandler.class.getName());
-            } else if (column.getJavaType().isEnum() || (
-                    column.getJavaType().isArray() && column.getJavaType().getComponentType().isEnum())) {
-                //ignore
-            } else if (TypeUtils.isNumberType(column)) { //数字
-                //数字
-                column.setValueConverter(new NumberValueConverter(column.getJavaType()));
             }
         }
         cache.put(cacheKey, rdbTableMetaData);
@@ -279,9 +230,6 @@ public class EasyOrmSqlBuilder {
         CommonSqlRender render = (CommonSqlRender) databaseMetaDate.getRenderer(SqlRender.TYPE.SELECT);
         List<CommonSqlRender.OperationColumn> columns = render.parseOperationField(tableMetaData, param);
         SqlAppender appender = new SqlAppender();
-        Object data = param.getData();
-        Map<String, Object> mapData = FastBeanCopier.copy(data, HashMap::new);
-
         columns.forEach(column -> {
 
             RDBColumnMetaData columnMetaData = column.getRDBColumnMetaData();
@@ -294,24 +242,21 @@ public class EasyOrmSqlBuilder {
             if (columnMetaData.getProperty("read-only").isTrue()) {
                 return;
             }
-            Object value = mapData.get(columnMetaData.getAlias());
-
-            if (value == null) {
+            Object value;
+            try {
+                value = propertyUtils.getProperty(param.getData(), columnMetaData.getAlias());
+                if (value == null) {
+                    return;
+                }
+            } catch (Exception e) {
                 return;
             }
-
             if (value instanceof Sql) {
-                appender.add(",", encodeColumn(dialect, columnMetaData.getName()), "=", ((Sql) value).getSql());
+                appender.add(",", encodeColumn(dialect, columnMetaData.getName())
+                        , "=", ((Sql) value).getSql());
             } else {
-                value = columnMetaData.getValueConverter().getData(value);
-
-                if (columnMetaData.getOptionConverter() != null) {
-                    value = columnMetaData.getOptionConverter().converterData(value);
-                }
-
-                mapData.put(columnMetaData.getAlias(), value);
-
-                String typeHandler = columnMetaData.getProperty("typeHandler").getValue();
+                String typeHandler = columnMetaData.getProperty("typeHandler")
+                        .getValue();
 
                 appender.add(",", encodeColumn(dialect, columnMetaData.getName())
                         , "=", "#{data.", columnMetaData.getAlias(),
