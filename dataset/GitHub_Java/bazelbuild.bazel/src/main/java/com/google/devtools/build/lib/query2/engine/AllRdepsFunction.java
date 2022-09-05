@@ -112,12 +112,6 @@ public class AllRdepsFunction implements QueryFunction {
       List<Argument> args,
       ThreadSafeCallback<T> callback,
       ForkJoinPool forkJoinPool) throws QueryException, InterruptedException {
-    boolean unbounded = args.size() == 1;
-    if (unbounded && env instanceof StreamableQueryEnvironment<?>) {
-      ((StreamableQueryEnvironment<T>) env).getAllRdepsUnboundedParallel(
-          args.get(0).getExpression(), context, callback, forkJoinPool);
-    } else {
-      eval(env, context, expression, args, callback);
-    }
+    eval(env, context, expression, args, callback);
   }
 }

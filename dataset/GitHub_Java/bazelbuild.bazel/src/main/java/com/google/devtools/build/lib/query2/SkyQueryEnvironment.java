@@ -101,7 +101,6 @@ import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -134,12 +133,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private final List<String> universeScope;
   protected final String parserPrefix;
   private final PathPackageLocator pkgPath;
-  private final int queryEvaluationParallelismLevel;
+  private final ForkJoinPool forkJoinPool;
 
   // The following fields are set in the #beforeEvaluateQuery method.
   protected WalkableGraph graph;
   private InterruptibleSupplier<ImmutableSet<PathFragment>> blacklistPatternsSupplier;
-  private ForkJoinPool forkJoinPool;
   private RecursivePackageProviderBackedTargetPatternResolver resolver;
 
   public SkyQueryEnvironment(
@@ -190,13 +188,15 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         extraFunctions,
         evalListener);
     this.loadingPhaseThreads = loadingPhaseThreads;
+    // Note that ForkJoinPool doesn't start any thread until work is submitted to it.
+    this.forkJoinPool = NamedForkJoinPool.newNamedPool(
+        "QueryEnvironment", queryEvaluationParallelismLevel);
     this.graphFactory = graphFactory;
     this.pkgPath = pkgPath;
     this.universeScope = Preconditions.checkNotNull(universeScope);
     this.parserPrefix = parserPrefix;
-    Preconditions.checkState(
-        !universeScope.isEmpty(), "No queries can be performed with an empty universe");
-    this.queryEvaluationParallelismLevel = queryEvaluationParallelismLevel;
+    Preconditions.checkState(!universeScope.isEmpty(),
+        "No queries can be performed with an empty universe");
   }
 
   private void beforeEvaluateQuery() throws InterruptedException {
@@ -217,8 +217,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
             PrepareDepsOfPatternsFunction.getSkyKeys(universeKey, eventHandler));
     GraphBackedRecursivePackageProvider graphBackedRecursivePackageProvider =
         new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
-    forkJoinPool =
-        NamedForkJoinPool.newNamedPool("QueryEnvironment", queryEvaluationParallelismLevel);
     resolver =
         new RecursivePackageProviderBackedTargetPatternResolver(
             graphBackedRecursivePackageProvider,
@@ -287,6 +285,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
+  public void close() {
+    forkJoinPool.shutdownNow();
+  }
+
+  @Override
   public final QueryExpression transformParsedQuery(QueryExpression queryExpression) {
     QueryExpression transformedQueryExpression = getTransformedQueryExpression(queryExpression);
     LOG.info(String.format(
@@ -342,12 +345,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         eval(expr, VariableContext.<Target>empty(), callbackWithEmptyCheck);
       } catch (QueryException e) {
         throw new QueryException(e, expr);
-      } finally {
-        // Force termination of remaining tasks - if evaluateQuery was successful there should be
-        // none, if it failed abruptly (e.g. was interrupted) we don't want to leave any dangling
-        // threads running tasks.
-        forkJoinPool.shutdownNow();
-        forkJoinPool.awaitQuiescence(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
       }
       aggregator.processLastPending();
     }
@@ -797,7 +794,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     if (originalFileFragment.equals(currentPathFragment)
         && originalFileFragment.equals(Label.EXTERNAL_PACKAGE_FILE_NAME)) {
       Preconditions.checkState(
-          Label.EXTERNAL_PACKAGE_FILE_NAME.getParentDirectory().equals(PathFragment.EMPTY_FRAGMENT),
+          Label.EXTERNAL_PACKAGE_FILE_NAME.getParentDirectory().equals(
+              PathFragment.EMPTY_FRAGMENT),
           Label.EXTERNAL_PACKAGE_FILE_NAME);
       return ImmutableList.of(
           PackageLookupValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER),

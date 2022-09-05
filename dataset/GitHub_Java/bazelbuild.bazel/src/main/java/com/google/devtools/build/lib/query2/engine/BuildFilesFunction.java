@@ -52,7 +52,7 @@ class BuildFilesFunction implements QueryFunction {
     env.eval(
         args.get(0).getExpression(),
         context,
-        new ThreadSafeCallback<T>() {
+        new Callback<T>() {
           @Override
           public void process(Iterable<T> partialResult)
               throws QueryException, InterruptedException {
@@ -73,7 +73,6 @@ class BuildFilesFunction implements QueryFunction {
       List<Argument> args,
       ThreadSafeCallback<T> callback,
       ForkJoinPool forkJoinPool) throws QueryException, InterruptedException {
-    // 'eval' is written in such a way that it enables parallel evaluation of 'expression'.
     eval(env, context, expression, args, callback);
   }
 
