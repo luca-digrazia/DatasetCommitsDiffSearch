@@ -121,8 +121,7 @@ import javax.xml.parsers.ParserConfigurationException;
 public class ResourceShrinker {
 
   public static final int TYPICAL_RESOURCE_COUNT = 200;
-  private final List<String> resourcePackages;
-  private final Path rTxt;
+  private List<ResourceFile> resourceFiles;
   private final Path classesJar;
   private final Path mergedManifest;
   private final Path mergedResourceDir;
@@ -152,14 +151,23 @@ public class ResourceShrinker {
    */
   private Map<String, ResourceType> resourceClassOwners = Maps.newHashMapWithExpectedSize(20);
 
+  public static class ResourceFile {
+
+    public ResourceFile(Path rTxt, String packageName) {
+      this.rTxt = rTxt;
+      this.packageName = packageName;
+    }
+
+    @NonNull Path rTxt;
+    @NonNull String packageName;
+  }
+
   public ResourceShrinker(
-      List<String> resourcePackages,
-      @NonNull Path rTxt,
+      List<ResourceFile> resourceFiles,
       @NonNull Path classesJar,
       @NonNull Path manifest,
       @NonNull Path resources) {
-    this.resourcePackages = resourcePackages;
-    this.rTxt = rTxt;
+    this.resourceFiles = resourceFiles;
     this.classesJar = classesJar;
     this.mergedManifest = manifest;
     this.mergedResourceDir = resources;
@@ -167,7 +175,7 @@ public class ResourceShrinker {
 
   public void shrink(Path destinationDir) throws IOException,
       ParserConfigurationException, SAXException {
-    parseResourceTxtFile(rTxt, resourcePackages);
+    parseResources(resourceFiles);
     recordUsages(classesJar);
     recordManifestUsages(mergedManifest);
     recordResources(mergedResourceDir);
@@ -857,15 +865,19 @@ public class ResourceShrinker {
     }
   }
 
-  private void parseResourceTxtFile(Path rTxt, List<String> resourcePackages) throws IOException {
-    BufferedReader reader = java.nio.file.Files.newBufferedReader(rTxt, Charset.defaultCharset());
+  private void parseResources(List<ResourceFile> resourceFiles) throws IOException {
+    for (ResourceFile resourceFile : resourceFiles) {
+      parseResourceTxtFile(resourceFile.rTxt, resourceFile.packageName.replace('.', '/'));
+    }
+  }
+
+  private void parseResourceTxtFile(Path file, String rPackagePath) throws IOException {
+    BufferedReader reader = java.nio.file.Files.newBufferedReader(file, Charset.defaultCharset());
     String line;
     while ((line = reader.readLine()) != null) {
       String[] tokens = line.split(" ");
       ResourceType type = ResourceType.getEnum(tokens[1]);
-      for (String resourcePackage : resourcePackages) {
-        resourceClassOwners.put(resourcePackage.replace('.', '/') + "/R$" + type.getName(), type);
-      }
+      resourceClassOwners.put(rPackagePath + "/R$" + type.getName(), type);
       if (type == ResourceType.STYLEABLE) {
         if (tokens[0].equals("int[]")) {
           addResource(ResourceType.DECLARE_STYLEABLE, tokens[2], null);
