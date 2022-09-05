@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -48,7 +49,7 @@ public class FileOutErr extends OutErr {
    * @param stderr The file for the stderr of this outErr
    */
   public FileOutErr(Path stdout, Path stderr) {
-    this(new FileRecordingOutputStream(stdout), new FileRecordingOutputStream(stderr));
+    super(new FileRecordingOutputStream(stdout), new FileRecordingOutputStream(stderr));
   }
 
   /**
@@ -62,11 +63,6 @@ public class FileOutErr extends OutErr {
     // We don't need to create a synchronized funnel here, like in the OutErr -- The
     // respective functions in the FileRecordingOutputStream take care of locking.
     this(new FileRecordingOutputStream(output));
-  }
-
-  protected FileOutErr(AbstractFileRecordingOutputStream out,
-                       AbstractFileRecordingOutputStream err) {
-    super(out, err);
   }
 
   /**
@@ -290,13 +286,13 @@ public class FileOutErr extends OutErr {
    * FileOutErr.
    */
   @ThreadSafety.ThreadCompatible
-  protected static class FileRecordingOutputStream extends AbstractFileRecordingOutputStream {
+  private static class FileRecordingOutputStream extends AbstractFileRecordingOutputStream {
 
     private final Path outputFile;
-    private OutputStream outputStream;
-    private String error;
+    OutputStream outputStream;
+    String error;
 
-    protected FileRecordingOutputStream(Path outputFile) {
+    FileRecordingOutputStream(Path outputFile) {
       this.outputFile = outputFile;
     }
 
@@ -332,7 +328,7 @@ public class FileOutErr extends OutErr {
     /**
      * Called whenever the FileRecordingOutputStream finds an error.
      */
-    protected void recordError(IOException exception) {
+    private void recordError(IOException exception) {
       String newErrorText = exception.getMessage();
       error = (error == null) ? newErrorText : error + "\n" + newErrorText;
     }
@@ -372,14 +368,22 @@ public class FileOutErr extends OutErr {
 
     @Override
     void dumpOut(OutputStream out) {
+      InputStream in = null;
       try {
         if (getFile().exists()) {
-          try (InputStream in = getFile().getInputStream()) {
-            ByteStreams.copy(in, out);
-          }
+          in = new FileInputStream(getFile().getPathString());
+          ByteStreams.copy(in, out);
         }
       } catch (IOException ex) {
         recordError(ex);
+      } finally {
+        if (in != null) {
+          try {
+            in.close();
+          } catch (IOException e) {
+            // Ignore.
+          }
+        }
       }
 
       if (hadError()) {
