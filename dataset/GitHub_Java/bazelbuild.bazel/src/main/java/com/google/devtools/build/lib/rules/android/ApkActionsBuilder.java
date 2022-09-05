@@ -16,16 +16,12 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.Runfiles;
-import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ApkSigningMethod;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.Jvm;
-import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Map;
 
@@ -68,12 +64,9 @@ public class ApkActionsBuilder {
   /**
    * Sets the dex file to be included in the APK.
    *
-   * <p>Can be either a plain classes.dex or a .zip file containing dexes.
+   * <p>Can be either a plain .dex or a .zip file containing dexes.
    */
   public ApkActionsBuilder setClassesDex(Artifact classesDex) {
-    Preconditions.checkArgument(
-        classesDex.getFilename().endsWith(".zip")
-            || classesDex.getFilename().equals("classes.dex"));
     this.classesDex = classesDex;
     return this;
   }
@@ -196,19 +189,12 @@ public class ApkActionsBuilder {
           .addInputArgument(javaResourceZip);
     }
 
-    Pair<Artifact, Runfiles> nativeSymlinksManifestAndRunfiles =
-        nativeLibs.createApkBuilderSymlinks(ruleContext);
-    if (nativeSymlinksManifestAndRunfiles != null) {
-      Artifact nativeSymlinksManifest = nativeSymlinksManifestAndRunfiles.first;
-      Runfiles nativeSymlinksRunfiles = nativeSymlinksManifestAndRunfiles.second;
-      PathFragment nativeSymlinksDir = nativeSymlinksManifest.getExecPath().getParentDirectory();
+    Artifact nativeSymlinks = nativeLibs.createApkBuilderSymlinks(ruleContext);
+    if (nativeSymlinks != null) {
+      PathFragment nativeSymlinksDir = nativeSymlinks.getExecPath().getParentDirectory();
       actionBuilder
-          .addRunfilesSupplier(
-              new RunfilesSupplierImpl(
-                  nativeSymlinksDir,
-                  nativeSymlinksRunfiles,
-                  nativeSymlinksManifest))
-          .addInput(nativeSymlinksManifest)
+          .addInputManifest(nativeSymlinks, nativeSymlinksDir)
+          .addInput(nativeSymlinks)
           .addInputs(nativeLibs.getAllNativeLibs())
           .addArgument("-nf")
           // If the native libs are "foo/bar/x86/foo.so", we need to pass "foo/bar" here
