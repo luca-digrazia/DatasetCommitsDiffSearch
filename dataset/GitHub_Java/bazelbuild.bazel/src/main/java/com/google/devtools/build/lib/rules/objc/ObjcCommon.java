@@ -76,7 +76,8 @@ import java.util.Set;
 // rule-internal information. Any provider created by a rule should not be read, only published.
 public final class ObjcCommon {
   /**
-   * Provides a way to access attributes that are common to all compilation rules.
+   * Provides a way to access attributes that are common to all compilation rules that inherit from
+   * {@link ObjcRuleClasses.ObjcCompilationRule}.
    */
   // TODO(bazel-team): Delete and move into support-specific attributes classes once ObjcCommon is
   // gone.
@@ -150,7 +151,8 @@ public final class ObjcCommon {
   }
 
   /**
-   * Provides a way to access attributes that are common to all resources rules.
+   * Provides a way to access attributes that are common to all resources rules that inherit from
+   * {@link ObjcRuleClasses.ObjcBaseResourcesRule}.
    */
   // TODO(bazel-team): Delete and move into support-specific attributes classes once ObjcCommon is
   // gone.
