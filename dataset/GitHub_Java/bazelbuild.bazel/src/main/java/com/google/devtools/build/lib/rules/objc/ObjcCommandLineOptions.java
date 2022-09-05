@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
-import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
@@ -207,14 +206,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   public String iosSigningCertName;
 
   @Option(
-    name = "experimental_use_absolute_paths_for_actions",
-    defaultValue = "false",
-    category = "undocumented",
-    help = "If set, then all actions objc actions will be executed with absolute paths."
-  )
-  public boolean useAbsolutePathsForActions;
-
-  @Option(
     name = "xcode_override_workspace_root",
     defaultValue = "",
     category = "xcode",
@@ -233,15 +224,15 @@ public class ObjcCommandLineOptions extends FragmentOptions {
       labelMap.put("dump_syms", dumpSyms);
     }
 
-    if (getPlatform() == Platform.IOS_DEVICE) {
+    if (getPlatform() == Platform.DEVICE) {
       labelMap.put("default_provisioning_profile", defaultProvisioningProfile);
     }
   }
 
   private Platform getPlatform() {
     for (String architecture : iosMultiCpus) {
-      if (Platform.forArch(architecture) == Platform.IOS_DEVICE) {
-        return Platform.IOS_DEVICE;
+      if (Platform.forArch(architecture) == Platform.DEVICE) {
+        return Platform.DEVICE;
       }
     }
     return Platform.forArch(iosCpu);
