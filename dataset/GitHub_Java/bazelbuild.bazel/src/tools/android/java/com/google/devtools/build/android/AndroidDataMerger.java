@@ -340,7 +340,7 @@ public class AndroidDataMerger {
           ParsedAndroidData.of(
               ImmutableSet.<MergeConflict>of(),
               ImmutableMap.copyOf(overwritableDeps),
-              direct.mergeCombining(transitive),
+              direct.mergeNonOverwritable(transitive),
               ImmutableMap.copyOf(assets)));
     } catch (IOException e) {
       throw new MergingException(e);
