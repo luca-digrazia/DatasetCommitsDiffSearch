@@ -18,6 +18,8 @@
 package org.hswebframework.web.controller;
 
 import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
 import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
@@ -25,6 +27,7 @@ import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.message.ResponseMessage;
+import org.hswebframework.web.logging.AccessLogger;
 import org.hswebframework.web.service.QueryByEntityService;
 import org.hswebframework.web.service.QueryService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,7 +56,6 @@ public interface QueryController<E, PK, Q extends Entity> {
      * @param <T> 服务类泛型
      * @return 服务类实例
      */
-    @Authorize(ignore = true)
     <T extends QueryByEntityService<E> & QueryService<E, PK>> T getService();
 
     /**
@@ -68,24 +70,24 @@ public interface QueryController<E, PK, Q extends Entity> {
      */
     @Authorize(action = Permission.ACTION_QUERY)
     @GetMapping
-    @ApiOperation(value = "根据动态条件查询", responseReference = "get")
+    @AccessLogger("{dynamic_query}")
+    @ApiOperation(value = "根据动态条件查询数据", responseReference = "get")
     default ResponseMessage<PagerResult<E>> list(Q param) {
         return ok(getService().selectPager(param));
     }
 
     @Authorize(action = Permission.ACTION_QUERY)
     @GetMapping("/no-paging")
-    @ApiOperation(value = "不分页动态查询", responseReference = "get")
+    @AccessLogger("{dynamic_query}")
+    @ApiOperation(value = "不分页动态查询数据", responseReference = "get")
     default ResponseMessage<List<E>> listNoPaging(Q param) {
-        if (param instanceof QueryParamEntity) {
-            ((QueryParamEntity) param).setPaging(false);
-        }
         return ok(getService().select(param));
     }
 
     @Authorize(action = Permission.ACTION_QUERY)
     @GetMapping("/count")
-    @ApiOperation(value = "根据动态条件统计", responseReference = "get")
+    @AccessLogger("{dynamic_query}")
+    @ApiOperation(value = "根据动态条件统计数据", responseReference = "get")
     default ResponseMessage<Integer> count(Q param) {
         return ok(getService().count(param));
     }
@@ -93,19 +95,20 @@ public interface QueryController<E, PK, Q extends Entity> {
 
     @Authorize(action = Permission.ACTION_GET)
     @GetMapping(path = "/{id:.+}")
-    @ApiOperation("根据主键查询")
+    @AccessLogger("{get_by_id}")
+    @ApiOperation("根据主键查询数据")
     default ResponseMessage<E> getByPrimaryKey(@PathVariable PK id) {
         return ok(assertNotNull(getService().selectByPk(id)));
     }
 
     @Authorize(action = Permission.ACTION_GET)
     @GetMapping(path = "/ids")
-    @ApiOperation("根据主键查询多条记录")
+    @AccessLogger("{get_by_id}")
+    @ApiOperation("根据主键查询多个数据")
     default ResponseMessage<List<E>> getByPrimaryKey(@RequestParam List<PK> ids) {
         return ok(assertNotNull(getService().selectByPk(ids)));
     }
 
-    @Authorize(ignore = true)
     static <T> T assertNotNull(T obj) {
         if (null == obj) {
             throw new NotFoundException("{data_not_exist}");
