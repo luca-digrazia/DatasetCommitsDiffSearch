@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -52,10 +51,16 @@ import javax.annotation.Nullable;
  * <p>The loader also supports legacy mode, where the JVM can be defined with an abolute path.
  */
 public final class JvmConfigurationLoader implements ConfigurationFragmentFactory {
+  private final boolean forceLegacy;
   private final JavaCpuSupplier cpuSupplier;
 
-  public JvmConfigurationLoader(JavaCpuSupplier cpuSupplier) {
+  public JvmConfigurationLoader(boolean forceLegacy, JavaCpuSupplier cpuSupplier) {
+    this.forceLegacy = forceLegacy;
     this.cpuSupplier = cpuSupplier;
+  }
+
+  public JvmConfigurationLoader(JavaCpuSupplier cpuSupplier) {
+    this(/*forceLegacy=*/ false, cpuSupplier);
   }
 
   @Override
@@ -72,10 +77,12 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
       return null;
     }
 
-    try {
-      return createDefault(env, javaHome, cpu);
-    } catch (LabelSyntaxException e) {
-      // Try again with legacy
+    if (!forceLegacy) {
+      try {
+        return createDefault(env, javaHome, cpu);
+      } catch (LabelSyntaxException e) {
+        // Try again with legacy
+      }
     }
 
     return createLegacy(javaHome);
@@ -150,9 +157,10 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
       }
       throw new InvalidConfigurationException("No JVM target found under " + javaHome
           + " that would work for " + cpu);
-    } catch (NoSuchPackageException | NoSuchTargetException e) {
-      lookup.getEventHandler().handle(Event.error(e.getMessage()));
+    } catch (NoSuchPackageException e) {
       throw new InvalidConfigurationException(e.getMessage(), e);
+    } catch (NoSuchTargetException e) {
+      throw new InvalidConfigurationException("No such target: " + e.getMessage(), e);
     }
   }
 

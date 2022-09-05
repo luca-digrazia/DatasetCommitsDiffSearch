@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -124,13 +124,5 @@ public abstract class FragmentOptions extends OptionsBase implements Cloneable, 
     } else {
       return null;
     }
-  }
-
-  /**
-   * Returns {@code true} if static configurations should be used with
-   * {@link BuildConfiguration.Options.DynamicConfigsMode.NOTRIM_PARTIAL}.
-   */
-  public boolean useStaticConfigurationsOverride() {
-    return false;
   }
 }
