@@ -23,6 +23,7 @@ import io.swagger.annotations.ApiParam;
 import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.NotFoundException;
 import org.hswebframework.web.authorization.Authentication;
+//import org.hswebframework.web.authorization.AuthenticationInitializeService;
 import org.hswebframework.web.authorization.AuthenticationManager;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.listener.AuthorizationListenerDispatcher;
@@ -38,7 +39,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
-import java.util.Map;
 import java.util.function.Function;
 
 import static org.hswebframework.web.controller.message.ResponseMessage.ok;
@@ -57,13 +57,15 @@ public class AuthorizationController {
     @Autowired
     private UserService userService;
 
+//    @Autowired
+//    private AuthenticationInitializeService authenticationInitializeService;
+
     @Autowired
     private AuthenticationManager authenticationManager;
-
     @Autowired
     private AuthorizationListenerDispatcher authorizationListenerDispatcher;
 
-    @GetMapping({"/login-out", "/sign-out", "/exit"})
+    @GetMapping("/login-out")
     @Authorize
     @ApiOperation("退出当前登录")
     public ResponseMessage exit(@ApiParam(hidden = true) Authentication authentication) {
@@ -80,9 +82,9 @@ public class AuthorizationController {
 
     @PostMapping(value = "/login")
     @ApiOperation("用户名密码登录")
-    public ResponseMessage<Map<String, Object>> authorize(@RequestParam @ApiParam("用户名") String username,
-                                                          @RequestParam @ApiParam("密码") String password,
-                                                          @ApiParam(hidden = true) HttpServletRequest request) {
+    public ResponseMessage<String> authorize(@RequestParam @ApiParam("用户名") String username,
+                                             @RequestParam @ApiParam("密码") String password,
+                                             @ApiParam(hidden = true) HttpServletRequest request) {
 
         AuthorizationFailedEvent.Reason reason = AuthorizationFailedEvent.Reason.OTHER;
         Function<String, Object> parameterGetter = request::getParameter;
@@ -111,12 +113,11 @@ public class AuthorizationController {
             // 验证通过
             Authentication authentication = authenticationManager.getByUserId(entity.getId());
             AuthorizationSuccessEvent event = new AuthorizationSuccessEvent(authentication, parameterGetter);
-            event.getResult().put("userId", entity.getId());
             int size = authorizationListenerDispatcher.doEvent(event);
             if (size == 0) {
                 logger.warn("not found any AuthorizationSuccessEvent,access control maybe disabled!");
             }
-            return ok(event.getResult());
+            return ok(entity.getId());
         } catch (Exception e) {
             AuthorizationFailedEvent failedEvent = new AuthorizationFailedEvent(username, password, parameterGetter, reason);
             failedEvent.setException(e);
