@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
-import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -170,12 +169,12 @@ abstract class TransitiveBaseTraversalFunction<TProcessedTargets> implements Sky
       }
 
       Multimap<Attribute, Label> transitions =
-          ((Rule) target).getTransitions(DependencyFilter.NO_NODEP_ATTRIBUTES);
+              ((Rule) target).getTransitions(Rule.NO_NODEP_ATTRIBUTES);
       for (Entry<Attribute, Label> entry : transitions.entries()) {
         ValueOrException2<NoSuchPackageException, NoSuchTargetException> value =
             labelDepMap.get(entry.getValue());
         for (Label label :
-                getAspectLabels((Rule) target, entry.getKey(), entry.getValue(), value, env)) {
+                getAspectLabels(target, entry.getKey(), entry.getValue(), value, env)) {
           depKeys.add(getKey(label));
         }
       }
@@ -185,7 +184,7 @@ abstract class TransitiveBaseTraversalFunction<TProcessedTargets> implements Sky
 
   /** Get the Aspect-related Label deps for the given edge. */
   protected abstract Collection<Label> getAspectLabels(
-      Rule fromRule,
+      Target fromTarget,
       Attribute attr,
       Label toLabel,
       ValueOrException2<NoSuchPackageException, NoSuchTargetException> toVal,
@@ -218,7 +217,7 @@ abstract class TransitiveBaseTraversalFunction<TProcessedTargets> implements Sky
   }
 
   private static void visitRule(Target target, Set<Label> labels) {
-    labels.addAll(((Rule) target).getTransitions(DependencyFilter.NO_NODEP_ATTRIBUTES).values());
+    labels.addAll(((Rule) target).getTransitions(Rule.NO_NODEP_ATTRIBUTES).values());
   }
 
   private static void visitTargetVisibility(Target target, Set<Label> labels) {
