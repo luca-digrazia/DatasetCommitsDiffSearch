@@ -43,7 +43,7 @@ public class HttpDownloadValue implements SkyValue {
     if (this == other) {
       return true;
     }
-    if (!(other instanceof HttpDownloadValue)) {
+    if (other == null || !(other instanceof HttpDownloadValue)) {
       return false;
     }
     HttpDownloadValue otherValue = (HttpDownloadValue) other;

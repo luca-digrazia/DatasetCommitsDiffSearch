@@ -29,7 +29,6 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.ReadableByteChannel;
-import java.nio.channels.WritableByteChannel;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -73,13 +72,12 @@ public class HttpDownloader {
 
     try (OutputStream outputStream = destination.getOutputStream()) {
       ReadableByteChannel rbc = getChannel(url);
-      WritableByteChannel obc = Channels.newChannel(outputStream);
       ByteBuffer byteBuffer = ByteBuffer.allocate(BUFFER_SIZE);
       while ((currentBytes = rbc.read(byteBuffer)) > 0) {
         totalBytes.addAndGet(currentBytes);
         byteBuffer.flip();
         while (byteBuffer.hasRemaining()) {
-          obc.write(byteBuffer);
+          outputStream.write(byteBuffer.get());
         }
         byteBuffer.flip();
       }
