@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,14 +14,11 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.rules.android.AndroidCommon;
-import com.google.devtools.build.lib.rules.android.AndroidIdeInfoProvider;
 import com.google.devtools.build.lib.rules.android.AndroidSemantics;
 import com.google.devtools.build.lib.rules.android.ApplicationManifest;
 import com.google.devtools.build.lib.rules.android.ResourceApk;
@@ -40,28 +37,15 @@ public class BazelAndroidSemantics implements AndroidSemantics {
   }
 
   @Override
-  public void addNonLocalResources(
-      RuleContext ruleContext,
-      ResourceApk resourceApk,
-      AndroidIdeInfoProvider.Builder ideInfoProviderBuilder) {}
-
-  @Override
-  public void addTransitiveInfoProviders(
-      RuleConfiguredTargetBuilder builder,
-      RuleContext ruleContext,
-      JavaCommon javaCommon,
-      AndroidCommon androidCommon,
-      Artifact jarWithAllClasses) {}
+  public void addTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
+      RuleContext ruleContext, JavaCommon javaCommon, AndroidCommon androidCommon,
+      Artifact jarWithAllClasses, ResourceApk resourceApk, Artifact zipAlignedApk,
+      Iterable<Artifact> apksUnderTest) {
+  }
 
   @Override
   public ApplicationManifest getManifestForRule(RuleContext ruleContext) {
-    ApplicationManifest result = ApplicationManifest.fromRule(ruleContext);
-    if (!result.getManifest().getExecPath().getBaseName().equals("AndroidManifest.xml")) {
-      ruleContext.attributeError("manifest", "The manifest must be called 'AndroidManifest.xml'");
-      return null;
-    }
-
-    return result;
+    return ApplicationManifest.fromRule(ruleContext);
   }
 
   @Override
@@ -89,12 +73,7 @@ public class BazelAndroidSemantics implements AndroidSemantics {
     // file specified on the command line. Currently, it checks $ANDROID_SDK_HOME, $USER_HOME then
     // $HOME which means that we could make it hermetic by setting $ANDROID_SDK_HOME for the
     // ApkBuilder invocation.
-    if (sign) {
-      Artifact debugKeyStore = ruleContext.getPrerequisiteArtifact("$debug_keystore", Mode.HOST);
-      actionBuilder
-          .addInput(debugKeyStore)
-          .setEnvironment(ImmutableMap.of("KEYSTORE", debugKeyStore.getExecPath().getPathString()));
-    } else {
+    if (!sign) {
       actionBuilder.addArgument("-u");
     }
   }
