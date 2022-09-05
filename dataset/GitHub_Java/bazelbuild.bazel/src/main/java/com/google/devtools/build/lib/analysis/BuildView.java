@@ -72,7 +72,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.Path;
@@ -518,8 +517,6 @@ public class BuildView {
           throws InterruptedException {
     Collection<Target> testsToRun = loadingResult.getTestsToRun();
     Collection<ConfiguredTarget> configuredTargets = skyframeAnalysisResult.getConfiguredTargets();
-    Collection<AspectValue> aspects = skyframeAnalysisResult.getAspects();
-
     Collection<ConfiguredTarget> allTargetsToTest = null;
     if (testsToRun != null) {
       // Determine the subset of configured targets that are meant to be run as tests.
@@ -540,7 +537,7 @@ public class BuildView {
     artifactsToBuild.addAll(buildInfoArtifacts);
 
     // Extra actions
-    addExtraActionsIfRequested(viewOptions, configuredTargets, aspects, artifactsToBuild);
+    addExtraActionsIfRequested(viewOptions, artifactsToBuild, configuredTargets);
 
     // Coverage
     NestedSet<Artifact> baselineCoverageArtifacts = getBaselineCoverageArtifacts(configuredTargets);
@@ -582,7 +579,7 @@ public class BuildView {
     };
     return new AnalysisResult(
         configuredTargets,
-        aspects,
+        skyframeAnalysisResult.getAspects(),
         allTargetsToTest,
         error,
         actionGraph,
@@ -619,50 +616,15 @@ public class BuildView {
     return baselineCoverageArtifacts.build();
   }
 
-  private void addExtraActionsIfRequested(Options viewOptions,
-      Collection<ConfiguredTarget> configuredTargets,
-      Collection<AspectValue> aspects,
-      Set<Artifact> artifactsToBuild) {
-    addExtraActionsIfRequested(viewOptions, artifactsToBuild,
-        Iterables.transform(configuredTargets,
-            new Function<ConfiguredTarget, Pair<Label, ExtraActionArtifactsProvider>>() {
-              @Nullable
-              @Override
-              public Pair<Label, ExtraActionArtifactsProvider> apply(
-                  ConfiguredTarget configuredTarget) {
-                return Pair.of(
-                    configuredTarget.getLabel(),
-                    configuredTarget.getProvider(ExtraActionArtifactsProvider.class));
-              }
-            }));
-    addExtraActionsIfRequested(viewOptions, artifactsToBuild,
-        Iterables.transform(aspects,
-            new Function<AspectValue, Pair<Label, ExtraActionArtifactsProvider>>() {
-              @Nullable
-              @Override
-              public Pair<Label, ExtraActionArtifactsProvider> apply(
-                  AspectValue aspectValue) {
-                return Pair.of(
-                    aspectValue.getLabel(),
-                    aspectValue
-                        .getConfiguredAspect()
-                        .getProvider(ExtraActionArtifactsProvider.class));
-              }
-            }
-        ));
-  }
-
   private void addExtraActionsIfRequested(BuildView.Options viewOptions,
-      Set<Artifact> artifactsToBuild,
-      Iterable<Pair<Label, ExtraActionArtifactsProvider>> providers) {
+      Set<Artifact> artifactsToBuild, Iterable<ConfiguredTarget> topLevelTargets) {
     NestedSetBuilder<ExtraArtifactSet> builder = NestedSetBuilder.stableOrder();
-    for (Pair<Label, ExtraActionArtifactsProvider> labelAndProvider : providers) {
-      ExtraActionArtifactsProvider provider = labelAndProvider.getSecond();
+    for (ConfiguredTarget topLevel : topLevelTargets) {
+      ExtraActionArtifactsProvider provider = topLevel.getProvider(
+          ExtraActionArtifactsProvider.class);
       if (provider != null) {
         if (viewOptions.extraActionTopLevelOnly) {
-          builder.add(ExtraArtifactSet.of(
-              labelAndProvider.getFirst(),
-              provider.getExtraActionArtifacts()));
+          builder.add(ExtraArtifactSet.of(topLevel.getLabel(), provider.getExtraActionArtifacts()));
         } else {
           builder.addTransitive(provider.getTransitiveExtraActionArtifacts());
         }
