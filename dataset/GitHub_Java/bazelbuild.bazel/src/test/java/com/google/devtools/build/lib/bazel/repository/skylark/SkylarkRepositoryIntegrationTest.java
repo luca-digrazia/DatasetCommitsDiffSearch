@@ -76,17 +76,13 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
       ImmutableMap<String, RepositoryFunction> repositoryHandlers =
           ImmutableMap.of(LocalRepositoryRule.NAME, localRepositoryFunction);
 
-      RepositoryDelegatorFunction function =
-          new RepositoryDelegatorFunction(
-              repositoryHandlers, skylarkRepositoryFunction, new AtomicBoolean(true));
-      function.setClientEnvironment(ImmutableMap.<String, String>of());
       return ImmutableMap.of(
           SkyFunctions.REPOSITORY_DIRECTORY,
-          function,
+          new RepositoryDelegatorFunction(
+              repositoryHandlers, skylarkRepositoryFunction, new AtomicBoolean(true)),
           SkyFunctions.REPOSITORY,
           new RepositoryLoaderFunction(),
-          FdoSupportValue.SKYFUNCTION,
-          new FdoSupportFunction());
+          FdoSupportValue.SKYFUNCTION, new FdoSupportFunction());
     }
   }
 
@@ -330,11 +326,17 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
         "workspace(name='bleh')",
         "local_repository(name='bazel_tools', path=__workspace_dir__)",
         "load('//:def.bzl', 'macro')");
+    scratch.overwriteFile("tools/genrule/genrule-setup.sh");
+    scratch.overwriteFile("tools/genrule/BUILD", "exports_files(['genrule-setup.sh'])");
     scratch.file("data.txt");
-    scratch.file("BUILD", "filegroup(", "  name='files', ", "  srcs=['data.txt'])");
+    scratch.file("BUILD",
+        "genrule(",
+        "  name='data', ",
+        "  outs=['data.out'],",
+        "  srcs=['data.txt'],",
+        "  cmd='cp $< $@')");
     invalidatePackages();
-    assertThat(getRuleContext(getConfiguredTarget("//:files")).getWorkspaceName())
-        .isEqualTo("bleh");
+    assertThat(getRuleContext(getConfiguredTarget("//:data")).getWorkspaceName()).isEqualTo("bleh");
   }
 
   @Test

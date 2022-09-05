@@ -71,6 +71,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
+
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.annotation.Nullable;
@@ -96,12 +97,12 @@ public class BazelRepositoryModule extends BlazeModule {
         ImmutableMap.<String, RepositoryFunction>builder()
             .put(LocalRepositoryRule.NAME, new LocalRepositoryFunction())
             .put(HttpArchiveRule.NAME, new HttpArchiveFunction(httpDownloader))
-            .put(GitRepositoryRule.NAME, new GitRepositoryFunction(httpDownloader))
+            .put(GitRepositoryRule.NAME, new GitRepositoryFunction())
             .put(HttpJarRule.NAME, new HttpJarFunction(httpDownloader))
             .put(HttpFileRule.NAME, new HttpFileFunction(httpDownloader))
             .put(MavenJarRule.NAME, new MavenJarFunction(mavenDownloader))
             .put(NewHttpArchiveRule.NAME, new NewHttpArchiveFunction(httpDownloader))
-            .put(NewGitRepositoryRule.NAME, new NewGitRepositoryFunction(httpDownloader))
+            .put(NewGitRepositoryRule.NAME, new NewGitRepositoryFunction())
             .put(NewLocalRepositoryRule.NAME, new NewLocalRepositoryFunction())
             .put(AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction())
             .put(AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction())
@@ -189,7 +190,8 @@ public class BazelRepositoryModule extends BlazeModule {
 
   @Override
   public void beforeCommand(Command command, CommandEnvironment env) throws AbruptExitException {
-    delegator.setClientEnvironment(env.getActionClientEnv());
+    delegator.setClientEnvironment(env.getClientEnv());
+    skylarkRepositoryFunction.setCommandEnvironment(env);
   }
 
   @Override
