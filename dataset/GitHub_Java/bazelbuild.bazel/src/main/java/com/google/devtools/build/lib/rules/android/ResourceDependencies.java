@@ -13,13 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 
 /**
@@ -41,10 +41,7 @@ public class ResourceDependencies {
    */
   private final NestedSet<ResourceContainer> directResources;
 
-  public static ResourceDependencies fromRuleResources(RuleContext ruleContext) { 
-    if (!hasResourceAttribute(ruleContext)) {
-      return empty();
-    }
+  public static ResourceDependencies fromRuleResources(RuleContext ruleContext) {
 
     NestedSetBuilder<ResourceContainer> transitiveDependencies = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<ResourceContainer> directDependencies = NestedSetBuilder.naiveLinkOrder();
@@ -62,9 +59,7 @@ public class ResourceDependencies {
   public static ResourceDependencies fromRuleResourceAndDeps(RuleContext ruleContext) {
     NestedSetBuilder<ResourceContainer> transitiveDependencies = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<ResourceContainer> directDependencies = NestedSetBuilder.naiveLinkOrder();
-    if (hasResourceAttribute(ruleContext)) {
-        extractFromAttribute("resources",ruleContext, transitiveDependencies, directDependencies);
-    }
+    extractFromAttribute("resources",ruleContext, transitiveDependencies, directDependencies);
     if (directDependencies.isEmpty()) {
       // There are no resources, so this library will forward the direct and transitive dependencies
       // without changes.
@@ -86,19 +81,6 @@ public class ResourceDependencies {
       builderForTransitive.addTransitive(resources.getTransitiveAndroidResources());
       builderForDirect.addTransitive(resources.getDirectAndroidResources());
     }
-  }
-
-  /**
-   * Check for the existence of a "resources" attribute.
-   * 
-   * <p>The existence of the resources attribute is not guaranteed on for all android rules, so it
-   * is necessary to check for it.
-   * 
-   * @param ruleContext The context to check.
-   * @return True if the ruleContext has resources, otherwise, false.
-   */
-  private static boolean hasResourceAttribute(RuleContext ruleContext) {
-    return ruleContext.attributes().has("resources", BuildType.LABEL);
   }
 
   @Override
