@@ -159,6 +159,18 @@ public final class PackageFactory {
     }
   }
 
+  private static class DefaultObsolete extends PackageArgument<Boolean> {
+    private DefaultObsolete() {
+      super("default_obsolete", Type.BOOLEAN);
+    }
+
+    @Override
+    protected void process(Package.LegacyBuilder pkgBuilder, Location location,
+        Boolean value) {
+      pkgBuilder.setDefaultObsolete(value);
+    }
+  }
+
   private static class DefaultTestOnly extends PackageArgument<Boolean> {
     private DefaultTestOnly() {
       super("default_testonly", Type.BOOLEAN);
@@ -420,6 +432,7 @@ public final class PackageFactory {
            .add(new DefaultDeprecation())
            .add(new DefaultDistribs())
            .add(new DefaultLicenses())
+           .add(new DefaultObsolete())
            .add(new DefaultTestOnly())
            .add(new DefaultVisibility())
            .add(new Features())
@@ -824,8 +837,7 @@ public final class PackageFactory {
       // if PKG_CONTEXT is missing, we're not called from a BUILD file. This happens if someone
       // uses native.some_func() in the wrong place.
       throw new EvalException(ast.getLocation(),
-          "The native module cannot be accessed from here. "
-          + "Wrap the function in a macro and call it from a BUILD file");
+          "This function must be wrapped in a macro and called from a BUILD file");
     }
   }
 
