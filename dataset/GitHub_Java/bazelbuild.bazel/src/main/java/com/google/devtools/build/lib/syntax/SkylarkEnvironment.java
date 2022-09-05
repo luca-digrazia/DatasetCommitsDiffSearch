@@ -119,7 +119,7 @@ public class SkylarkEnvironment extends Environment implements Serializable {
    * Clones this Skylark global environment.
    */
   public SkylarkEnvironment cloneEnv(EventHandler eventHandler) {
-    Preconditions.checkArgument(isGlobal());
+    Preconditions.checkArgument(isGlobalEnvironment());
     SkylarkEnvironment newEnv = new SkylarkEnvironment(eventHandler, this.fileContentHashCode);
     for (Entry<String, Object> entry : env.entrySet()) {
       newEnv.env.put(entry.getKey(), entry.getValue());
@@ -142,8 +142,7 @@ public class SkylarkEnvironment extends Environment implements Serializable {
   /**
    * Returns true if this is a Skylark global environment.
    */
-  @Override
-  public boolean isGlobal() {
+  public boolean isGlobalEnvironment() {
     return parent == null;
   }
 
