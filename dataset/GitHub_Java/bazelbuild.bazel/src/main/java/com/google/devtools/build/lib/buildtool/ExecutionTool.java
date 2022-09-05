@@ -387,26 +387,26 @@ public class ExecutionTool {
                                   request.getOptionsDescription());
 
     Set<ConfiguredTarget> builtTargets = new HashSet<>();
-    Collection<AspectValue> aspects = analysisResult.getAspects();
-
-    Iterable<Artifact> allArtifactsForProviders =
-        Iterables.concat(
-            additionalArtifacts,
-            TopLevelArtifactHelper.getAllArtifactsToBuild(
-                    analysisResult.getTargetsToBuild(), analysisResult.getTopLevelContext())
-                .getAllArtifacts(),
-            TopLevelArtifactHelper.getAllArtifactsToBuildFromAspects(
-                    aspects, analysisResult.getTopLevelContext())
-                .getAllArtifacts(),
-            //TODO(dslomov): Artifacts to test from aspects?
-            TopLevelArtifactHelper.getAllArtifactsToTest(analysisResult.getTargetsToTest()));
-
-    if (request.isRunningInEmacs()) {
-      // The syntax of this message is tightly constrained by lisp/progmodes/compile.el in emacs
-      request.getOutErr().printErrLn("blaze: Entering directory `" + getExecRoot() + "/'");
-    }
-    boolean buildCompleted = false;
+    boolean interrupted = false;
     try {
+      Collection<AspectValue> aspects = analysisResult.getAspects();
+
+      Iterable<Artifact> allArtifactsForProviders =
+          Iterables.concat(
+              additionalArtifacts,
+              TopLevelArtifactHelper.getAllArtifactsToBuild(
+                      analysisResult.getTargetsToBuild(), analysisResult.getTopLevelContext())
+                  .getAllArtifacts(),
+              TopLevelArtifactHelper.getAllArtifactsToBuildFromAspects(
+                      aspects, analysisResult.getTopLevelContext())
+                  .getAllArtifacts(),
+              //TODO(dslomov): Artifacts to test from aspects?
+              TopLevelArtifactHelper.getAllArtifactsToTest(analysisResult.getTargetsToTest()));
+
+      if (request.isRunningInEmacs()) {
+        // The syntax of this message is tightly constrained by lisp/progmodes/compile.el in emacs
+        request.getOutErr().printErrLn("blaze: Entering directory `" + getExecRoot() + "/'");
+      }
       for (ActionContextProvider actionContextProvider : actionContextProviders) {
         actionContextProvider.executionPhaseStarting(
             fileCache,
@@ -439,16 +439,16 @@ public class ExecutionTool {
           builtTargets,
           request.getBuildOptions().explanationPath != null,
           runtime.getLastExecutionTimeRange());
-      buildCompleted = true;
-    } catch (BuildFailedException | TestExecException e) {
-      buildCompleted = true;
+
+    } catch (InterruptedException e) {
+      interrupted = true;
       throw e;
     } finally {
       env.recordLastExecutionTime();
       if (request.isRunningInEmacs()) {
         request.getOutErr().printErrLn("blaze: Leaving directory `" + getExecRoot() + "/'");
       }
-      if (buildCompleted) {
+      if (!interrupted) {
         getReporter().handle(Event.progress("Building complete."));
       }
 
@@ -463,7 +463,7 @@ public class ExecutionTool {
 
       Profiler.instance().markPhase(ProfilePhase.FINISH);
 
-      if (buildCompleted) {
+      if (!interrupted) {
         saveCaches(actionCache);
       }
 
