@@ -2,7 +2,6 @@ package com.prolificinteractive.materialcalendarview;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-import android.support.annotation.NonNull;
 
 import java.util.Calendar;
 import java.util.Date;
@@ -13,78 +12,20 @@ import java.util.Locale;
  */
 public final class CalendarDay implements Parcelable {
 
-    /**
-     * @return CalendarDay set to today's date
-     */
-    public static @NonNull CalendarDay today() {
-        return from(CalendarUtils.getInstance());
-    }
-
-    /**
-     *
-     * @param year new instance's year
-     * @param month new instance's month as defined by {@linkplain java.util.Calendar}
-     * @param day new instance's day of month
-     * @return CalendarDay set to the specified date
-     */
-    public static @NonNull CalendarDay from(int year, int month, int day) {
-        return new CalendarDay(year, month, day);
-    }
-
-    /**
-     * @return CalendarDay set to the specified date
-     */
-    public static CalendarDay from(Calendar calendar) {
-        if(calendar == null) {
-            return null;
-        }
-        return from(
-                CalendarUtils.getYear(calendar),
-                CalendarUtils.getMonth(calendar),
-                CalendarUtils.getDay(calendar)
-        );
-    }
-
-    /**
-     * @return CalendarDay set to the specified date
-     */
-    public static CalendarDay from(Date date) {
-        if(date == null) {
-            return null;
-        }
-        return from(CalendarUtils.getInstance(date));
-    }
-
     private final int year;
     private final int month;
     private final int day;
 
     /**
-     * Cache for calls to {@linkplain #getCalendar()}
-     */
-    private Calendar _calendar;
-
-    /**
-     * Cache for calls to {@linkplain #getDate()}
-     */
-    private Date _date;
-
-    /**
      * Initialized to the current day
-     *
-     * @see CalendarDay#today()
      */
-    @Deprecated
     public CalendarDay() {
         this(CalendarUtils.getInstance());
     }
 
     /**
-     * @see CalendarDay#from(Calendar)
-     *
      * @param calendar source to pull date information from for this instance
      */
-    @Deprecated
     public CalendarDay(Calendar calendar) {
         this(
                 CalendarUtils.getYear(calendar),
@@ -94,13 +35,10 @@ public final class CalendarDay implements Parcelable {
     }
 
     /**
-     * @see CalendarDay#from(Calendar)
-     *
      * @param year new instance's year
      * @param month new instance's month as defined by {@linkplain java.util.Calendar}
      * @param day new instance's day of month
      */
-    @Deprecated
     public CalendarDay(int year, int month, int day) {
         this.year = year;
         this.month = month;
@@ -108,11 +46,8 @@ public final class CalendarDay implements Parcelable {
     }
 
     /**
-     * @see CalendarDay#from(Date)
-     *
      * @param date source to pull date information from for this instance
      */
-    @Deprecated
     public CalendarDay(Date date) {
         this(CalendarUtils.getInstance(date));
     }
@@ -141,22 +76,17 @@ public final class CalendarDay implements Parcelable {
     /**
      * @return a date with this days information
      */
-    public @NonNull Date getDate() {
-        if(_date == null) {
-            _date = getCalendar().getTime();
-        }
-        return _date;
+    public Date getDate() {
+        return getCalendar().getTime();
     }
 
     /**
      * @return a new calendar instance with this day information
      */
-    public @NonNull Calendar getCalendar() {
-        if(_calendar == null) {
-            _calendar = CalendarUtils.getInstance();
-            copyTo(_calendar);
-        }
-        return _calendar;
+    public Calendar getCalendar() {
+        Calendar calendar = CalendarUtils.getInstance();
+        copyTo(calendar);
+        return calendar;
     }
 
     /**
@@ -181,57 +111,48 @@ public final class CalendarDay implements Parcelable {
      * @param other the other day to test
      * @return true if this is before other, false if equal or after
      */
-    public boolean isBefore(@NonNull CalendarDay other) {
+    public boolean isBefore(CalendarDay other) {
         if(other == null) {
             throw new IllegalArgumentException("other cannot be null");
         }
-        if (year == other.year) {
-            return ((month == other.month) ? (day < other.day) : (month < other.month));
-        }
-        else {
-            return year < other.year;
-        }
+        return (year == other.year) ?
+                ((month == other.month) ? (day < other.day) : (month < other.month)) :
+                (year < other.year);
     }
 
     /**
      * @param other the other day to test
      * @return true if this is after other, false if equal or before
      */
-    public boolean isAfter(@NonNull CalendarDay other) {
+    public boolean isAfter(CalendarDay other) {
         if(other == null) {
             throw new IllegalArgumentException("other cannot be null");
         }
-
-        if (year == other.year) {
-            return (month == other.month) ? (day > other.day) : (month > other.month);
-        }
-        else {
-            return year > other.year;
-        }
+        return (year == other.year) ?
+                ((month == other.month) ? (day > other.day) : (month > other.month)) :
+                (year > other.year);
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
+        if(this == o) return true;
+        if(o == null || getClass() != o.getClass()) return false;
 
         CalendarDay that = (CalendarDay) o;
 
-        return day == that.day && month == that.month && year == that.year;
+        if(day != that.day) return false;
+        if(month != that.month) return false;
+        if(year != that.year) return false;
+
+        return true;
     }
 
     @Override
     public int hashCode() {
-        return hashCode(year, month, day);
-    }
-
-    private static int hashCode(int year, int month, int day) {
-        //Should produce hashes like "20150401"
-        return (year * 10000) + (month * 100) + day;
+        int result = year;
+        result = 31 * result + month;
+        result = 31 * result + day;
+        return result;
     }
 
     @Override

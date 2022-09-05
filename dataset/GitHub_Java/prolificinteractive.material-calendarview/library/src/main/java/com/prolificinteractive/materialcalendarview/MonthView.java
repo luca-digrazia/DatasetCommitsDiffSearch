@@ -5,10 +5,7 @@ import android.util.AttributeSet;
 import android.view.View;
 import android.widget.GridLayout;
 
-import com.prolificinteractive.materialcalendarview.format.WeekDayFormatter;
-
 import java.util.ArrayList;
-import java.util.Calendar;
 
 import static java.util.Calendar.DATE;
 import static java.util.Calendar.DAY_OF_WEEK;
@@ -30,8 +27,8 @@ class MonthView extends GridLayout implements View.OnClickListener {
     private final ArrayList<WeekDayView> weekDayViews = new ArrayList<>();
     private final ArrayList<DayView> monthDayViews = new ArrayList<>();
 
-    private final Calendar calendarOfRecord = CalendarUtils.getInstance();
-    private final Calendar tempWorkingCalendar = CalendarUtils.getInstance();
+    private final CalendarWrapper calendarOfRecord = CalendarWrapper.getInstance();
+    private final CalendarWrapper tempWorkingCalendar = CalendarWrapper.getInstance();
     private int firstDayOfWeek = SUNDAY;
 
     private CalendarDay selection = null;
@@ -99,9 +96,9 @@ class MonthView extends GridLayout implements View.OnClickListener {
         }
     }
 
-    private Calendar resetAndGetWorkingCalendar() {
-        CalendarUtils.copyDateTo(calendarOfRecord, tempWorkingCalendar);
-        int dow = CalendarUtils.getDayOfWeek(tempWorkingCalendar);
+    private CalendarWrapper resetAndGetWorkingCalendar() {
+        CalendarWrapper.copyDateTo(calendarOfRecord, tempWorkingCalendar);
+        int dow = tempWorkingCalendar.getDayOfWeek();
         int delta = firstDayOfWeek - dow;
         //If the delta is positive, we want to remove a week
         boolean removeRow = showOtherDates ? delta >= 0 : delta > 0;
@@ -115,17 +112,11 @@ class MonthView extends GridLayout implements View.OnClickListener {
     public void setFirstDayOfWeek(int dayOfWeek) {
         this.firstDayOfWeek = dayOfWeek;
 
-        Calendar calendar = resetAndGetWorkingCalendar();
+        CalendarWrapper calendar = resetAndGetWorkingCalendar();
         calendar.set(DAY_OF_WEEK, dayOfWeek);
         for(WeekDayView dayView : weekDayViews) {
-            dayView.setDayOfWeek(CalendarUtils.getDayOfWeek(calendar));
+            dayView.setDayOfWeek(calendar.getDayOfWeek());
             calendar.add(DATE, 1);
-        }
-    }
-
-    public void setWeekDayFormatter(WeekDayFormatter formatter) {
-        for(WeekDayView dayView : weekDayViews) {
-            dayView.setWeekDayFormatter(formatter);
         }
     }
 
@@ -141,8 +132,19 @@ class MonthView extends GridLayout implements View.OnClickListener {
 
     public void setDate(CalendarDay month) {
         month.copyTo(calendarOfRecord);
-        CalendarUtils.setToFirstDay(calendarOfRecord);
+        calendarOfRecord.setToFirstDay();
         updateUi();
+    }
+
+    public void setDate(CalendarWrapper calendar) {
+        CalendarWrapper.copyDateTo(calendar, calendarOfRecord);
+        calendarOfRecord.setToFirstDay();
+        updateUi();
+    }
+
+
+    public void setSelectedDate(CalendarWrapper cal) {
+        setSelectedDate(cal == null ? null : new CalendarDay(cal));
     }
 
     public void setSelectedDate(CalendarDay cal) {
@@ -151,8 +153,8 @@ class MonthView extends GridLayout implements View.OnClickListener {
     }
 
     private void updateUi() {
-        int ourMonth = CalendarUtils.getMonth(calendarOfRecord);
-        Calendar calendar = resetAndGetWorkingCalendar();
+        int ourMonth = calendarOfRecord.getMonth();
+        CalendarWrapper calendar = resetAndGetWorkingCalendar();
         for(DayView dayView : monthDayViews) {
             CalendarDay day = new CalendarDay(calendar);
             dayView.setDay(day);

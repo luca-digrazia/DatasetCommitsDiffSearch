@@ -18,6 +18,8 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
+import com.prolificinteractive.library.calendarwidget.R;
+
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -42,12 +44,12 @@ import java.util.Locale;
  * {@linkplain com.prolificinteractive.materialcalendarview.OnDateChangedListener}
  * </p>
  *
- * @see R.styleable#MaterialCalendarView_arrowColor
- * @see R.styleable#MaterialCalendarView_selectionColor
- * @see R.styleable#MaterialCalendarView_headerTextAppearance
- * @see R.styleable#MaterialCalendarView_dateTextAppearance
- * @see R.styleable#MaterialCalendarView_weekDayTextAppearance
- * @see R.styleable#MaterialCalendarView_showOtherDates
+ * @attr ref R.styleable.MaterialCalendarView_arrowColor
+ * @attr ref R.styleable.MaterialCalendarView_selectionColor
+ * @attr ref R.styleable.MaterialCalendarView_headerTextAppearance
+ * @attr ref R.styleable.MaterialCalendarView_dateTextAppearance
+ * @attr ref R.styleable.MaterialCalendarView_weekDayTextAppearance
+ * @attr ref R.styleable.MaterialCalendarView_showOtherDates
  */
 public class MaterialCalendarView extends FrameLayout {
 
@@ -351,14 +353,6 @@ public class MaterialCalendarView extends FrameLayout {
     }
 
     /**
-     * @param date set the minimum selectable date, null for no minimum
-     */
-    public void setMinimumDate(Date date) {
-        setMinimumDate(date == null ? null : new CalendarDay(date));
-        setRangeDates(minDate, maxDate);
-    }
-
-    /**
      * @param calendar set the minimum selectable date, null for no minimum
      */
     public void setMinimumDate(CalendarDay calendar) {
@@ -378,14 +372,6 @@ public class MaterialCalendarView extends FrameLayout {
      */
     public void setMaximumDate(Calendar calendar) {
         setMaximumDate(calendar == null ? null : new CalendarDay(calendar));
-        setRangeDates(minDate, maxDate);
-    }
-
-    /**
-     * @param date set the maximum selectable date, null for no maximum
-     */
-    public void setMaximumDate(Date date) {
-        setMaximumDate(date == null ? null : new CalendarDay(date));
         setRangeDates(minDate, maxDate);
     }
 
@@ -690,18 +676,18 @@ public class MaterialCalendarView extends FrameLayout {
             }
 
             if(min == null) {
-                Calendar worker = CalendarUtils.getInstance();
+                CalendarWrapper worker = CalendarWrapper.getInstance();
                 worker.add(Calendar.YEAR, -200);
                 min = new CalendarDay(worker);
             }
 
             if(max == null) {
-                Calendar worker = CalendarUtils.getInstance();
+                CalendarWrapper worker = CalendarWrapper.getInstance();
                 worker.add(Calendar.YEAR, 200);
                 max = new CalendarDay(worker);
             }
 
-            Calendar worker = CalendarUtils.getInstance();
+            CalendarWrapper worker = CalendarWrapper.getInstance();
             min.copyTo(worker);
             months.clear();
             CalendarDay workingMonth = new CalendarDay(worker);
