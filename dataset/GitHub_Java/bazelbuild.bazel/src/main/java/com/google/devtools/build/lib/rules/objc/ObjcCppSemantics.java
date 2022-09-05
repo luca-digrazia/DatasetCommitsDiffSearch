@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_FILE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
-
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -34,18 +31,10 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 public class ObjcCppSemantics implements CppSemantics {
 
-  private final ObjcProvider objcProvider;
+  // We make CppSemantics a singleton object for efficiency and consistency, since we expect
+  // any instance to be identical.
+  public static final CppSemantics INSTANCE = new ObjcCppSemantics();
 
-  /**
-   * Creates an instance of ObjcCppSemantics
-   * 
-   * @param objcProvider  the provider that should be used in determining objc-specific inputs
-   *    to actions
-   */
-  public ObjcCppSemantics(ObjcProvider objcProvider) {
-    this.objcProvider = objcProvider;
-  }
-  
   @Override
   public PathFragment getEffectiveSourcePath(Artifact source) {
     return source.getRootRelativePath();
@@ -60,9 +49,6 @@ public class ObjcCppSemantics implements CppSemantics {
     // including header files, as opposed to just the "compile" filegroup.
     actionBuilder.addTransitiveMandatoryInputs(CppHelper.getToolchain(ruleContext).getCrosstool());
     actionBuilder.setShouldScanIncludes(false);
-
-    actionBuilder.addTransitiveMandatoryInputs(objcProvider.get(STATIC_FRAMEWORK_FILE));
-    actionBuilder.addTransitiveMandatoryInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
   }
 
   @Override

@@ -131,6 +131,7 @@ import com.google.devtools.build.lib.rules.repository.BindRule;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.NewLocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.WorkspaceBaseRule;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 
 import java.io.IOException;
@@ -232,10 +233,10 @@ public class BazelRuleClassProvider {
   /**
    * Java objects accessible from Skylark rule implementations using this module.
    */
-  public static final ImmutableMap<String, Object> skylarkBuiltinJavaObects =
+  public static final ImmutableMap<String, SkylarkType> skylarkBuiltinJavaObects =
       ImmutableMap.of(
-          "android_common", new AndroidSkylarkCommon(),
-          "apple_common", new AppleSkylarkCommon());
+          "android_common", SkylarkType.of(AndroidSkylarkCommon.class),
+          "apple_common", SkylarkType.of(AppleSkylarkCommon.class));
           
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
     builder
@@ -247,7 +248,7 @@ public class BazelRuleClassProvider {
         .setRunfilesPrefix("")
         .setToolsRepository("@bazel_tools")
         .setPrerequisiteValidator(new BazelPrerequisiteValidator())
-        .setSkylarkAccessibleTopLevels(skylarkBuiltinJavaObects);
+        .setSkylarkAccessibleJavaClasses(skylarkBuiltinJavaObects);
 
     builder.addBuildOptions(BUILD_OPTIONS);
 
