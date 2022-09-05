@@ -15,6 +15,9 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Iterables;
@@ -24,16 +27,19 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil.UncheckedActio
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
-import java.io.IOException;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Unit tests for the {@link CompilationHelper} class. */
+import java.io.IOException;
+import java.util.List;
+
+/**
+ * Unit tests for the {@link CompilationHelper} class.
+ */
 @RunWith(JUnit4.class)
 public class CompilationHelperTest extends BuildViewTestCase {
   private AnalysisTestUtil.CollectingAnalysisEnvironment analysisEnvironment;
@@ -46,16 +52,12 @@ public class CompilationHelperTest extends BuildViewTestCase {
 
   private List<Artifact> getAggregatingMiddleman(
       ConfiguredTarget rule, BuildConfiguration configuration, boolean withSolib) throws Exception {
-    RuleContext ruleContext = getRuleContext(rule, analysisEnvironment);
-    CcToolchainProvider toolchain =
-        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     return CppHelper.getAggregatingMiddlemanForTesting(
-        ruleContext,
+        getRuleContext(rule, analysisEnvironment),
         ActionsTestUtil.NULL_ACTION_OWNER,
         "middleman",
         rule.getProvider(FileProvider.class).getFilesToBuild(),
         withSolib,
-        toolchain.getSolibDirectory(),
         configuration);
   }
 
@@ -77,7 +79,7 @@ public class CompilationHelperTest extends BuildViewTestCase {
     assertThat(middleman1).hasSize(1);
     List<Artifact> middleman2 = getAggregatingMiddleman(rule, false);
     assertThat(middleman2).hasSize(1);
-    assertThat(middleman2.get(0)).isEqualTo(middleman1.get(0));
+    assertEquals(middleman1.get(0), middleman2.get(0));
   }
 
   /**
@@ -95,7 +97,7 @@ public class CompilationHelperTest extends BuildViewTestCase {
     assertThat(middleman).hasSize(1);
     List<Artifact> middlemanWithSymlinks = getAggregatingMiddleman(rule, true);
     assertThat(middlemanWithSymlinks).hasSize(1);
-    assertThat(middlemanWithSymlinks.get(0)).isNotSameAs(middleman.get(0));
+    assertNotSame(middleman.get(0), middlemanWithSymlinks.get(0));
   }
 
   /**
@@ -129,8 +131,9 @@ public class CompilationHelperTest extends BuildViewTestCase {
 
 
     List<Artifact> middleman2 = getAggregatingMiddleman(pyRuleB, true);
-    assertThat(Iterables.getOnlyElement(middleman2).getExecPathString())
-        .isEqualTo(Iterables.getOnlyElement(middleman1).getExecPathString());
+    assertEquals(
+        Iterables.getOnlyElement(middleman1).getExecPathString(),
+        Iterables.getOnlyElement(middleman2).getExecPathString());
   }
 
   /**
@@ -161,11 +164,10 @@ public class CompilationHelperTest extends BuildViewTestCase {
     ConfiguredTarget javaRuleB = getDirectPrerequisite(
         getConfiguredTarget("//foo:d"), "//foo:libb.so");
     List<Artifact> middleman2 = getAggregatingMiddleman(javaRuleB, false);
-    assertThat(
-            Iterables.getOnlyElement(middleman1)
-                .getExecPathString()
-                .equals(Iterables.getOnlyElement(middleman2).getExecPathString()))
-        .isFalse();
+    assertFalse(
+        Iterables.getOnlyElement(middleman1)
+            .getExecPathString()
+            .equals(Iterables.getOnlyElement(middleman2).getExecPathString()));
   }
 
   private void setupJavaPythonCcConfigurationFiles() throws IOException {

@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
@@ -36,6 +34,7 @@ import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
@@ -248,7 +247,7 @@ public class CppHelper {
    * if there is no such attribute (this is currently not an error).
    */
   @Nullable public static CcToolchainProvider getToolchain(RuleContext ruleContext) {
-    if (!ruleContext.isAttrDefined(":cc_toolchain", LABEL)) {
+    if (ruleContext.attributes().getAttributeDefinition(":cc_toolchain") == null) {
       // TODO(bazel-team): Report an error or throw an exception in this case.
       return null;
     }
@@ -385,7 +384,7 @@ public class CppHelper {
       scannableBuilder.addTransitive(dep.getTransitiveIncludeScannables());
     }
 
-    if (ruleContext.attributes().has("malloc", LABEL)) {
+    if (ruleContext.attributes().has("malloc", BuildType.LABEL)) {
       TransitiveInfoCollection malloc = mallocForTarget(ruleContext);
       TransitiveLipoInfoProvider provider = malloc.getProvider(TransitiveLipoInfoProvider.class);
       if (provider != null) {
@@ -435,19 +434,16 @@ public class CppHelper {
   }
 
   /**
-   * Creates a CppModuleMap object for pure c++ builds. The module map artifact becomes a candidate
-   * input to a CppCompileAction.
+   * Creates a CppModuleMap object for pure c++ builds.  The module map artifact becomes a
+   * candidate input to a CppCompileAction.
    */
-  public static CppModuleMap createDefaultCppModuleMap(RuleContext ruleContext, String suffix) {
+  public static CppModuleMap createDefaultCppModuleMap(RuleContext ruleContext) {
     // Create the module map artifact as a genfile.
-    Artifact mapFile =
-        ruleContext.getPackageRelativeArtifact(
-            ruleContext.getLabel().getName()
-                + suffix
-                + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
-            ruleContext
-                .getConfiguration()
-                .getGenfilesDirectory(ruleContext.getRule().getRepository()));
+    Artifact mapFile = ruleContext.getPackageRelativeArtifact(
+        ruleContext.getLabel().getName()
+            + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
+        ruleContext.getConfiguration().getGenfilesDirectory(
+            ruleContext.getRule().getRepository()));
     return new CppModuleMap(mapFile, ruleContext.getLabel().toString());
   }
 

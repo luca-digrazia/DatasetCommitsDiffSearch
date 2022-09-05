@@ -56,7 +56,6 @@ import java.util.Map;
  * Implementation for the cc_toolchain rule.
  */
 public class CcToolchain implements RuleConfiguredTargetFactory {
-
   /**
    * This file (found under the sysroot) may be unconditionally included in every C/C++ compilation.
    */
@@ -199,8 +198,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
           "FDO_DIR", cppConfiguration.getFdoInstrument().getPathString()));
     }
 
-    Artifact linkDynamicLibraryTool = getLinkDynamicLibraryTool(ruleContext);
-
     CcToolchainProvider provider =
         new CcToolchainProvider(
             cppConfiguration,
@@ -223,7 +220,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             getBuildVariables(ruleContext),
             getBuiltinIncludes(ruleContext),
             coverageEnvironment.build(),
-            linkDynamicLibraryTool,
             getEnvironment(ruleContext));
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
@@ -237,10 +233,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     // but it is sort-of-kind-of a tool, but various parts of it are linked into the output...
     // ...so we trust the judgment of the author of the cc_toolchain rule to figure out what
     // licenses should be propagated to C++ targets.
-    // TODO(elenairina): Remove this and use Attribute.Builder.useOutputLicenses() on the
-    // :cc_toolchain attribute instead.
-    final License outputLicense =
-        ruleContext.getRule().getToolOutputLicense(ruleContext.attributes());
+    License outputLicense = ruleContext.getRule().getToolOutputLicense(ruleContext.attributes());
     if (outputLicense != null && outputLicense != License.NO_LICENSE) {
       final NestedSet<TargetLicense> license = NestedSetBuilder.create(Order.STABLE_ORDER,
           new TargetLicense(ruleContext.getLabel(), outputLicense));
@@ -249,27 +242,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         public NestedSet<TargetLicense> getTransitiveLicenses() {
           return license;
         }
-
-        @Override
-        public TargetLicense getOutputLicenses() {
-          return new TargetLicense(label, outputLicense);
-        }
-
-        @Override
-        public boolean hasOutputLicenses() {
-          return true;
-        }
-
       };
 
       builder.add(LicensesProvider.class, licensesProvider);
     }
 
     return builder.build();
-  }
-
-  private Artifact getLinkDynamicLibraryTool(RuleContext ruleContext) {
-    return ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.TARGET);
   }
 
   private ImmutableList<Artifact> getBuiltinIncludes(RuleContext ruleContext) {
@@ -307,7 +285,6 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     return NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(link)
         .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top"))
-        .add(getLinkDynamicLibraryTool(ruleContext))
         .add(
             ruleContext
                 .getAnalysisEnvironment()
