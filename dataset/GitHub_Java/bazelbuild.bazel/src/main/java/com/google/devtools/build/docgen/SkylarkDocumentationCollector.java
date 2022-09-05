@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,25 +19,15 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.docgen.skylark.SkylarkBuiltinMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkJavaMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkModuleDoc;
-import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.rules.SkylarkModules;
 import com.google.devtools.build.lib.rules.SkylarkRuleContext;
-import com.google.devtools.build.lib.rules.android.AndroidSkylarkApiProvider;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
-import com.google.devtools.build.lib.rules.java.Jvm;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
-import com.google.devtools.build.lib.syntax.BazelLibrary;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.MethodLibrary;
 import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkSignature;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -55,12 +45,8 @@ import java.util.TreeMap;
  * A helper class that collects Skylark module documentation.
  */
 final class SkylarkDocumentationCollector {
-  @SkylarkModule(
-    name = "globals",
-    title = "Globals",
-    category = SkylarkModuleCategory.TOP_LEVEL_TYPE,
-    doc = "Objects, functions and modules registered in the global environment."
-  )
+  @SkylarkModule(name = "globals",
+      doc = "Objects, functions and modules registered in the global environment.")
   private static final class TopLevelModule {}
 
   private SkylarkDocumentationCollector() {}
@@ -76,10 +62,10 @@ final class SkylarkDocumentationCollector {
    * Collects the documentation for all Skylark modules and returns a map that maps Skylark
    * module name to the module documentation.
    */
-  public static Map<String, SkylarkModuleDoc> collectModules(String... clazz) {
+  public static Map<String, SkylarkModuleDoc> collectModules() {
     Map<String, SkylarkModuleDoc> modules = new TreeMap<>();
-    Map<String, SkylarkModuleDoc> builtinModules = collectBuiltinModules(clazz);
-    Map<SkylarkModule, Class<?>> builtinJavaObjects = collectBuiltinJavaObjects(clazz);
+    Map<String, SkylarkModuleDoc> builtinModules = collectBuiltinModules();
+    Map<SkylarkModule, Class<?>> builtinJavaObjects = collectBuiltinJavaObjects();
 
     modules.putAll(builtinModules);
     for (SkylarkModuleDoc builtinObject : builtinModules.values()) {
@@ -144,21 +130,12 @@ final class SkylarkDocumentationCollector {
     }
   }
 
-  private static Map<String, SkylarkModuleDoc> collectBuiltinModules(String... clazz) {
+  private static Map<String, SkylarkModuleDoc> collectBuiltinModules() {
     Map<String, SkylarkModuleDoc> modules = new HashMap<>();
     collectBuiltinDoc(modules, Runtime.class.getDeclaredFields());
-    collectBuiltinDoc(modules, BazelLibrary.class.getDeclaredFields());
     collectBuiltinDoc(modules, MethodLibrary.class.getDeclaredFields());
     for (Class<?> moduleClass : SkylarkModules.MODULES) {
       collectBuiltinDoc(modules, moduleClass.getDeclaredFields());
-    }
-    for (String c : clazz) {
-      try {
-        collectBuiltinDoc(modules,
-            SkylarkDocumentationCollector.class.getClassLoader().loadClass(c).getDeclaredFields());
-      } catch (ClassNotFoundException e) {
-        System.err.println("SkylarkModule class " + c + " could not be found, ignoring...");
-      }
     }
     return modules;
   }
@@ -187,28 +164,10 @@ final class SkylarkDocumentationCollector {
     }
   }
 
-  private static Map<SkylarkModule, Class<?>> collectBuiltinJavaObjects(String ...clazz) {
+  private static Map<SkylarkModule, Class<?>> collectBuiltinJavaObjects() {
     Map<SkylarkModule, Class<?>> modules = new HashMap<>();
     collectBuiltinModule(modules, SkylarkRuleContext.class);
     collectBuiltinModule(modules, TransitiveInfoCollection.class);
-
-    collectBuiltinModule(modules, AbstractAction.class);
-
-    collectBuiltinModule(modules, AppleConfiguration.class);
-    collectBuiltinModule(modules, CppConfiguration.class);
-    collectBuiltinModule(modules, JavaConfiguration.class);
-    collectBuiltinModule(modules, Jvm.class);
-    collectBuiltinModule(modules, JavaSkylarkApiProvider.class);
-    collectBuiltinModule(modules, JavaRuleOutputJarsProvider.OutputJar.class);
-    collectBuiltinModule(modules, AndroidSkylarkApiProvider.class);
-    for (String c : clazz) {
-      try {
-        collectBuiltinModule(modules,
-            SkylarkDocumentationCollector.class.getClassLoader().loadClass(c));
-      } catch (ClassNotFoundException e) {
-        System.err.println("SkylarkModule class " + c + " could not be found, ignoring...");
-      }
-    }
     return modules;
   }
 

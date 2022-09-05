@@ -381,7 +381,8 @@ public final class RuleConfiguredTargetBuilder {
       return;
     } else if (object instanceof SkylarkList) {
       SkylarkList list = (SkylarkList) object;
-      if (list.isEmpty()) {
+      if (list == SkylarkList.EMPTY_LIST
+          || isSimpleSkylarkObjectSafe(list.getContentType().getType())) {
         // Try not to iterate over the list if avoidable.
         return;
       }

@@ -436,11 +436,6 @@ public class EvaluationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testAccessDictWithATupleKey() throws Exception {
-    newTest().setUp("x = {(1, 2): 3}[1, 2]").testLookup("x", 3);
-  }
-
-  @Test
   public void testRecursiveTupleDestructuring() throws Exception {
     newTest()
         .setUp("((a, b), (c, d)) = [(1, 2), (3, 4)]")
@@ -487,9 +482,9 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testDictComprehensions_ToString() throws Exception {
     assertEquals("{x: x for x in [1, 2]}",
-        parseExpression("{x : x for x in [1, 2]}").toString());
+        evaluationContext.parseExpression("{x : x for x in [1, 2]}").toString());
     assertEquals("{x + 'a': x for x in [1, 2]}",
-        parseExpression("{x + 'a' : x for x in [1, 2]}").toString());
+        evaluationContext.parseExpression("{x + 'a' : x for x in [1, 2]}").toString());
   }
 
   @Test

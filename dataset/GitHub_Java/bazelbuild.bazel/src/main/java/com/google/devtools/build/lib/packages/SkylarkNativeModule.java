@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,18 @@
 
 package com.google.devtools.build.lib.packages;
 
+import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
+import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
-import com.google.devtools.build.lib.syntax.Type.ConversionException;
 
 /**
  * A class for the Skylark native module.
@@ -38,7 +39,7 @@ public class SkylarkNativeModule {
 
   // TODO(bazel-team): shouldn't we return a SkylarkList instead?
   @SkylarkSignature(name = "glob", objectType = SkylarkNativeModule.class,
-      returnType = SkylarkList.class,
+      returnType = GlobList.class,
       doc = "Glob returns a list of every file in the current package that:<ul>\n"
           + "<li>Matches at least one pattern in <code>include</code>.</li>\n"
           + "<li>Does not match any of the patterns in <code>exclude</code> "
@@ -51,16 +52,22 @@ public class SkylarkNativeModule {
       optionalPositionals = {
       @Param(name = "exclude", type = SkylarkList.class, generic1 = String.class,
           defaultValue = "[]", doc = "The list of glob patterns to exclude."),
+      @Param(name = "excludes", type = SkylarkList.class, generic1 = String.class,
+          defaultValue = "[]", doc = "The list of glob patterns to exclude."),
       // TODO(bazel-team): accept booleans as well as integers? (and eventually migrate?)
       @Param(name = "exclude_directories", type = Integer.class, defaultValue = "1",
           doc = "A flag whether to exclude directories or not.")},
       useAst = true, useEnvironment = true)
   private static final BuiltinFunction glob = new BuiltinFunction("glob") {
-      public SkylarkList invoke(
-          SkylarkList include, SkylarkList exclude,
+      public GlobList<String> invoke(
+          SkylarkList include, SkylarkList exclude, SkylarkList excludes,
           Integer excludeDirectories, FuncallExpression ast, Environment env)
           throws EvalException, ConversionException, InterruptedException {
         env.checkLoadingPhase("native.glob", ast.getLocation());
+        // TODO(bazel-team): Remove 'excludes' argument in July 2015.
+        if (exclude.size() == 0) {
+          exclude = excludes;
+        }
         return PackageFactory.callGlob(
             null, false, include, exclude, excludeDirectories != 0, ast, env);
     }
