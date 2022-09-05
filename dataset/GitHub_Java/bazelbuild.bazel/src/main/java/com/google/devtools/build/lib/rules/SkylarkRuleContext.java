@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression.FuncallException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -400,14 +399,14 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(doc = "Splits a shell command to a list of tokens.", documented = false)
-  public MutableList tokenize(String optionString) throws FuncallException {
+  public List<String> tokenize(String optionString) throws FuncallException {
     List<String> options = new ArrayList<>();
     try {
       ShellUtils.tokenize(options, optionString);
     } catch (TokenizationException e) {
       throw new FuncallException(e.getMessage() + " while tokenizing '" + optionString + "'");
     }
-    return new MutableList(options); // no env is provided, so it's effectively immutable
+    return ImmutableList.copyOf(options);
   }
 
   @SkylarkCallable(doc =
@@ -415,10 +414,10 @@ public final class SkylarkRuleContext {
     + "from definition labels (i.e. the label in the output type attribute) to files. Deprecated.",
       documented = false)
   public String expand(@Nullable String expression,
-      SkylarkList artifacts, Label labelResolver) throws EvalException, FuncallException {
+      List<Artifact> artifacts, Label labelResolver) throws FuncallException {
     try {
       Map<Label, Iterable<Artifact>> labelMap = new HashMap<>();
-      for (Artifact artifact : artifacts.getContents(Artifact.class, "artifacts")) {
+      for (Artifact artifact : artifacts) {
         labelMap.put(artifactLabelMap.get(artifact), ImmutableList.of(artifact));
       }
       return LabelExpander.expand(expression, labelMap, labelResolver);
@@ -466,11 +465,9 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(documented = false)
-  public boolean checkPlaceholders(String template, SkylarkList allowedPlaceholders)
-      throws EvalException {
+  public boolean checkPlaceholders(String template, List<String> allowedPlaceholders) {
     List<String> actualPlaceHolders = new LinkedList<>();
-    Set<String> allowedPlaceholderSet =
-        ImmutableSet.copyOf(allowedPlaceholders.getContents(String.class, "allowed_placeholders"));
+    Set<String> allowedPlaceholderSet = ImmutableSet.copyOf(allowedPlaceholders);
     ImplicitOutputsFunction.createPlaceholderSubstitutionFormatString(template, actualPlaceHolders);
     for (String placeholder : actualPlaceHolders) {
       if (!allowedPlaceholderSet.contains(placeholder)) {
