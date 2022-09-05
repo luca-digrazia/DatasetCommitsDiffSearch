@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,18 +17,17 @@ package com.google.devtools.build.lib.rules.objc;
 import static com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.util.FileType;
 
 /**
@@ -54,7 +53,6 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
         ${SYNOPSIS}
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .override(attr("deps", LABEL_LIST)
-            // Support for files in deps is for backwards compatibility.
             .allowedRuleClasses("proto_library", "filegroup")
             .legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(objc_proto_library).ATTRIBUTE(options_file) -->
@@ -82,11 +80,11 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
             .allowedFileTypes(FileType.of(".py"))
             .cfg(HOST)
             .singleArtifact()
-            .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:compile_protos")))
+            .value(env.getLabel("//tools/objc:compile_protos")))
         .add(attr(PROTO_SUPPORT_ATTR, LABEL)
             .legacyAllowAnyFileType()
             .cfg(HOST)
-            .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:proto_support")))
+            .value(env.getLabel("//tools/objc:proto_support")))
         .add(attr(USE_OBJC_HEADER_NAMES_ATTR, BOOLEAN).value(false))
         .add(attr(LIBPROTOBUF_ATTR, LABEL).allowedRuleClasses("objc_library")
             .value(new ComputedDefault(OUTPUT_CPP_ATTR) {
@@ -98,7 +96,7 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
               }
             }))
         .add(attr("$xcodegen", LABEL).cfg(HOST).exec()
-            .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:xcodegen")))
+            .value(env.getLabel("//tools/objc:xcodegen")))
         .build();
   }
 

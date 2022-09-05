@@ -153,8 +153,6 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         .addNonArcSrcs(protoGeneratedSources)
         .setIntermediateArtifacts(intermediateArtifacts)
         .setPchFile(Optional.<Artifact>absent())
-        .addAdditionalHdrs(protoGeneratedHeaders)
-        .addAdditionalHdrs(protoGeneratedSources)
         .build();
 
     ImmutableSet.Builder<PathFragment> searchPathEntriesBuilder =
@@ -163,7 +161,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     boolean libPerProtoIncludes =
          ruleContext.attributes().get(
              ObjcProtoLibraryRule.PER_PROTO_INCLUDES, Type.BOOLEAN);
-    if (ruleContext.getFragment(ObjcConfiguration.class).perProtoIncludes()
+    if (ruleContext.getConfiguration().getFragment(ObjcConfiguration.class).perProtoIncludes()
         || libPerProtoIncludes) {
       searchPathEntriesBuilder
           .add(generatedProtoDir)
@@ -177,6 +175,8 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
         .addDepObjcProviders(ruleContext.getPrerequisites(
             ObjcProtoLibraryRule.LIBPROTOBUF_ATTR, Mode.TARGET, ObjcProvider.class))
         .setIntermediateArtifacts(intermediateArtifacts)
+        .addHeaders(protoGeneratedHeaders)
+        .addHeaders(protoGeneratedSources)
         .build();
 
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.<Artifact>stableOrder()
