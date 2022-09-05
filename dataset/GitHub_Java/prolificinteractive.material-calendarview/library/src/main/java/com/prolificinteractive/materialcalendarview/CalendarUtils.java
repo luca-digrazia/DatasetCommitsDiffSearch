@@ -1,7 +1,9 @@
 package com.prolificinteractive.materialcalendarview;
 
+import android.support.annotation.NonNull;
+
 import java.util.Calendar;
-import java.util.Date;
+import java.util.Locale;
 
 import static java.util.Calendar.DATE;
 import static java.util.Calendar.DAY_OF_WEEK;
@@ -13,51 +15,28 @@ import static java.util.Calendar.YEAR;
  */
 public class CalendarUtils {
 
-    public static Calendar getInstance(Date date) {
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTime(date);
-        copyDateTo(calendar, calendar);
-        return calendar;
-    }
 
+    /**
+     * @return a new Calendar instance with the date set to today.
+     */
+    @NonNull
     public static Calendar getInstance() {
-        Calendar calendar = Calendar.getInstance();
-        copyDateTo(calendar, calendar);
-        return calendar;
+        return Calendar.getInstance(Locale.getDefault());
     }
 
-    public static void setToFirstDay(Calendar calendar) {
-        int year = getYear(calendar);
-        int month = getMonth(calendar);
-        calendar.clear();
-        calendar.set(year, month, 1);
-        calendar.getTimeInMillis();
-    }
-
-    public static void copyDateTo(Calendar from, Calendar to) {
-        to.clear();
-        to.set(
-                getYear(from),
-                getMonth(from),
-                getDay(from)
-        );
-        to.setTimeZone(from.getTimeZone());
-        to.getTimeInMillis();
-    }
-
-    public static int getYear(Calendar calendar) {
+    public static int getYear(final Calendar calendar) {
         return calendar.get(YEAR);
     }
 
-    public static int getMonth(Calendar calendar) {
+    public static int getMonth(final Calendar calendar) {
         return calendar.get(MONTH);
     }
 
-    public static int getDay(Calendar calendar) {
+    public static int getDay(final Calendar calendar) {
         return calendar.get(DATE);
     }
 
-    public static int getDayOfWeek(Calendar calendar) {
+    public static int getDayOfWeek(final Calendar calendar) {
         return calendar.get(DAY_OF_WEEK);
     }
 }
