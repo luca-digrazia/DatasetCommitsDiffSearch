@@ -240,7 +240,7 @@ public class MetricRegistry implements MetricSet {
      * @param supplier a MetricSupplier that can be used to manufacture a Gauge
      * @return a new or pre-existing {@link Gauge}
      */
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings("unchecked")
     public Gauge gauge(String name, final MetricSupplier<Gauge> supplier) {
         return getOrAdd(name, new MetricBuilder<Gauge>() {
             @Override
