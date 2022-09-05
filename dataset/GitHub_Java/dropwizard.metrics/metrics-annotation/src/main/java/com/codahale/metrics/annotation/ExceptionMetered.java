@@ -35,7 +35,7 @@ import java.lang.annotation.Target;
  * thrown.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.TYPE, ElementType.METHOD })
+@Target(ElementType.METHOD)
 public @interface ExceptionMetered {
     /**
      * The default suffix for meter names.

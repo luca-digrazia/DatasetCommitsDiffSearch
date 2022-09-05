@@ -20,7 +20,7 @@ import java.lang.annotation.Target;
  * {@code #fancyName(String)} method is invoked, the method's execution will be timed.
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.TYPE, ElementType.METHOD })
+@Target(ElementType.METHOD)
 public @interface Timed {
     /**
      * The name of the timer.
