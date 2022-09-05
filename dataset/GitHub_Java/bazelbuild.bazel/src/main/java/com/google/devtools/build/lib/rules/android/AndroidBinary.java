@@ -447,8 +447,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .setJavaResourceZip(dexingOutput.javaResourceJar)
         .setNativeLibs(nativeLibs)
         .setUnsignedApk(unsignedApk)
-        .setSignedApk(zipAlignedApk)
-        .setZipalignApk(true)
+        .setSignedAndZipalignedApk(zipAlignedApk)
         .setApkName("apk")
         .registerActions(ruleContext, androidSemantics);
 
