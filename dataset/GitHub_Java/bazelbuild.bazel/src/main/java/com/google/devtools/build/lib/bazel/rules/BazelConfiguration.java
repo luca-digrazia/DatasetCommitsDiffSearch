@@ -56,24 +56,26 @@ public class BazelConfiguration extends Fragment {
   }
 
   @Override
-  public PathFragment getShellExecutable() {
+  public void defineExecutables(ImmutableMap.Builder<String, PathFragment> builder) {
     if (OS.getCurrent() == OS.WINDOWS) {
       String path = System.getenv("BAZEL_SH");
       if (path != null) {
-        return new PathFragment(path);
+        builder.put("sh", new PathFragment(path));
       } else {
-        return new PathFragment("c:/tools/msys64/usr/bin/bash.exe");
+        builder.put("sh", new PathFragment("c:/tools/msys64/usr/bin/bash.exe"));
       }
+      return;
     }
     if (OS.getCurrent() == OS.FREEBSD) {
       String path = System.getenv("BAZEL_SH");
       if (path != null) {
-        return  new PathFragment(path);
+        builder.put("sh", new PathFragment(path));
       } else {
-        return new PathFragment("/usr/local/bin/bash");
+        builder.put("sh", new PathFragment("/usr/local/bin/bash"));
       }
+      return;
     }
-    return new PathFragment("/bin/bash");
+    builder.put("sh", new PathFragment("/bin/bash"));
   }
 
   @Override
