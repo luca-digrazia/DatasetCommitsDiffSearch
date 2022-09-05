@@ -13,10 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+
 import com.google.devtools.build.lib.util.Pair;
-import java.util.LinkedHashSet;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * A class that, when beeing told about start and end of a package
@@ -26,17 +28,23 @@ import java.util.LinkedHashSet;
 public class PackageProgressReceiver {
 
   private int packagesCompleted;
-  private LinkedHashSet<PackageIdentifier> pendingSet = new LinkedHashSet<>();
+  private Deque<PackageIdentifier> pending = new ArrayDeque<>();
 
-  /** Register that loading a package has started. */
-  synchronized void startReadPackage(PackageIdentifier packageId) {
-    pendingSet.add(packageId);
+  /**
+   * Register that loading a package has started.
+   */
+  public synchronized void startReadPackage(PackageIdentifier packageId) {
+    if (!pending.contains(packageId)) {
+      pending.addLast(packageId);
+    }
   }
 
-  /** Register that loding a package has completed. */
-  synchronized void doneReadPackage(PackageIdentifier packageId) {
+  /**
+   * Register that loding a package has completed.
+   */
+  public synchronized void doneReadPackage(PackageIdentifier packageId) {
     packagesCompleted++;
-    pendingSet.remove(packageId);
+    pending.remove(packageId);
   }
 
   /**
@@ -45,7 +53,7 @@ public class PackageProgressReceiver {
    */
   public synchronized void reset() {
     packagesCompleted = 0;
-    pendingSet = new LinkedHashSet<>();
+    pending = new ArrayDeque<>();
   }
 
   /**
@@ -56,12 +64,10 @@ public class PackageProgressReceiver {
   public synchronized Pair<String, String> progressState() {
     String progress = "" + packagesCompleted + " packages loaded";
     StringBuffer activity = new StringBuffer();
-    if (pendingSet.size() > 0) {
-      activity
-          .append("currently loading: ")
-          .append(Iterables.getFirst(pendingSet, null).toString());
-      if (pendingSet.size() > 1) {
-        activity.append(" ... (" + pendingSet.size() + " packages)");
+    if (pending.size() > 0) {
+      activity.append("currently loading: ").append(pending.peekFirst().toString());
+      if (pending.size() > 1) {
+        activity.append(" ... (" + pending.size() + " packages)");
       }
     }
     return new Pair<String, String>(progress, activity.toString());
