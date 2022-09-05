@@ -209,20 +209,24 @@ public class SqlParser {
 
     private Object[] getMethodValuesWithSubQueries(SQLMethodInvokeExpr method) throws SqlParseException {
         List<Object> values = new ArrayList<>();
+        boolean foundSubQuery = false;
         for(SQLExpr innerExpr : method.getParameters()){
             if(innerExpr instanceof SQLQueryExpr){
+                foundSubQuery = true;
                 Select select = parseSelect((MySqlSelectQueryBlock) ((SQLQueryExpr) innerExpr).getSubQuery().getQuery());
                 values.add(new SubQueryExpression(select));
-            }
-            else if(innerExpr instanceof SQLTextLiteralExpr){
-                values.add(((SQLTextLiteralExpr)innerExpr).getText());
             }
             else {
                 values.add(innerExpr);
             }
 
         }
-        return values.toArray();
+        Object[] conditionValues ;
+        if(foundSubQuery)
+            conditionValues = values.toArray();
+        else
+            conditionValues = method.getParameters().toArray();
+        return conditionValues;
     }
 
     private Object[] parseValue(List<SQLExpr> targetList) throws SqlParseException {
