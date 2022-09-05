@@ -36,7 +36,7 @@ public class Counter implements Metric, Counting {
     /**
      * Decrement the counter by {@code n}.
      *
-     * @param n the amount by which the counter will be decreased
+     * @param n the amount by which the counter will be increased
      */
     public void dec(long n) {
         count.add(-n);
