@@ -616,23 +616,11 @@ public abstract class DependencyResolver {
         return; // Skip this round: this is either a loading error or unevaluated Skyframe dep.
       }
       BuildConfiguration.TransitionApplier transitionApplier = config.getTransitionApplier();
-      boolean applyNullTransition = false;
       if (BuildConfiguration.usesNullConfiguration(toTarget)) {
         transitionApplier.applyTransition(Attribute.ConfigurationTransition.NULL);
-        applyNullTransition = true;
       }
-
-      ImmutableSet<AspectDescriptor> aspects = requiredAspects(aspect, attribute, toTarget, rule);
-      Dependency dep;
-      if (config.useDynamicConfigurations() && !applyNullTransition) {
-        // Since we feed a pre-prepared configuration directly to the dep, it won't get trimmed to
-        // the dep's fragments.
-        // TODO(gregce): properly trim this configuration, too.
-        dep = Dependency.withConfigurationAndAspects(depLabel, config, aspects);
-      } else {
-        dep = Iterables.getOnlyElement(transitionApplier.getDependencies(depLabel, aspects));
-      }
-
+      Dependency dep = Iterables.getOnlyElement(transitionApplier.getDependencies(depLabel,
+          requiredAspects(aspect, attribute, toTarget, rule)));
       outgoingEdges.put(attribute, dep);
     }
   }
