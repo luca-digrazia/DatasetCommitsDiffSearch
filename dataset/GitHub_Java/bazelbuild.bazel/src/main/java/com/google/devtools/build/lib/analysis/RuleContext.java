@@ -53,7 +53,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
@@ -81,7 +81,6 @@ import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -152,7 +151,8 @@ public final class RuleContext extends TargetContext
   private static final String HOST_CONFIGURATION_PROGRESS_TAG = "for host";
 
   private final Rule rule;
-  private final ImmutableList<AspectDescriptor> aspectDescriptors;
+  @Nullable private final String aspectName;
+  @Nullable private final AspectParameters aspectParameters;
   private final ListMultimap<String, ConfiguredTarget> targetMap;
   private final ListMultimap<String, ConfiguredFilesetEntry> filesetEntryMap;
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
@@ -183,7 +183,8 @@ public final class RuleContext extends TargetContext
     super(builder.env, builder.rule, builder.configuration, builder.prerequisiteMap.get(null),
         builder.visibility);
     this.rule = builder.rule;
-    this.aspectDescriptors = builder.aspectDescriptors;
+    this.aspectName = builder.getAspectName();
+    this.aspectParameters = builder.getAspectParameters();
     this.configurationFragmentPolicy = builder.configurationFragmentPolicy;
     this.universalFragment = universalFragment;
     this.targetMap = targetMap;
@@ -333,7 +334,7 @@ public final class RuleContext extends TargetContext
   @Override
   public ActionOwner getActionOwner() {
     if (actionOwner == null) {
-      actionOwner = createActionOwner(rule, aspectDescriptors, getConfiguration());
+      actionOwner = createActionOwner(rule, aspectName, aspectParameters, getConfiguration());
     }
     return actionOwner;
   }
@@ -411,11 +412,13 @@ public final class RuleContext extends TargetContext
   @VisibleForTesting
   public static ActionOwner createActionOwner(
       Rule rule,
-      ImmutableList<AspectDescriptor> aspectDescriptors,
+      @Nullable String aspectName,
+      @Nullable AspectParameters aspectParameters,
       BuildConfiguration configuration) {
     return ActionOwner.create(
         rule.getLabel(),
-        aspectDescriptors,
+        aspectName,
+        aspectParameters,
         rule.getLocation(),
         configuration.getMnemonic(),
         rule.getTargetKind(),
@@ -1084,7 +1087,8 @@ public final class RuleContext extends TargetContext
       throw new IllegalStateException(getRule().getLocation() + ": " + getRuleClassNameForLogging()
         + " attribute " + attributeName + " is not defined");
     }
-    if (attributeDefinition.getType().getLabelClass() != LabelClass.DEPENDENCY) {
+    if (!(attributeDefinition.getType() == BuildType.LABEL
+        || attributeDefinition.getType() == BuildType.LABEL_LIST)) {
       throw new IllegalStateException(getRuleClassNameForLogging() + " attribute " + attributeName
         + " is not a label type attribute");
     }
@@ -1125,7 +1129,8 @@ public final class RuleContext extends TargetContext
       throw new IllegalStateException(getRule().getLocation() + ": " + getRuleClassNameForLogging()
         + " attribute " + attributeName + " is not defined");
     }
-    if (attributeDefinition.getType().getLabelClass() != LabelClass.DEPENDENCY) {
+    if (!(attributeDefinition.getType() == BuildType.LABEL
+        || attributeDefinition.getType() == BuildType.LABEL_LIST)) {
       throw new IllegalStateException(getRuleClassNameForLogging() + " attribute " + attributeName
         + " is not a label type attribute");
     }
@@ -1429,25 +1434,28 @@ public final class RuleContext extends TargetContext
     private final BuildConfiguration configuration;
     private final BuildConfiguration hostConfiguration;
     private final PrerequisiteValidator prerequisiteValidator;
+    @Nullable private final String aspectName;
+    @Nullable private final AspectParameters aspectParameters;
     private final ErrorReporter reporter;
     private OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap;
     private ImmutableMap<Label, ConfigMatchingProvider> configConditions;
     private NestedSet<PackageSpecification> visibility;
     private ImmutableMap<String, Attribute> aspectAttributes;
     private ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>> skylarkProviderRegistry;
-    private ImmutableList<AspectDescriptor> aspectDescriptors;
 
     Builder(
         AnalysisEnvironment env,
         Rule rule,
-        ImmutableList<AspectDescriptor> aspectDescriptors,
+        @Nullable String aspectName,
+        @Nullable AspectParameters aspectParameters,
         BuildConfiguration configuration,
         BuildConfiguration hostConfiguration,
         PrerequisiteValidator prerequisiteValidator,
         ConfigurationFragmentPolicy configurationFragmentPolicy) {
       this.env = Preconditions.checkNotNull(env);
       this.rule = Preconditions.checkNotNull(rule);
-      this.aspectDescriptors = aspectDescriptors;
+      this.aspectName = aspectName;
+      this.aspectParameters = aspectParameters;
       this.configurationFragmentPolicy = Preconditions.checkNotNull(configurationFragmentPolicy);
       this.configuration = Preconditions.checkNotNull(configuration);
       this.hostConfiguration = Preconditions.checkNotNull(hostConfiguration);
@@ -1728,7 +1736,7 @@ public final class RuleContext extends TargetContext
 
     /** Returns whether the context being constructed is for the evaluation of an aspect. */
     public boolean forAspect() {
-      return !aspectDescriptors.isEmpty();
+      return aspectName != null;
     }
 
     public Rule getRule() {
@@ -1739,11 +1747,9 @@ public final class RuleContext extends TargetContext
      * Returns a rule class name suitable for log messages, including an aspect name if applicable.
      */
     public String getRuleClassNameForLogging() {
-      if (aspectDescriptors.isEmpty()) {
-        return rule.getRuleClass();
-      }
-
-      return Joiner.on(",").join(aspectDescriptors) + " aspect on " + rule.getRuleClass();
+      return aspectName != null
+          ? aspectName + " aspect on " + rule.getRuleClass()
+          : rule.getRuleClass();
     }
 
     public BuildConfiguration getConfiguration() {
@@ -1952,6 +1958,16 @@ public final class RuleContext extends TargetContext
       if (attribute.performPrereqValidatorCheck()) {
         prerequisiteValidator.validate(this, prerequisite, attribute);
       }
+    }
+
+    @Nullable
+    public AspectParameters getAspectParameters() {
+      return aspectParameters;
+    }
+
+    @Nullable
+    public String getAspectName() {
+      return aspectName;
     }
   }
 
