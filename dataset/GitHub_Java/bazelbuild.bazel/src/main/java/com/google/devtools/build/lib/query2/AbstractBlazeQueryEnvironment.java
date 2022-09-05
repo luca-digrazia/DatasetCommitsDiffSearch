@@ -31,12 +31,13 @@ import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
-import com.google.devtools.build.lib.query2.engine.VariableContext;
 import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -48,6 +49,7 @@ import java.util.logging.Logger;
 public abstract class AbstractBlazeQueryEnvironment<T>
     implements QueryEnvironment<T>, AutoCloseable {
   protected final ErrorSensingEventHandler eventHandler;
+  private final Map<String, Set<T>> letBindings = new HashMap<>();
   protected final boolean keepGoing;
   protected final boolean strictScope;
 
@@ -115,7 +117,7 @@ public abstract class AbstractBlazeQueryEnvironment<T>
         throw new QueryException(expr, e.getMessage());
       }
       try {
-        this.eval(expr, VariableContext.<T>empty(), new Callback<T>() {
+        this.eval(expr, new Callback<T>() {
           @Override
           public void process(Iterable<T> partialResult)
               throws QueryException, InterruptedException {
@@ -166,6 +168,16 @@ public abstract class AbstractBlazeQueryEnvironment<T>
   }
 
   public abstract Target getTarget(Label label) throws TargetNotFoundException, QueryException;
+
+  @Override
+  public Set<T> getVariable(String name) {
+    return letBindings.get(name);
+  }
+
+  @Override
+  public Set<T> setVariable(String name, Set<T> value) {
+    return letBindings.put(name, value);
+  }
 
   protected boolean validateScope(Label label, boolean strict) throws QueryException {
     if (!labelFilter.apply(label)) {
