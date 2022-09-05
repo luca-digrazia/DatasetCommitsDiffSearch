@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ public class CompactPersistentActionCacheTest {
   private CompactPersistentActionCache cache;
 
   @Before
-  public final void createFiles() throws Exception  {
+  public void setUp() throws Exception {
     dataRoot = scratch.resolve("/cache/test.dat");
     cache = new CompactPersistentActionCache(dataRoot, clock);
     mapFile = CompactPersistentActionCache.cacheFile(dataRoot);
