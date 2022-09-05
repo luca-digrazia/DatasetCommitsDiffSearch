@@ -46,7 +46,7 @@ public final class LabelValidator {
    * restrictions around surrounding characters; see {@link #validateTargetName(String)}.
    */
   private static final CharMatcher ALWAYS_ALLOWED_TARGET_CHARACTERS =
-      CharMatcher.javaLetterOrDigit()
+      CharMatcher.JAVA_LETTER_OR_DIGIT
           .or(PUNCTUATION_REQUIRING_QUOTING)
           .or(PUNCTUATION_NOT_REQUIRING_QUOTING);
 
@@ -174,7 +174,7 @@ public final class LabelValidator {
         }
         continue;
       }
-      if (CharMatcher.javaIsoControl().matches(c)) {
+      if (CharMatcher.JAVA_ISO_CONTROL.matches(c)) {
         return "target names may not contain non-printable characters: '" +
                String.format("\\x%02X", (int) c) + "'";
       }
