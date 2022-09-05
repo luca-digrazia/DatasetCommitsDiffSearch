@@ -53,10 +53,8 @@ import javax.annotation.Nullable;
 @VisibleForTesting
 public abstract class FileStateValue implements SkyValue {
 
-  public static final DirectoryFileStateValue DIRECTORY_FILE_STATE_NODE =
-      new DirectoryFileStateValue();
-  public static final NonexistentFileStateValue NONEXISTENT_FILE_STATE_NODE =
-      new NonexistentFileStateValue();
+  static final FileStateValue DIRECTORY_FILE_STATE_NODE = DirectoryFileStateValue.INSTANCE;
+  static final FileStateValue NONEXISTENT_FILE_STATE_NODE = NonexistentFileStateValue.INSTANCE;
 
   enum Type {
     FILE,
@@ -133,7 +131,7 @@ public abstract class FileStateValue implements SkyValue {
    * where fast digest lookups are not available.
    */
   @ThreadSafe
-  public static final class FileFileStateValue extends FileStateValue {
+  private static final class FileFileStateValue extends FileStateValue {
     private final long size;
     // Only needed for empty-file equality-checking. Otherwise is always -1.
     // TODO(bazel-team): Consider getting rid of this special case for empty files.
@@ -231,7 +229,9 @@ public abstract class FileStateValue implements SkyValue {
   }
 
   /** Implementation of {@link FileStateValue} for directories that exist. */
-  public static final class DirectoryFileStateValue extends FileStateValue {
+  private static final class DirectoryFileStateValue extends FileStateValue {
+
+    static final DirectoryFileStateValue INSTANCE = new DirectoryFileStateValue();
 
     private DirectoryFileStateValue() {
     }
@@ -259,7 +259,7 @@ public abstract class FileStateValue implements SkyValue {
   }
 
   /** Implementation of {@link FileStateValue} for symlinks. */
-  public static final class SymlinkFileStateValue extends FileStateValue {
+  private static final class SymlinkFileStateValue extends FileStateValue {
 
     private final PathFragment symlinkTarget;
 
@@ -298,7 +298,9 @@ public abstract class FileStateValue implements SkyValue {
   }
 
   /** Implementation of {@link FileStateValue} for nonexistent files. */
-  public static final class NonexistentFileStateValue extends FileStateValue {
+  private static final class NonexistentFileStateValue extends FileStateValue {
+
+    static final NonexistentFileStateValue INSTANCE = new NonexistentFileStateValue();
 
     private NonexistentFileStateValue() {
     }
