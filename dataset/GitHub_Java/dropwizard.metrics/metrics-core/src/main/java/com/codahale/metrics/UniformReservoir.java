@@ -1,7 +1,6 @@
 package com.codahale.metrics;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 
@@ -13,7 +12,6 @@ import java.util.concurrent.atomic.AtomicLongArray;
  */
 public class UniformReservoir implements Reservoir {
     private static final int DEFAULT_SIZE = 1028;
-    private static final int BITS_PER_LONG = 63;
     private final AtomicLong count = new AtomicLong();
     private final AtomicLongArray values;
 
@@ -53,35 +51,19 @@ public class UniformReservoir implements Reservoir {
         if (c <= values.length()) {
             values.set((int) c - 1, value);
         } else {
-            final long r = nextLong(c);
+            final long r = ThreadLocalRandom.current().nextLong(c);
             if (r < values.length()) {
                 values.set((int) r, value);
             }
         }
     }
 
-    /**
-     * Get a pseudo-random long uniformly between 0 and n-1. Stolen from
-     * {@link java.util.Random#nextInt()}.
-     *
-     * @param n the bound
-     * @return a value select randomly from the range {@code [0..n)}.
-     */
-    private static long nextLong(long n) {
-        long bits, val;
-        do {
-            bits = ThreadLocalRandom.current().nextLong() & (~(1L << BITS_PER_LONG));
-            val = bits % n;
-        } while (bits - val + (n - 1) < 0L);
-        return val;
-    }
-
     @Override
     public Snapshot getSnapshot() {
         final int s = size();
-        final List<Long> copy = new ArrayList<Long>(s);
+        long[] copy = new long[s];
         for (int i = 0; i < s; i++) {
-            copy.add(values.get(i));
+            copy[i] = values.get(i);  
         }
         return new UniformSnapshot(copy);
     }
