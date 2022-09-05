@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.ThinNodeEntry.MarkedDirtyResult;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -391,14 +390,15 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
         final boolean mustExist) {
       Preconditions.checkState(invalidationType != InvalidationType.DELETED, keys);
       final boolean isChanged = (invalidationType == InvalidationType.CHANGED);
-      int size = Iterables.size(keys);
-      ArrayList<Pair<SkyKey, InvalidationType>> invalidationPairs = new ArrayList<>(size);
+      Builder<Pair<SkyKey, InvalidationType>> invalidationPairsBuilder = ImmutableList.builder();
       for (SkyKey key : keys) {
         Pair<SkyKey, InvalidationType> invalidationPair = Pair.of(key, invalidationType);
         if (visited.add(invalidationPair)) {
-          invalidationPairs.add(invalidationPair);
+          invalidationPairsBuilder.add(invalidationPair);
         }
       }
+      ImmutableList<Pair<SkyKey, InvalidationType>> invalidationPairs =
+          invalidationPairsBuilder.build();
       List<SkyKey> keysToGet =
           Lists.transform(invalidationPairs, Pair.<SkyKey, InvalidationType>firstFunction());
       pendingVisitations.addAll(invalidationPairs);
