@@ -3,24 +3,16 @@ package org.hswebframework.web.authorization.simple.builder;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import org.hswebframework.web.authorization.Authentication;
-import org.hswebframework.web.authorization.Permission;
-import org.hswebframework.web.authorization.Role;
-import org.hswebframework.web.authorization.User;
+import org.hswebframework.web.authorization.*;
 import org.hswebframework.web.authorization.builder.AuthenticationBuilder;
 import org.hswebframework.web.authorization.builder.DataAccessConfigBuilderFactory;
-import org.hswebframework.web.authorization.simple.SimpleAuthentication;
-import org.hswebframework.web.authorization.simple.SimplePermission;
-import org.hswebframework.web.authorization.simple.SimpleRole;
-import org.hswebframework.web.authorization.simple.SimpleUser;
+import org.hswebframework.web.authorization.simple.*;
 
 import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
@@ -55,14 +47,14 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
                 .id(user.get("id"))
                 .username(user.get("username"))
                 .name(user.get("name"))
-                .type(user.get("type"))
+                .userType(user.get("type"))
                 .build());
         return this;
     }
 
     @Override
     public AuthenticationBuilder role(List<Role> role) {
-        authentication.setRoles(role);
+        authentication.getDimensions().addAll(role);
         return this;
     }
 
@@ -83,10 +75,11 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
         JSONArray jsonArray = JSON.parseArray(permissionJson);
         List<Permission> permissions = new ArrayList<>();
         for (int i = 0; i < jsonArray.size(); i++) {
-            JSONObject jsonObject = jsonArray.getJSONObject(0);
+            JSONObject jsonObject = jsonArray.getJSONObject(i);
             SimplePermission permission = new SimplePermission();
             permission.setId(jsonObject.getString("id"));
-
+            permission.setName(jsonObject.getString("name"));
+            permission.setOptions(jsonObject.getJSONObject("options"));
             JSONArray actions = jsonObject.getJSONArray("actions");
             if (actions != null) {
                 permission.setActions(new HashSet<>(actions.toJavaList(String.class)));
@@ -95,6 +88,7 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
             if (null != dataAccess) {
                 permission.setDataAccesses(dataAccess.stream().map(JSONObject.class::cast)
                         .map(dataJson -> dataBuilderFactory.create().fromJson(dataJson.toJSONString()).build())
+                        .filter(Objects::nonNull)
                         .collect(Collectors.toSet()));
             }
             permissions.add(permission);
@@ -105,22 +99,53 @@ public class SimpleAuthenticationBuilder implements AuthenticationBuilder {
 
     @Override
     public AuthenticationBuilder attributes(String attributes) {
-        authentication.setAttributes(JSON.<Map<String, Serializable>>parseObject(attributes, Map.class));
+        authentication.getAttributes().putAll(JSON.<Map<String, Serializable>>parseObject(attributes, Map.class));
         return this;
     }
 
     @Override
     public AuthenticationBuilder attributes(Map<String, Serializable> permission) {
-        authentication.setAttributes(permission);
+        authentication.getAttributes().putAll(permission);
         return this;
+    }
+
+    public AuthenticationBuilder dimension(JSONArray json) {
+
+        if (json == null) {
+            return this;
+        }
+        List<Dimension> dimensions = new ArrayList<>();
+
+        for (int i = 0; i < json.size(); i++) {
+            JSONObject jsonObject = json.getJSONObject(i);
+            Object type = jsonObject.get("type");
+
+            dimensions.add( SimpleDimension.of(
+                    jsonObject.getString("id"),
+                    jsonObject.getString("name"),
+                    type instanceof String?SimpleDimensionType.of(String.valueOf(type)):jsonObject.getJSONObject("type").toJavaObject(SimpleDimensionType.class),
+                    jsonObject.getJSONObject("options")
+            ));
+        }
+        authentication.setDimensions(dimensions);
+
+        return this;
+
     }
 
     @Override
     public AuthenticationBuilder json(String json) {
         JSONObject jsonObject = JSON.parseObject(json);
         user(jsonObject.getObject("user", SimpleUser.class));
-        role(jsonObject.getJSONArray("roles").toJSONString());
-        permission(jsonObject.getJSONArray("permissions").toJSONString());
+        if (jsonObject.containsKey("roles")) {
+            role(jsonObject.getJSONArray("roles").toJSONString());
+        }
+        if (jsonObject.containsKey("permissions")) {
+            permission(jsonObject.getJSONArray("permissions").toJSONString());
+        }
+        if (jsonObject.containsKey("dimensions")) {
+            dimension(jsonObject.getJSONArray("dimensions"));
+        }
         return this;
     }
 
