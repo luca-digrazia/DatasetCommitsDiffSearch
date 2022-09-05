@@ -47,7 +47,7 @@ public class EventCollectionApparatus {
   }
 
   public EventCollectionApparatus() {
-    this(EventKind.ERRORS_WARNINGS_AND_INFO);
+    this(EventKind.ERRORS_AND_WARNINGS);
   }
 
   public void clear() {
@@ -82,10 +82,6 @@ public class EventCollectionApparatus {
     return eventCollector;
   }
 
-  public Iterable<Event> infos() {
-    return eventCollector.filtered(EventKind.INFO);
-  }
-
   public Iterable<Event> errors() {
     return eventCollector.filtered(EventKind.ERROR);
   }
@@ -104,11 +100,13 @@ public class EventCollectionApparatus {
 
   /**
    * Utility method: Asserts that the {@link #collector()} has not collected
-   * any warnings or errors.
+   * any events.
+   *
+   * @throws IllegalStateException If the apparatus has not yet been
+   *    initialized by calling {@link #reporter()} or {@link #collector()}.
    */
-  public void assertNoWarningsOrErrors() {
-    MoreAsserts.assertNoEvents(warnings());
-    MoreAsserts.assertNoEvents(errors());
+  public void assertNoEvents() {
+    MoreAsserts.assertNoEvents(eventCollector);
   }
 
   /**

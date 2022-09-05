@@ -189,8 +189,8 @@ public class EvaluationTestCase {
     return this;
   }
 
-  public EvaluationTestCase assertNoWarningsOrErrors() {
-    eventCollectionApparatus.assertNoWarningsOrErrors();
+  public EvaluationTestCase assertNoEvents() {
+    eventCollectionApparatus.assertNoEvents();
     return this;
   }
 
@@ -217,7 +217,7 @@ public class EvaluationTestCase {
   }
 
   public EvaluationTestCase clearEvents() {
-    eventCollectionApparatus.clear();
+    eventCollectionApparatus.collector().clear();
     return this;
   }
 

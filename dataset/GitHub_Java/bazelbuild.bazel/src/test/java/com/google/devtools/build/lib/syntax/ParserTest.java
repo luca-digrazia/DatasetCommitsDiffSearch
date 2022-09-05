@@ -469,23 +469,19 @@ public class ParserTest extends EvaluationTestCase {
         "def foo():",
         "  for i in [1, 2]:",
         "    break",
-        "    continue",
-        "    break");
+        "    continue");
     assertThat(file).hasSize(1);
     List<Statement> body = ((FunctionDefStatement) file.get(0)).getStatements();
     assertThat(body).hasSize(1);
 
     List<Statement> loop = ((ForStatement) body.get(0)).block();
-    assertThat(loop).hasSize(3);
+    assertThat(loop).hasSize(2);
 
-    assertThat(((FlowStatement) loop.get(0)).getKind()).isEqualTo(FlowStatement.Kind.BREAK);
+    assertThat(loop.get(0)).isEqualTo(FlowStatement.BREAK);
     assertLocation(34, 40, loop.get(0).getLocation());
 
-    assertThat(((FlowStatement) loop.get(1)).getKind()).isEqualTo(FlowStatement.Kind.CONTINUE);
-    assertLocation(44, 53, loop.get(1).getLocation());
-
-    assertThat(((FlowStatement) loop.get(2)).getKind()).isEqualTo(FlowStatement.Kind.BREAK);
-    assertLocation(57, 62, loop.get(2).getLocation());
+    assertThat(loop.get(1)).isEqualTo(FlowStatement.CONTINUE);
+    assertLocation(44, 52, loop.get(1).getLocation());
   }
 
   @Test
