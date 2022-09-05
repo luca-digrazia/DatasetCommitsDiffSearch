@@ -92,7 +92,6 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.flags.InvocationPolicyEnforcer;
-import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -126,6 +125,7 @@ import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -138,6 +138,9 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
+
+import org.junit.Before;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -150,7 +153,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.Before;
 
 /**
  * Common test code that creates a BuildView instance.
@@ -158,7 +160,6 @@ import org.junit.Before;
 public abstract class BuildViewTestCase extends FoundationTestCase {
   protected static final int LOADING_PHASE_THREADS = 20;
 
-  protected AnalysisMock analysisMock;
   protected ConfiguredRuleClassProvider ruleClassProvider;
   protected ConfigurationFactory configurationFactory;
   protected BuildView view;
@@ -186,28 +187,25 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   @Before
   public final void initializeSkyframeExecutor() throws Exception {
-    analysisMock = getAnalysisMock();
-    directories =
-        new BlazeDirectories(outputBase, outputBase, rootDirectory, analysisMock.getProductName());
-    binTools = BinTools.forUnitTesting(directories, analysisMock.getEmbeddedTools());
+    AnalysisMock mock = getAnalysisMock();
+    directories = new BlazeDirectories(outputBase, outputBase, rootDirectory,
+        TestConstants.PRODUCT_NAME);
+    binTools = BinTools.forUnitTesting(directories, TestConstants.EMBEDDED_TOOLS);
     mockToolsConfig = new MockToolsConfig(rootDirectory, false);
-    analysisMock.setupMockClient(mockToolsConfig);
-    analysisMock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
+    mock.setupMockClient(mockToolsConfig);
+    mock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
 
-    configurationFactory = analysisMock.createConfigurationFactory();
+    configurationFactory = mock.createConfigurationFactory();
     packageCacheOptions = parsePackageCacheOptions();
     workspaceStatusActionFactory =
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
     mutableActionGraph = new MapBasedActionGraph();
     ruleClassProvider = getRuleClassProvider();
-    pkgFactory =
-        analysisMock
-            .getPackageFactoryForTesting()
-            .create(
-                ruleClassProvider,
-                getPlatformSetRegexps(),
-                getEnvironmentExtensions(),
-                scratch.getFileSystem());
+    pkgFactory = TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
+        ruleClassProvider,
+        getPlatformSetRegexps(),
+        getEnvironmentExtensions(),
+        scratch.getFileSystem());
     tsgm = new TimestampGranularityMonitor(BlazeClock.instance());
     skyframeExecutor =
         SequencedSkyframeExecutor.create(
@@ -219,10 +217,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             getPreprocessorFactorySupplier(),
-            analysisMock.getSkyFunctions(),
+            mock.getSkyFunctions(),
             getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
-            analysisMock.getProductName());
+            TestConstants.PRODUCT_NAME);
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory)),
         ConstantRuleVisibility.PUBLIC, true, 7, "",
@@ -975,32 +973,32 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Gets a derived Artifact for testing in the subdirectory of the {@link
-   * BuildConfiguration#getBinDirectory()} corresponding to the package of {@code owner}, where the
-   * given artifact belongs to the given ConfiguredTarget together with the given Aspect. So to
-   * specify a file foo/foo.o owned by target //foo:foo with an aspect from FooAspect, {@code
-   * packageRelativePath} should just be "foo.o", and aspectOfOwner should be FooAspect.class. This
-   * method is necessary when an Aspect of the target, not the target itself, is creating an
-   * Artifact.
+   * BuildConfiguration#getBinDirectory()} corresponding to the package of {@code owner},
+   * where the given artifact belongs to the given ConfiguredTarget together with the given Aspect.
+   * So to specify a file foo/foo.o owned by target //foo:foo with an aspect from FooAspect,
+   * {@code packageRelativePath} should just be "foo.o", and aspectOfOwner should be
+   * FooAspect.class. This method is necessary when an Aspect of the target, not the target itself,
+   * is creating an Artifact.
    */
-  protected Artifact getBinArtifact(
-      String packageRelativePath, ConfiguredTarget owner, AspectClass creatingAspectFactory) {
+  protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner,
+      NativeAspectClass creatingAspectFactory) {
     return getBinArtifact(
         packageRelativePath, owner, creatingAspectFactory, AspectParameters.EMPTY);
   }
 
   /**
    * Gets a derived Artifact for testing in the subdirectory of the {@link
-   * BuildConfiguration#getBinDirectory()} corresponding to the package of {@code owner}, where the
-   * given artifact belongs to the given ConfiguredTarget together with the given Aspect. So to
-   * specify a file foo/foo.o owned by target //foo:foo with an aspect from FooAspect, {@code
-   * packageRelativePath} should just be "foo.o", and aspectOfOwner should be FooAspect.class. This
-   * method is necessary when an Aspect of the target, not the target itself, is creating an
-   * Artifact.
+   * BuildConfiguration#getBinDirectory()} corresponding to the package of {@code owner},
+   * where the given artifact belongs to the given ConfiguredTarget together with the given Aspect.
+   * So to specify a file foo/foo.o owned by target //foo:foo with an aspect from FooAspect,
+   * {@code packageRelativePath} should just be "foo.o", and aspectOfOwner should be
+   * FooAspect.class. This method is necessary when an Aspect of the target, not the target itself,
+   * is creating an Artifact.
    */
   protected Artifact getBinArtifact(
       String packageRelativePath,
       ConfiguredTarget owner,
-      AspectClass creatingAspectFactory,
+      NativeAspectClass creatingAspectFactory,
       AspectParameters parameters) {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
