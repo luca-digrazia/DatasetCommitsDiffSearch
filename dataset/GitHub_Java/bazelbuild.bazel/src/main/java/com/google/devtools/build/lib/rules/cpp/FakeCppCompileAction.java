@@ -98,8 +98,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         null,
         null,
         null,
-        configuration.getLocalShellEnvironment(),
-        configuration.isCodeCoverageEnabled(),
+        configuration,
         cppConfiguration,
         // We only allow inclusion of header files explicitly declared in
         // "srcs", so we only use declaredIncludeSrcs, not declaredIncludeDirs.

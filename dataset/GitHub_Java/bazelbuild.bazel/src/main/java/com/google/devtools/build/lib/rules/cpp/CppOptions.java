@@ -316,15 +316,6 @@ public class CppOptions extends FragmentOptions {
   public List<String> linkoptList;
 
   @Option(
-    name = "ltoindexopt",
-    defaultValue = "",
-    category = "flags",
-    allowMultiple = true,
-    help = "Additional option to pass to the LTO indexing step (under --features=thin_lto)."
-  )
-  public List<String> ltoindexoptList;
-
-  @Option(
     name = "stripopt",
     allowMultiple = true,
     defaultValue = "",
@@ -534,16 +525,6 @@ public class CppOptions extends FragmentOptions {
             + "build nodes instead of being written to disk."
   )
   public boolean inmemoryDotdFiles;
-
-  @Option(
-    name = "experimental_skip_unused_modules",
-    defaultValue = "false",
-    category = "experimental",
-    help =
-        "If enabled, not all transitive modules automatically become an action's inputs. Instead,"
-            + " input discovery adds just the required ones."
-  )
-  public boolean skipUnusedModules;
 
   @Option(
     name = "experimental_omitfp",
