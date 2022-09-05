@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -22,7 +24,6 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.DelegatingEventHandler;
@@ -33,6 +34,7 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TestSize;
@@ -601,8 +603,33 @@ public class LoadingPhaseRunner {
 
     ResolvedTargets.Builder<Target> finalBuilder = ResolvedTargets.builder();
     finalBuilder.merge(testTargetsBuilder);
-    finalBuilder.filter(TestFilter.forOptions(options, eventHandler, ruleNames));
+    finalBuilder.filter(getTestFilter(eventHandler, options));
     return finalBuilder.build();
+
+  }
+
+  /**
+   * Convert the options into a test filter.
+   */
+  private Predicate<Target> getTestFilter(EventHandler eventHandler, Options options) {
+    Predicate<Target> testFilter = Predicates.alwaysTrue();
+    if (!options.testSizeFilterSet.isEmpty()) {
+      testFilter = Predicates.and(testFilter,
+          TestTargetUtils.testSizeFilter(options.testSizeFilterSet));
+    }
+    if (!options.testTimeoutFilterSet.isEmpty()) {
+      testFilter = Predicates.and(testFilter,
+          TestTargetUtils.testTimeoutFilter(options.testTimeoutFilterSet));
+    }
+    if (!options.testTagFilterList.isEmpty()) {
+      testFilter = Predicates.and(testFilter,
+          TestTargetUtils.tagFilter(options.testTagFilterList));
+    }
+    if (!options.testLangFilterList.isEmpty()) {
+      testFilter = Predicates.and(testFilter,
+          TestTargetUtils.testLangFilter(options.testLangFilterList, eventHandler, ruleNames));
+    }
+    return testFilter;
   }
 
   /**
