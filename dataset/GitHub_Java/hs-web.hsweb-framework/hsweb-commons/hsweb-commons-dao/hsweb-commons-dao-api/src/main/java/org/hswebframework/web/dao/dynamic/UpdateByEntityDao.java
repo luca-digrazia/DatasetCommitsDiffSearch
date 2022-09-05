@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2019 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -19,13 +19,15 @@
 package org.hswebframework.web.dao.dynamic;
 
 import org.hswebframework.web.commons.entity.Entity;
+import org.hswebframework.web.dao.Dao;
 
 /**
- * TODO  完成注释
+ * 根据实体类进行更新,实体类支持动态条件或者普通实体类。
+ * 动态条件和{@link QueryByEntityDao#query(Entity)} 一致。
  *
  * @author zhouhao
  * @since 3.0
  */
-public interface UpdateByEntityDao {
+public interface UpdateByEntityDao extends Dao {
     int update(Entity entity);
 }

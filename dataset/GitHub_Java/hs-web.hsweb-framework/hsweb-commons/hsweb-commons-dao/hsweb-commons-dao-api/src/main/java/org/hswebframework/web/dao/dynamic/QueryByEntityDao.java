@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2019 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -19,16 +19,17 @@
 package org.hswebframework.web.dao.dynamic;
 
 import org.hswebframework.web.commons.entity.Entity;
+import org.hswebframework.web.dao.Dao;
 
 import java.util.List;
 
 /**
- * TODO  完成注释
- *
+ * 根据实体类动态查询，可传入特定的实体类进行查询。
+ * 目前支持{@link org.hswebframework.web.commons.entity.param.QueryParamEntity} 动态查询
  * @author zhouhao
  * @since 3.0
  */
-public interface QueryByEntityDao<PO> {
+public interface QueryByEntityDao<PO>  extends Dao {
     List<PO> query(Entity queryEntity);
 
     int count(Entity queryEntity);
