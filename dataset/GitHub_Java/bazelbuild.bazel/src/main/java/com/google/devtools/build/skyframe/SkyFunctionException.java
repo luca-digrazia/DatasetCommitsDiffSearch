@@ -14,7 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
 
 import javax.annotation.Nullable;
 
@@ -43,17 +43,13 @@ public abstract class SkyFunctionException extends Exception {
 
   /** The transience of the error. */
   public enum Transience {
-    /**
-     * An error that may or may not occur again if the computation were re-run. If a computation
-     * results in a transient error and is needed on a subsequent MemoizingEvaluator#evaluate call,
-     * it will be re-executed.
-     */
+    // An error that may or may not occur again if the computation were re-run. If a computation
+    // results in a transient error and is needed on a subsequent MemoizingEvaluator#evaluate call,
+    // it will be re-executed.
     TRANSIENT,
 
-    /**
-     * An error that is completely deterministic and persistent in terms of the computation's
-     * inputs. Persistent errors may be cached.
-     */
+    // An error that is completely deterministic and persistent in terms of the computation's
+    // inputs. Persistent errors may be cached.
     PERSISTENT;
   }
 
@@ -64,7 +60,7 @@ public abstract class SkyFunctionException extends Exception {
   public SkyFunctionException(Exception cause, Transience transience) {
     this(cause, transience, null);
   }
-
+  
   /** Used to rethrow a child error that the parent cannot handle. */
   public SkyFunctionException(Exception cause, SkyKey childKey) {
     this(cause, Transience.PERSISTENT, childKey);

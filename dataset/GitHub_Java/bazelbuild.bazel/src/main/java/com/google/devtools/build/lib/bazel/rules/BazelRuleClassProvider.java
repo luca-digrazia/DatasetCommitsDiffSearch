@@ -382,7 +382,5 @@ public class BazelRuleClassProvider {
     builder.addConfigurationFragment(new AppleConfiguration.Loader());
     builder.addConfigurationFragment(new J2ObjcConfiguration.Loader());
     builder.addConfigurationFragment(new AndroidConfiguration.Loader());
-
-    builder.setUniversalConfigurationFragment(BazelConfiguration.class);
   }
 }

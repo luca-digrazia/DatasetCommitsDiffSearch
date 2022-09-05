@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
+import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspectClass;
 import com.google.devtools.build.lib.skyframe.AspectValue.SkylarkAspectLoadingKey;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
@@ -73,7 +74,7 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
         AspectValue.key(
             aspectLoadingKey.getTargetLabel(),
             aspectLoadingKey.getTargetConfiguration(),
-            skylarkAspect.getAspectClass(),
+            new SkylarkAspectClass(skylarkAspect),
             AspectParameters.EMPTY);
 
     return env.getValue(aspectKey);
@@ -89,6 +90,7 @@ public class ToplevelSkylarkAspectFunction implements SkyFunction {
    * Exceptions thrown from ToplevelSkylarkAspectFunction.
    */
   public class LoadSkylarkAspectFunctionException extends SkyFunctionException {
+
     public LoadSkylarkAspectFunctionException(Exception cause, SkyKey childKey) {
       super(cause, childKey);
     }

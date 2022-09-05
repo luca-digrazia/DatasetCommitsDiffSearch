@@ -76,7 +76,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -174,7 +173,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
   private final BlazeDirectories directories;
   @Nullable
-  private OutputService outputService;
+  private BatchStat batchStatter;
 
   // TODO(bazel-team): Figure out how to handle value builders that block internally. Blocking
   // operations may need to be handled in another (bigger?) thread pool. Also, we should detect
@@ -448,8 +447,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   public abstract void dumpPackages(PrintStream out);
 
-  public void setOutputService(OutputService outputService) {
-    this.outputService = outputService;
+  public void setBatchStatter(@Nullable BatchStat batchStatter) {
+    this.batchStatter = batchStatter;
   }
 
   /**
@@ -1044,7 +1043,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       boolean exclusiveTesting,
       boolean keepGoing,
       boolean explain,
-      boolean finalizeActionsToOutputService,
       int numJobs,
       ActionCacheChecker actionCacheChecker,
       @Nullable EvaluationProgressReceiver executionProgressReceiver)
@@ -1053,8 +1051,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     Preconditions.checkState(actionLogBufferPathGenerator != null);
 
     skyframeActionExecutor.prepareForExecution(
-        reporter, executor, keepGoing, explain, actionCacheChecker,
-        finalizeActionsToOutputService ? outputService : null);
+        reporter, executor, keepGoing, explain, actionCacheChecker);
 
     resourceManager.resetResourceUsage();
     try {
@@ -1080,8 +1077,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting
   public void prepareBuildingForTestingOnly(Reporter reporter, Executor executor, boolean keepGoing,
       boolean explain, ActionCacheChecker checker) {
-    skyframeActionExecutor.prepareForExecution(reporter, executor, keepGoing, explain, checker,
-        outputService);
+    skyframeActionExecutor.prepareForExecution(reporter, executor, keepGoing, explain, checker);
   }
 
   EvaluationResult<TargetPatternValue> targetPatterns(Iterable<SkyKey> patternSkyKeys,
@@ -1641,15 +1637,14 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.statusReporterRef.set(statusReporter);
   }
 
-  public void prepareExecution(ModifiedFileSet modifiedOutputFiles,
+  public void prepareExecution(boolean checkOutputFiles,
       @Nullable Range<Long> lastExecutionTimeRange) throws AbruptExitException,
       InterruptedException {
     maybeInjectEmbeddedArtifacts();
 
-    if (modifiedOutputFiles != ModifiedFileSet.NOTHING_MODIFIED) {
+    if (checkOutputFiles) {
       // Detect external modifications in the output tree.
       FilesystemValueChecker fsvc = new FilesystemValueChecker(tsgm, lastExecutionTimeRange);
-      BatchStat batchStatter = outputService == null ? null : outputService.getBatchStatter();
       invalidateDirtyActions(fsvc.getDirtyActionValues(memoizingEvaluator.getValues(),
           batchStatter));
       modifiedFiles += fsvc.getNumberOfModifiedOutputFiles();

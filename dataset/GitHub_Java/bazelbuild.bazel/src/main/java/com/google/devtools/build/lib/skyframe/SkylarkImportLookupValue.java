@@ -13,15 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
-import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * A value that represents a Skylark import lookup result. The lookup value corresponds to
@@ -59,65 +55,10 @@ public class SkylarkImportLookupValue implements SkyValue {
   }
 
   /**
-   * SkyKey for a Skylark import composed of the label of the Skylark extension and wether it is
-   * loaded from the WORKSPACE file or from a BUILD file.
+   * Returns a SkyKey to look up {@link Label} {@code importLabel}, which must be an absolute
+   * label.
    */
-  @Immutable
-  public static final class SkylarkImportLookupKey implements Serializable {
-    public final Label importLabel;
-    public final boolean inWorkspace;
-
-    public SkylarkImportLookupKey(Label importLabel, boolean inWorkspace) {
-      Preconditions.checkNotNull(importLabel);
-      Preconditions.checkArgument(!importLabel.getPackageIdentifier().getRepository().isDefault());
-      this.importLabel = importLabel;
-      this.inWorkspace = inWorkspace;
-    }
-
-    @Override
-    public String toString() {
-      return importLabel + (inWorkspace ? " (in workspace)" : "");
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-      if (!(obj instanceof SkylarkImportLookupKey)) {
-        return false;
-      }
-      SkylarkImportLookupKey other = (SkylarkImportLookupKey) obj;
-      return importLabel.equals(other.importLabel)
-          && inWorkspace == other.inWorkspace;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(importLabel, inWorkspace);
-    }
-  }
-
-  static SkyKey key(Label importLabel, boolean inWorkspace) {
-    return LegacySkyKey.create(
-        SkyFunctions.SKYLARK_IMPORTS_LOOKUP, new SkylarkImportLookupKey(importLabel, inWorkspace));
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (!(obj instanceof SkylarkImportLookupValue)) {
-      return false;
-    }
-    SkylarkImportLookupValue other = (SkylarkImportLookupValue) obj;
-    return environmentExtension.equals(other.getEnvironmentExtension())
-        && dependency.equals(other.getDependency());
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(environmentExtension, dependency);
+  static SkyKey key(Label importLabel) {
+    return new SkyKey(SkyFunctions.SKYLARK_IMPORTS_LOOKUP, importLabel);  
   }
 }

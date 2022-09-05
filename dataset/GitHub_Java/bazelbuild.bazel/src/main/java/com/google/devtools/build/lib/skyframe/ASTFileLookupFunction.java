@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Mutability;
@@ -29,7 +28,9 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
+
 import javax.annotation.Nullable;
 
 /**
@@ -59,15 +60,7 @@ public class ASTFileLookupFunction implements SkyFunction {
     //
     SkyKey pkgSkyKey = PackageLookupValue.key(fileLabel.getPackageIdentifier());
     PackageLookupValue pkgLookupValue = null;
-    try {
-      pkgLookupValue = (PackageLookupValue) env.getValueOrThrow(
-          pkgSkyKey, BuildFileNotFoundException.class, InconsistentFilesystemException.class);
-    } catch (BuildFileNotFoundException e) {
-      throw new ASTLookupFunctionException(
-          new ErrorReadingSkylarkExtensionException(e), Transience.PERSISTENT);
-    } catch (InconsistentFilesystemException e) {
-      throw new ASTLookupFunctionException(e, Transience.PERSISTENT);
-    }
+    pkgLookupValue = (PackageLookupValue) env.getValue(pkgSkyKey);
     if (pkgLookupValue == null) {
       return null;
     }
@@ -112,7 +105,6 @@ public class ASTFileLookupFunction implements SkyFunction {
             ast = BuildFileAST.parseSkylarkFile(path, astFileSize, env.getListener(),
                 new ValidationEnvironment(
                     ruleClassProvider.createSkylarkRuleClassEnvironment(
-                        fileLabel,
                         mutability,
                         env.getListener(),
                         // the two below don't matter for extracting the ValidationEnvironment:
@@ -122,7 +114,7 @@ public class ASTFileLookupFunction implements SkyFunction {
                     .setupDynamic(Runtime.REPOSITORY_NAME, Runtime.NONE)));
         }
       } else {
-        ast = BuildFileAST.parseBuildFile(path, astFileSize, env.getListener());
+        ast = BuildFileAST.parseBuildFile(path, astFileSize, env.getListener(), false);
       }
     } catch (IOException e) {
       throw new ASTLookupFunctionException(new ErrorReadingSkylarkExtensionException(e),

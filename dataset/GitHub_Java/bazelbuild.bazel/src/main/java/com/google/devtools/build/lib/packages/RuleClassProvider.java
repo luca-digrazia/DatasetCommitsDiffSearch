@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.packages.NativeAspectClass.NativeAspectFact
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.Map;
 
@@ -58,7 +59,7 @@ public interface RuleClassProvider {
       Mutability mutability,
       EventHandler eventHandler,
       @Nullable String astFileContentHashCode,
-      @Nullable Map<String, Extension> importMap);
+      @Nullable Map<PathFragment, Extension> importMap);
 
   /**
    * Returns a map from aspect names to aspect factory objects.
@@ -72,9 +73,4 @@ public interface RuleClassProvider {
    * overwritten in the WORKSPACE file in the actual workspace.
    */
   String getDefaultWorkspaceFile();
-  
-  /**
-   * Returns the path to the tools repository
-   */
-  String getToolsRepository();
 }

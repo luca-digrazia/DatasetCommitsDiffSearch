@@ -14,18 +14,18 @@
 
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 /**
- * A value that represents an AST file lookup result. There are two subclasses: one for the case
- * where the file is found, and another for the case where the file is missing (but there are no
- * other errors).
+ * A value that represents an AST file lookup result. There are two subclasses: one for the
+ * case where the file is found, and another for the case where the file is missing (but there
+ * are no other errors).
  */
-public abstract class ASTFileLookupValue implements SkyValue {
+abstract class ASTFileLookupValue implements SkyValue {
   public abstract boolean lookupSuccessful();
   public abstract BuildFileAST getAST();
   public abstract String getErrorMsg();
@@ -94,7 +94,7 @@ public abstract class ASTFileLookupValue implements SkyValue {
     return new ASTLookupWithFile(ast);
   }
 
-  public static SkyKey key(Label astFileLabel) {
-    return SkyKey.create(SkyFunctions.AST_FILE_LOOKUP, astFileLabel);
+  static SkyKey key(Label astFileLabel) {
+    return new SkyKey(SkyFunctions.AST_FILE_LOOKUP, astFileLabel);
   }
 }

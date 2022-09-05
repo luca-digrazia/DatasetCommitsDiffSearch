@@ -87,21 +87,6 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     get(key("//pkg3:ext.bzl"));
   }
 
-  public void testLoadFromSameAbsolutePathTwice() throws Exception {
-    scratch.file("pkg1/BUILD");
-    scratch.file("pkg2/BUILD");
-    scratch.file("pkg1/ext.bzl", "a = 1", "b = 2");
-    scratch.file("pkg2/ext.bzl", "load('/pkg1/ext', 'a')", "load('/pkg1/ext', 'b')");
-    get(key("//pkg1:ext.bzl"));
-  }
-
-  public void testLoadFromSameRelativePathTwice() throws Exception {
-    scratch.file("pkg/BUILD");
-    scratch.file("pkg/ext1.bzl", "a = 1", "b = 2");
-    scratch.file("pkg/ext2.bzl", "load('ext1', 'a')", "load('ext1', 'b')");
-    get(key("//pkg:ext1.bzl"));
-  }
-
   private EvaluationResult<SkylarkImportLookupValue> get(SkyKey skylarkImportLookupKey)
       throws Exception {
     EvaluationResult<SkylarkImportLookupValue> result =
@@ -117,11 +102,10 @@ public class SkylarkImportLookupFunctionTest extends BuildViewTestCase {
     return SkylarkImportLookupValue.key(Label.parseAbsoluteUnchecked(label));
   }
 
-  private void checkLabel(String labelRequested, String labelFound) throws Exception {
-    SkyKey skylarkImportLookupKey = key(labelRequested);
+  private void checkLabel(String file, String label) throws Exception {
+    SkyKey skylarkImportLookupKey = key(file);
     EvaluationResult<SkylarkImportLookupValue> result = get(skylarkImportLookupKey);
-    assertEquals(labelFound,
-        result.get(skylarkImportLookupKey).getDependency().getLabel().toString());
+    assertEquals(label, result.get(skylarkImportLookupKey).getDependency().getLabel().toString());
   }
 
   public void testSkylarkImportLookupNoBuildFile() throws Exception {

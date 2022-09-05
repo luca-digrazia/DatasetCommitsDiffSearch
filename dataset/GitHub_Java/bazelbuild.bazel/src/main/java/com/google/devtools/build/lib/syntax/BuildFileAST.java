@@ -34,7 +34,7 @@ public class BuildFileAST extends ASTNode {
 
   private final ImmutableList<Comment> comments;
 
-  private ImmutableList<SkylarkImport> imports;
+  private ImmutableList<LoadStatement> loads;
 
   /**
    * Whether any errors were encountered during scanning or parsing.
@@ -59,40 +59,16 @@ public class BuildFileAST extends ASTNode {
     setLocation(result.location);
   }
 
-  private BuildFileAST(
-      ImmutableList<Statement> stmts,
-      boolean containsErrors,
-      String contentHashCode,
-      Location location) {
-    this.stmts = stmts;
-    this.containsErrors = containsErrors;
-    this.contentHashCode = contentHashCode;
-    this.comments = ImmutableList.of();
-    this.setLocation(location);
-  }
-
-  /**
-   * Extract a subtree containing only statements from {@code firstStatement} (included) up to
-   * {@code lastStatement} excluded.
-   */
-  public BuildFileAST subTree(int firstStatement, int lastStatement) {
-    return new BuildFileAST(
-        stmts.subList(firstStatement, lastStatement),
-        containsErrors,
-        null,
-        stmts.get(firstStatement).getLocation());
-  }
-
   /** Collects all load statements */
-  private ImmutableList<SkylarkImport> fetchLoads(List<Statement> stmts) {
-    ImmutableList.Builder<SkylarkImport> imports = new ImmutableList.Builder<>();
+  private ImmutableList<LoadStatement> fetchLoads(List<Statement> stmts) {
+    ImmutableList.Builder<LoadStatement> loads = new ImmutableList.Builder<>();
     for (Statement stmt : stmts) {
       if (stmt instanceof LoadStatement) {
-        SkylarkImport imp = ((LoadStatement) stmt).getImport();
-        imports.add(imp);
+        LoadStatement imp = (LoadStatement) stmt;
+        loads.add(imp);
       }
     }
-    return imports.build();
+    return loads.build();
   }
 
   /**
@@ -121,11 +97,11 @@ public class BuildFileAST extends ASTNode {
   /**
    * Returns a list of loads in this BUILD file.
    */
-  public synchronized ImmutableList<SkylarkImport> getImports() {
-    if (imports == null) {
-      imports = fetchLoads(stmts);
+  public synchronized ImmutableList<LoadStatement> getImports() {
+    if (loads == null) {
+      loads = fetchLoads(stmts);
     }
-    return imports;
+    return loads;
   }
 
   /**

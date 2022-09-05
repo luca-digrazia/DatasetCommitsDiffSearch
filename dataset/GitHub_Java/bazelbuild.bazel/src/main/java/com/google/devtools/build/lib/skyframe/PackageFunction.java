@@ -394,10 +394,10 @@ public class PackageFunction implements SkyFunction {
       }
     }
 
-    if (packageId.equals(Label.EXTERNAL_PACKAGE_IDENTIFIER)) {
+    if (packageId.equals(Package.EXTERNAL_PACKAGE_IDENTIFIER)) {
       return getExternalPackage(env, packageLookupValue.getRoot());
     }
-    SkyKey externalPackageKey = PackageValue.key(Label.EXTERNAL_PACKAGE_IDENTIFIER);
+    SkyKey externalPackageKey = PackageValue.key(Package.EXTERNAL_PACKAGE_IDENTIFIER);
     PackageValue externalPackage = (PackageValue) env.getValue(externalPackageKey);
     if (externalPackage == null) {
       return null;
@@ -405,7 +405,7 @@ public class PackageFunction implements SkyFunction {
     Package externalPkg = externalPackage.getPackage();
     if (externalPkg.containsErrors()) {
       throw new PackageFunctionException(
-          new BuildFileContainsErrorsException(Label.EXTERNAL_PACKAGE_IDENTIFIER),
+          new BuildFileContainsErrorsException(Package.EXTERNAL_PACKAGE_IDENTIFIER),
           Transience.PERSISTENT);
     }
 
@@ -539,12 +539,7 @@ public class PackageFunction implements SkyFunction {
               ImmutableList.<Label>of());
     } else {
       importResult =
-          fetchImportsFromBuildFile(
-              buildFilePath,
-              packageId,
-              astAfterPreprocessing.ast,
-              env,
-              skylarkImportLookupFunctionForInlining);
+          fetchImportsFromBuildFile(buildFilePath, packageId, astAfterPreprocessing.ast, env);
     }
 
     return importResult;
@@ -555,12 +550,11 @@ public class PackageFunction implements SkyFunction {
    * returns null.
    */
   @Nullable
-  static SkylarkImportResult fetchImportsFromBuildFile(
+  private SkylarkImportResult fetchImportsFromBuildFile(
       Path buildFilePath,
       PackageIdentifier packageId,
       BuildFileAST buildFileAST,
-      Environment env,
-      SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining)
+      Environment env)
       throws PackageFunctionException, InterruptedException {
     ImmutableList<LoadStatement> loadStmts = buildFileAST.getImports();
     Map<PathFragment, Extension> importMap = Maps.newHashMapWithExpectedSize(loadStmts.size());
@@ -590,9 +584,8 @@ public class PackageFunction implements SkyFunction {
     // Look up and load the imports.
     ImmutableCollection<Label> importLabels = importPathMap.values();
     List<SkyKey> importLookupKeys = Lists.newArrayListWithExpectedSize(importLabels.size());
-    boolean inWorkspace = buildFilePath.getBaseName().endsWith("WORKSPACE");
     for (Label importLabel : importLabels) {
-      importLookupKeys.add(SkylarkImportLookupValue.key(importLabel, inWorkspace));
+      importLookupKeys.add(SkylarkImportLookupValue.key(importLabel));
     }
     Map<SkyKey, SkyValue> skylarkImportMap = Maps.newHashMapWithExpectedSize(importPathMap.size());
     boolean valuesMissing = false;
@@ -632,7 +625,6 @@ public class PackageFunction implements SkyFunction {
             skylarkImportMap.put(importLookupKey, skyValue);
           }
         }
-
       }
     } catch (SkylarkImportFailedException e) {
       env.getListener().handle(Event.error(Location.fromFile(buildFilePath), e.getMessage()));
@@ -652,7 +644,7 @@ public class PackageFunction implements SkyFunction {
     for (Entry<PathFragment, Label> importEntry : importPathMap.entrySet()) {
       PathFragment importPath = importEntry.getKey();
       Label importLabel = importEntry.getValue();
-      SkyKey keyForLabel = SkylarkImportLookupValue.key(importLabel, inWorkspace);
+      SkyKey keyForLabel = SkylarkImportLookupValue.key(importLabel);
       SkylarkImportLookupValue importLookupValue =
           (SkylarkImportLookupValue) skylarkImportMap.get(keyForLabel);
       importMap.put(importPath, importLookupValue.getEnvironmentExtension());
@@ -662,14 +654,14 @@ public class PackageFunction implements SkyFunction {
     return new SkylarkImportResult(importMap, transitiveClosureOfLabels(fileDependencies.build()));
   }
 
-  private static ImmutableList<Label> transitiveClosureOfLabels(
+  private ImmutableList<Label> transitiveClosureOfLabels(
       ImmutableList<SkylarkFileDependency> immediateDeps) {
     Set<Label> transitiveClosure = Sets.newHashSet();
     transitiveClosureOfLabels(immediateDeps, transitiveClosure);
     return ImmutableList.copyOf(transitiveClosure);
   }
 
-  private static void transitiveClosureOfLabels(
+  private void transitiveClosureOfLabels(
       ImmutableList<SkylarkFileDependency> immediateDeps, Set<Label> transitiveClosure) {
     for (SkylarkFileDependency dep : immediateDeps) {
       if (transitiveClosure.add(dep.getLabel())) {
@@ -947,7 +939,7 @@ public class PackageFunction implements SkyFunction {
   private static class BadWorkspaceFileException extends NoSuchPackageException {
     private BadWorkspaceFileException(String message) {
       super(
-          Label.EXTERNAL_PACKAGE_IDENTIFIER,
+          Package.EXTERNAL_PACKAGE_IDENTIFIER,
           "Error encountered while dealing with the WORKSPACE file: " + message);
     }
   }
@@ -962,16 +954,16 @@ public class PackageFunction implements SkyFunction {
    * Used to declare all the exception types that can be wrapped in the exception thrown by
    * {@link PackageFunction#compute}.
    */
-  static class PackageFunctionException extends SkyFunctionException {
+  private static class PackageFunctionException extends SkyFunctionException {
     public PackageFunctionException(NoSuchPackageException e, Transience transience) {
       super(e, transience);
     }
   }
 
   /** A simple value class to store the result of the Skylark imports.*/
-  static final class SkylarkImportResult {
-    final Map<PathFragment, Extension> importMap;
-    final ImmutableList<Label> fileDependencies;
+  private static final class SkylarkImportResult {
+    private final Map<PathFragment, Extension> importMap;
+    private final ImmutableList<Label> fileDependencies;
     private SkylarkImportResult(
         Map<PathFragment, Extension> importMap,
         ImmutableList<Label> fileDependencies) {

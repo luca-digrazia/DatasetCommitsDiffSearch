@@ -24,7 +24,6 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
@@ -98,7 +97,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private final Digraph<Class<? extends RuleDefinition>> dependencyGraph =
         new Digraph<>();
     private ConfigurationCollectionFactory configurationCollectionFactory;
-    private Class<? extends BuildConfiguration.Fragment> universalFragment;
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses = ImmutableMap.of();
 
@@ -162,12 +160,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
     public Builder setConfigurationCollectionFactory(ConfigurationCollectionFactory factory) {
       this.configurationCollectionFactory = factory;
-      return this;
-    }
-
-    public Builder setUniversalConfigurationFragment(
-        Class<? extends BuildConfiguration.Fragment> fragment) {
-      this.universalFragment = fragment;
       return this;
     }
 
@@ -246,7 +238,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           ImmutableList.copyOf(configurationOptions),
           ImmutableList.copyOf(configurationFragments),
           configurationCollectionFactory,
-          universalFragment,
           prerequisiteValidator,
           skylarkAccessibleJavaClasses);
     }
@@ -319,12 +310,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    */
   private final ConfigurationCollectionFactory configurationCollectionFactory;
 
-  /**
-   * A configuration fragment that should be available to all rules even when they don't
-   * explicitly require it.
-   */
-  private final Class<? extends BuildConfiguration.Fragment> universalFragment;
-
   private final ImmutableList<BuildInfoFactory> buildInfoFactories;
 
   private final PrerequisiteValidator prerequisiteValidator;
@@ -342,7 +327,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ImmutableList<Class<? extends FragmentOptions>> configurationOptions,
       ImmutableList<ConfigurationFragmentFactory> configurationFragments,
       ConfigurationCollectionFactory configurationCollectionFactory,
-      Class<? extends BuildConfiguration.Fragment> universalFragment,
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, SkylarkType> skylarkAccessibleJavaClasses) {
     this.preludeLabel = preludeLabel;
@@ -355,7 +339,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.configurationOptions = configurationOptions;
     this.configurationFragments = configurationFragments;
     this.configurationCollectionFactory = configurationCollectionFactory;
-    this.universalFragment = universalFragment;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses);
   }
@@ -417,14 +400,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    */
   public ConfigurationCollectionFactory getConfigurationCollectionFactory() {
     return configurationCollectionFactory;
-  }
-
-  /**
-   * Returns the configuration fragment that should be available to all rules even when they
-   * don't explicitly require it.
-   */
-  public Class<? extends BuildConfiguration.Fragment> getUniversalFragment() {
-    return universalFragment;
   }
 
   /**
