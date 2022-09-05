@@ -8,6 +8,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/**
+ * Created by zhouhao on 16-4-28.
+ */
+@Component
 public class Slf4jAccessLoggerPersisting implements AccessLoggerPersisting {
     protected Logger logger = LoggerFactory.getLogger(this.getClass());
     @Autowired(required = false)
@@ -15,10 +19,9 @@ public class Slf4jAccessLoggerPersisting implements AccessLoggerPersisting {
 
     @Override
     public void save(LoggerInfo loggerInfo) {
-        if (logger.isInfoEnabled())
-            if (fastJsonHttpMessageConverter == null)
-                logger.info(JSON.toJSONString(loggerInfo));
-            else
-                logger.info(fastJsonHttpMessageConverter.converter(loggerInfo));
+        if (fastJsonHttpMessageConverter == null)
+            logger.info(JSON.toJSONString(loggerInfo));
+        else
+            logger.info(fastJsonHttpMessageConverter.converter(loggerInfo));
     }
 }
