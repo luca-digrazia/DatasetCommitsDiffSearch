@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.DefaultLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsConverter;
@@ -29,8 +28,8 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -41,21 +40,6 @@ import java.util.List;
  * Configuration fragment for Android rules.
  */
 public class AndroidConfiguration extends BuildConfiguration.Fragment {
-
-  /** Converter for --android_crosstool_top. */
-  public static class AndroidCrosstoolTopConverter extends DefaultLabelConverter {
-    public AndroidCrosstoolTopConverter() {
-      super(Constants.ANDROID_DEFAULT_CROSSTOOL);
-    }
-  }
-
-  /** Converter for --android_sdk. */
-  public static class AndroidSdkConverter extends DefaultLabelConverter {
-    public AndroidSdkConverter() {
-      super(Constants.ANDROID_DEFAULT_SDK);
-    }
-  }
-
   /**
    * Value used to avoid multiple configurations from conflicting.
    *
@@ -108,9 +92,9 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     public boolean incrementalNativeLibs;
 
     @Option(name = "android_crosstool_top",
-        defaultValue = "",
+        defaultValue = "null",
         category = "semantics",
-        converter = AndroidCrosstoolTopConverter.class,
+        converter = LabelConverter.class,
         help = "The location of the C++ compiler used for Android builds.")
     public Label androidCrosstoolTop;
 
@@ -132,9 +116,9 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     // Label of filegroup combining all Android tools used as implicit dependencies of
     // android_* rules
     @Option(name = "android_sdk",
-            defaultValue = "",
+            defaultValue = "null",
             category = "version",
-            converter = AndroidSdkConverter.class,
+            converter = LabelConverter.class,
             help = "Specifies Android SDK/platform that is used to build Android applications.")
     public Label sdk;
 
@@ -181,9 +165,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     // TODO(cushon): enable by default, then delete the flag
     @Option(
       name = "treat_srcjars_as_srcs_for_strict_deps",
-      defaultValue = "true",
-      category = "undocumented",
-      help = "No-op. Kept here for backwards compatibility."
+      defaultValue = "false",
+      category = "semantics",
+      help = "Causes deps of android_library rules with .srcjars (but no Java srcs)"
+          + " to be promoted to exports."
     )
     public boolean treatSrcjarsAsSrcsForStrictDeps;
 
@@ -193,16 +178,37 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         labelMap.put("android_proguard", proguard);
       }
 
-      if (androidCrosstoolTop != null) {
-        labelMap.put("android_crosstool_top", androidCrosstoolTop);
+      if (realAndroidCrosstoolTop() != null) {
+        labelMap.put("android_crosstool_top", realAndroidCrosstoolTop());
       }
 
-      labelMap.put("android_sdk", sdk);
+      labelMap.put("android_sdk", realSdk());
     }
 
-    // This method is here because Constants.ANDROID_DEFAULT_FAT_APK_CPUS cannot be a constant
-    // because we replace the class file in the .jar after compilation. However, that means that we
-    // cannot use it as an attribute value in an annotation.
+    // This method is here because Constants.ANDROID_DEFAULT_SDK cannot be a constant, because we
+    // replace the class file in the .jar after compilation. However, that means that we cannot use
+    // it as an attribute value in an annotation.
+    private Label realSdk() {
+      return sdk == null
+          ? Label.parseAbsoluteUnchecked(Constants.ANDROID_DEFAULT_SDK)
+          : sdk;
+    }
+
+    // This method is here because Constants.ANDROID_DEFAULT_CROSSTOOL cannot be a constant, because
+    // we replace the class file in the .jar after compilation. However, that means that we cannot
+    // use it as an attribute value in an annotation.
+    public Label realAndroidCrosstoolTop() {
+      if (androidCrosstoolTop != null) {
+        return androidCrosstoolTop;
+      }
+
+      if (Constants.ANDROID_DEFAULT_CROSSTOOL.equals("null")) {
+        return null;
+      }
+
+      return Label.parseAbsoluteUnchecked(Constants.ANDROID_DEFAULT_CROSSTOOL);
+    }
+
     public List<String> realFatApkCpus() {
       if (fatApkCpus.isEmpty()) {
         return Constants.ANDROID_DEFAULT_FAT_APK_CPUS;
@@ -253,9 +259,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final Label proguard;
   private final boolean useJackForDexing;
   private final boolean jackSanityChecks;
+  private final boolean treatSrcjarsAsSrcsForStrictDeps;
 
   AndroidConfiguration(Options options) {
-    this.sdk = options.sdk;
+    this.sdk = options.realSdk();
     this.incrementalNativeLibs = options.incrementalNativeLibs;
     this.strictDeps = options.strictDeps;
     this.legacyNativeSupport = options.legacyNativeSupport;
@@ -265,6 +272,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.proguard = options.proguard;
     this.useJackForDexing = options.useJackForDexing;
     this.jackSanityChecks = options.jackSanityChecks;
+    this.treatSrcjarsAsSrcsForStrictDeps = options.treatSrcjarsAsSrcsForStrictDeps;
   }
 
   public String getCpu() {
@@ -300,6 +308,14 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
    */
   public boolean isJackSanityChecked() {
     return jackSanityChecks;
+  }
+
+  /**
+   * Returns true if srcjars should be treated as sources when deciding to promote
+   * deps to exports for Strict Java Deps.
+   */
+  public boolean treatSrcjarsAsSrcsForStrictDeps() {
+    return treatSrcjarsAsSrcsForStrictDeps;
   }
 
   public boolean useIncrementalNativeLibs() {
