@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Package.NameConflictException;
@@ -25,6 +24,7 @@ import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.util.Pair;
 
@@ -98,7 +98,7 @@ public class RuleFactory {
       // Test that this would form a valid label name -- in particular, this
       // catches cases where Makefile variables $(foo) appear in "name".
       label = pkgBuilder.createLabel(name);
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       throw new InvalidRuleException("illegal rule name: " + name + ": " + e.getMessage());
     }
     boolean inWorkspaceFile =
@@ -115,7 +115,7 @@ public class RuleFactory {
     try {
       return ruleClass.createRuleWithLabel(
           pkgBuilder, label, generator.attributes, eventHandler, ast, generator.location);
-    } catch (LabelSyntaxException e) {
+    } catch (SyntaxException e) {
       throw new RuleFactory.InvalidRuleException(ruleClass + " " + e.getMessage());
     }
   }
