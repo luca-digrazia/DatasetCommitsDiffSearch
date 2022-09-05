@@ -1408,9 +1408,7 @@ public final class CompilationSupport {
     }
 
     if (objcProvider.is(USES_SWIFT)) {
-      commandLine
-          .add("-L")
-          .add(AppleToolchain.swiftLibDir(appleConfiguration.getSingleArchPlatform()));
+      commandLine.add("-L").add(AppleToolchain.swiftLibDir(appleConfiguration));
     }
 
     for (String linkopt : attributes.linkopts()) {
