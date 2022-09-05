@@ -67,6 +67,7 @@ import com.google.devtools.build.skyframe.ValueOrExceptionUtils;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -640,9 +641,11 @@ public class PackageFunction implements SkyFunction {
                 SkylarkImportFailedException, InconsistentFilesystemException,
                 ASTLookupInputException, BuildFileNotFoundException>
             lookupResult;
+        Set<SkyKey> visitedKeysForCycle = new LinkedHashSet<>();
         try {
           SkyValue value =
-              skylarkImportLookupFunctionForInlining.computeWithInlineCalls(importKey, env);
+              skylarkImportLookupFunctionForInlining.computeWithInlineCalls(importKey, env,
+                  visitedKeysForCycle);
           if (value == null) {
             Preconditions.checkState(env.valuesMissing(), importKey);
             // Don't give up on computing. This is against the Skyframe contract, but we don't want

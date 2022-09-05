@@ -64,11 +64,9 @@ public class BazelAnalysisMock extends AnalysisMock {
 
   @Override
   public void setupMockClient(MockToolsConfig config) throws IOException {
-    String workspace = config.getPath("").getPathString();
     ArrayList<String> workspaceContents =
         new ArrayList<>(
             ImmutableList.of(
-                "local_repository(name = 'bazel_tools', path = '" + workspace + "')",
                 "bind(",
                 "  name = 'objc_proto_lib',",
                 "  actual = '//objcproto:ProtocolBuffers_lib',",
@@ -85,7 +83,6 @@ public class BazelAnalysisMock extends AnalysisMock {
     }
 
     config.overwrite("WORKSPACE", workspaceContents.toArray(new String[workspaceContents.size()]));
-    config.create("tools/defaults/BUILD");
     config.create("tools/jdk/BUILD",
         "package(default_visibility=['//visibility:public'])",
         "java_toolchain(name = 'toolchain', encoding = 'UTF-8', source_version = '8', ",
