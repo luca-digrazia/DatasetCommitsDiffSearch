@@ -18,13 +18,13 @@ import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
-import com.prolificinteractive.materialcalendarview.format.DateFormatTitleFormatter;
-import com.prolificinteractive.materialcalendarview.format.TitleFormatter;
-
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.LinkedList;
+import java.util.Locale;
 
 /**
  * <p>
@@ -51,15 +51,15 @@ import java.util.LinkedList;
  */
 public class MaterialCalendarView extends FrameLayout {
 
-    private static final TitleFormatter DEFAULT_TITLE_FORMATTER = new DateFormatTitleFormatter();
-
     private final TextView title;
     private final DirectionButton buttonPast;
     private final DirectionButton buttonFuture;
     private final ViewPager pager;
     private final MonthPagerAdapter adapter;
     private CalendarDay currentMonth;
-    private TitleFormatter titleFormatter = DEFAULT_TITLE_FORMATTER;
+    private DateFormat titleFormat = new SimpleDateFormat(
+        "MMMM yyyy", Locale.getDefault()
+    );
 
     private final MonthView.Callbacks monthViewCallbacks = new MonthView.Callbacks() {
         @Override
@@ -192,7 +192,7 @@ public class MaterialCalendarView extends FrameLayout {
 
     private void updateUi() {
         if(currentMonth != null) {
-            title.setText(titleFormatter.format(currentMonth));
+            title.setText(titleFormat.format(currentMonth.getDate()));
         }
         buttonPast.setEnabled(canGoBack());
         buttonFuture.setEnabled(canGoForward());
@@ -414,15 +414,6 @@ public class MaterialCalendarView extends FrameLayout {
      */
     public boolean getShowOtherDates() {
         return adapter.getShowOtherDates();
-    }
-
-    /**
-     * Set a custom formatter for the month/year title
-     * @param titleFormatter new formatter to use, null to use default formatter
-     */
-    public void setTitleFormatter(TitleFormatter titleFormatter) {
-        this.titleFormatter = titleFormatter == null ? DEFAULT_TITLE_FORMATTER : titleFormatter;
-        updateUi();
     }
 
     @Override
