@@ -31,11 +31,12 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.io.IOException;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
 import javax.annotation.Nullable;
 
 /** A {@link SkyFunction} to build {@link RecursiveFilesystemTraversalValue}s. */
@@ -98,13 +99,6 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
     }
   }
 
-  /** Thrown when we encounter errors from underlying File operations */
-  public static final class FileOperationException extends RecursiveFilesystemTraversalException {
-    public FileOperationException(String message) {
-      super(message);
-    }
-  }
-
   /** Exception type thrown by {@link RecursiveFilesystemTraversalFunction#compute}. */
   private static final class RecursiveFilesystemTraversalFunctionException extends
       SkyFunctionException {
@@ -115,7 +109,7 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
 
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
-      throws RecursiveFilesystemTraversalFunctionException, InterruptedException {
+      throws RecursiveFilesystemTraversalFunctionException {
     TraversalRequest traversal = (TraversalRequest) skyKey.argument();
     try {
       // Stat the traversal root.
@@ -174,9 +168,6 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
       // We are free to traverse this directory.
       Collection<SkyKey> dependentKeys = createRecursiveTraversalKeys(env, traversal);
       return resultForDirectory(traversal, rootInfo, traverseChildren(env, dependentKeys));
-    } catch (FileSymlinkException | InconsistentFilesystemException | IOException e) {
-      throw new RecursiveFilesystemTraversalFunctionException(
-          new FileOperationException("Error while traversing fileset: " + e.getMessage()));
     } catch (MissingDepException e) {
       return null;
     }
@@ -213,20 +204,9 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
   }
 
   private static FileInfo lookUpFileInfo(Environment env, TraversalRequest traversal)
-      throws MissingDepException, FileSymlinkException, InconsistentFilesystemException,
-          IOException, InterruptedException {
+      throws MissingDepException {
     // Stat the file.
-    FileValue fileValue =
-        (FileValue)
-            env.getValueOrThrow(
-                FileValue.key(traversal.path),
-                FileSymlinkException.class,
-                InconsistentFilesystemException.class,
-                IOException.class);
-
-    if (env.valuesMissing()) {
-      throw new MissingDepException();
-    }
+    FileValue fileValue = (FileValue) getDependentSkyValue(env, FileValue.key(traversal.path));
     if (fileValue.exists()) {
       // If it exists, it may either be a symlink or a file/directory.
       PathFragment unresolvedLinkTarget = null;
@@ -299,10 +279,8 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
    *     {@link FileInfo} so the caller should use these instead of the old ones (this happens when
    *     a package is found, but under a different root than expected)
    */
-  private static PkgLookupResult checkIfPackage(
-      Environment env, TraversalRequest traversal, FileInfo rootInfo)
-      throws MissingDepException, FileSymlinkException, InconsistentFilesystemException,
-          IOException, InterruptedException {
+  private static PkgLookupResult checkIfPackage(Environment env, TraversalRequest traversal,
+      FileInfo rootInfo) throws MissingDepException {
     Preconditions.checkArgument(rootInfo.type.exists() && !rootInfo.type.isFile(),
         "{%s} {%s}", traversal, rootInfo);
     PackageLookupValue pkgLookup = (PackageLookupValue) getDependentSkyValue(env,
@@ -337,9 +315,8 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
    *
    * <p>The returned keys are of type {@link SkyFunctions#RECURSIVE_FILESYSTEM_TRAVERSAL}.
    */
-  private static Collection<SkyKey> createRecursiveTraversalKeys(
-      Environment env, TraversalRequest traversal)
-      throws MissingDepException, InterruptedException {
+  private static Collection<SkyKey> createRecursiveTraversalKeys(Environment env,
+      TraversalRequest traversal) throws MissingDepException {
     // Use the traversal's path, even if it's a symlink. The contents of the directory, as listed
     // in the result, must be relative to it.
     DirectoryListingValue dirListing = (DirectoryListingValue) getDependentSkyValue(env,
@@ -428,7 +405,7 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
   }
 
   private static SkyValue getDependentSkyValue(Environment env, SkyKey key)
-      throws MissingDepException, InterruptedException {
+      throws MissingDepException {
     SkyValue value = env.getValue(key);
     if (env.valuesMissing()) {
       throw new MissingDepException();
@@ -442,7 +419,8 @@ public final class RecursiveFilesystemTraversalFunction implements SkyFunction {
    * <p>The keys must all be {@link SkyFunctions#RECURSIVE_FILESYSTEM_TRAVERSAL} keys.
    */
   private static Collection<RecursiveFilesystemTraversalValue> traverseChildren(
-      Environment env, Iterable<SkyKey> keys) throws MissingDepException, InterruptedException {
+      Environment env, Iterable<SkyKey> keys)
+      throws MissingDepException {
     Map<SkyKey, SkyValue> values = env.getValues(keys);
     if (env.valuesMissing()) {
       throw new MissingDepException();

@@ -71,14 +71,8 @@ public class StandaloneTestStrategy extends TestStrategy {
       throws ExecException, InterruptedException {
     Path runfilesDir = null;
     try {
-      runfilesDir =
-          TestStrategy.getLocalRunfilesDirectory(
-              action,
-              actionExecutionContext,
-              binTools,
-              action.getShExecutable(),
-              action.getLocalShellEnvironment(),
-              action.isEnableRunfiles());
+      runfilesDir = TestStrategy.getLocalRunfilesDirectory(action, actionExecutionContext, binTools,
+          action.getShExecutable(), action.getLocalShellEnvironment());
     } catch (ExecException e) {
       throw new TestExecException(e.getMessage());
     }
@@ -139,7 +133,7 @@ public class StandaloneTestStrategy extends TestStrategy {
           ResourceHandle handle = ResourceManager.instance().acquireResources(action, resources)) {
         TestResultData data =
             execute(actionExecutionContext.withFileOutErr(fileOutErr), spawn, action);
-        appendStderr(fileOutErr.getOutputPath(), fileOutErr.getErrorPath());
+        appendStderr(fileOutErr.getOutputFile(), fileOutErr.getErrorFile());
         finalizeTest(actionExecutionContext, action, data);
       }
     } catch (IOException e) {
@@ -167,9 +161,6 @@ public class StandaloneTestStrategy extends TestStrategy {
     vars.put("TEST_TMPDIR", tmpDir.getPathString());
     vars.put("TEST_WORKSPACE", action.getRunfilesPrefix());
     vars.put("XML_OUTPUT_FILE", resolvedPaths.getXmlOutputPath().getPathString());
-    if (!action.isEnableRunfiles()) {
-      vars.put("RUNFILES_MANIFEST_ONLY", "1");
-    }
 
     return vars;
   }

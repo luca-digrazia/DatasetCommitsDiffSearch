@@ -14,9 +14,11 @@
 
 package com.google.devtools.build.lib.events;
 
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
+
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.io.OutputStream;
-import java.util.Arrays;
 
 /**
  * An OutputStream that delegates all writes to a Reporter.
@@ -47,11 +49,11 @@ public final class ReporterStream extends OutputStream {
 
   @Override
   public void write(byte[] bytes) {
-    write(bytes, 0, bytes.length);
+    reporter.handle(Event.of(eventKind, null, bytes));
   }
 
   @Override
   public void write(byte[] bytes, int offset, int len) {
-    reporter.handle(Event.of(eventKind, null, Arrays.copyOfRange(bytes, offset, offset + len)));
+    reporter.handle(Event.of(eventKind, null, new String(bytes, offset, len, ISO_8859_1)));
   }
 }

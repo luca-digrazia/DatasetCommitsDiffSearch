@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
+import com.google.devtools.build.lib.actions.Action.MiddlemanType;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.actions.cache.ActionCache.Entry;
 import com.google.devtools.build.lib.actions.cache.Digest;
@@ -219,7 +219,8 @@ public class ActionCacheChecker {
       // This cache entry has already been updated by a shared action. We don't need to do it again.
       return;
     }
-    ActionCache.Entry entry = new ActionCache.Entry(action.getKey(), action.discoversInputs());
+    ActionCache.Entry entry =
+        actionCache.createEntry(action.getKey(), action.discoversInputs());
     for (Artifact output : action.getOutputs()) {
       // Remove old records from the cache if they used different key.
       String execPath = output.getExecPathString();
@@ -297,7 +298,7 @@ public class ActionCacheChecker {
       // Compute the aggregated middleman digest.
       // Since we never validate action key for middlemen, we should not store
       // it in the cache entry and just use empty string instead.
-      entry = new ActionCache.Entry("", false);
+      entry = actionCache.createEntry("", false);
       for (Artifact input : action.getInputs()) {
         entry.addFile(input.getExecPath(), metadataHandler.getMetadataMaybe(input));
       }

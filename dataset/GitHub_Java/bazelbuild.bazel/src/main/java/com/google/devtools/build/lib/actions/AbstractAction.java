@@ -395,7 +395,7 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   }
 
   @Override
-  public boolean shouldReportPathPrefixConflict(ActionAnalysisMetadata action) {
+  public boolean shouldReportPathPrefixConflict(Action action) {
     return this != action;
   }
 
