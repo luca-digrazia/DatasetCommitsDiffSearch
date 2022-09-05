@@ -58,27 +58,24 @@ public final class BazelAnalysisMock extends AnalysisMock {
   }
 
   @Override
-  public List<String> getWorkspaceContents(MockToolsConfig config) {
-    String bazelToolWorkspace = config.getPath("/bazel_tools_workspace").getPathString();
-    return new ArrayList<>(
-        ImmutableList.of(
-            "local_repository(name = 'bazel_tools', path = '" + bazelToolWorkspace + "')",
-            "local_repository(name = 'local_config_xcode', path = '/local_config_xcode')",
-            "bind(",
-            "  name = 'objc_proto_lib',",
-            "  actual = '//objcproto:ProtocolBuffers_lib',",
-            ")",
-            "bind(",
-            "  name = 'objc_protobuf_lib',",
-            "  actual = '//objcproto:protobuf_lib',",
-            ")",
-            "bind(name = 'android/sdk', actual='@bazel_tools//tools/android:sdk')",
-            "bind(name = 'tools/python', actual='//tools/python')"));
-  }
-
-  @Override
   public void setupMockClient(MockToolsConfig config) throws IOException {
-    List<String> workspaceContents = getWorkspaceContents(config);
+    String bazelToolWorkspace = config.getPath("/bazel_tools_workspace").getPathString();
+    ArrayList<String> workspaceContents =
+        new ArrayList<>(
+            ImmutableList.of(
+                "local_repository(name = 'bazel_tools', path = '" + bazelToolWorkspace + "')",
+                "local_repository(name = 'local_config_xcode', path = '/local_config_xcode')",
+                "bind(",
+                "  name = 'objc_proto_lib',",
+                "  actual = '//objcproto:ProtocolBuffers_lib',",
+                ")",
+                "bind(",
+                "  name = 'objc_protobuf_lib',",
+                "  actual = '//objcproto:protobuf_lib',",
+                ")",
+                "bind(name = 'android/sdk', actual='@bazel_tools//tools/android:sdk')",
+                "bind(name = 'tools/python', actual='//tools/python')"));
+
     config.create(
         "/local_config_xcode/BUILD", "xcode_config(name = 'host_xcodes')");
     config.overwrite("WORKSPACE", workspaceContents.toArray(new String[workspaceContents.size()]));
@@ -169,7 +166,13 @@ public final class BazelAnalysisMock extends AnalysisMock {
         .add("sh_binary(name = 'aar_native_libs_zip_creator', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'dexbuilder', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'dexmerger', srcs = ['empty.sh'])")
-        .add("sh_binary(name = 'busybox', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'manifest_merger', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'rclass_generator', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'resources_processor', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'resource_merger', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'resource_parser', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'resource_shrinker', srcs = ['empty.sh'])")
+        .add("sh_binary(name = 'resource_validator', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'rex_wrapper', srcs = ['empty.sh'])")
         .add("android_library(name = 'incremental_stub_application')")
         .add("android_library(name = 'incremental_split_stub_application')")
