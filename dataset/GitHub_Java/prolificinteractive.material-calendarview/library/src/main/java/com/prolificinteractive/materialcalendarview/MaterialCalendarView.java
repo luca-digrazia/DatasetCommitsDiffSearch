@@ -855,27 +855,6 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Get the current first day of the month in month mode, or the first visible day of the
-     * currently visible week.
-     *
-     * For example, in week mode, if the week is July 29th, 2018 to August 4th, 2018,
-     * this will return July 29th, 2018. If in month mode and the month is august, then this method
-     * will return August 1st, 2018.
-     *
-     * @return The current month or week shown, will be set to first day of the month in month mode,
-     * or the first visible day for a week.
-     */
-    public CalendarDay getCurrentDate() {
-        return adapter.getItem(pager.getCurrentItem());
-    }
-
-    /**
-     * Set the calendar to a specific month or week based on a date.
-     *
-     * In month mode, the calendar will be set to the corresponding month.
-     *
-     * In week mode, the calendar will be set to the corresponding week.
-     *
      * @param calendar a Calendar set to a day to focus the calendar on. Null will do nothing
      */
     public void setCurrentDate(@Nullable LocalDate calendar) {
@@ -883,12 +862,13 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Set the calendar to a specific month or week based on a date.
-     *
-     * In month mode, the calendar will be set to the corresponding month.
-     *
-     * In week mode, the calendar will be set to the corresponding week.
-     *
+     * @return The current month shown, will be set to first day of the month
+     */
+    public CalendarDay getCurrentDate() {
+        return adapter.getItem(pager.getCurrentItem());
+    }
+
+    /**
      * @param day a CalendarDay to focus the calendar on. Null will do nothing
      */
     public void setCurrentDate(@Nullable CalendarDay day) {
@@ -896,12 +876,6 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Set the calendar to a specific month or week based on a date.
-     *
-     * In month mode, the calendar will be set to the corresponding month.
-     *
-     * In week mode, the calendar will be set to the corresponding week.
-     *
      * @param day             a CalendarDay to focus the calendar on. Null will do nothing
      * @param useSmoothScroll use smooth scroll when changing months.
      */
