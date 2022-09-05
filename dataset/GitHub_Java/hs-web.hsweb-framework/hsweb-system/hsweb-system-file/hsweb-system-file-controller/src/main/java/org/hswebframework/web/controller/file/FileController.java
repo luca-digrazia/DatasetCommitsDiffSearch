@@ -1,16 +1,13 @@
 package org.hswebframework.web.controller.file;
 
 import com.alibaba.fastjson.JSON;
-import org.apache.commons.fileupload.ParameterParser;
 import org.hswebframework.expands.compress.Compress;
 import org.hswebframework.expands.compress.zip.ZIPWriter;
 import org.hswebframework.utils.StringUtils;
 import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.NotFoundException;
-import org.hswebframework.web.WebUtil;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.annotation.Authorize;
-import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframework.web.entity.file.FileInfoEntity;
 import org.hswebframework.web.logging.AccessLogger;
@@ -19,6 +16,7 @@ import org.hswebframework.web.service.file.FileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,17 +26,13 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static java.util.Optional.ofNullable;
 
 /**
  * 文件操作控制器，提供文件上传下载等操作
@@ -132,7 +126,6 @@ public class FileController {
                              @PathVariable("name") String name,
                              HttpServletResponse response,
                              HttpServletRequest request) throws IOException {
-
         downLoad(id, name, response, request);
     }
 
@@ -156,7 +149,7 @@ public class FileController {
                          HttpServletResponse response, HttpServletRequest request)
             throws IOException {
         FileInfoEntity fileInfo = fileInfoService.selectByIdOrMd5(idOrMd5);
-        if (fileInfo == null || !DataStatus.STATUS_ENABLED.equals(fileInfo.getStatus())) {
+        if (fileInfo == null || fileInfo.getStatus() != 1) {
             throw new NotFoundException("文件不存在");
         }
         String fileName = fileInfo.getName();
@@ -181,9 +174,9 @@ public class FileController {
         //尝试判断是否为断点下载
         try {
             //获取要继续下载的位置
-            String Range = request.getHeader("Range").replace("bytes=", "").replace("-", "");
+            String Range = request.getHeader("Range").replaceAll("bytes=", "").replaceAll("-", "");
             skip = StringUtils.toInt(Range);
-        } catch (Exception ignore) {
+        } catch (Exception e) {
         }
         response.setContentLength((int) fSize);//文件大小
         response.setContentType(contentType);
@@ -212,12 +205,7 @@ public class FileController {
                 .map(this::upload)
                 .map(ResponseMessage::getResult)
                 .collect(Collectors.toList()))
-                .include(FileInfoEntity.class,
-                        FileInfoEntity.id,
-                        FileInfoEntity.name,
-                        FileInfoEntity.md5,
-                        FileInfoEntity.size,
-                        FileInfoEntity.type);
+                .include(FileInfoEntity.class, FileInfoEntity.id, FileInfoEntity.name, FileInfoEntity.md5);
     }
 
     /**
@@ -236,21 +224,9 @@ public class FileController {
         if (file.isEmpty()) {
             return ResponseMessage.ok();
         }
-        String fileName = file.getOriginalFilename();
-        String contentType = Optional.ofNullable(WebUtil.getHttpServletRequest())
-                .orElseThrow(UnsupportedOperationException::new)
-                .getContentType();
-        ParameterParser parser = new ParameterParser();
-        Map<String, String> params = parser.parse(contentType, ';');
-        if (params.get("charset") == null) {
-            try {
-                fileName = new String(file.getOriginalFilename().getBytes("ISO-8859-1"), "utf-8");
-            } catch (UnsupportedEncodingException ignore) {
-            }
-        }
         if (logger.isInfoEnabled())
-            logger.info("start write file:{}", fileName);
-
+            logger.info("start write file:{}", file.getOriginalFilename());
+        String fileName = file.getOriginalFilename();
         FileInfoEntity fileInfo;
         try {
             fileInfo = fileService.saveFile(file.getInputStream(), fileName, file.getContentType(), creator);
@@ -259,17 +235,13 @@ public class FileController {
         }
         fileInfoList.add(fileInfo);
         return ResponseMessage.ok(fileInfo)
-                .include(FileInfoEntity.class, FileInfoEntity.id,
-                        FileInfoEntity.name,
-                        FileInfoEntity.md5,
-                        FileInfoEntity.size,
-                        FileInfoEntity.type);
+                .include(FileInfoEntity.class, FileInfoEntity.id, FileInfoEntity.name, FileInfoEntity.md5);
     }
 
     @PostMapping(value = "/upload-static")
     @AccessLogger("上传静态文件")
     @Authorize(action = "static")
-    public ResponseMessage<String> uploadStatic(@RequestParam("file") MultipartFile file) throws IOException {
+    public ResponseMessage<String> uploadStatic(MultipartFile file) throws IOException {
         if (file.isEmpty()) return ResponseMessage.ok();
         return ResponseMessage.ok(fileService.saveStaticFile(file.getInputStream(), file.getOriginalFilename()));
     }
@@ -277,8 +249,7 @@ public class FileController {
     @GetMapping(value = "/md5/{md5}")
     @AccessLogger("根据MD5获取文件信息")
     public ResponseMessage<FileInfoEntity> uploadStatic(@PathVariable String md5) throws IOException {
-        return ofNullable(fileInfoService.selectByMd5(md5))
-                .map(ResponseMessage::ok)
-                .orElseThrow(() -> new NotFoundException("file not found"));
+        return ResponseMessage
+                .ok(fileInfoService.selectByMd5(md5));
     }
 }
