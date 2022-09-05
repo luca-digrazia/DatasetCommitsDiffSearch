@@ -100,7 +100,7 @@ public final class RuleConfiguredTargetBuilder {
     if (runfilesSupport != null) {
       // If a binary is built, build its runfiles, too
       addOutputGroup(
-          OutputGroupProvider.HIDDEN_TOP_LEVEL, runfilesSupport.getRunfilesMiddleman());
+          TopLevelArtifactProvider.HIDDEN_TOP_LEVEL, runfilesSupport.getRunfilesMiddleman());
     } else if (providers.get(RunfilesProvider.class) != null) {
       // If we don't have a RunfilesSupport (probably because this is not a binary rule), we still
       // want to build the files this rule contributes to runfiles of dependent rules so that we
@@ -109,7 +109,7 @@ public final class RuleConfiguredTargetBuilder {
       // Note that this is a best-effort thing: there is .getDataRunfiles() and all the language-
       // specific *RunfilesProvider classes, which we don't add here for reasons that are lost in
       // the mists of time.
-      addOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL,
+      addOutputGroup(TopLevelArtifactProvider.HIDDEN_TOP_LEVEL,
           ((RunfilesProvider) providers.get(RunfilesProvider.class))
               .getDefaultRunfiles().getAllArtifacts());
     }
@@ -127,7 +127,7 @@ public final class RuleConfiguredTargetBuilder {
         outputGroups.put(entry.getKey(), entry.getValue().build());
       }
 
-      add(OutputGroupProvider.class, new OutputGroupProvider(outputGroups.build()));
+      add(TopLevelArtifactProvider.class, new TopLevelArtifactProvider(outputGroups.build()));
     }
 
 
@@ -141,14 +141,15 @@ public final class RuleConfiguredTargetBuilder {
    * publishes this rule's supported environments for the rules that depend on it.
    */
   private void checkConstraints() {
-    if (!ruleContext.getRule().getRuleClassObject().supportsConstraintChecking()) {
-      return;
-    }
-    EnvironmentCollection supportedEnvironments =
-        ConstraintSemantics.getSupportedEnvironments(ruleContext);
-    if (supportedEnvironments != null) {
-      add(SupportedEnvironmentsProvider.class, new SupportedEnvironments(supportedEnvironments));
-      ConstraintSemantics.checkConstraints(ruleContext, supportedEnvironments);
+    if (providers.get(SupportedEnvironmentsProvider.class) == null) {
+      // Note the "environment" rule sets its own SupportedEnvironmentProvider instance, so this
+      // logic is for "normal" rules that just want to apply default semantics.
+      EnvironmentCollection supportedEnvironments =
+          ConstraintSemantics.getSupportedEnvironments(ruleContext);
+      if (supportedEnvironments != null) {
+        add(SupportedEnvironmentsProvider.class, new SupportedEnvironments(supportedEnvironments));
+        ConstraintSemantics.checkConstraints(ruleContext, supportedEnvironments);
+      }
     }
   }
 
@@ -363,8 +364,7 @@ public final class RuleConfiguredTargetBuilder {
   private void checkCompositeSkylarkObjectSafe(Object object) {
     if (object instanceof SkylarkList) {
       SkylarkList list = (SkylarkList) object;
-      if (list == SkylarkList.EMPTY_LIST
-          || isSimpleSkylarkObjectSafe(list.getContentType().getType())) {
+      if (list == SkylarkList.EMPTY_LIST || isSimpleSkylarkObjectSafe(list.getGenericType())) {
         // Try not to iterate over the list if avoidable.
         return;
       }
@@ -375,9 +375,9 @@ public final class RuleConfiguredTargetBuilder {
       return;
     } else if (object instanceof SkylarkNestedSet) {
       // SkylarkNestedSets cannot have composite items.
-      Class<?> contentType = ((SkylarkNestedSet) object).getContentType().getType();
-      if (!contentType.equals(Object.class) && !isSimpleSkylarkObjectSafe(contentType)) {
-        throw new IllegalArgumentException(EvalUtils.getDataTypeName(contentType));
+      Class<?> genericType = ((SkylarkNestedSet) object).getGenericType();
+      if (!genericType.equals(Object.class) && !isSimpleSkylarkObjectSafe(genericType)) {
+        throw new IllegalArgumentException(EvalUtils.getDataTypeName(genericType));
       }
       return;
     } else if (object instanceof Map<?, ?>) {

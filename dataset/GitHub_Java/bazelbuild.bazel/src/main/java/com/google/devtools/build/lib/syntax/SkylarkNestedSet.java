@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -46,18 +47,18 @@ import javax.annotation.Nullable;
 @Immutable
 public final class SkylarkNestedSet implements Iterable<Object> {
 
-  private final SkylarkType contentType;
+  private final Class<?> genericType;
   @Nullable private final List<Object> items;
   @Nullable private final List<NestedSet<Object>> transitiveItems;
   private final NestedSet<?> set;
 
   public SkylarkNestedSet(Order order, Object item, Location loc) throws EvalException {
-    this(order, SkylarkType.TOP, item, loc, new ArrayList<Object>(),
+    this(order, Object.class, item, loc, new ArrayList<Object>(),
         new ArrayList<NestedSet<Object>>());
   }
 
   public SkylarkNestedSet(SkylarkNestedSet left, Object right, Location loc) throws EvalException {
-    this(left.set.getOrder(), left.contentType, right, loc,
+    this(left.set.getOrder(), left.genericType, right, loc,
         new ArrayList<Object>(checkItems(left.items, loc)),
         new ArrayList<NestedSet<Object>>(checkItems(left.transitiveItems, loc)));
   }
@@ -75,30 +76,30 @@ public final class SkylarkNestedSet implements Iterable<Object> {
 
   // This is safe because of the type checking
   @SuppressWarnings("unchecked")
-  private SkylarkNestedSet(Order order, SkylarkType contentType, Object item, Location loc,
+  private SkylarkNestedSet(Order order, Class<?> genericType, Object item, Location loc,
       List<Object> items, List<NestedSet<Object>> transitiveItems) throws EvalException {
 
     // Adding the item
     if (item instanceof SkylarkNestedSet) {
       SkylarkNestedSet nestedSet = (SkylarkNestedSet) item;
       if (!nestedSet.isEmpty()) {
-        contentType = checkType(contentType, nestedSet.contentType, loc);
+        genericType = checkType(genericType, nestedSet.genericType, loc);
         transitiveItems.add((NestedSet<Object>) nestedSet.set);
       }
     } else if (item instanceof SkylarkList) {
       // TODO(bazel-team): we should check ImmutableList here but it screws up genrule at line 43
       for (Object object : (SkylarkList) item) {
-        contentType = checkType(contentType, SkylarkType.of(object.getClass()), loc);
+        genericType = checkType(genericType, object.getClass(), loc);
         items.add(object);
       }
     } else {
       throw new EvalException(loc,
           String.format("cannot add '%s'-s to nested sets", EvalUtils.getDataTypeName(item)));
     }
-    this.contentType = Preconditions.checkNotNull(contentType, "type cannot be null");
+    this.genericType = Preconditions.checkNotNull(genericType, "type cannot be null");
 
     // Initializing the real nested set
-    NestedSetBuilder<Object> builder = new NestedSetBuilder<>(order);
+    NestedSetBuilder<Object> builder = new NestedSetBuilder<Object>(order);
     builder.addAll(items);
     try {
       for (NestedSet<Object> nestedSet : transitiveItems) {
@@ -115,55 +116,43 @@ public final class SkylarkNestedSet implements Iterable<Object> {
   /**
    * Returns a type safe SkylarkNestedSet. Use this instead of the constructor if possible.
    */
-  public static <T> SkylarkNestedSet of(SkylarkType contentType, NestedSet<T> set) {
-    return new SkylarkNestedSet(contentType, set);
-  }
-
-  /**
-   * Returns a type safe SkylarkNestedSet. Use this instead of the constructor if possible.
-   */
-  public static <T> SkylarkNestedSet of(Class<T> contentType, NestedSet<T> set) {
-    return of(SkylarkType.of(contentType), set);
+  public static <T> SkylarkNestedSet of(Class<T> genericType, NestedSet<T> set) {
+    return new SkylarkNestedSet(genericType, set);
   }
 
   /**
    * A not type safe constructor for SkylarkNestedSet. It's discouraged to use it unless type
    * generic safety is guaranteed from the caller side.
    */
-  SkylarkNestedSet(SkylarkType contentType, NestedSet<?> set) {
+  SkylarkNestedSet(Class<?> genericType, NestedSet<?> set) {
     // This is here for the sake of FuncallExpression.
-    this.contentType = Preconditions.checkNotNull(contentType, "type cannot be null");
+    this.genericType = Preconditions.checkNotNull(genericType, "type cannot be null");
     this.set = Preconditions.checkNotNull(set, "set cannot be null");
     this.items = null;
     this.transitiveItems = null;
   }
 
-  /**
-   * A not type safe constructor for SkylarkNestedSet, specifying type as a Java class.
-   * It's discouraged to use it unless type generic safety is guaranteed from the caller side.
-   */
-  SkylarkNestedSet(Class<?> contentType, NestedSet<?> set) {
-    this(SkylarkType.of(contentType), set);
-  }
-
-  private static SkylarkType checkType(SkylarkType builderType, SkylarkType itemType, Location loc)
+  private static Class<?> checkType(Class<?> builderType, Class<?> itemType, Location loc)
       throws EvalException {
-    if (SkylarkType.intersection(
-        SkylarkType.Union.of(SkylarkType.MAP, SkylarkType.LIST, SkylarkType.STRUCT),
-        itemType) != SkylarkType.BOTTOM) {
+    if (Map.class.isAssignableFrom(itemType) || SkylarkList.class.isAssignableFrom(itemType)
+        || ClassObject.class.isAssignableFrom(itemType)) {
       throw new EvalException(loc, String.format("nested set item is composite (type of %s)",
-              itemType));
+          EvalUtils.getDataTypeNameFromClass(itemType)));
     }
-    if (!EvalUtils.isSkylarkImmutable(itemType.getType())) {
+    if (!EvalUtils.isSkylarkImmutable(itemType)) {
       throw new EvalException(loc, String.format("nested set item is not immutable (type of %s)",
-              itemType));
+          EvalUtils.getDataTypeNameFromClass(itemType)));
     }
-    SkylarkType newType = SkylarkType.intersection(builderType, itemType);
-    if (newType == SkylarkType.BOTTOM) {
+    if (builderType.equals(Object.class)) {
+      return itemType;
+    }
+    if (!EvalUtils.getSkylarkType(builderType).equals(EvalUtils.getSkylarkType(itemType))) {
       throw new EvalException(loc, String.format(
-          "cannot add an item of type %s to a nested %s", itemType, builderType));
+          "nested set item is type of %s but the nested set accepts only %s-s",
+          EvalUtils.getDataTypeNameFromClass(itemType),
+          EvalUtils.getDataTypeNameFromClass(builderType)));
     }
-    return newType;
+    return builderType;
   }
 
   /**
@@ -176,10 +165,10 @@ public final class SkylarkNestedSet implements Iterable<Object> {
     if (set.isEmpty()) {
       return (NestedSet<T>) set;
     }
-    Preconditions.checkArgument(contentType.canBeCastTo(type),
-        String.format("Expected a set of %ss but got a set of %ss",
+    Preconditions.checkArgument(type.isAssignableFrom(genericType),
+        String.format("Expected %s as a type but got %s",
             EvalUtils.getDataTypeNameFromClass(type),
-            contentType));
+            EvalUtils.getDataTypeNameFromClass(genericType)));
     return (NestedSet<T>) set;
   }
 
@@ -199,8 +188,8 @@ public final class SkylarkNestedSet implements Iterable<Object> {
   }
 
   @VisibleForTesting
-  public SkylarkType getContentType() {
-    return contentType;
+  public Class<?> getGenericType() {
+    return genericType;
   }
 
   @Override

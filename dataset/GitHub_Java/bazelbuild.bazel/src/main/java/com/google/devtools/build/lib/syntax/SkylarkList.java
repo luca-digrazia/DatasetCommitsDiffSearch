@@ -40,15 +40,15 @@ import java.util.List;
         + "List elements have to be of the same type, <code>[1, 2, \"c\"]</code> results in an "
         + "error. Lists - just like everything - are immutable, therefore <code>x[1] = \"a\""
         + "</code> is not supported.")
-// TODO(bazel-team): should we instead have it implement List<Object> like ImmutableList does?
-public abstract class SkylarkList implements Iterable<Object> {
+  // TODO(bazel-team): should we instead implements List<Object> like ImmutableList does?
+  public abstract class SkylarkList implements Iterable<Object> {
 
   private final boolean tuple;
-  private final SkylarkType contentType;
+  private final Class<?> genericType;
 
-  private SkylarkList(boolean tuple, SkylarkType contentType) {
+  private SkylarkList(boolean tuple, Class<?> genericType) {
     this.tuple = tuple;
-    this.contentType = contentType;
+    this.genericType = genericType;
   }
 
   /**
@@ -74,8 +74,8 @@ public abstract class SkylarkList implements Iterable<Object> {
   }
 
   @VisibleForTesting
-  public SkylarkType getContentType() {
-    return contentType;
+  public Class<?> getGenericType() {
+    return genericType;
   }
 
   @Override
@@ -86,20 +86,19 @@ public abstract class SkylarkList implements Iterable<Object> {
   // TODO(bazel-team): we should be very careful using this method. Check and remove
   // auto conversions on the Java-Skylark interface if possible.
   /**
-   * Returns a mutable Java list copy of this SkylarkList if it's a list or an
-   * immutable copy if it's a tuple.
+   * Converts this Skylark list to a Java list.
    */
-  public abstract List<Object> toList();
+  public abstract List<?> toList();
 
   @SuppressWarnings("unchecked")
   public <T> Iterable<T> to(Class<T> type) {
-    Preconditions.checkArgument(this == EMPTY_LIST || contentType.canBeCastTo(type));
+    Preconditions.checkArgument(this == EMPTY_LIST || type.isAssignableFrom(genericType));
     return (Iterable<T>) this;
   }
 
   private static final class EmptySkylarkList extends SkylarkList {
     private EmptySkylarkList(boolean tuple) {
-      super(tuple, SkylarkType.TOP);
+      super(tuple, Object.class);
     }
 
     @Override
@@ -123,7 +122,7 @@ public abstract class SkylarkList implements Iterable<Object> {
     }
 
     @Override
-    public List<Object> toList() {
+    public List<?> toList() {
       return isTuple() ? ImmutableList.of() : Lists.newArrayList();
     }
 
@@ -138,16 +137,11 @@ public abstract class SkylarkList implements Iterable<Object> {
    */
   public static final SkylarkList EMPTY_LIST = new EmptySkylarkList(false);
 
-  /**
-   * An empty Skylark tuple.
-   */
-  public static final SkylarkList EMPTY_TUPLE = new EmptySkylarkList(true);
-
   private static final class SimpleSkylarkList extends SkylarkList {
     private final ImmutableList<Object> list;
 
-    private SimpleSkylarkList(ImmutableList<Object> list, boolean tuple, SkylarkType contentType) {
-      super(tuple, contentType);
+    private SimpleSkylarkList(ImmutableList<Object> list, boolean tuple, Class<?> genericType) {
+      super(tuple, genericType);
       this.list = Preconditions.checkNotNull(list);
     }
 
@@ -172,7 +166,7 @@ public abstract class SkylarkList implements Iterable<Object> {
     }
 
     @Override
-    public List<Object> toList() {
+    public List<?> toList() {
       return isTuple() ? list : Lists.newArrayList(list);
     }
 
@@ -209,8 +203,8 @@ public abstract class SkylarkList implements Iterable<Object> {
     private final Iterable<Object> iterable;
     private ImmutableList<Object> list = null;
 
-    private LazySkylarkList(Iterable<Object> iterable, boolean tuple, SkylarkType contentType) {
-      super(tuple, contentType);
+    private LazySkylarkList(Iterable<Object> iterable, boolean tuple, Class<?> genericType) {
+      super(tuple, genericType);
       this.iterable = Preconditions.checkNotNull(iterable);
     }
 
@@ -235,9 +229,8 @@ public abstract class SkylarkList implements Iterable<Object> {
     }
 
     @Override
-    public List<Object> toList() {
-      ImmutableList<Object> result = getList();
-      return isTuple() ? result : Lists.newArrayList(result);
+    public List<?> toList() {
+      return getList();
     }
 
     private ImmutableList<Object> getList() {
@@ -257,8 +250,8 @@ public abstract class SkylarkList implements Iterable<Object> {
     private final SkylarkList right;
 
     private ConcatenatedSkylarkList(
-        SkylarkList left, SkylarkList right, boolean tuple, SkylarkType contentType) {
-      super(tuple, contentType);
+        SkylarkList left, SkylarkList right, boolean tuple, Class<?> genericType) {
+      super(tuple, genericType);
       this.left = Preconditions.checkNotNull(left);
       this.right = Preconditions.checkNotNull(right);
     }
@@ -293,94 +286,59 @@ public abstract class SkylarkList implements Iterable<Object> {
     }
 
     @Override
-    public List<Object> toList() {
-      List<Object> result = ImmutableList.<Object>builder().addAll(left).addAll(right).build();
-      return isTuple() ? result : Lists.newArrayList(result);
+    public List<?> toList() {
+      return ImmutableList.<Object>builder().addAll(left).addAll(right).build();
     }
   }
 
   /**
-   * @param elements the contents of the list
-   * @param contentType a SkylarkType for the contents of the list
-   * @return a Skylark list containing elements without a type check
-   * Only use if you already know for sure all elements are of the specified type.
+   * Returns a Skylark list containing elements without a type check. Only use if all elements
+   * are of the same type.
    */
-  public static SkylarkList list(Collection<?> elements, SkylarkType contentType) {
+  public static SkylarkList list(Collection<?> elements, Class<?> genericType) {
     if (elements.isEmpty()) {
       return EMPTY_LIST;
     }
-    return new SimpleSkylarkList(ImmutableList.copyOf(elements), false, contentType);
+    return new SimpleSkylarkList(ImmutableList.copyOf(elements), false, genericType);
   }
 
   /**
-   * @param elements the contents of the list
-   * @param contentType a Java class for the contents of the list
-   * @return a Skylark list containing elements without a type check
-   * Only use if you already know for sure all elements are of the specified type.
+   * Returns a Skylark list containing elements without a type check and without creating
+   * an immutable copy. Therefore the iterable containing elements must be immutable
+   * (which is not checked here so callers must be extra careful). This way
+   * it's possibly to create a SkylarkList without requesting the original iterator. This
+   * can be useful for nested set - list conversions.
    */
   @SuppressWarnings("unchecked")
-  public static SkylarkList list(Collection<?> elements, Class<?> contentType) {
-    return list(elements, SkylarkType.of(contentType));
+  public static SkylarkList lazyList(Iterable<?> elements, Class<?> genericType) {
+    return new LazySkylarkList((Iterable<Object>) elements, false, genericType);
   }
 
   /**
-   * @param elements the contents of the list
-   * @param contentType a SkylarkType for the contents of the list
-   * @return a Skylark list without a type check and without creating an immutable copy
-   * Therefore the iterable containing elements must be immutable
-   * (which is not checked here so callers must be extra careful).
-   * This way it's possibly to create a SkylarkList without requesting the original iterator.
-   * This can be useful for nested set - list conversions.
-   * Only use if you already know for sure all elements are of the specified type.
-   */
-  @SuppressWarnings("unchecked")
-  public static SkylarkList lazyList(Iterable<?> elements, SkylarkType contentType) {
-    return new LazySkylarkList((Iterable<Object>) elements, false, contentType);
-  }
-
-  /**
-   * @param elements the contents of the list
-   * @param contentType a Java class for the contents of the list
-   * @return a Skylark list without a type check and without creating an immutable copy
-   * Therefore the iterable containing elements must be immutable
-   * (which is not checked here so callers must be extra careful).
-   * This way it's possibly to create a SkylarkList without requesting the original iterator.
-   * This can be useful for nested set - list conversions.
-   * Only use if you already know for sure all elements are of the specified type.
-   */
-  @SuppressWarnings("unchecked")
-  public static SkylarkList lazyList(Iterable<?> elements, Class<?> contentType) {
-    return lazyList(elements, SkylarkType.of(contentType));
-  }
-
-  /**
-   * @param elements the contents of the list
-   * @return a Skylark list containing elements
-   * @throws EvalException in case the list is not monomorphic
+   * Returns a Skylark list containing elements. Performs type check and throws an exception
+   * in case the list contains elements of different type.
    */
   public static SkylarkList list(Collection<?> elements, Location loc) throws EvalException {
     if (elements.isEmpty()) {
       return EMPTY_LIST;
     }
     return new SimpleSkylarkList(
-        ImmutableList.copyOf(elements), false, getContentType(elements, loc));
+        ImmutableList.copyOf(elements), false, getGenericType(elements, loc));
   }
 
-  private static SkylarkType getContentType(Collection<?> elements, Location loc)
+  private static Class<?> getGenericType(Collection<?> elements, Location loc)
       throws EvalException {
-    SkylarkType type = SkylarkType.TOP;
+    Class<?> genericType = elements.iterator().next().getClass();
     for (Object element : elements) {
-      SkylarkType elementType = SkylarkType.typeOf(element);
-      SkylarkType inter = SkylarkType.intersection(type, elementType);
-      if (inter == SkylarkType.BOTTOM) {
+      Class<?> type = element.getClass();
+      if (!EvalUtils.getSkylarkType(genericType).equals(EvalUtils.getSkylarkType(type))) {
         throw new EvalException(loc, String.format(
-            "Incompatible types in list: found a %s but the previous elements were %ss",
-            elementType, type));
-      } else {
-        type = inter;
+            "Incompatible types in list: found a %s but the first element is a %s",
+            EvalUtils.getDataTypeNameFromClass(type),
+            EvalUtils.getDataTypeNameFromClass(genericType)));
       }
     }
-    return type;
+    return genericType;
   }
 
   /**
@@ -398,12 +356,12 @@ public abstract class SkylarkList implements Iterable<Object> {
     if (right == EMPTY_LIST) {
       return left;
     }
-    SkylarkType type = SkylarkType.intersection(left.contentType, right.contentType);
-    if (type == SkylarkType.BOTTOM) {
+    if (!left.genericType.equals(right.genericType)) {
       throw new EvalException(loc, String.format("cannot concatenate list of %s with list of %s",
-              left.contentType, right.contentType));
+          EvalUtils.getDataTypeNameFromClass(left.genericType),
+          EvalUtils.getDataTypeNameFromClass(right.genericType)));
     }
-    return new ConcatenatedSkylarkList(left, right, left.isTuple(), type);
+    return new ConcatenatedSkylarkList(left, right, left.isTuple(), left.genericType);
   }
 
   /**
@@ -411,6 +369,6 @@ public abstract class SkylarkList implements Iterable<Object> {
    */
   public static SkylarkList tuple(List<?> elements) {
     // Tuple elements do not have to have the same type.
-    return new SimpleSkylarkList(ImmutableList.copyOf(elements), true, SkylarkType.TOP);
+    return new SimpleSkylarkList(ImmutableList.copyOf(elements), true, Object.class);
   }
 }
