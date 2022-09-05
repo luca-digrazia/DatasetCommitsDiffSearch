@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Lists;
@@ -32,14 +32,10 @@ import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions;
-import com.google.devtools.build.lib.skyframe.SkylarkImportLookupValue.SkylarkImportLookupKey;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Environment.Extension;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.LoadStatement;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.SkylarkImport;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -47,10 +43,13 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
-import java.util.LinkedHashMap;
+
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -77,9 +76,9 @@ public class SkylarkImportLookupFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException,
       InterruptedException {
-    SkylarkImportLookupKey key = (SkylarkImportLookupKey) skyKey.argument();
+    Label fileLabel = (Label) skyKey.argument();
     try {
-      return computeInternal(key.importLabel, key.inWorkspace, env, null);
+      return computeInternal(fileLabel, env, null);
     } catch (InconsistentFilesystemException e) {
       throw new SkylarkImportLookupFunctionException(e, Transience.PERSISTENT);
     } catch (SkylarkImportFailedException e) {
@@ -87,33 +86,26 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     }
   }
 
-  SkyValue computeWithInlineCalls(
-      SkyKey skyKey, Environment env, LinkedHashMap<Label, SkylarkImportLookupValue> visited)
-      throws InconsistentFilesystemException, SkylarkImportFailedException, InterruptedException {
-    return computeWithInlineCallsInternal(skyKey, env, visited);
+  SkyValue computeWithInlineCalls(SkyKey skyKey, Environment env)
+      throws InconsistentFilesystemException,
+          SkylarkImportFailedException,
+          InterruptedException {
+    return computeWithInlineCallsInternal(
+        (Label) skyKey.argument(), env, new LinkedHashSet<Label>());
   }
 
   private SkyValue computeWithInlineCallsInternal(
-      SkyKey skyKey, Environment env, LinkedHashMap<Label, SkylarkImportLookupValue> visited)
-      throws InconsistentFilesystemException, SkylarkImportFailedException, InterruptedException {
-    SkylarkImportLookupKey key = (SkylarkImportLookupKey) skyKey.argument();
-    SkylarkImportLookupValue precomputedResult = visited.get(key.importLabel);
-    if (precomputedResult != null) {
-      return precomputedResult;
-    }
-    return computeInternal(
-        key.importLabel,
-        key.inWorkspace,
-        env,
-        Preconditions.checkNotNull(visited, key.importLabel));
+      Label fileLabel, Environment env, Set<Label> visited)
+          throws InconsistentFilesystemException,
+              SkylarkImportFailedException,
+              InterruptedException {
+    return computeInternal(fileLabel, env, Preconditions.checkNotNull(visited, fileLabel));
   }
 
-  private SkyValue computeInternal(
-      Label fileLabel,
-      boolean inWorkspace,
-      Environment env,
-      @Nullable LinkedHashMap<Label, SkylarkImportLookupValue> alreadyVisited)
-      throws InconsistentFilesystemException, SkylarkImportFailedException, InterruptedException {
+  SkyValue computeInternal(Label fileLabel, Environment env, @Nullable Set<Label> visited)
+      throws InconsistentFilesystemException,
+          SkylarkImportFailedException,
+          InterruptedException {
     PathFragment filePath = fileLabel.toPathFragment();
 
     // Load the AST corresponding to this file.
@@ -138,46 +130,46 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     }
 
     // Process the load statements in the file.
-    ImmutableList<SkylarkImport> imports = ast.getImports();
-    Map<String, Extension> extensionsForImports = Maps.newHashMapWithExpectedSize(imports.size());
+    ImmutableList<LoadStatement> loadStmts = ast.getImports();
+    Map<PathFragment, Extension> importMap = Maps.newHashMapWithExpectedSize(loadStmts.size());
     ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
-    ImmutableMap<String, Label> labelsForImports;
+    ImmutableMap<PathFragment, Label> importPathMap;
 
     // Find the labels corresponding to the load statements.
-    labelsForImports = findLabelsForLoadStatements(imports, fileLabel, env);
-    if (labelsForImports == null) {
+    importPathMap = findLabelsForLoadStatements(loadStmts, fileLabel, env);
+    if (importPathMap == null) {
       return null;
     }
 
     // Look up and load the imports.
-    ImmutableCollection<Label> importLabels = labelsForImports.values();
+    ImmutableCollection<Label> importLabels = importPathMap.values();
     List<SkyKey> importLookupKeys =
         Lists.newArrayListWithExpectedSize(importLabels.size());
     for (Label importLabel : importLabels) {
-      importLookupKeys.add(SkylarkImportLookupValue.key(importLabel, inWorkspace));
+      importLookupKeys.add(SkylarkImportLookupValue.key(importLabel));
     }
     Map<SkyKey, SkyValue> skylarkImportMap;
     boolean valuesMissing = false;
-    if (alreadyVisited == null) {
+    if (visited == null) {
       // Not inlining.
       skylarkImportMap = env.getValues(importLookupKeys);
       valuesMissing = env.valuesMissing();
     } else {
       // Inlining calls to SkylarkImportLookupFunction.
-      if (alreadyVisited.containsKey(fileLabel)) {
+      if (!visited.add(fileLabel)) {
         ImmutableList<Label> cycle =
-            CycleUtils.splitIntoPathAndChain(Predicates.equalTo(fileLabel), alreadyVisited.keySet())
+            CycleUtils.splitIntoPathAndChain(Predicates.equalTo(fileLabel), visited)
                 .second;
         if (env.getValue(SkylarkImportUniqueCycleFunction.key(cycle)) == null) {
           return null;
         }
         throw new SkylarkImportFailedException("Skylark import cycle");
       }
-      alreadyVisited.put(fileLabel, null);
-      skylarkImportMap = Maps.newHashMapWithExpectedSize(imports.size());
+      skylarkImportMap = Maps.newHashMapWithExpectedSize(loadStmts.size());
       for (SkyKey importLookupKey : importLookupKeys) {
         SkyValue skyValue =
-            this.computeWithInlineCallsInternal(importLookupKey, env, alreadyVisited);
+            this.computeWithInlineCallsInternal(
+                (Label) importLookupKey.argument(), env, visited);
         if (skyValue == null) {
           Preconditions.checkState(
               env.valuesMissing(), "no skylark import value for %s", importLookupKey);
@@ -190,7 +182,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
         }
       }
       // All imports traversed, this key can no longer be part of a cycle.
-      Preconditions.checkState(alreadyVisited.remove(fileLabel) == null, fileLabel);
+      visited.remove(fileLabel);
     }
     if (valuesMissing) {
       // This means some imports are unavailable.
@@ -198,40 +190,56 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     }
 
     // Process the loaded imports.
-    for (Entry<String, Label> importEntry : labelsForImports.entrySet()) {
-      String importString = importEntry.getKey();
+    for (Entry<PathFragment, Label> importEntry : importPathMap.entrySet()) {
+      PathFragment importPath = importEntry.getKey();
       Label importLabel = importEntry.getValue();
-      SkyKey keyForLabel = SkylarkImportLookupValue.key(importLabel, inWorkspace);
+      SkyKey keyForLabel = SkylarkImportLookupValue.key(importLabel);
       SkylarkImportLookupValue importLookupValue =
           (SkylarkImportLookupValue) skylarkImportMap.get(keyForLabel);
-      extensionsForImports.put(importString, importLookupValue.getEnvironmentExtension());
+      importMap.put(importPath, importLookupValue.getEnvironmentExtension());
       fileDependencies.add(importLookupValue.getDependency());
     }
-
     // Skylark UserDefinedFunction-s in that file will share this function definition Environment,
     // which will be frozen by the time it is returned by createExtension.
-    Extension extension = createExtension(ast, fileLabel, extensionsForImports, env, inWorkspace);
-    SkylarkImportLookupValue result =
-        new SkylarkImportLookupValue(
-            extension, new SkylarkFileDependency(fileLabel, fileDependencies.build()));
-    if (alreadyVisited != null) {
-      alreadyVisited.put(fileLabel, result);
+    Extension extension = createExtension(ast, fileLabel, importMap, env);
+
+    return new SkylarkImportLookupValue(
+        extension, new SkylarkFileDependency(fileLabel, fileDependencies.build()));
+  }
+
+  /** Computes the Label corresponding to a relative import path. */
+  private static Label labelForRelativeImport(PathFragment importPath, Label containingFileLabel)
+      throws SkylarkImportFailedException {
+    // The twistiness of the code below is due to the fact that the containing file may be in
+    // a subdirectory of the package that contains it. We need to construct a Label with
+    // the import file in the same subdirectory.
+    PackageIdentifier pkgIdForImport = containingFileLabel.getPackageIdentifier();
+    PathFragment containingDirInPkg =
+        (new PathFragment(containingFileLabel.getName())).getParentDirectory();
+    String targetNameForImport = containingDirInPkg.getRelative(importPath).toString();
+    try {
+      return Label.create(pkgIdForImport, targetNameForImport);
+    } catch (LabelSyntaxException e) {
+      // While the Label is for the most part guaranteed to be well-formed by construction, an
+      // error is still possible if the filename itself is malformed, e.g., contains control
+      // characters. Since we expect this error to be very rare, for code simplicity, we allow the
+      // error message to refer to a Label even though the filename was specified via a simple path.
+     throw new SkylarkImportFailedException(e);
     }
-    return result;
   }
 
   /**
-   * Computes the set of Labels corresponding to a collection of PathFragments representing absolute
-   * import paths.
-   *
+   * Computes the set of Labels corresponding to a collection of PathFragments representing
+   * absolute import paths.
+   * 
    * @return a map from the computed {@link Label}s to the corresponding {@link PathFragment}s;
-   *     {@code null} if any Skyframe dependencies are unavailable.
+   *   {@code null} if any Skyframe dependencies are unavailable.
    * @throws SkylarkImportFailedException
    */
   @Nullable
   static ImmutableMap<PathFragment, Label> labelsForAbsoluteImports(
       ImmutableSet<PathFragment> pathsToLookup, Environment env)
-      throws SkylarkImportFailedException, InterruptedException {
+          throws SkylarkImportFailedException {
 
     // Import PathFragments are absolute, so there is a 1-1 mapping from corresponding Labels.
     ImmutableMap.Builder<PathFragment, Label> outputMap = new ImmutableMap.Builder<>();
@@ -242,7 +250,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     for (PathFragment importPath : pathsToLookup) {
       PathFragment relativeImportPath = importPath.toRelative();
       PackageIdentifier pkgToLookUp =
-          PackageIdentifier.createInMainRepo(relativeImportPath.getParentDirectory());
+          PackageIdentifier.createInDefaultRepo(relativeImportPath.getParentDirectory());
       lookupMap.put(ContainingPackageLookupValue.key(pkgToLookUp), importPath);
     }
 
@@ -300,52 +308,51 @@ public class SkylarkImportLookupFunction implements SkyFunction {
 
   /**
    * Computes the set of {@link Label}s corresponding to a set of Skylark {@link LoadStatement}s.
-   *
-   * @param imports a collection of Skylark {@link LoadStatement}s
+   * 
+   * @param loadStmts a collection of Skylark {@link LoadStatement}s
    * @param containingFileLabel the {@link Label} of the file containing the load statements
-   * @return an {@link ImmutableMap} which maps a {@link String} used in the load statement to its
-   *     corresponding {@Label}. Returns {@code null} if any Skyframe dependencies are unavailable.
-   * @throws SkylarkImportFailedException if no package can be found that contains the loaded file
+   * @return an {@link ImmutableMap} which maps a {@link PathFragment} corresponding
+   *     to one of the files to be loaded to the corresponding {@Label}. Returns {@code null} if any
+   *     Skyframe dependencies are unavailable. (attempt to retrieve an AST 
+   * @throws SkylarkImportFailedException if no package can be found that contains the
+   *     loaded file
    */
   @Nullable
-  static ImmutableMap<String, Label> findLabelsForLoadStatements(
-      ImmutableCollection<SkylarkImport> imports, Label containingFileLabel, Environment env)
-      throws SkylarkImportFailedException, InterruptedException {
-    Preconditions.checkArgument(
-        !containingFileLabel.getPackageIdentifier().getRepository().isDefault());
-    Map<String, Label> outputMap = Maps.newHashMapWithExpectedSize(imports.size());
+  static ImmutableMap<PathFragment, Label> findLabelsForLoadStatements(
+      Iterable<LoadStatement> loadStmts, Label containingFileLabel, Environment env)
+          throws SkylarkImportFailedException {
+    ImmutableMap.Builder<PathFragment, Label> outputMap = new ImmutableMap.Builder<>();
 
     // Filter relative vs. absolute paths.
-    ImmutableSet.Builder<PathFragment> absoluteImportsToLookup = new ImmutableSet.Builder<>();
-    // We maintain a multimap from path fragments to their correspond import strings, to cover the
-    // (unlikely) case where two distinct import strings generate the same path fragment.
-    ImmutableMultimap.Builder<PathFragment, String> pathToImports =
-        new ImmutableMultimap.Builder<>();
-    for (SkylarkImport imp : imports) {
-      if (imp.hasAbsolutePath()) {
-        absoluteImportsToLookup.add(imp.getAbsolutePath());
-        pathToImports.put(imp.getAbsolutePath(), imp.getImportString());
+    ImmutableSet.Builder<PathFragment> absolutePathsToLookup = new ImmutableSet.Builder<>();
+    ImmutableSet.Builder<PathFragment> relativePathsToConvert = new ImmutableSet.Builder<>();
+    for (LoadStatement loadStmt : loadStmts) {
+      PathFragment importPath = loadStmt.getImportPath();
+      if (loadStmt.isAbsolute()) {
+        absolutePathsToLookup.add(importPath);
       } else {
-        outputMap.put(imp.getImportString(), imp.getLabel(containingFileLabel));
+        relativePathsToConvert.add(importPath);
       }
     }
 
-    // Look up labels for absolute paths.
+    // Compute labels for absolute paths.
     ImmutableMap<PathFragment, Label> absoluteLabels =
-        labelsForAbsoluteImports(absoluteImportsToLookup.build(), env);
+        labelsForAbsoluteImports(absolutePathsToLookup.build(), env);
     if (absoluteLabels == null) {
       return null;
     }
-    for (Entry<PathFragment, Label> entry : absoluteLabels.entrySet()) {
-      PathFragment currPath = entry.getKey();
-      Label currLabel = entry.getValue();
-      for (String importString : pathToImports.build().get(currPath)) {
-        outputMap.put(importString, currLabel);
-      }
+    outputMap.putAll(absoluteLabels);
+
+    // Compute labels for relative paths.
+    for (PathFragment importPath : relativePathsToConvert.build()) {
+      // Relative paths don't require package lookups since they can only refer to files in the
+      // same directory as the file containing the load statement; i.e., they can't refer to
+      // subdirectories. We can therefore compute the corresponding label directly from the label
+      // of the containing file (whose package has already been validated).
+      outputMap.put(importPath, labelForRelativeImport(importPath, containingFileLabel));
     }
 
-    ImmutableMap<String, Label> immutableOutputMap = ImmutableMap.copyOf(outputMap);
-    return immutableOutputMap;
+    return outputMap.build();
   }
 
   /**
@@ -354,10 +361,9 @@ public class SkylarkImportLookupFunction implements SkyFunction {
   private Extension createExtension(
       BuildFileAST ast,
       Label extensionLabel,
-      Map<String, Extension> importMap,
-      Environment env,
-      boolean inWorkspace)
-      throws SkylarkImportFailedException, InterruptedException {
+      Map<PathFragment, Extension> importMap,
+      Environment env)
+          throws SkylarkImportFailedException, InterruptedException {
     StoredEventHandler eventHandler = new StoredEventHandler();
     // TODO(bazel-team): this method overestimates the changes which can affect the
     // Skylark RuleClass. For example changes to comments or unused functions can modify the hash.
@@ -366,16 +372,11 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     PathFragment extensionFile = extensionLabel.toPathFragment();
     try (Mutability mutability = Mutability.create("importing %s", extensionFile)) {
       com.google.devtools.build.lib.syntax.Environment extensionEnv =
-          ruleClassProvider
-              .createSkylarkRuleClassEnvironment(
-                  extensionLabel, mutability, eventHandler, ast.getContentHashCode(), importMap)
-              .setupOverride("native", packageFactory.getNativeModule(inWorkspace));
+          ruleClassProvider.createSkylarkRuleClassEnvironment(
+              mutability, eventHandler, ast.getContentHashCode(), importMap)
+          .setupOverride("native", packageFactory.getNativeModule());
       ast.exec(extensionEnv, eventHandler);
-      try {
-        SkylarkRuleClassFunctions.exportRuleFunctionsAndAspects(extensionEnv, extensionLabel);
-      } catch (EvalException e) {
-        eventHandler.handle(Event.error(e.getLocation(), e.getMessage()));
-      }
+      SkylarkRuleClassFunctions.exportRuleFunctionsAndAspects(extensionEnv, extensionLabel);
 
       Event.replayEventsOn(env.getListener(), eventHandler.getEvents());
       if (eventHandler.hasErrors()) {
@@ -432,15 +433,6 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     static SkylarkImportFailedException skylarkErrors(PathFragment file) {
       return new SkylarkImportFailedException(String.format("Extension '%s' has errors", file));
     }
-
-   static final String NO_EXT_WORKSPACE_LOAD_MSG_TEMPLATE =
-       "Extension file '%s' may not be loaded from a WORKSPACE file "
-           + "since the extension file is located in an external repository.";
-   static SkylarkImportFailedException noExternalLoadsFromWorkspace(Label fileLabel) {
-      return new SkylarkImportFailedException(String.format(NO_EXT_WORKSPACE_LOAD_MSG_TEMPLATE,
-          fileLabel));
-    }
-
   }
 
   private static final class SkylarkImportLookupFunctionException extends SkyFunctionException {
