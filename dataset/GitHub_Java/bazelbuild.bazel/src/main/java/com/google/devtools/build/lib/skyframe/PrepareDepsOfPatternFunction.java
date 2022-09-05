@@ -145,7 +145,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
       Label label = TargetPatternResolverUtil.label(targetName);
       try {
         Target target = packageProvider.getTarget(env.getListener(), label);
-        SkyKey key = TransitiveTraversalValue.key(target.getLabel());
+        SkyKey key = TransitiveTargetValue.key(target.getLabel());
         SkyValue token =
             env.getValueOrThrow(key, NoSuchPackageException.class, NoSuchTargetException.class);
         if (token == null) {
@@ -176,7 +176,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
             TargetPatternResolverUtil.resolvePackageTargets(pkg, policy);
         ImmutableList.Builder<SkyKey> builder = ImmutableList.builder();
         for (Target target : packageTargets.getTargets()) {
-          builder.add(TransitiveTraversalValue.key(target.getLabel()));
+          builder.add(TransitiveTargetValue.key(target.getLabel()));
         }
         ImmutableList<SkyKey> skyKeys = builder.build();
         env.getValuesOrThrow(skyKeys, NoSuchPackageException.class, NoSuchTargetException.class);
@@ -193,10 +193,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
 
     @Override
     public boolean isPackage(String packageName) {
-      // TODO(bazel-team): this should get the whole PackageIdentifier. Using only the package name
-      // makes it impossible to use wildcards to refer to targets in remote repositories.
-      return packageProvider.isPackage(env.getListener(),
-          PackageIdentifier.createInDefaultRepo(packageName));
+      return packageProvider.isPackage(env.getListener(), packageName);
     }
 
     @Override

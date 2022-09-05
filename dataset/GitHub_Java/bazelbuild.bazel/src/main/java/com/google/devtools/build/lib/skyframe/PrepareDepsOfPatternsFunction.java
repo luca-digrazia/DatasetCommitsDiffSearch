@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
@@ -23,7 +24,6 @@ import com.google.devtools.build.lib.pkgcache.ParseFailureListener;
 import com.google.devtools.build.lib.skyframe.PrepareDepsOfPatternValue.PrepareDepsOfPatternSkyKeyOrException;
 import com.google.devtools.build.lib.skyframe.PrepareDepsOfPatternsValue.TargetPatternSequence;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -39,40 +39,6 @@ import javax.annotation.Nullable;
  */
 public class PrepareDepsOfPatternsFunction implements SkyFunction {
 
-  public static ImmutableList<SkyKey> getSkyKeys(SkyKey skyKey, EventHandler eventHandler) {
-    TargetPatternSequence targetPatternSequence = (TargetPatternSequence) skyKey.argument();
-    Iterable<PrepareDepsOfPatternSkyKeyOrException> keysMaybe =
-        PrepareDepsOfPatternValue.keys(targetPatternSequence.getPatterns(),
-            targetPatternSequence.getOffset());
-
-    ImmutableList.Builder<SkyKey> skyKeyBuilder = ImmutableList.builder();
-    boolean handlerIsParseFailureListener = eventHandler instanceof ParseFailureListener;
-    for (PrepareDepsOfPatternSkyKeyOrException skyKeyOrException : keysMaybe) {
-      try {
-        skyKeyBuilder.add(skyKeyOrException.getSkyKey());
-      } catch (TargetParsingException e) {
-        handleTargetParsingException(eventHandler, handlerIsParseFailureListener,
-            skyKeyOrException.getOriginalPattern(), e);
-      }
-    }
-
-    return skyKeyBuilder.build();
-  }
-
-  private static final Function<SkyKey, TargetPatternKey> SKY_TO_TARGET_PATTERN =
-      new Function<SkyKey, TargetPatternKey>() {
-        @Nullable
-        @Override
-        public TargetPatternKey apply(SkyKey skyKey) {
-          return (TargetPatternKey) skyKey.argument();
-        }
-      };
-
-  public static ImmutableList<TargetPatternKey> getTargetPatternKeys(
-      ImmutableList<SkyKey> skyKeys) {
-    return ImmutableList.copyOf(Iterables.transform(skyKeys, SKY_TO_TARGET_PATTERN));
-  }
-
   /**
    * Given a {@link SkyKey} that contains a sequence of target patterns, when this function returns
    * {@link PrepareDepsOfPatternsValue}, then all targets matching that sequence, and those targets'
@@ -82,7 +48,23 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
     EventHandler eventHandler = env.getListener();
-    ImmutableList<SkyKey> skyKeys = getSkyKeys(skyKey, eventHandler);
+    boolean handlerIsParseFailureListener = eventHandler instanceof ParseFailureListener;
+    TargetPatternSequence targetPatternSequence = (TargetPatternSequence) skyKey.argument();
+
+    Iterable<PrepareDepsOfPatternSkyKeyOrException> keysMaybe =
+        PrepareDepsOfPatternValue.keys(targetPatternSequence.getPatterns(),
+            targetPatternSequence.getOffset());
+
+    ImmutableList.Builder<SkyKey> skyKeyBuilder = ImmutableList.builder();
+    for (PrepareDepsOfPatternSkyKeyOrException skyKeyOrException : keysMaybe) {
+      try {
+        skyKeyBuilder.add(skyKeyOrException.getSkyKey());
+      } catch (TargetParsingException e) {
+        handleTargetParsingException(eventHandler, handlerIsParseFailureListener,
+            skyKeyOrException.getOriginalPattern(), e);
+      }
+    }
+    ImmutableList<SkyKey> skyKeys = skyKeyBuilder.build();
 
     Map<SkyKey, ValueOrException<TargetParsingException>> tokensByKey =
         env.getValuesOrThrow(skyKeys, TargetParsingException.class);
@@ -90,7 +72,6 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
       return null;
     }
 
-    boolean handlerIsParseFailureListener = eventHandler instanceof ParseFailureListener;
     for (SkyKey key : skyKeys) {
       try {
         // The only exception type throwable by PrepareDepsOfPatternFunction is
@@ -103,7 +84,15 @@ public class PrepareDepsOfPatternsFunction implements SkyFunction {
       }
     }
 
-    return new PrepareDepsOfPatternsValue(getTargetPatternKeys(skyKeys));
+    ImmutableList<TargetPatternKey> targetPatternKeys =
+        ImmutableList.copyOf(Iterables.transform(skyKeys,
+            new Function<SkyKey, TargetPatternKey>() {
+              @Override
+              public TargetPatternKey apply(SkyKey skyKey) {
+                return (TargetPatternKey) skyKey.argument();
+              }
+            }));
+    return new PrepareDepsOfPatternsValue(targetPatternKeys);
   }
 
   private static void handleTargetParsingException(EventHandler eventHandler,

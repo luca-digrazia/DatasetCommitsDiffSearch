@@ -39,11 +39,11 @@ import javax.annotation.Nullable;
 /**
  * SkyFunction for {@link PackageLookupValue}s.
  */
-public class PackageLookupFunction implements SkyFunction {
+class PackageLookupFunction implements SkyFunction {
 
-  private final AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages;
+  private final AtomicReference<ImmutableSet<String>> deletedPackages;
 
-  public PackageLookupFunction(AtomicReference<ImmutableSet<PackageIdentifier>> deletedPackages) {
+  PackageLookupFunction(AtomicReference<ImmutableSet<String>> deletedPackages) {
     this.deletedPackages = deletedPackages;
   }
 
@@ -64,7 +64,7 @@ public class PackageLookupFunction implements SkyFunction {
           + packageNameErrorMsg);
     }
 
-    if (deletedPackages.get().contains(packageKey)) {
+    if (deletedPackages.get().contains(packageKey.getPackageFragment().toString())) {
       return PackageLookupValue.deletedPackage();
     }
 
@@ -142,7 +142,7 @@ public class PackageLookupFunction implements SkyFunction {
       throws PackageLookupFunctionException {
     PackageIdentifier id = (PackageIdentifier) skyKey.argument();
     SkyKey repositoryKey = RepositoryValue.key(id.getRepository());
-    RepositoryValue repositoryValue;
+    RepositoryValue repositoryValue = null;
     try {
       repositoryValue = (RepositoryValue) env.getValueOrThrow(
           repositoryKey, NoSuchPackageException.class, IOException.class, EvalException.class);

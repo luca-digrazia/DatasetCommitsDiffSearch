@@ -41,11 +41,10 @@ public interface WalkableGraph {
   SkyValue getValue(SkyKey key);
 
   /**
-   * Returns a map giving the values of the given keys for done keys that were successfully
-   * computed. Or in other words, it filters out non-existent nodes, pending nodes and nodes
-   * that produced an exception.
+   * Returns a map giving the values of the given keys for done keys. Keys not present in the graph
+   * or whose nodes are not done will not be present in the returned map.
    */
-  Map<SkyKey, SkyValue> getSuccessfulValues(Iterable<SkyKey> keys);
+  Map<SkyKey, SkyValue> getDoneValues(Iterable<SkyKey> keys);
 
   /**
    * Returns a map giving exceptions associated to the given keys for done keys. Keys not present in

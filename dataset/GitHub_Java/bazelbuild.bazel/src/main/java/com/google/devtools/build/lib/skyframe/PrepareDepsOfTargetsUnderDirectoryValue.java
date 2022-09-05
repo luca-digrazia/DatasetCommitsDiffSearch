@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -150,14 +149,6 @@ public final class PrepareDepsOfTargetsUnderDirectoryValue implements SkyValue {
     @Override
     public int hashCode() {
       return Objects.hash(recursivePkgKey, filteringPolicy);
-    }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(PrepareDepsOfTargetsUnderDirectoryKey.class)
-              .add("pkg-key", recursivePkgKey)
-              .add("filtering policy", filteringPolicy)
-              .toString();
     }
   }
 }

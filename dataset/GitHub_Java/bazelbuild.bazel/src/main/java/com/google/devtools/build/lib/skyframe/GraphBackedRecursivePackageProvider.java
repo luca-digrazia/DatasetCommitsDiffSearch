@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
 import com.google.devtools.build.lib.cmdline.TargetPattern.Type;
 import com.google.devtools.build.lib.events.Event;
@@ -26,6 +25,7 @@ import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
@@ -62,8 +62,13 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
     if (graph.exists(pkgKey)) {
       pkgValue = (PackageValue) graph.getValue(pkgKey);
       if (pkgValue == null) {
-        throw (NoSuchPackageException)
-            Preconditions.checkNotNull(graph.getException(pkgKey), pkgKey);
+        NoSuchPackageException noSuchPackageException =
+            (NoSuchPackageException) Preconditions.checkNotNull(graph.getException(pkgKey), pkgKey);
+        Package pkg = noSuchPackageException.getPackage();
+        if (pkg == null) {
+          throw noSuchPackageException;
+        }
+        return pkg;
       }
     } else {
       // If the package key does not exist in the graph, then it must not correspond to any package,
@@ -74,8 +79,8 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
   }
 
   @Override
-  public boolean isPackage(EventHandler eventHandler, PackageIdentifier packageName) {
-    SkyKey packageLookupKey = PackageLookupValue.key(packageName);
+  public boolean isPackage(EventHandler eventHandler, String packageName) {
+    SkyKey packageLookupKey = PackageLookupValue.key(new PathFragment(packageName));
     if (!graph.exists(packageLookupKey)) {
       // If the package lookup key does not exist in the graph, then it must not correspond to any
       // package, because the SkyQuery environment has already loaded the universe.
