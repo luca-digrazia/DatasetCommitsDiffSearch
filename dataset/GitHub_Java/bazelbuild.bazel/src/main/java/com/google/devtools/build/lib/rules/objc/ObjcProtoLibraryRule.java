@@ -14,20 +14,16 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PROTOBUF_WELL_KNOWN_TYPES;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PROTO_COMPILER_ATTR;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PROTO_COMPILER_SUPPORT_ATTR;
-import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.PROTO_LIB_ATTR;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -47,20 +43,11 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
   static final String PER_PROTO_INCLUDES_ATTR = "per_proto_includes";
   static final String PORTABLE_PROTO_FILTERS_ATTR = "portable_proto_filters";
 
+  static final String PROTO_COMPILER_ATTR = "$googlemac_proto_compiler";
+  static final String PROTO_COMPILER_SUPPORT_ATTR = "$googlemac_proto_compiler_support";
+  static final String PROTO_LIB_ATTR = "$lib_protobuf";
+  static final String PROTOBUF_WELL_KNOWN_TYPES = "$protobuf_well_known_types";
   static final String XCODE_GEN_ATTR = "$xcodegen";
-
-  private final ObjcProtoAspect objcProtoAspect;
-
-  /**
-   * Returns a newly built rule definition for objc_proto_library.
-   *
-   * @param objcProtoAspect Aspect that traverses the dependency graph through the deps attribute
-   *                        to gather all proto files and portable filters depended by
-   *                        objc_proto_library targets using the new protobuf compiler/library.
-   */
-  public ObjcProtoLibraryRule(ObjcProtoAspect objcProtoAspect) {
-    this.objcProtoAspect = objcProtoAspect;
-  }
 
   @Override
   public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
@@ -72,8 +59,7 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
         .override(
             attr("deps", LABEL_LIST)
                 // Support for files in deps is for backwards compatibility.
-                .allowedRuleClasses("proto_library", "filegroup", "objc_proto_library")
-                .aspect(objcProtoAspect)
+                .allowedRuleClasses("proto_library", "filegroup")
                 .legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(objc_proto_library).ATTRIBUTE(options_file) -->
         Optional options file to apply to protos which affects compilation (e.g. class
@@ -146,9 +132,16 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
                       }
                     }))
         .add(
+            // The well known type proto label should resolve to the shared location of proto
+            // dependencies of targets in the workspace. Unless all dependencies refer to the same
+            // label for these proto dependencies, an artifact comparison between them is not
+            // possible. Ultimately, we will need to resolve this cross-repository dependency, but,
+            // for now, these well-known protos do not exist in a common repository, and must thus
+            // be present in the root workspace.
             attr(PROTOBUF_WELL_KNOWN_TYPES, LABEL)
                 .cfg(HOST)
-                .value(env.getToolsLabel("//tools/objc:protobuf_well_known_types")))
+                .exec()
+                .value(env.getLabel("//tools/objc:protobuf_well_known_types")))
         .add(
             attr(XCODE_GEN_ATTR, LABEL)
                 .cfg(HOST)
@@ -162,8 +155,7 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("objc_proto_library")
         .factoryClass(ObjcProtoLibrary.class)
-        .ancestors(BaseRuleClasses.RuleBase.class, ObjcRuleClasses.LibtoolRule.class,
-            ObjcRuleClasses.XcrunRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class, ObjcRuleClasses.XcrunRule.class)
         .build();
   }
 }
