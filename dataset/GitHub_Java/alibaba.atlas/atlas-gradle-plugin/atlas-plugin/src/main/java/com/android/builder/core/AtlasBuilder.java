@@ -209,6 +209,20 @@
 
 package com.android.builder.core;
 
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.lang.reflect.Method;
+import java.security.PrivateKey;
+import java.security.cert.X509Certificate;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import com.android.SdkConstants;
 import com.android.annotations.NonNull;
 import com.android.annotations.Nullable;
@@ -239,7 +253,12 @@ import com.android.dex.Dex;
 import com.android.dx.command.dexer.DxContext;
 import com.android.dx.merge.CollisionPolicy;
 import com.android.dx.merge.DexMerger;
-import com.android.ide.common.process.*;
+import com.android.ide.common.process.JavaProcessExecutor;
+import com.android.ide.common.process.ProcessException;
+import com.android.ide.common.process.ProcessExecutor;
+import com.android.ide.common.process.ProcessInfo;
+import com.android.ide.common.process.ProcessOutputHandler;
+import com.android.ide.common.process.ProcessResult;
 import com.android.ide.common.res2.FileStatus;
 import com.android.ide.common.signing.KeytoolException;
 import com.android.io.FileWrapper;
@@ -257,7 +276,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.extension.AtlasExtension;
-import com.taobao.android.builder.hook.dex.DexByteCodeConverterHook;
 import com.taobao.android.builder.tools.FileNameUtils;
 import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.Profiler;
@@ -273,14 +291,6 @@ import org.gradle.api.tasks.StopExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
-import java.util.*;
-
 import static com.android.builder.model.AndroidProject.FD_INTERMEDIATES;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
@@ -295,18 +305,9 @@ public class AtlasBuilder extends AndroidBuilder {
 
     protected AtlasExtension atlasExtension;
 
-
-
     public MultiDexer multiDexer;
 
     protected AndroidBuilder defaultBuilder;
-
-    private DexByteCodeConverter dexByteCodeConverter;
-
-    private JavaProcessExecutor javaProcessExecutor;
-
-    private boolean verboseExec;
-
 
     /**
      * Creates an AndroidBuilder.
@@ -336,8 +337,6 @@ public class AtlasBuilder extends AndroidBuilder {
               errorReporter,
               logger,
               verboseExec);
-        this.javaProcessExecutor = javaProcessExecutor;
-        this.verboseExec = verboseExec;
     }
 
     public AtlasExtension getAtlasExtension() {
@@ -814,7 +813,6 @@ public class AtlasBuilder extends AndroidBuilder {
         return defaultBuilder.getTargetInfo();
     }
 
-
     static class TProcessInfo implements ProcessInfo {
 
         private ProcessInfo origin;
@@ -906,6 +904,7 @@ public class AtlasBuilder extends AndroidBuilder {
                                 DexOptions dexOptions,
                                 ProcessOutputHandler processOutputHandler, boolean awb)
         throws IOException, InterruptedException, ProcessException {
+
         Profiler.start();
 
         boolean fastMultiDex = null != multiDexer && !awb;
@@ -1066,7 +1065,7 @@ public class AtlasBuilder extends AndroidBuilder {
         String md5 = "";
         File dexFile = new File(outFile, "classes.dex");
 
-        if (!inputFile.getName().startsWith("combined")  && !(inputFile.getName().startsWith("main") && inputFile.getName().endsWith("jar"))) {
+        if (!inputFile.getName().startsWith("combined")) {
 
             if (inputFile.isFile()) {
                 md5 = MD5Util.getFileMD5(inputFile);
@@ -1096,16 +1095,15 @@ public class AtlasBuilder extends AndroidBuilder {
 
         //todo  设置dexOptions
         DefaultDexOptions defaultDexOptions = new DefaultDexOptions();
-
+        defaultDexOptions.setDexInProcess(true);
         defaultDexOptions.setJumboMode(dexOptions.getJumboMode());
+        defaultDexOptions.setDexInProcess(true);
         //外部已经启动了多线程，尽量少一点
         defaultDexOptions.setThreadCount(dexOptions.getThreadCount());
         defaultDexOptions.setAdditionalParameters(dexOptions.getAdditionalParameters());
         defaultDexOptions.setJumboMode(dexOptions.getJumboMode());
-        if (!multiDex){
-            defaultDexOptions.setJavaMaxHeapSize("500m");
-            defaultDexOptions.setDexInProcess(true);
-        }
+        defaultDexOptions.setJavaMaxHeapSize("500m");
+
         sLogger.info("[mtldex] pre dex for {} {}",
                      inputFile.getAbsolutePath(),
                      outFile.getAbsolutePath());
@@ -1279,17 +1277,6 @@ public class AtlasBuilder extends AndroidBuilder {
 
     }
 
-    @NonNull
-    public DexByteCodeConverter getDexByteCodeConverter() {
-        if (!AtlasBuildContext.appVariantContext.getBuildType().getDexConfig().isUseMyDex()){
-            return super.getDexByteCodeConverter();
-        }
-        if (dexByteCodeConverter == null){
-            dexByteCodeConverter = new DexByteCodeConverterHook(getLogger(), defaultBuilder.getTargetInfo(), javaProcessExecutor, verboseExec);
-        }
-        sLogger.debug("use DexByteCodeConverterHook......");
-        return dexByteCodeConverter;
-    }
     public static interface MultiDexer {
 
         public Collection<File> repackageJarList(Collection<File> files) throws IOException;
