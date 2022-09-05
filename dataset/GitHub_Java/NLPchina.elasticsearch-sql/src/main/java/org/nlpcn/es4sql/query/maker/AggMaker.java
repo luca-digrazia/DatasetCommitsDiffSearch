@@ -6,16 +6,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.ValuesSourceAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGridBuilder;
-
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
 import org.elasticsearch.search.aggregations.bucket.histogram.HistogramBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.RangeBuilder;
@@ -30,7 +27,6 @@ import org.nlpcn.es4sql.Util;
 import org.nlpcn.es4sql.domain.Field;
 import org.nlpcn.es4sql.domain.KVValue;
 import org.nlpcn.es4sql.domain.MethodField;
-import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 public class AggMaker {
@@ -46,15 +42,7 @@ public class AggMaker {
 	 */
 	public AggregationBuilder<?> makeGroupAgg(Field field) throws SqlParseException {
 		if (field instanceof MethodField) {
-
-            MethodField methodField = (MethodField) field;
-            if(methodField.getName().equals("filter")){
-                Map<String, Object> paramsAsMap = methodField.getParamsAsMap();
-                Where where = (Where) paramsAsMap.get("where");
-                return AggregationBuilders.filter(paramsAsMap.get("alias").toString()).
-                        filter(QueryMaker.explan(where));
-            }
-            return makeRangeGroup(methodField);
+			return makeRangeGroup((MethodField) field);
 		} else {
 			TermsBuilder termsBuilder = AggregationBuilders.terms(field.getName()).field(field.getName());
 			groupMap.put(field.getName(), new KVValue("KEY", termsBuilder));
@@ -127,7 +115,7 @@ public class AggMaker {
         else
         {
             //todo: support different lang script
-            builder.script(new Script(((MethodField)kvValue.value).getParams().get(1).toString()));
+            builder.script(((MethodField)kvValue.value).getParams().get(1).toString());
         }
     }
 
@@ -171,44 +159,43 @@ public class AggMaker {
                 }
                continue;
             }
-            if(reduceScriptAdditionalParams.size() == 0) reduceScriptAdditionalParams = null;
 
             switch (param.getKey().toLowerCase()) {
                 case "map_script":
-                    scriptedMetricBuilder.mapScript(new Script(paramValue));
+                    scriptedMetricBuilder.mapScript(paramValue);
                     break;
                 case "map_script_id":
-                    scriptedMetricBuilder.mapScript(new Script(paramValue, ScriptService.ScriptType.INDEXED,null,null));
+                    scriptedMetricBuilder.mapScriptId(paramValue);
                     break;
                 case "map_script_file":
-                    scriptedMetricBuilder.mapScript(new Script(paramValue, ScriptService.ScriptType.FILE,null,null));
+                    scriptedMetricBuilder.mapScriptFile(paramValue);
                     break;
                 case "init_script":
-                    scriptedMetricBuilder.initScript(new Script(paramValue));
+                    scriptedMetricBuilder.initScript(paramValue);
                     break;
                 case "init_script_id":
-                    scriptedMetricBuilder.initScript(new Script(paramValue, ScriptService.ScriptType.INDEXED,null,null));
+                    scriptedMetricBuilder.initScriptId(paramValue);
                     break;
                 case "init_script_file":
-                    scriptedMetricBuilder.initScript(new Script(paramValue, ScriptService.ScriptType.FILE,null,null));
+                    scriptedMetricBuilder.initScriptFile(paramValue);
                     break;
                 case "combine_script":
-                    scriptedMetricBuilder.combineScript(new Script(paramValue));
+                    scriptedMetricBuilder.combineScript(paramValue);
                     break;
                 case "combine_script_id":
-                    scriptedMetricBuilder.combineScript(new Script(paramValue, ScriptService.ScriptType.INDEXED,null,null));
+                    scriptedMetricBuilder.combineScriptId(paramValue);
                     break;
                 case "combine_script_file":
-                    scriptedMetricBuilder.combineScript(new Script(paramValue, ScriptService.ScriptType.FILE,null,null));
+                    scriptedMetricBuilder.combineScriptFile(paramValue);
                     break;
                 case "reduce_script":
-                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.INLINE,null,reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScript(paramValue);
                     break;
                 case "reduce_script_id":
-                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.INDEXED,null,reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScriptId(paramValue);
                     break;
                 case "reduce_script_file":
-                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.FILE,null,reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScriptFile(paramValue);
                     break;
                 case "alias":
                     break;
@@ -221,6 +208,8 @@ public class AggMaker {
             scriptedMetricBuilder.params(scriptAdditionalParams);
         }
 
+        if(reduceScriptAdditionalParams.size() > 0)
+            scriptedMetricBuilder.reduceParams(reduceScriptAdditionalParams);
         return scriptedMetricBuilder;
     }
 
@@ -303,7 +292,7 @@ public class AggMaker {
 			value = kv.value.toString();
 			switch (kv.key.toLowerCase()) {
 			case "interval":
-				dateHistogram.interval(new DateHistogramInterval(kv.value.toString()));
+				dateHistogram.interval(new DateHistogram.Interval(kv.value.toString()));
 				break;
 			case "field":
 				dateHistogram.field(value);
@@ -312,10 +301,19 @@ public class AggMaker {
 				dateHistogram.format(value);
 				break;
 			case "time_zone":
-				dateHistogram.timeZone(value);
+			case "pre_zone":
+				dateHistogram.preZone(value);
 				break;
-
-            case "alias":
+			case "post_zone":
+				dateHistogram.postZone(value);
+				break;
+			case "post_offset":
+				dateHistogram.postOffset(value);
+				break;
+			case "pre_offset":
+				dateHistogram.preOffset(value);
+				break;
+                case "alias":
                     break;
 			default:
 				throw new SqlParseException("date range err or not define field " + kv.toString());
