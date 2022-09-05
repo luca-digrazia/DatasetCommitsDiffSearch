@@ -53,7 +53,6 @@ import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteE
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.License;
@@ -84,7 +83,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
-import java.util.regex.Pattern;
 
 /**
  * Provides the bulk of the implementation of the 'blaze build' command.
@@ -399,8 +397,6 @@ public class BuildTool {
     Profiler.instance().markPhase(ProfilePhase.LOAD);
     runtime.throwPendingException();
 
-    initializeOutputFilter(request);
-
     final boolean keepGoing = request.getViewOptions().keepGoing;
 
     Callback callback = new Callback() {
@@ -423,16 +419,6 @@ public class BuildTool {
         request.shouldRunTests(), callback);
     runtime.throwPendingException();
     return result;
-  }
-
-  /**
-   * Initializes the output filter to the value given with {@code --output_filter}.
-   */
-  private void initializeOutputFilter(BuildRequest request) {
-    Pattern outputFilter = request.getBuildOptions().outputFilter;
-    if (outputFilter != null) {
-      getReporter().setOutputFilter(OutputFilter.RegexOutputFilter.forPattern(outputFilter));
-    }
   }
 
   /**
@@ -460,16 +446,9 @@ public class BuildTool {
     getReporter().handle(Event.progress("Loading complete.  Analyzing..."));
     Profiler.instance().markPhase(ProfilePhase.ANALYZE);
 
-    AnalysisResult analysisResult =
-        getView()
-            .update(
-                loadingResult,
-                configurations,
-                request.getAspects(),
-                request.getViewOptions(),
-                request.getTopLevelArtifactContext(),
-                getReporter(),
-                getEventBus());
+    AnalysisResult analysisResult = getView().update(loadingResult, configurations,
+        request.getViewOptions(), request.getTopLevelArtifactContext(), getReporter(),
+        getEventBus());
 
     // TODO(bazel-team): Merge these into one event.
     getEventBus().post(new AnalysisPhaseCompleteEvent(analysisResult.getTargetsToBuild(),
