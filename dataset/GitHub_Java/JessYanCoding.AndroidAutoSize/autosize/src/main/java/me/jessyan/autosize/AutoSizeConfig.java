@@ -62,10 +62,6 @@ public final class AutoSizeConfig {
      */
     private float mInitScaledDensity;
     /**
-     * 最初的 {@link DisplayMetrics#xdpi}
-     */
-    private float mInitXdpi;
-    /**
      * 设计图上的总宽度, 单位 dp
      */
     private int mDesignWidthInDp;
@@ -176,7 +172,6 @@ public final class AutoSizeConfig {
         mInitDensity = displayMetrics.density;
         mInitDensityDpi = displayMetrics.densityDpi;
         mInitScaledDensity = displayMetrics.scaledDensity;
-        mInitXdpi = displayMetrics.xdpi;
         application.registerComponentCallbacks(new ComponentCallbacks() {
             @Override
             public void onConfigurationChanged(Configuration newConfig) {
@@ -394,15 +389,6 @@ public final class AutoSizeConfig {
      */
     public float getInitScaledDensity() {
         return mInitScaledDensity;
-    }
-
-    /**
-     * 获取 {@link #mInitXdpi}
-     *
-     * @return {@link #mInitXdpi}
-     */
-    public float getInitXdpi() {
-        return mInitXdpi;
     }
 
     /**
