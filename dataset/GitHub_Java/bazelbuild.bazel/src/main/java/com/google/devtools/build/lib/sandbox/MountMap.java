@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,30 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.sandbox;
 
-import com.google.common.collect.ForwardingSortedMap;
-import com.google.devtools.build.lib.vfs.Path;
+import com.google.common.collect.ForwardingMap;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.SortedMap;
-import java.util.TreeMap;
 
 /**
  * A map that throws an exception when trying to replace a key (i.e. once a key gets a value,
  * any additional attempt of putting a value on the same key will throw an exception).
- *
- * <p>Returns entries sorted by path depth (shorter paths first) and in lexicographical order.
  */
-final class MountMap extends ForwardingSortedMap<Path, Path> {
-  final TreeMap<Path, Path> delegate = new TreeMap<>();
+final class MountMap<K, V> extends ForwardingMap<K, V> {
+  final LinkedHashMap<K, V> delegate = new LinkedHashMap<>();
 
   @Override
-  protected SortedMap<Path, Path> delegate() {
+  protected Map<K, V> delegate() {
     return delegate;
   }
 
   @Override
-  public Path put(Path key, Path value) {
-    Path previousValue = get(key);
+  public V put(K key, V value) {
+    V previousValue = get(key);
     if (previousValue == null) {
       return super.put(key, value);
     } else if (previousValue.equals(value)) {
@@ -48,8 +44,8 @@ final class MountMap extends ForwardingSortedMap<Path, Path> {
   }
 
   @Override
-  public void putAll(Map<? extends Path, ? extends Path> map) {
-    for (Entry<? extends Path, ? extends Path> entry : map.entrySet()) {
+  public void putAll(Map<? extends K, ? extends V> map) {
+    for (Entry<? extends K, ? extends V> entry : map.entrySet()) {
       put(entry.getKey(), entry.getValue());
     }
   }

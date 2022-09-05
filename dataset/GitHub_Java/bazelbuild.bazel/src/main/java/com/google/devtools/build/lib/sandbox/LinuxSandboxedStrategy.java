@@ -132,7 +132,7 @@ public class LinuxSandboxedStrategy implements SpawnActionContext {
         runner.run(
             spawn.getArguments(),
             spawn.getEnvironment(),
-            execRoot.getPathFile(),
+            blazeDirs.getExecRoot().getPathFile(),
             outErr,
             spawn.getOutputFiles(),
             timeout);
