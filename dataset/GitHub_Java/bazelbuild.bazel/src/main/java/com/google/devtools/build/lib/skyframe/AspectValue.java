@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -156,17 +156,6 @@ public final class AspectValue extends ActionLookupValue {
           && Objects.equal(parameters, that.parameters);
     }
 
-    public String prettyPrint() {
-      if (label == null) {
-        return "null";
-      }
-      return String.format("%s with aspect %s%s",
-          label.toString(),
-          aspectClass.getName(),
-          (aspectConfiguration != null && aspectConfiguration.isHostConfiguration())
-              ? "(host) " : "");
-    }
-
     @Override
     public String toString() {
       return label
@@ -258,7 +247,7 @@ public final class AspectValue extends ActionLookupValue {
       Label label,
       Location location,
       ConfiguredAspect configuredAspect,
-      Iterable<ActionAnalysisMetadata> actions,
+      Iterable<Action> actions,
       NestedSet<Package> transitivePackages) {
     super(actions);
     this.aspect = aspect;
