@@ -38,7 +38,7 @@ public final class ExperimentalIosTest extends IosTest {
   public ConfiguredTarget create(RuleContext ruleContext, ObjcCommon common,
       XcodeProvider xcodeProvider, NestedSet<Artifact> filesToBuild) throws InterruptedException {
 
-    Runfiles.Builder runfilesBuilder = new Runfiles.Builder(ruleContext.getWorkspaceName())
+    Runfiles.Builder runfilesBuilder = new Runfiles.Builder()
         .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
     NestedSetBuilder<Artifact> filesToBuildBuilder = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(filesToBuild);
