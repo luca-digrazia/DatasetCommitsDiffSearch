@@ -18,7 +18,6 @@ package org.hsweb.web.datasource.dynamic;
 
 import com.atomikos.jdbc.AtomikosDataSourceBean;
 import com.atomikos.jdbc.AtomikosSQLException;
-import org.hsweb.commons.StringUtils;
 import org.hsweb.concurrent.lock.LockFactory;
 import org.hsweb.web.bean.po.datasource.DataSource;
 import org.hsweb.web.core.datasource.DatabaseType;
@@ -140,8 +139,6 @@ public class DynamicDataSourceServiceImpl implements DynamicDataSourceService {
         properties.setType(DatabaseType.fromJdbcUrl(dataSource.getUrl()));
         properties.setTestQuery(dataSource.getTestSql());
         Map<String, Object> otherProperties = dataSource.getProperties();
-        int initTimeout = StringUtils.toInt(otherProperties.getOrDefault("initTimeOut", 30 * 1000));
-        otherProperties.remove("initTimeOut");
         try {
             properties.afterPropertiesSet();
         } catch (Exception e) {
@@ -170,14 +167,11 @@ public class DynamicDataSourceServiceImpl implements DynamicDataSourceService {
         //初始化检测
         new Thread(() -> {
             try {
-                Thread.sleep(initTimeout);
+                Thread.sleep(30 * 1000);
                 if (!success[0]) {
                     logger.error("初始化jdbc超时:{}", dataSourceBean);
-                    try {
-                        closeDataSource(dataSourceBean);
-                    } finally {
-                        cache.remove(dataSource.getId());
-                    }
+                    closeDataSource(dataSourceBean);
+                    cache.remove(dataSource.getId());
                 }
             } catch (Exception e) {
 
