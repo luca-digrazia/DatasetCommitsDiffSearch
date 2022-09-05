@@ -1,44 +1,107 @@
 package org.hswebframework.web.datasource;
 
-import org.hswebframework.web.datasource.starter.AopDataSourceSwitcherAutoConfiguration;
+import org.hswebframework.ezorm.rdb.executor.SqlExecutor;
+import org.hswebframework.web.datasource.config.DynamicDataSourceConfigRepository;
+import org.hswebframework.web.datasource.config.InSpringDynamicDataSourceConfig;
+import org.hswebframework.web.datasource.service.InSpringContextDynamicDataSourceService;
+import org.hswebframework.web.datasource.service.InSpringDynamicDataSourceConfigRepository;
 import org.hswebframework.web.datasource.switcher.DataSourceSwitcher;
-import org.hswebframework.web.datasource.switcher.DefaultDataSourceSwitcher;
+import org.hswebframework.web.datasource.switcher.DatabaseSwitcher;
+import org.hswebframework.web.datasource.switcher.DefaultTableSwitcher;
+import org.hswebframework.web.datasource.switcher.TableSwitcher;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import javax.sql.DataSource;
+
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 @Configuration
 @ImportAutoConfiguration(AopDataSourceSwitcherAutoConfiguration.class)
-public class DynamicDataSourceAutoConfiguration implements BeanPostProcessor {
+public class DynamicDataSourceAutoConfiguration {
 
     @Bean
-    @ConditionalOnMissingBean(DataSourceSwitcher.class)
-    public DataSourceSwitcher dataSourceSwitcher() {
-        return new DefaultDataSourceSwitcher();
+    @ConditionalOnMissingBean(SqlExecutor.class)
+    public SqlExecutor sqlExecutor() {
+        return new DefaultJdbcExecutor();
     }
 
-    @Override
-    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-        return bean;
+    @Bean
+    @ConfigurationProperties(prefix = "hsweb.datasource.table")
+    public DefaultTableSwitcher defaultTableSwitcher() {
+        return new DefaultTableSwitcher();
     }
 
-    @Override
-    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-        if (bean instanceof DynamicDataSourceService) {
-            DataSourceHolder.dynamicDataSourceService = ((DynamicDataSourceService) bean);
-        }
-        if (bean instanceof DataSourceSwitcher) {
-            DataSourceHolder.dataSourceSwitcher = ((DataSourceSwitcher) bean);
-        }
-        return bean;
+    @Bean
+    @ConditionalOnMissingBean(DynamicDataSourceConfigRepository.class)
+    public InSpringDynamicDataSourceConfigRepository inSpringDynamicDataSourceConfigRepository() {
+        return new InSpringDynamicDataSourceConfigRepository();
     }
+
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource")
+    public HswebDataSourceProperties hswebDataSouceProperties() {
+        return new HswebDataSourceProperties();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DynamicDataSourceService.class)
+    public InSpringContextDynamicDataSourceService inMemoryDynamicDataSourceService(DynamicDataSourceConfigRepository<InSpringDynamicDataSourceConfig> repository,
+                                                                                    HswebDataSourceProperties properties,
+                                                                                    DataSource dataSource) {
+        DynamicDataSourceProxy dataSourceProxy = new DynamicDataSourceProxy(null, dataSource) {
+            @Override
+            public DatabaseType getType() {
+                if (properties.getDatabaseType() != null) {
+                    return properties.getDatabaseType();
+                }
+                return super.getType();
+            }
+        };
+        return new InSpringContextDynamicDataSourceService(repository, dataSourceProxy);
+    }
+
+    @Bean
+    public BeanPostProcessor switcherInitProcessor() {
+        return new BeanPostProcessor() {
+            @Override
+            public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+                return bean;
+            }
+
+            @Override
+            public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+                if (bean instanceof DynamicDataSourceService) {
+                    DataSourceHolder.dynamicDataSourceService = ((DynamicDataSourceService) bean);
+                }
+                if (bean instanceof DataSourceSwitcher) {
+                    DataSourceHolder.dataSourceSwitcher = ((DataSourceSwitcher) bean);
+                }
+                if (bean instanceof TableSwitcher) {
+                    DataSourceHolder.tableSwitcher = ((TableSwitcher) bean);
+                }
+                if (bean instanceof DatabaseSwitcher) {
+                    DataSourceHolder.databaseSwitcher = ((DatabaseSwitcher) bean);
+                }
+                return bean;
+            }
+        };
+    }
+
+
+    @Configuration
+    public static class AutoRegisterDataSource {
+        @Autowired
+        public void setDataSourceService(DynamicDataSourceService dataSourceService) {
+            DataSourceHolder.dynamicDataSourceService = dataSourceService;
+        }
+    }
+
 }
