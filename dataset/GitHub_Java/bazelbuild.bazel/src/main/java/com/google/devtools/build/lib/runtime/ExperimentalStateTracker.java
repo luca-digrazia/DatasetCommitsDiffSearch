@@ -33,6 +33,7 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.AnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.PositionAwareAnsiTerminalWriter;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
+
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -234,10 +235,7 @@ class ExperimentalStateTracker {
   /**
    * From a string, take a suffix of at most the given length.
    */
-  static String suffix(String s, int len) {
-    if (len <= 0) {
-      return "";
-    }
+  private String suffix(String s, int len) {
     int startPos = s.length() - len;
     if (startPos <= 0) {
       return s;
