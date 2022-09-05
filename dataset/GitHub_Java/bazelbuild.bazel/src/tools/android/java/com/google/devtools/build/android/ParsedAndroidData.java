@@ -93,8 +93,7 @@ public class ParsedAndroidData {
 
     private void checkForErrors() throws MergingException {
       if (!errors.isEmpty()) {
-        MergingException mergingException =
-            new MergingException(String.format("%s Parse Error(s)", errors.size()));
+        MergingException mergingException = new MergingException("Parse Error(s)");
         for (Exception e : errors) {
           mergingException.addSuppressed(e);
         }
@@ -353,7 +352,7 @@ public class ParsedAndroidData {
    * @throws IOException when there are issues with reading files.
    * @throws MergingException when there is invalid resource information.
    */
-  public static ParsedAndroidData from(UnvalidatedAndroidDirectories primary)
+  public static ParsedAndroidData from(UnvalidatedAndroidData primary)
       throws IOException, MergingException {
     final ParsedAndroidDataBuildingPathWalker pathWalker =
         ParsedAndroidDataBuildingPathWalker.create(Builder.newBuilder());
@@ -385,10 +384,10 @@ public class ParsedAndroidData {
   /**
    * Parses resource symbols including "@+id/resourceName" (optional for now).
    *
-   * @see ParsedAndroidData#from(UnvalidatedAndroidDirectories)
+   * @see ParsedAndroidData#from(UnvalidatedAndroidData)
    */
   @VisibleForTesting
-  static ParsedAndroidData parseWithIds(UnvalidatedAndroidDirectories primary)
+  static ParsedAndroidData parseWithIds(UnvalidatedAndroidData primary)
       throws IOException, MergingException {
     Builder builder = Builder.newBuilder().enableIdParsing();
     final ParsedAndroidDataBuildingPathWalker pathWalker =
