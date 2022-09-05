@@ -15,7 +15,9 @@
 package com.google.devtools.build.buildjar;
 
 import com.google.devtools.build.buildjar.javac.JavacRunner;
+
 import com.sun.tools.javac.main.Main.Result;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -61,7 +63,7 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
     // Compile!
     StringWriter javacOutput = new StringWriter();
     PrintWriter javacOutputWriter = new PrintWriter(javacOutput);
-    Result result = javacRunner.invokeJavac(build.getPlugins(), javacArguments, javacOutputWriter);
+    Result result = javacRunner.invokeJavac(javacArguments, javacOutputWriter);
     javacOutputWriter.close();
 
     // If javac errored out because of missing entries on the classpath, give it another try.
@@ -76,7 +78,7 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
 
       // Fall back to the regular compile, but add extra checks to catch transitive uses
       javacArguments = makeJavacArguments(build);
-      result = javacRunner.invokeJavac(build.getPlugins(), javacArguments, err);
+      result = javacRunner.invokeJavac(javacArguments, err);
     } else {
       err.print(javacOutput.getBuffer());
     }
@@ -90,8 +92,6 @@ public class ReducedClasspathJavaLibraryBuilder extends SimpleJavaLibraryBuilder
     return javacOutput.contains("error: cannot access")
         || javacOutput.contains("error: cannot find symbol")
         || javacOutput.contains("com.sun.tools.javac.code.Symbol$CompletionFailure")
-        || MISSING_PACKAGE.matcher(javacOutput).find()
-        // TODO(cushon): -Xdoclint:reference is probably a bad idea
-        || javacOutput.contains("error: reference not found");
+        || MISSING_PACKAGE.matcher(javacOutput).find();
   }
 }
