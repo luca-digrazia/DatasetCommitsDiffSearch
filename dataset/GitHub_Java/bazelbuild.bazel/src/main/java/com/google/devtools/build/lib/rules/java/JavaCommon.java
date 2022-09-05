@@ -518,11 +518,7 @@ public class JavaCommon {
       ruleContext.attributeError("deps", "deps not allowed without srcs; move to runtime_deps?");
     }
 
-    for (Artifact resource : semantics.collectResources(ruleContext)) {
-      javaTargetAttributes.addResource(
-          JavaHelper.getJavaResourcePath(semantics, ruleContext, resource), resource);
-    }
-
+    javaTargetAttributes.addResources(semantics.collectResources(ruleContext));
     addPlugins(javaTargetAttributes);
 
     javaTargetAttributes.setRuleKind(ruleContext.getRule().getRuleClass());
