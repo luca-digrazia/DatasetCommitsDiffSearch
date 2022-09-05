@@ -48,7 +48,6 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -117,7 +116,7 @@ public class WorkspaceFileFunction implements SkyFunction {
     if (buildFileAST.containsErrors()) {
       localReporter.handle(Event.error("WORKSPACE file could not be parsed"));
     } else {
-      if (!evaluateWorkspaceFile(buildFileAST, builder, localReporter)) {
+      if (!evaluateWorkspaceFile(buildFileAST, builder)) {
         localReporter.handle(
             Event.error("Error evaluating WORKSPACE file " + workspaceFilePath));
       }
@@ -201,8 +200,8 @@ public class WorkspaceFileFunction implements SkyFunction {
     };
   }
 
-  public boolean evaluateWorkspaceFile(BuildFileAST buildFileAST, Builder builder,
-      StoredEventHandler eventHandler) throws InterruptedException {
+  public boolean evaluateWorkspaceFile(BuildFileAST buildFileAST, Builder builder)
+      throws InterruptedException {
     // Environment is defined in SkyFunction and the syntax package.
     com.google.devtools.build.lib.syntax.Environment workspaceEnv =
         new com.google.devtools.build.lib.syntax.Environment();
@@ -213,14 +212,10 @@ public class WorkspaceFileFunction implements SkyFunction {
       workspaceEnv.update(ruleClass, ruleFunction);
     }
 
-    workspaceEnv.update("__embedded_dir__", this.installDir.toString());
-    // TODO(kchodorow): Get all the toolchain rules and load this from there.
-    File jreDirectory = new File(System.getProperty("java.home"));
-    workspaceEnv.update("DEFAULT_SERVER_JAVABASE", jreDirectory.getParentFile().toString());
-
     workspaceEnv.update(BIND, newBindFunction(builder));
     workspaceEnv.update("workspace", newWorkspaceNameFunction(builder));
 
+    StoredEventHandler eventHandler = new StoredEventHandler();
     return buildFileAST.exec(workspaceEnv, eventHandler);
   }
 
