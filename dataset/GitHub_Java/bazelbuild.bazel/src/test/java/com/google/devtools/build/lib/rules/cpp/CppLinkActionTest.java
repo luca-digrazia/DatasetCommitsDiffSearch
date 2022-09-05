@@ -164,12 +164,8 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 };
             builder.addCompilationInputs(
                 (i & 1) == 0 ? ImmutableList.of(oFile) : ImmutableList.of(oFile2));
-            if ((i & 2) == 0) {
-              builder.setLinkType(LinkTargetType.DYNAMIC_LIBRARY);
-              builder.setLibraryIdentifier("foo");
-            } else {
-              builder.setLinkType(LinkTargetType.EXECUTABLE);
-            }
+            builder.setLinkType(
+                (i & 2) == 0 ? LinkTargetType.DYNAMIC_LIBRARY : LinkTargetType.EXECUTABLE);
             builder.setLinkStaticness(LinkStaticness.DYNAMIC);
             builder.setNativeDeps((i & 4) == 0);
             builder.setUseTestOnlyFlags((i & 8) == 0);
@@ -214,7 +210,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 (i & 1) == 0 ? ImmutableList.of(oFile) : ImmutableList.of(oFile2));
             builder.setLinkType(
                 (i & 2) == 0 ? LinkTargetType.STATIC_LIBRARY : LinkTargetType.DYNAMIC_LIBRARY);
-            builder.setLibraryIdentifier("foo");
             builder.setFeatureConfiguration(featureConfiguration);
             return builder.build();
           }
@@ -380,9 +375,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   @Test
   public void testStaticLinkWithDynamicIsError() throws Exception {
     CppLinkActionBuilder builder =
-        createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
-            .setLinkStaticness(LinkStaticness.DYNAMIC)
-            .setLibraryIdentifier("foo");
+        createLinkBuilder(LinkTargetType.STATIC_LIBRARY).setLinkStaticness(LinkStaticness.DYNAMIC);
 
     assertError("static library link must be static", builder);
   }
@@ -392,7 +385,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-            .setLibraryIdentifier("foo")
             .setSymbolCountsOutput(scratchArtifact("dummySymbolCounts"));
 
     assertError("the symbol counts output must be null for static links", builder);
@@ -403,7 +395,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-            .setLibraryIdentifier("foo")
             .setNativeDeps(true);
 
     assertError("the native deps flag must be false for static links", builder);
@@ -414,7 +405,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-            .setLibraryIdentifier("foo")
             .setWholeArchive(true);
 
     assertError("the need whole archive flag must be false for static links", builder);

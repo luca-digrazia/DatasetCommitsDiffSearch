@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -734,13 +735,11 @@ public class CcToolchainFeatures implements Serializable {
     /**
      * Returns the artifact name that pattern selects for a given rule.
      */
-    public String getArtifactName(RuleContext ruleContext, Map<String, String> extraVariables) {
+    public String getArtifactName(RuleContext ruleContext) {
       StringBuilder result = new StringBuilder();
-      PathFragment nameFragment = new PathFragment(ruleContext.getLabel().getName());
       Variables.View artifactNameVariables =
           new Variables.Builder()
-              .addVariable("base_name", nameFragment.getBaseName())
-              .addAllVariables(extraVariables)
+              .addAllVariables(artifactCategory.getTemplateVariables(ruleContext))
               .build()
               .getView(variables);
       for (StringChunk chunk : chunks) {
@@ -1453,8 +1452,8 @@ public class CcToolchainFeatures implements Serializable {
    * Returns the artifact selected by the toolchain for the given action type and action category,
    * or null if the category is not supported by the action config.
    */
-  String getArtifactNameForCategory(ArtifactCategory artifactCategory, RuleContext ruleContext,
-      Map<String, String> extraVariables) throws ExpansionException {
+  Artifact getArtifactForCategory(ArtifactCategory artifactCategory, RuleContext ruleContext)
+      throws ExpansionException {
     ArtifactNamePattern patternForCategory = null;
     for (ArtifactNamePattern artifactNamePattern : artifactNamePatterns) {
       if (artifactNamePattern.getArtifactCategory() == artifactCategory) {
@@ -1467,7 +1466,8 @@ public class CcToolchainFeatures implements Serializable {
               MISSING_ARTIFACT_NAME_PATTERN_ERROR_TEMPLATE, artifactCategory.getCategoryName()));
     }
 
-    return patternForCategory.getArtifactName(ruleContext, extraVariables);
+    String templatedName = patternForCategory.getArtifactName(ruleContext);
+    return artifactCategory.getArtifactForName(templatedName, ruleContext);
   }
 
   /** Returns true if the toolchain defines an ArtifactNamePattern for the given category. */

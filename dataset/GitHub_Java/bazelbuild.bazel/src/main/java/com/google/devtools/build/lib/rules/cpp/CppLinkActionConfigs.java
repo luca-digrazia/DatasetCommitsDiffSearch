@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import java.util.Set;
 
 /**
  * A helper class for creating action_configs for the c++ link action.
@@ -31,25 +30,7 @@ public class CppLinkActionConfigs {
     MAC
   }
 
-  public static String getCppLinkActionConfigs(
-      CppLinkPlatform platform, Set<String> features, String cppLinkDynamicLibraryToolPath) {
-    String cppDynamicLibraryLinkerTool = "";
-    if (!features.contains("dynamic_library_linker_tool")) {
-      cppDynamicLibraryLinkerTool =
-          ""
-              + "feature {"
-              + "   name: 'dynamic_library_linker_tool'"
-              + "   flag_set {"
-              + "       action: 'c++-link-dynamic-library'"
-              + "       flag_group {"
-              + "           flag: '"
-              + cppLinkDynamicLibraryToolPath
-              + "'"
-              + "       }"
-              + "   }"
-              + "}";
-    }
-
+  public static String getCppLinkActionConfigs(CppLinkPlatform platform) {
     return Joiner.on("\n")
         .join(
             ImmutableList.of(
@@ -65,7 +46,6 @@ public class CppLinkActionConfigs {
                 "   implies: 'global_whole_archive_open'",
                 "   implies: 'runtime_root_flags'",
                 "   implies: 'input_param_flags'",
-                "   implies: 'libraries_to_link_opts'",
                 "   implies: 'global_whole_archive_close'",
                 "   implies: 'force_pic_flags'",
                 "}",
@@ -75,8 +55,6 @@ public class CppLinkActionConfigs {
                 "   tool {",
                 "       tool_path: 'DUMMY_TOOL'",
                 "   }",
-                "   implies: 'build_interface_libraries'",
-                "   implies: 'dynamic_library_linker_tool'",
                 "   implies: 'symbol_counts'",
                 "   implies: 'shared_flag'",
                 "   implies: 'linkstamps'",
@@ -84,7 +62,6 @@ public class CppLinkActionConfigs {
                 "   implies: 'global_whole_archive_open'",
                 "   implies: 'runtime_root_flags'",
                 "   implies: 'input_param_flags'",
-                "   implies: 'libraries_to_link_opts'",
                 "   implies: 'global_whole_archive_close'",
                 "}",
                 "action_config {",
@@ -96,7 +73,6 @@ public class CppLinkActionConfigs {
                 "   implies: 'global_whole_archive_open'",
                 "   implies: 'runtime_root_flags'",
                 "   implies: 'input_param_flags'",
-                "   implies: 'libraries_to_link_opts'",
                 "   implies: 'global_whole_archive_close'",
                 "}",
                 "action_config {",
@@ -108,7 +84,6 @@ public class CppLinkActionConfigs {
                 "   implies: 'global_whole_archive_open'",
                 "   implies: 'runtime_root_flags'",
                 "   implies: 'input_param_flags'",
-                "   implies: 'libraries_to_link_opts'",
                 "   implies: 'global_whole_archive_close'",
                 "}",
                 "action_config {",
@@ -120,7 +95,6 @@ public class CppLinkActionConfigs {
                 "   implies: 'global_whole_archive_open'",
                 "   implies: 'runtime_root_flags'",
                 "   implies: 'input_param_flags'",
-                "   implies: 'libraries_to_link_opts'",
                 "   implies: 'global_whole_archive_close'",
                 "}",
                 "action_config {",
@@ -132,25 +106,8 @@ public class CppLinkActionConfigs {
                 "   implies: 'global_whole_archive_open'",
                 "   implies: 'runtime_root_flags'",
                 "   implies: 'input_param_flags'",
-                "   implies: 'libraries_to_link_opts'",
                 "   implies: 'global_whole_archive_close'",
                 "}",
-                "feature {",
-                "   name: 'build_interface_libraries'",
-                "   flag_set {",
-                "       expand_if_all_available: 'generate_interface_library'",
-                "       action: 'c++-link-dynamic-library'",
-                "       flag_group {",
-                "           flag: '%{generate_interface_library}'",
-                "           flag: '%{interface_library_builder_path}'",
-                "           flag: '%{interface_library_input_path}'",
-                "           flag: '%{interface_library_output_path}'",
-                "       }",
-                "   }",
-                "}",
-                // Order of feature declaration matters, cppDynamicLibraryLinkerTool has to follow
-                // right after build_interface_libraries.
-                cppDynamicLibraryLinkerTool,
                 "feature {",
                 "   name: 'symbol_counts'",
                 "   flag_set {",
@@ -264,27 +221,6 @@ public class CppLinkActionConfigs {
                 "           flag: '%{runtime_root_entries}'",
                 "       }",
                 "   }",
-                "}",
-                "feature {",
-                "  name: 'libraries_to_link_opts'",
-                "  flag_set {",
-                "    expand_if_all_available: 'library_search_directories'",
-                "    action: 'c++-link-executable'",
-                "    action: 'c++-link-dynamic-library'",
-                "    action: 'c++-link-static-library'",
-                "    action: 'c++-link-alwayslink-static-library'",
-                "    action: 'c++-link-pic-static-library'",
-                "    action: 'c++-link-alwayslink-pic-static-library'",
-                "    flag_group {",
-                "      flag: '-L%{library_search_directories}'",
-                "    }",
-                "    flag_group {",
-                "      flag: '%{interface_libraries_to_link}'",
-                "    }",
-                "    flag_group {",
-                "      flag: '-l%{dynamic_libraries_to_link}'",
-                "    }",
-                "  }",
                 "}",
                 "feature {",
                 "   name: 'input_param_flags'",

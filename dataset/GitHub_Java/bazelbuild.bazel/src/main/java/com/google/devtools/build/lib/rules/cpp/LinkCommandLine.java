@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
@@ -123,7 +122,7 @@ public final class LinkCommandLine extends CommandLine {
     this.linkTargetType = Preconditions.checkNotNull(linkTargetType);
     this.linkStaticness = Preconditions.checkNotNull(linkStaticness);
     // For now, silently ignore linkopts if this is a static library link.
-    this.linkopts = linkTargetType.staticness() == Staticness.STATIC
+    this.linkopts = linkTargetType.isStaticLibraryLink()
         ? ImmutableList.<String>of()
         : Preconditions.checkNotNull(linkopts);
     this.features = Preconditions.checkNotNull(features);
@@ -253,7 +252,7 @@ public final class LinkCommandLine extends CommandLine {
   @VisibleForTesting
   final Pair<List<String>, List<String>> splitCommandline() {
     List<String> args = getRawLinkArgv();
-    if (linkTargetType.staticness() == Staticness.STATIC) {
+    if (linkTargetType.isStaticLibraryLink()) {
       // Ar link commands can also generate huge command lines.
       List<String> paramFileArgs = args.subList(1, args.size());
       List<String> commandlineArgs = new ArrayList<>();
@@ -384,7 +383,7 @@ public final class LinkCommandLine extends CommandLine {
     }
 
     // Fission mode: debug info is in .dwo files instead of .o files. Inform the linker of this.
-    if (linkTargetType.staticness() == Staticness.DYNAMIC && cppConfiguration.useFission()) {
+    if (!linkTargetType.isStaticLibraryLink() && cppConfiguration.useFission()) {
       argv.add("-Wl,--gdb-index");
     }
   }
@@ -689,7 +688,7 @@ public final class LinkCommandLine extends CommandLine {
 
     public LinkCommandLine build() {
       
-      if (linkTargetType.staticness() == Staticness.STATIC) {
+      if (linkTargetType.isStaticLibraryLink()) {
         Preconditions.checkArgument(
             linkstamps.isEmpty(),
             "linkstamps may only be present on dynamic library or executable links");
@@ -772,7 +771,7 @@ public final class LinkCommandLine extends CommandLine {
     /**
      * Sets the type of the link. It is an error to try to set this to {@link
      * LinkTargetType#INTERFACE_DYNAMIC_LIBRARY}. Note that all the static target types (see {@link
-     * LinkTargetType#staticness}) are equivalent, and there is no check that the output
+     * LinkTargetType#isStaticLibraryLink}) are equivalent, and there is no check that the output
      * artifact matches the target type extension.
      */
     public Builder setLinkTargetType(LinkTargetType linkTargetType) {
@@ -818,7 +817,7 @@ public final class LinkCommandLine extends CommandLine {
      * Sets the linker options. These are passed to the linker in addition to the other linker
      * options like linker inputs, symbol count options, etc. The {@link #build} method throws an
      * exception if the linker options are non-empty for a static link (see {@link
-     * LinkTargetType#staticness()}).
+     * LinkTargetType#isStaticLibraryLink}).
      */
     public Builder setLinkopts(ImmutableList<String> linkopts) {
       this.linkopts = linkopts;
@@ -827,7 +826,7 @@ public final class LinkCommandLine extends CommandLine {
 
     /**
      * Sets how static the link is supposed to be. For static target types (see {@link
-     * LinkTargetType#staticness()}}), the {@link #build} method throws an exception if this
+     * LinkTargetType#isStaticLibraryLink}), the {@link #build} method throws an exception if this
      * is not {@link LinkStaticness#FULLY_STATIC}. The default setting is {@link
      * LinkStaticness#FULLY_STATIC}.
      */
@@ -849,7 +848,7 @@ public final class LinkCommandLine extends CommandLine {
     /**
      * Sets the linkstamps. Linkstamps are additional C++ source files that are compiled as part of
      * the link command. The {@link #build} method throws an exception if the linkstamps are
-     * non-empty for a static link (see {@link LinkTargetType#staticness()}}).
+     * non-empty for a static link (see {@link LinkTargetType#isStaticLibraryLink}).
      */
     public Builder setLinkstamps(ImmutableMap<Artifact, Artifact> linkstamps) {
       this.linkstamps = linkstamps;
@@ -868,7 +867,7 @@ public final class LinkCommandLine extends CommandLine {
     /**
      * The build info header artifacts are generated header files that are used for link stamping.
      * The {@link #build} method throws an exception if the build info header artifacts are
-     * non-empty for a static link (see {@link LinkTargetType#staticness()}}).
+     * non-empty for a static link (see {@link LinkTargetType#isStaticLibraryLink}).
      */
     public Builder setBuildInfoHeaderArtifacts(ImmutableList<Artifact> buildInfoHeaderArtifacts) {
       this.buildInfoHeaderArtifacts = buildInfoHeaderArtifacts;
@@ -886,7 +885,7 @@ public final class LinkCommandLine extends CommandLine {
     /**
      * Whether the resulting library is intended to be used as a native library from another
      * programming language. This influences the rpath. The {@link #build} method throws an
-     * exception if this is true for a static link (see {@link LinkTargetType#staticness()}}).
+     * exception if this is true for a static link (see {@link LinkTargetType#isStaticLibraryLink}).
      */
     public Builder setNativeDeps(boolean nativeDeps) {
       this.nativeDeps = nativeDeps;
