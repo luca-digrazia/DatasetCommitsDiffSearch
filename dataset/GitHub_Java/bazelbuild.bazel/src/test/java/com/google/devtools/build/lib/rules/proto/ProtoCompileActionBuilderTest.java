@@ -82,9 +82,7 @@ public class ProtoCompileActionBuilderTest {
                 new ToolchainInvocation(
                     "dontcare_because_no_plugin", toolchainNoPlugin, "foo.srcjar"),
                 new ToolchainInvocation("pluginName", toolchainWithPlugin, "bar.srcjar")),
-            supportData.getDirectProtoSources(),
-            supportData.getTransitiveImports(),
-            supportData.getProtosInDirectDeps(),
+            supportData,
             true /* allowServices */,
             ImmutableList.<String>of() /* protocOpts */);
 
@@ -120,9 +118,7 @@ public class ProtoCompileActionBuilderTest {
     CustomCommandLine cmdLine =
         createCommandLineFromToolchains(
             ImmutableList.of(new ToolchainInvocation("dontcare", toolchain, "foo.srcjar")),
-            supportData.getDirectProtoSources(),
-            supportData.getTransitiveImports(),
-            supportData.getProtosInDirectDeps(),
+            supportData,
             true /* allowServices */,
             ImmutableList.<String>of() /* protocOpts */);
 
@@ -149,9 +145,7 @@ public class ProtoCompileActionBuilderTest {
     CustomCommandLine cmdLine =
         createCommandLineFromToolchains(
             ImmutableList.<ToolchainInvocation>of(),
-            supportData.getDirectProtoSources(),
-            supportData.getTransitiveImports(),
-            supportData.getProtosInDirectDeps(),
+            supportData,
             false /* allowServices */,
             ImmutableList.of("--foo", "--bar") /* protocOpts */);
 
@@ -190,9 +184,7 @@ public class ProtoCompileActionBuilderTest {
     CustomCommandLine cmdLine =
         createCommandLineFromToolchains(
             ImmutableList.of(new ToolchainInvocation("pluginName", toolchain, outReplacement)),
-            supportData.getDirectProtoSources(),
-            supportData.getTransitiveImports(),
-            supportData.getProtosInDirectDeps(),
+            supportData,
             true /* allowServices */,
             ImmutableList.<String>of() /* protocOpts */);
 
@@ -234,9 +226,7 @@ public class ProtoCompileActionBuilderTest {
           ImmutableList.of(
               new ToolchainInvocation("pluginName", toolchain1, "outReplacement"),
               new ToolchainInvocation("pluginName", toolchain2, "outReplacement")),
-          supportData.getDirectProtoSources(),
-          supportData.getTransitiveImports(),
-          supportData.getProtosInDirectDeps(),
+          supportData,
           true /* allowServices */,
           ImmutableList.<String>of() /* protocOpts */);
       fail("Expected an exception");

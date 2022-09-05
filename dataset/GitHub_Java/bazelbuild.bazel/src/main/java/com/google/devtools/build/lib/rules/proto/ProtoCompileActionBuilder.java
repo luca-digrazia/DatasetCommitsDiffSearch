@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.LazyString;
 import java.util.ArrayList;
@@ -346,17 +345,13 @@ public class ProtoCompileActionBuilder {
   public static void writeDescriptorSet(
       RuleContext ruleContext,
       final CharSequence outReplacement,
-      Iterable<Artifact> protosToCompile,
-      NestedSet<Artifact> transitiveSources,
-      NestedSet<Artifact> protosInDirectDeps,
+      SupportData supportData,
       Iterable<Artifact> outputs,
       boolean allowServices) {
     registerActions(
         ruleContext,
         ImmutableList.of(createDescriptorSetToolchain(outReplacement)),
-        protosToCompile,
-        transitiveSources,
-        protosInDirectDeps,
+        supportData,
         outputs,
         "Descriptor Set",
         allowServices);
@@ -383,13 +378,12 @@ public class ProtoCompileActionBuilder {
    * @param outputs The artifacts that the resulting action must create.
    * @param flavorName e.g., "Java (Immutable)"
    * @param allowServices If false, the compilation will break if any .proto file has service
+   *     definitions.
    */
   public static void registerActions(
       RuleContext ruleContext,
       List<ToolchainInvocation> toolchainInvocations,
-      Iterable<Artifact> protosToCompile,
-      NestedSet<Artifact> transitiveSources,
-      NestedSet<Artifact> protosInDirectDeps,
+      SupportData supportData,
       Iterable<Artifact> outputs,
       String flavorName,
       boolean allowServices) {
@@ -397,7 +391,8 @@ public class ProtoCompileActionBuilder {
       return;
     }
 
-    SpawnAction.Builder result = new SpawnAction.Builder().addTransitiveInputs(transitiveSources);
+    SpawnAction.Builder result =
+        new SpawnAction.Builder().addTransitiveInputs(supportData.getTransitiveImports());
 
     for (ToolchainInvocation invocation : toolchainInvocations) {
       ProtoLangToolchainProvider toolchain = invocation.toolchain;
@@ -421,9 +416,7 @@ public class ProtoCompileActionBuilder {
         .setCommandLine(
             createCommandLineFromToolchains(
                 toolchainInvocations,
-                protosToCompile,
-                transitiveSources,
-                protosInDirectDeps,
+                supportData,
                 allowServices,
                 ruleContext.getFragment(ProtoConfiguration.class).protocOpts()))
         .setProgressMessage("Generating " + flavorName + " proto_library " + ruleContext.getLabel())
@@ -448,15 +441,13 @@ public class ProtoCompileActionBuilder {
    * called. As some plugins rely on output from other plugins, their order matters.
    *
    * @param toolchainInvocations See {@link #createCommandLineFromToolchains}.
-   * @param allowServices If false, the compilation will break if any .proto file has
-   *     service @return a command-line to pass to proto-compiler.
+   * @param allowServices If false, the compilation will break if any .proto file has service
+   * @return a command-line to pass to proto-compiler.
    */
   @VisibleForTesting
   static CustomCommandLine createCommandLineFromToolchains(
       List<ToolchainInvocation> toolchainInvocations,
-      Iterable<Artifact> protosToCompile,
-      NestedSet<Artifact> transitiveSources,
-      NestedSet<Artifact> protosInDirectDeps,
+      SupportData supportData,
       boolean allowServices,
       ImmutableList<String> protocOpts) {
     CustomCommandLine.Builder cmdLine = CustomCommandLine.builder();
@@ -496,9 +487,11 @@ public class ProtoCompileActionBuilder {
     cmdLine.add(protocOpts);
 
     // Add include maps
-    cmdLine.add(new ProtoCommandLineArgv(protosInDirectDeps, transitiveSources));
+    cmdLine.add(
+        new ProtoCommandLineArgv(
+            supportData.getProtosInDirectDeps(), supportData.getTransitiveImports()));
 
-    for (Artifact src : protosToCompile) {
+    for (Artifact src : supportData.getDirectProtoSources()) {
       cmdLine.addPath(src.getRootRelativePath());
     }
 
