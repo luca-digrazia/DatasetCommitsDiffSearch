@@ -9,6 +9,7 @@ import org.webbuilder.sql.support.common.CommonDataBase;
 import org.webbuilder.sql.support.executor.SqlExecutor;
 
 import javax.annotation.Resource;
+import java.sql.DatabaseMetaData;
 
 /**
  * Created by zhouhao on 16-4-20.
