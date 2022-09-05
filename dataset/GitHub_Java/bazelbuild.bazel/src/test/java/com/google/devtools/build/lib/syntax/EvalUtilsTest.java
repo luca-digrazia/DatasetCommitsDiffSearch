@@ -1,4 +1,4 @@
-// Copyright 2006-2015 Google Inc. All Rights Reserved.
+// Copyright 2006 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -138,7 +137,7 @@ public class EvalUtilsTest {
 
     // Note: formatString doesn't perform scalar x -> (x) conversion;
     // The %-operator is responsible for that.
-    assertThat(EvalUtils.formatString("", makeTuple())).isEmpty();
+    assertEquals("", EvalUtils.formatString("", makeTuple()));
     assertEquals("foo", EvalUtils.formatString("%s", makeTuple("foo")));
     assertEquals("3.14159", EvalUtils.formatString("%s", makeTuple(3.14159)));
     checkFormatPositionalFails("%s", makeTuple(1, 2, 3),
@@ -206,8 +205,8 @@ public class EvalUtilsTest {
     String prettyWithout = EvalUtils.prettyPrintValue(withoutStripPrefix);
     String prettyWith = EvalUtils.prettyPrintValue(withStripPrefix);
 
-    assertThat(prettyWithout).contains("strip_prefix = \".\"");
-    assertThat(prettyWith).contains("strip_prefix = \"orange\"");
+    assertTrue(prettyWithout.contains("strip_prefix = \".\""));
+    assertTrue(prettyWith.contains("strip_prefix = \"orange\""));
   }
 
   @Test

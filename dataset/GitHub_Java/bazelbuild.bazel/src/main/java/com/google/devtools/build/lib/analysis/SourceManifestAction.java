@@ -93,6 +93,11 @@ public class SourceManifestAction extends AbstractFileWriteAction {
   private final Runfiles runfiles;
 
   /**
+   * If non-null, the paths should be computed relative to this path fragment.
+   */
+  private final PathFragment root;
+
+  /**
    * Creates a new AbstractSourceManifestAction instance using latin1 encoding
    * to write the manifest file and with a specified root path for manifest entries.
    *
@@ -100,25 +105,27 @@ public class SourceManifestAction extends AbstractFileWriteAction {
    * @param owner the action owner
    * @param output the file to which to write the manifest
    * @param runfiles runfiles
+   * @param root the artifacts' root-relative path is relativized to this before writing it out
    */
   private SourceManifestAction(ManifestWriter manifestWriter, ActionOwner owner, Artifact output,
-      Runfiles runfiles) {
+      Runfiles runfiles, PathFragment root) {
     super(owner, getDependencies(runfiles), output, false);
     this.manifestWriter = manifestWriter;
     this.runfiles = runfiles;
+    this.root = root;
   }
 
   @VisibleForTesting
   public void writeOutputFile(OutputStream out, EventHandler eventHandler)
       throws IOException {
-    writeFile(out, runfiles.getRunfilesInputs(eventHandler, getOwner().getLocation()));
+    writeFile(out, runfiles.getRunfilesInputs(root, eventHandler, getOwner().getLocation()));
   }
 
   @Override
   public DeterministicWriter newDeterministicWriter(EventHandler eventHandler, Executor executor)
       throws IOException {
     final Pair<Map<PathFragment, Artifact>, Map<PathFragment, Artifact>> runfilesInputs =
-        runfiles.getRunfilesInputs(eventHandler, getOwner().getLocation());
+        runfiles.getRunfilesInputs(root, eventHandler, getOwner().getLocation());
     return new DeterministicWriter() {
       @Override
       public void writeOutputFile(OutputStream out) throws IOException {
@@ -208,9 +215,16 @@ public class SourceManifestAction extends AbstractFileWriteAction {
       f.addPath(rootSymlink.getValue().getPath());
     }
 
-    for (Artifact artifact : runfiles.getArtifactsWithoutMiddlemen()) {
-      f.addPath(artifact.getRootRelativePath());
-      f.addPath(artifact.getPath());
+    if (root != null) {
+      for (Artifact artifact : runfiles.getArtifactsWithoutMiddlemen()) {
+        f.addPath(artifact.getRootRelativePath().relativeTo(root));
+        f.addPath(artifact.getPath());
+      }
+    } else {
+      for (Artifact artifact : runfiles.getArtifactsWithoutMiddlemen()) {
+        f.addPath(artifact.getRootRelativePath());
+        f.addPath(artifact.getPath());
+      }
     }
     return f.hexDigestAndReset();
   }
@@ -285,7 +299,7 @@ public class SourceManifestAction extends AbstractFileWriteAction {
   /** Creates an action for the given runfiles. */
   public static SourceManifestAction forRunfiles(ManifestType manifestType, ActionOwner owner,
       Artifact output, Runfiles runfiles) {
-    return new SourceManifestAction(manifestType, owner, output, runfiles);
+    return new SourceManifestAction(manifestType, owner, output, runfiles, null);
   }
 
   /**
@@ -295,6 +309,7 @@ public class SourceManifestAction extends AbstractFileWriteAction {
     private final ManifestWriter manifestWriter;
     private final ActionOwner owner;
     private final Artifact output;
+    private PathFragment top;
     private final Runfiles.Builder runfilesBuilder = new Runfiles.Builder();
 
     public Builder(ManifestType manifestType, ActionOwner owner, Artifact output) {
@@ -311,7 +326,16 @@ public class SourceManifestAction extends AbstractFileWriteAction {
     }
 
     public SourceManifestAction build() {
-      return new SourceManifestAction(manifestWriter, owner, output, runfilesBuilder.build());
+      return new SourceManifestAction(manifestWriter, owner, output, runfilesBuilder.build(), top);
+    }
+
+    /**
+     * Sets the path fragment which is used to relativize the artifacts' root
+     * relative paths further. Most likely, you don't need this.
+     */
+    public Builder setTopLevel(PathFragment top) {
+      this.top = top;
+      return this;
     }
 
     /**

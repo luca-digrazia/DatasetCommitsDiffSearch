@@ -52,9 +52,9 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.InputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputFileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -404,14 +404,12 @@ public class ExecutionTool {
           analysisResult.getExclusiveTests(),
           analysisResult.getTargetsToBuild(),
           executor, builtTargets,
-          request.getBuildOptions().explanationPath != null,
-          runtime.getLastExecutionTimeRange());
+          request.getBuildOptions().explanationPath != null);
 
     } catch (InterruptedException e) {
       interrupted = true;
       throw e;
     } finally {
-      runtime.recordLastExecutionTime();
       if (request.isRunningInEmacs()) {
         request.getOutErr().printErrLn("blaze: Leaving directory `" + getExecRoot() + "/'");
       }
@@ -419,9 +417,8 @@ public class ExecutionTool {
         getReporter().handle(Event.progress("Building complete."));
       }
 
-      runtime.getEventBus().post(new ExecutionFinishedEvent(ImmutableMap.<String, Long> of(), 0L,
-          skyframeExecutor.getOutputDirtyFiles(),
-          skyframeExecutor.getModifiedFilesDuringPreviousBuild()));
+      // Transfer over source file "last save time" stats so the remote logger can find them.
+      runtime.getEventBus().post(new ExecutionFinishedEvent(ImmutableMap.<String, Long> of(), 0));
 
       // Disable system load polling (noop if it was not enabled).
       ResourceManager.instance().setAutoSensing(false);
@@ -702,10 +699,10 @@ public class ExecutionTool {
 
       // For failed compilation, it is still useful to examine temp artifacts,
       // (ie, preprocessed and assembler files).
-      OutputGroupProvider topLevelProvider =
-          target.getProvider(OutputGroupProvider.class);
+      TopLevelArtifactProvider topLevelProvider =
+          target.getProvider(TopLevelArtifactProvider.class);
       if (topLevelProvider != null) {
-        for (Artifact temp : topLevelProvider.getOutputGroup(OutputGroupProvider.TEMP_FILES)) {
+        for (Artifact temp : topLevelProvider.getOutputGroup(TopLevelArtifactProvider.TEMP_FILES)) {
           if (temp.getPath().exists()) {
             outErr.printErrLn("  See temp at " +
                 OutputDirectoryLinksUtils.getPrettyPath(temp.getPath(),

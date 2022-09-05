@@ -19,12 +19,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 
@@ -255,11 +253,15 @@ public class EvaluationTest extends AbstractEvaluationTestCase {
                            final Map<String, Object> kwargs,
                            FuncallExpression ast,
                            Environment env) {
-          List<String> keys = Ordering.natural().sortedCopy(new ArrayList<String>(kwargs.keySet()));
+          ArrayList<String> keys = new ArrayList<>(kwargs.keySet());
+          Collections.sort(keys);
           if ((Integer) args.get(0) == 0) {
             return keys;
           } else {
-            return Lists.transform(keys, Functions.forMap(kwargs, null));
+            return Lists.transform(keys, new com.google.common.base.Function<String, Object> () {
+                  @Override public Object apply (String s) {
+                    return kwargs.get(s);
+                  }});
           }
         }
       };
@@ -528,7 +530,7 @@ public class EvaluationTest extends AbstractEvaluationTestCase {
       eval(input, env);
       fail();
     } catch (EvalException e) {
-      assertThat(e).hasMessage(msg);
+      assertEquals(msg, e.getMessage());
     }
   }
 
@@ -542,7 +544,7 @@ public class EvaluationTest extends AbstractEvaluationTestCase {
       exec(input, env);
       fail();
     } catch (EvalException e) {
-      assertThat(e).hasMessage(msg);
+      assertEquals(msg, e.getMessage());
     }
   }
 }

@@ -369,7 +369,7 @@ public abstract class SkylarkType {
       return argType;
     }
     @Override public String toString() {
-      return genericType + " of " + argType + "s";
+      return genericType.toString() + " of " + argType.toString() + "s";
     }
 
     private static Interner<Combination> combinationInterner =
@@ -549,7 +549,7 @@ public abstract class SkylarkType {
 
     public boolean contains(Object value) {
       // This returns true a bit too much, but it looks
-      return value instanceof Function;
+      return Function.class.isAssignableFrom(value.getClass());
     }
 
     public static SkylarkFunctionType of(String name) {
