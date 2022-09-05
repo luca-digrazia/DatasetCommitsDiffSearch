@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Range;
@@ -23,25 +22,19 @@ import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCacheChecker;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionStatusReporter;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BuildFailedException;
+import com.google.devtools.build.lib.actions.BuilderUtils;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.TestExecException;
-import com.google.devtools.build.lib.analysis.AspectCompleteEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TargetCompleteEvent;
-import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.rules.test.TestProvider;
-import com.google.devtools.build.lib.runtime.BugReport;
 import com.google.devtools.build.lib.skyframe.ActionExecutionInactivityWatchdog;
 import com.google.devtools.build.lib.skyframe.ActionExecutionValue;
-import com.google.devtools.build.lib.skyframe.AspectCompletionValue;
-import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor;
@@ -93,12 +86,10 @@ public class SkyframeBuilder implements Builder {
   }
 
   @Override
-  public void buildArtifacts(
-      Set<Artifact> artifacts,
+  public void buildArtifacts(Set<Artifact> artifacts,
       Set<ConfiguredTarget> parallelTests,
       Set<ConfiguredTarget> exclusiveTests,
       Collection<ConfiguredTarget> targetsToBuild,
-      Collection<AspectValue> aspects,
       Executor executor,
       Set<ConfiguredTarget> builtTargets,
       boolean explain,
@@ -130,32 +121,17 @@ public class SkyframeBuilder implements Builder {
     watchdog.start();
 
     try {
-      result =
-          skyframeExecutor.buildArtifacts(
-              executor,
-              artifacts,
-              targetsToBuild,
-              aspects,
-              parallelTests,
-              /*exclusiveTesting=*/ false,
-              keepGoing,
-              explain,
-              numJobs,
-              actionCacheChecker,
-              executionProgressReceiver);
+      result = skyframeExecutor.buildArtifacts(executor, artifacts, targetsToBuild, parallelTests,
+          /*exclusiveTesting=*/false, keepGoing, explain, numJobs, actionCacheChecker,
+          executionProgressReceiver);
       // progressReceiver is finished, so unsynchronized access to builtTargets is now safe.
       success = processResult(result, keepGoing, skyframeExecutor);
 
       Preconditions.checkState(
-          !success
-              || result.keyNames().size()
-                  == (artifacts.size()
-                      + targetsToBuild.size()
-                      + aspects.size()
-                      + parallelTests.size()),
+          !success || result.keyNames().size()
+              == (artifacts.size() + targetsToBuild.size() + parallelTests.size()),
           "Build reported as successful but not all artifacts and targets built: %s, %s",
-          result,
-          artifacts);
+          result, artifacts);
 
       // Run exclusive tests: either tagged as "exclusive" or is run in an invocation with
       // --test_output=streamed.
@@ -163,19 +139,9 @@ public class SkyframeBuilder implements Builder {
       for (ConfiguredTarget exclusiveTest : exclusiveTests) {
         // Since only one artifact is being built at a time, we don't worry about an artifact being
         // built and then the build being interrupted.
-        result =
-            skyframeExecutor.buildArtifacts(
-                executor,
-                ImmutableSet.<Artifact>of(),
-                targetsToBuild,
-                aspects,
-                ImmutableSet.of(exclusiveTest), /*exclusiveTesting=*/
-                true,
-                keepGoing,
-                explain,
-                numJobs,
-                actionCacheChecker,
-                null);
+        result = skyframeExecutor.buildArtifacts(executor, ImmutableSet.<Artifact>of(),
+            targetsToBuild, ImmutableSet.of(exclusiveTest), /*exclusiveTesting=*/true, keepGoing,
+            explain, numJobs, actionCacheChecker, null);
         boolean exclusiveSuccess = processResult(result, keepGoing, skyframeExecutor);
         Preconditions.checkState(!exclusiveSuccess || !result.keyNames().isEmpty(),
             "Build reported as successful but test %s not executed: %s",
@@ -207,7 +173,7 @@ public class SkyframeBuilder implements Builder {
   /**
    * Process the Skyframe update, taking into account the keepGoing setting.
    *
-   * <p>Returns false if the update() failed, but we should continue. Returns true on success.
+   * Returns false if the update() failed, but we should continue. Returns true on success.
    * Throws on fail-fast failures.
    */
   private static boolean processResult(EvaluationResult<?> result, boolean keepGoing,
@@ -226,50 +192,10 @@ public class SkyframeBuilder implements Builder {
         // error map may be empty in the case of a catastrophe.
         throw new BuildFailedException();
       } else {
-        rethrow(Preconditions.checkNotNull(result.getError().getException()));
+        BuilderUtils.rethrow(Preconditions.checkNotNull(result.getError().getException()));
       }
     }
     return true;
-  }
-
-  /** Figure out why an action's execution failed and rethrow the right kind of exception. */
-  @VisibleForTesting
-  public static void rethrow(Throwable cause) throws BuildFailedException, TestExecException {
-    Throwable innerCause = cause.getCause();
-    if (innerCause instanceof TestExecException) {
-      throw (TestExecException) innerCause;
-    }
-    if (cause instanceof ActionExecutionException) {
-      ActionExecutionException actionExecutionCause = (ActionExecutionException) cause;
-      // Sometimes ActionExecutionExceptions are caused by Actions with no owner.
-      String message =
-          (actionExecutionCause.getLocation() != null)
-              ? (actionExecutionCause.getLocation().print() + " " + cause.getMessage())
-              : cause.getMessage();
-      throw new BuildFailedException(
-          message,
-          actionExecutionCause.isCatastrophe(),
-          actionExecutionCause.getAction(),
-          actionExecutionCause.getRootCauses(),
-          /*errorAlreadyShown=*/ !actionExecutionCause.showError());
-    } else if (cause instanceof MissingInputFileException) {
-      throw new BuildFailedException(cause.getMessage());
-    } else if (cause instanceof BuildFileNotFoundException) {
-      // Sadly, this can happen because we may load new packages during input discovery. Any
-      // failures reading those packages shouldn't terminate the build, but in Skyframe they do.
-      BugReport.sendBugReport(cause, ImmutableList.<String>of());
-      throw new BuildFailedException(cause.getMessage());
-    } else if (cause instanceof RuntimeException) {
-      throw (RuntimeException) cause;
-    } else if (cause instanceof Error) {
-      throw (Error) cause;
-    } else {
-      // We encountered an exception we don't think we should have encountered. This can indicate
-      // a bug in our code, such as lower level exceptions not being properly handled, or in our
-      // expectations in this method.
-      throw new IllegalArgumentException(
-          "action terminated with " + "unexpected exception: " + cause.getMessage(), cause);
-    }
   }
 
   private static int countTestActions(Iterable<ConfiguredTarget> testTargets) {
@@ -335,9 +261,6 @@ public class SkyframeBuilder implements Builder {
         ConfiguredTarget target = val.getConfiguredTarget();
         builtTargets.add(target);
         eventBus.post(TargetCompleteEvent.createSuccessful(target));
-      } else if (type == SkyFunctions.ASPECT_COMPLETION && node != null) {
-        AspectCompletionValue val = (AspectCompletionValue) node;
-        eventBus.post(AspectCompleteEvent.createSuccessful(val.getAspectValue()));
       } else if (type == SkyFunctions.ACTION_EXECUTION) {
         // Remember all completed actions, even those in error, regardless of having been cached or
         // really executed.
