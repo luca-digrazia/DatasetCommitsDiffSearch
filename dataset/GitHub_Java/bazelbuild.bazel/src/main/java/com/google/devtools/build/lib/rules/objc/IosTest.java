@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
@@ -63,7 +62,6 @@ public final class IosTest implements RuleConfiguredTargetFactory {
   static final String TEST_TARGET_DEVICE_ATTR = "ios_test_target_device";
   static final String TEST_TEMPLATE_ATTR = "$test_template";
   static final String XCTEST_APP_ATTR = "xctest_app";
-  static final String MCOV_TOOL_ATTR = ":mcov";
 
   @VisibleForTesting
   public static final String REQUIRES_SOURCE_ERROR =
@@ -131,8 +129,7 @@ public final class IosTest implements RuleConfiguredTargetFactory {
     }
 
     new CompilationSupport(ruleContext)
-        .registerLinkActions(
-            common.getObjcProvider(), extraLinkArgs, extraLinkInputs, DsymOutputType.TEST)
+        .registerLinkActions(common.getObjcProvider(), extraLinkArgs, extraLinkInputs)
         .registerCompileAndArchiveActions(common)
         .addXcodeSettings(xcodeProviderBuilder, common)
         .validateAttributes();
@@ -144,9 +141,9 @@ public final class IosTest implements RuleConfiguredTargetFactory {
             LinkedBinary.LOCAL_AND_DEPENDENCIES,
             bundleFormat,
             objcConfiguration.getMinimumOs())
-        .registerActions(DsymOutputType.TEST)
+        .registerActions()
         .addXcodeSettings(xcodeProviderBuilder)
-        .addFilesToBuild(filesToBuild, DsymOutputType.TEST)
+        .addFilesToBuild(filesToBuild)
         .validateResources()
         .validateAttributes();
 
@@ -170,13 +167,10 @@ public final class IosTest implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> filesToBuildBuilder =
         NestedSetBuilder.<Artifact>stableOrder().addTransitive(filesToBuildSet);
 
-    InstrumentedFilesProvider instrumentedFilesProvider =
-        new CompilationSupport(ruleContext).getInstrumentedFilesProvider(common);
-
     TestSupport testSupport =
         new TestSupport(ruleContext)
             .registerTestRunnerActions()
-            .addRunfiles(runfilesBuilder, instrumentedFilesProvider)
+            .addRunfiles(runfilesBuilder)
             .addFilesToBuild(filesToBuildBuilder);
 
     Artifact executable = testSupport.generatedTestScript();
@@ -192,7 +186,9 @@ public final class IosTest implements RuleConfiguredTargetFactory {
         .add(
             ExecutionInfoProvider.class,
             new ExecutionInfoProvider(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, "")))
-        .addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
+        .addProvider(
+            InstrumentedFilesProvider.class,
+            new CompilationSupport(ruleContext).getInstrumentedFilesProvider(common))
         .addProviders(testSupport.getExtraProviders())
         .setRunfilesSupport(runfilesSupport, executable)
         .build();
