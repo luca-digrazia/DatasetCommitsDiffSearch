@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules;
 
-import static com.google.devtools.build.lib.analysis.BaseRuleClasses.RUN_UNDER;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.DATA;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
@@ -38,6 +37,8 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
@@ -47,6 +48,8 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabelList;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunctionWithCallback;
@@ -55,6 +58,7 @@ import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.PackageContext;
 import com.google.devtools.build.lib.packages.PredicateWithMessage;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
@@ -99,23 +103,60 @@ import java.util.concurrent.ExecutionException;
  */
 public class SkylarkRuleClassFunctions {
 
-  @SkylarkSignature(
-    name = "DATA_CFG",
-    returnType = ConfigurationTransition.class,
-    doc =
-        "Deprecated. Use string \"data\" instead. "
-            + "Specifies a transition to the data configuration."
-  )
+  //TODO(bazel-team): proper enum support
+  @SkylarkSignature(name = "DATA_CFG", returnType = ConfigurationTransition.class,
+      doc = "Experimental. Specifies a transition to the data configuration.")
   private static final Object dataTransition = ConfigurationTransition.DATA;
 
-  @SkylarkSignature(
-    name = "HOST_CFG",
-    returnType = ConfigurationTransition.class,
-    doc =
-        "Deprecated. Use string \"host\" instead. "
-            + "Specifies a transition to the host configuration."
-  )
+  @SkylarkSignature(name = "HOST_CFG", returnType = ConfigurationTransition.class,
+      doc = "Specifies a transition to the host configuration.")
   private static final Object hostTransition = ConfigurationTransition.HOST;
+
+  private static final LateBoundLabel<BuildConfiguration> RUN_UNDER =
+      new LateBoundLabel<BuildConfiguration>() {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          RunUnder runUnder = configuration.getRunUnder();
+          return runUnder == null ? null : runUnder.getLabel();
+        }
+      };
+
+  private static final Label COVERAGE_SUPPORT_LABEL =
+      Label.parseAbsoluteUnchecked("//tools/defaults:coverage");
+
+  private static final LateBoundLabelList<BuildConfiguration> GCOV =
+      new LateBoundLabelList<BuildConfiguration>(ImmutableList.of(COVERAGE_SUPPORT_LABEL)) {
+        @Override
+        public List<Label> resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          return configuration.isCodeCoverageEnabled()
+              ? ImmutableList.copyOf(configuration.getGcovLabels())
+              : ImmutableList.<Label>of();
+        }
+      };
+
+  private static final LateBoundLabelList<BuildConfiguration> COVERAGE_REPORT_GENERATOR =
+      new LateBoundLabelList<BuildConfiguration>(ImmutableList.of(COVERAGE_SUPPORT_LABEL)) {
+        @Override
+        public List<Label> resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          return configuration.isCodeCoverageEnabled()
+              ? ImmutableList.copyOf(configuration.getCoverageReportGeneratorLabels())
+              : ImmutableList.<Label>of();
+        }
+      };
+
+  private static final LateBoundLabelList<BuildConfiguration> COVERAGE_SUPPORT =
+      new LateBoundLabelList<BuildConfiguration>(ImmutableList.of(COVERAGE_SUPPORT_LABEL)) {
+        @Override
+        public List<Label> resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          return configuration.isCodeCoverageEnabled()
+              ? ImmutableList.copyOf(configuration.getCoverageLabels())
+              : ImmutableList.<Label>of();
+        }
+      };
 
   // TODO(bazel-team): Copied from ConfiguredRuleClassProvider for the transition from built-in
   // rules to skylark extensions. Using the same instance would require a large refactoring.
@@ -151,7 +192,7 @@ public class SkylarkRuleClassFunctions {
           .build();
 
   /** Parent rule class for test Skylark rules. */
-  public static final RuleClass getTestBaseRule(String toolsRepository) {
+  public static final RuleClass getTestBaseRule(String toolsRespository) {
     return new RuleClass.Builder("$test_base_rule", RuleClassType.ABSTRACT, true, baseRule)
         .add(attr("size", STRING).value("medium").taggable()
             .nonconfigurable("used in loading phase rule validation logic"))
@@ -177,19 +218,15 @@ public class SkylarkRuleClassFunctions {
             .nonconfigurable("policy decision: this should be consistent across configurations"))
         .add(attr("args", STRING_LIST)
             .nonconfigurable("policy decision: should be consistent across configurations"))
-        // Input files for every test action
         .add(attr("$test_runtime", LABEL_LIST).cfg(HOST).value(ImmutableList.of(
-            labelCache.getUnchecked(toolsRepository + "//tools/test:runtime"))))
-        // Input files for test actions collecting code coverage
-        .add(attr("$coverage_support", LABEL)
-            .cfg(HOST)
-            .value(labelCache.getUnchecked("//tools/defaults:coverage_support")))
-        // Used in the one-per-build coverage report generation action.
-        .add(attr("$coverage_report_generator", LABEL)
-            .cfg(HOST)
-            .value(labelCache.getUnchecked("//tools/defaults:coverage_report_generator"))
-            .singleArtifact())
+            labelCache.getUnchecked(toolsRespository + "//tools/test:runtime"))))
         .add(attr(":run_under", LABEL).cfg(DATA).value(RUN_UNDER))
+        .add(attr(":gcov", LABEL_LIST).cfg(HOST).value(GCOV))
+        .add(attr(":coverage_support", LABEL_LIST).cfg(HOST).value(COVERAGE_SUPPORT))
+        .add(
+            attr(":coverage_report_generator", LABEL_LIST)
+            .cfg(HOST)
+            .value(COVERAGE_REPORT_GENERATOR))
         .build();
   }
 
@@ -223,11 +260,9 @@ public class SkylarkRuleClassFunctions {
             + "It is a dictionary mapping from string to a template name. "
             + "For example: <code>{\"ext\": \"%{name}.ext\"}</code>. <br>"
             + "The dictionary key becomes an attribute in <code>ctx.outputs</code>. "
-            + "Similar to computed dependency rule attributes, you can also specify the name of a "
-            + "function that returns the dictionary. This function can access all rule "
-            + "attributes that are listed as parameters in its function signature."
-            + "For example, <code>outputs = _my_func<code> with <code>def _my_func(srcs, deps):"
-            + "</code> has access to the attributes 'srcs' and 'deps' (if defined)."),
+            // TODO(bazel-team): Make doc more clear, wrt late-bound attributes.
+            + "It may also be a function (which receives <code>ctx.attr</code> as argument) "
+            + "returning such a dictionary."),
         @Param(name = "executable", type = Boolean.class, defaultValue = "False",
             doc = "whether this rule is marked as executable or not. If True, "
             + "there must be an action that generates <code>ctx.outputs.executable</code>."),
@@ -543,7 +578,14 @@ public class SkylarkRuleClassFunctions {
       }
       for (Pair<String, SkylarkAttr.Descriptor> attribute : attributes) {
         SkylarkAttr.Descriptor descriptor = attribute.getSecond();
-        descriptor.exportAspects(definitionLocation);
+        Attribute.Builder<?> attributeBuilder = descriptor.getAttributeBuilder();
+        for (SkylarkAspect skylarkAspect : descriptor.getAspects()) {
+          if (!skylarkAspect.isExported()) {
+            throw new EvalException(definitionLocation,
+                "All aspects applied to rule dependencies must be top-level values");
+          }
+          attributeBuilder.aspect(skylarkAspect);
+        }
 
         addAttribute(definitionLocation, builder,
             descriptor.getAttributeBuilder().build(attribute.getFirst()));
