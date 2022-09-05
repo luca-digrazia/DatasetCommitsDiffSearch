@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.annotations.VisibleForTesting;
-import com.android.annotations.concurrency.Immutable;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.android.AndroidDataMerger.SourceChecker;
-import java.io.IOException;
+
+import com.android.annotations.VisibleForTesting;
+import com.android.annotations.concurrency.Immutable;
+
 import java.util.Objects;
 
 /**
@@ -32,70 +32,62 @@ public class MergeConflict {
           + " %s is provided with ambiguous priority from:\n\t%s\n\t%s";
 
   private final DataKey dataKey;
-  private final DataValue primary;
-  private final DataValue overwritten;
+  private final DataValue first;
+  private final DataValue second;
 
   private MergeConflict(DataKey dataKey, DataValue sortedFirst, DataValue sortedSecond) {
     this.dataKey = dataKey;
-    this.primary = sortedFirst;
-    this.overwritten = sortedSecond;
+    this.first = sortedFirst;
+    this.second = sortedSecond;
   }
 
   /**
    * Creates a MergeConflict between two DataResources.
    *
-   * <p>The {@link DataKey} must match the first.dataKey() and second .dataKey().
+   * The {@link DataKey} must match the first.dataKey() and second .dataKey().
    *
    * @param dataKey The dataKey name that both DataResources share.
-   * @param primary The DataResource that will be used in the graph.
-   * @param overwritten The DataResource that is replaced.
+   * @param first The first DataResource.
+   * @param second The second DataResource.
    * @return A new MergeConflict.
    */
-  public static MergeConflict between(DataKey dataKey, DataValue primary, DataValue overwritten) {
+  public static MergeConflict between(DataKey dataKey, DataValue first, DataValue second) {
     Preconditions.checkNotNull(dataKey);
-    return of(dataKey, primary, overwritten);
+    return of(dataKey, first, second);
   }
 
   @VisibleForTesting
-  static MergeConflict of(DataKey key, DataValue primary, DataValue overwritten) {
+  static MergeConflict of(DataKey key, DataValue first, DataValue second) {
     // Make sure the paths are always ordered.
-    DataValue sortedFirst =
-        primary.source().compareTo(overwritten.source()) > 0 ? primary : overwritten;
-    DataValue sortedSecond = sortedFirst != primary ? primary : overwritten;
+    DataValue sortedFirst = first.source().compareTo(second.source()) > 0 ? first : second;
+    DataValue sortedSecond = sortedFirst != first ? first : second;
     return new MergeConflict(key, sortedFirst, sortedSecond);
   }
 
   public String toConflictMessage() {
     return String.format(
-        CONFLICT_MESSAGE,
-        dataKey.toPrettyString(),
-        primary.source().getPath(),
-        overwritten.source().getPath());
+        CONFLICT_MESSAGE, dataKey.toPrettyString(), first.source().getPath(),
+        second.source().getPath());
   }
 
   public DataKey dataKey() {
     return dataKey;
   }
 
-  DataValue primary() {
-    return primary;
+  DataValue first() {
+    return first;
   }
 
-  DataValue overwritten() {
-    return overwritten;
-  }
-
-  boolean isValidWith(SourceChecker checker) throws IOException {
-    return !primary.equals(overwritten)
-        && !checker.checkEquality(primary.source(), overwritten.source());
+  DataValue second() {
+    return second;
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
         .add("dataKey", dataKey)
-        .add("primary", primary)
-        .add("overwritten", overwritten)
+        .add("first", first)
+        .add("second", second)
         .toString();
   }
 
@@ -109,12 +101,12 @@ public class MergeConflict {
     }
     MergeConflict that = (MergeConflict) other;
     return Objects.equals(dataKey, that.dataKey)
-        && Objects.equals(primary, that.primary)
-        && Objects.equals(overwritten, that.overwritten);
+        && Objects.equals(first, that.first)
+        && Objects.equals(second, that.second);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(dataKey, primary, overwritten);
+    return Objects.hash(dataKey, first, second);
   }
 }
