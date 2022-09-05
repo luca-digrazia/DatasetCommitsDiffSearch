@@ -1,13 +1,13 @@
 package com.codahale.metrics;
 
+import static java.lang.System.arraycopy;
+import static java.util.Arrays.binarySearch;
+
 import java.lang.ref.SoftReference;
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.ListIterator;
-
-import static java.lang.System.arraycopy;
-import static java.util.Arrays.binarySearch;
 
 class ChunkedAssociativeLongArray {
     private static final long[] EMPTY = new long[0];
@@ -133,9 +133,10 @@ class ChunkedAssociativeLongArray {
 
     /**
      * Try to trim all beyond specified boundaries.
+     * All items that are less then startKey or greater/equals then endKey
      *
-     * @param startKey the start value for which all elements less than it should be removed.
-     * @param endKey   the end value for which all elements greater/equals than it should be removed.
+     * @param startKey
+     * @param endKey
      */
     synchronized void trim(long startKey, long endKey) {
         /*
@@ -178,10 +179,11 @@ class ChunkedAssociativeLongArray {
     }
 
     /**
-     * Clear all items in specified boundaries.
+     * Clear all in specified boundaries.
+     * Remove all items between startKey(inclusive) and endKey(exclusive)
      *
-     * @param startKey the minimal value (inclusive) after which all elements should be removed
-     * @param endKey   the maximum value (exlusive) before which all elements should be removed
+     * @param startKey
+     * @param endKey
      */
     synchronized void clear(long startKey, long endKey) {
         /*

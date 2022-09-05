@@ -10,9 +10,9 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class SharedMetricRegistries {
     private static final ConcurrentMap<String, MetricRegistry> REGISTRIES =
-            new ConcurrentHashMap<String, MetricRegistry>();
+            new ConcurrentHashMap<>();
 
-    private static AtomicReference<String> defaultRegistryName = new AtomicReference<String>();
+    private static AtomicReference<String> defaultRegistryName = new AtomicReference<>();
 
     /* Visible for testing */
     static void setDefaultRegistryName(AtomicReference<String> defaultRegistryName) {
@@ -84,10 +84,24 @@ public class SharedMetricRegistries {
      * @throws IllegalStateException if the default has not been set
      */
     public static MetricRegistry getDefault() {
+        MetricRegistry metricRegistry = tryGetDefault();
+        if (metricRegistry == null) {
+            throw new IllegalStateException("Default registry name has not been set.");
+        }
+        return metricRegistry;
+    }
+
+    /**
+     * Same as {@link #getDefault()} except returns null when the default registry has not been set.
+     *
+     * @return the default registry or null
+     */
+    public static MetricRegistry tryGetDefault() {
         final String name = defaultRegistryName.get();
         if (name != null) {
             return getOrCreate(name);
+        } else {
+            return null;
         }
-        throw new IllegalStateException("Default registry name has not been set.");
     }
 }
