@@ -473,7 +473,7 @@ public class MethodLibrary {
 
   @SkylarkSignature(name = "rindex", objectType = StringModule.class, returnType = Integer.class,
       doc = "Returns the last index where <code>sub</code> is found, "
-          + "or raises an error if no such index exists, optionally restricting to "
+          + "or throw an error if no such index exists, optionally restricting to "
           + "[<code>start</code>:<code>end</code>], "
           + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       mandatoryPositionals = {
@@ -498,7 +498,7 @@ public class MethodLibrary {
 
   @SkylarkSignature(name = "index", objectType = StringModule.class, returnType = Integer.class,
       doc = "Returns the first index where <code>sub</code> is found, "
-          + "or raises an error if no such index exists, optionally restricting to "
+          + "or throw an error if no such index exists, optionally restricting to "
           + "[<code>start</code>:<code>end]</code>, "
           + "<code>start</code> being inclusive and <code>end</code> being exclusive.",
       mandatoryPositionals = {
@@ -574,19 +574,8 @@ public class MethodLibrary {
   // We handle here the simplest case which provides most of the value of the function.
   // https://docs.python.org/3/library/string.html#formatstrings
   @SkylarkSignature(name = "format", objectType = StringModule.class, returnType = String.class,
-      doc = "Perform string interpolation. Format strings contain replacement fields "
-          + "surrounded by curly braces <code>{}</code>. Anything that is not contained "
-          + "in braces is considered literal text, which is copied unchanged to the output."
-          + "If you need to include a brace character in the literal text, it can be "
-          + "escaped by doubling: <code>{{</code> and <code>}}</code>"
-          + "A replacement field can be either a name, a number, or empty. Values are "
-          + "converted to strings using the <a href=\"globals.html#str\">str</a> function."
+      doc = "Replace the values surrounded by curly brackets in the string."
           + "<pre class=\"language-python\">"
-          + "# Access in order:\n"
-          + "\"{} < {}\".format(4, 5) == \"4 < 5\"\n"
-          + "# Access by position:\n"
-          + "\"{1}, {0}\".format(2, 1) == \"1, 2\"\n"
-          + "# Access by name:\n"
           + "\"x{key}x\".format(key = 2) == \"x2x\"</pre>\n",
       mandatoryPositionals = {
           @Param(name = "self", type = String.class, doc = "This string."),
@@ -666,8 +655,7 @@ public class MethodLibrary {
 
   // supported list methods
   @SkylarkSignature(name = "sorted", returnType = HackHackEitherList.class,
-      doc = "Sort a collection. Elements are sorted first by their type, "
-          + "then by their value (in ascending order).",
+      doc = "Sort a collection.",
       mandatoryPositionals = {
         @Param(name = "self", type = HackHackEitherList.class, doc = "This list.")},
         useLocation = true, useEnvironment = true)
@@ -964,7 +952,7 @@ public class MethodLibrary {
   };
 
   @SkylarkSignature(name = "set", returnType = SkylarkNestedSet.class,
-      doc = "Creates a <a href=\"set.html\">set</a> from the <code>items</code>."
+      doc = "Creates a <a href=\"#modules.set\">set</a> from the <code>items</code>."
       + " The set supports nesting other sets of the same element"
       + " type in it. A desired iteration order can also be specified.<br>"
       + " Examples:<br><pre class=\"language-python\">set([\"a\", \"b\"])\n"
@@ -977,7 +965,7 @@ public class MethodLibrary {
             doc = "The ordering strategy for the set if it's nested, "
             + "possible values are: <code>stable</code> (default), <code>compile</code>, "
             + "<code>link</code> or <code>naive_link</code>. An explanation of the "
-            + "values can be found <a href=\"set.html\">here</a>.")},
+            + "values can be found <a href=\"#modules.set\">here</a>.")},
       useLocation = true)
   private static final BuiltinFunction set = new BuiltinFunction("set") {
     public SkylarkNestedSet invoke(Object items, String order,
@@ -1034,7 +1022,7 @@ public class MethodLibrary {
 
   @SkylarkSignature(name = "union", objectType = SkylarkNestedSet.class,
       returnType = SkylarkNestedSet.class,
-      doc = "Creates a new <a href=\"set.html\">set</a> that contains both "
+      doc = "Creates a new <a href=\"#modules.set\">set</a> that contains both "
           + "the input set as well as all additional elements.",
       mandatoryPositionals = {
         @Param(name = "input", type = SkylarkNestedSet.class, doc = "The input set"),
@@ -1167,9 +1155,11 @@ public class MethodLibrary {
   };
 
   @SkylarkSignature(name = "getattr",
-      doc = "Returns the struct's field of the given name if it exists. If not, it either returns "
-          + "<code>default</code> (if specified) or raises an error. <code>getattr(x, \"foobar\")"
-          + "</code> is equivalent to <code>x.foobar</code>."
+      doc = "Returns the struct's field of the given name if exists, otherwise <code>default</code>"
+          + " if specified, otherwise raises an error. For example, <code>getattr(x, \"foobar\")"
+          + "</code> is equivalent to <code>x.foobar</code>, except that it returns "
+          + "<code>default</code> for a non-existent attribute instead of raising an error."
+          + "<br>"
           + "<pre class=\"language-python\">getattr(ctx.attr, \"myattr\")\n"
           + "getattr(ctx.attr, \"myattr\", \"mydefault\")</pre>",
       mandatoryPositionals = {
@@ -1329,7 +1319,9 @@ public class MethodLibrary {
       + "z = \"hello\"[:4]  # \"hell\"</pre>"
       + "Strings are iterable and support the <code>in</code> operator. Examples:<br>"
       + "<pre class=\"language-python\">\"bc\" in \"abcd\"   # evaluates to True\n"
-      + "x = [s for s in \"abc\"]  # x == [\"a\", \"b\", \"c\"]</pre>\n"
+      + "x = []\n"
+      + "for s in \"abc\":\n"
+      + "  x += [s]     # x == [\"a\", \"b\", \"c\"]</pre>\n"
       + "Implicit concatenation of strings is not allowed; use the <code>+</code> "
       + "operator instead.")
   public static final class StringModule {}
