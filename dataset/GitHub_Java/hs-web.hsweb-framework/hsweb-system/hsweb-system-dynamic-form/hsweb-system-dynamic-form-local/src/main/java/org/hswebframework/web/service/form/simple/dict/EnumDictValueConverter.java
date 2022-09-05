@@ -11,7 +11,6 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 public class EnumDictValueConverter<T extends EnumDict> implements ValueConverter {
@@ -22,14 +21,6 @@ public class EnumDictValueConverter<T extends EnumDict> implements ValueConverte
         log.warn("选项[{}]在字典中不存在.全部选项:[{}]", v, allOptionSupplier.get());
         return null;
     };
-
-    @Getter
-    @Setter
-    protected Function<Stream<String>, String> multiValueConvert = stream -> stream.collect(Collectors.joining(","));
-
-    @Setter
-    @Getter
-    protected Function<String, List<Object>> splitter = str -> Arrays.asList(str.split("[, ; ；]"));
 
     public EnumDictValueConverter(Supplier<List<T>> allOptionSupplier) {
         this.allOptionSupplier = allOptionSupplier;
@@ -59,70 +50,70 @@ public class EnumDictValueConverter<T extends EnumDict> implements ValueConverte
 
     @Override
     @SuppressWarnings("all")
-    public Object getData(Object value) {
-        if (StringUtils.isEmpty(value)) {
-            return value;
+    public Object getData(Object o) {
+        if (StringUtils.isEmpty(o)) {
+            return o;
         }
         //多选
         if (multi) {
             List<Object> values;
-            if (value instanceof String) {
-                values = splitter.apply((String) value);
-            } else if (value instanceof Object[]) {
-                values = Arrays.asList(((Object[]) value));
-            } else if (value instanceof Collection) {
-                values = new ArrayList<>(((Collection) value));
+            if (o instanceof String) {
+                values = Arrays.asList(((String) o).split("[, ; ；]"));
+            } else if (o instanceof Object[]) {
+                values = Arrays.asList(((Object[]) o));
+            } else if (o instanceof Collection) {
+                values = new ArrayList<>(((Collection) o));
             } else {
-                values = Collections.singletonList(value);
+                values = Collections.singletonList(o);
             }
             //转为mask
             if (dataToMask) {
-                if (value instanceof Number) {
-                    return ((Number) value).longValue();
+                if (o instanceof Number) {
+                    return ((Number) o).longValue();
                 }
                 return EnumDict.toMask(values.stream()
                         .map(this::find)
                         .filter(Objects::nonNull)
                         .toArray(EnumDict[]::new));
             }
-            return multiValueConvert
-                    .apply(values.stream()
-                            .map(this::find)
-                            .filter(Objects::nonNull)
-                            .map(EnumDict::getValue)
-                            .map(String::valueOf));
+            //以逗号分隔
+            return values.stream()
+                    .map(this::find)
+                    .filter(Objects::nonNull)
+                    .map(EnumDict::getValue)
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(","));
         }
 
-        return Optional.ofNullable(this.find(value))
+        return Optional.ofNullable(this.find(o))
                 .map(EnumDict::getValue)
-                .orElse(value);
+                .orElse(o);
     }
 
     @Override
-    public Object getValue(Object data) {
+    public Object getValue(Object o) {
         if (multi) {
             if (dataToMask) {
                 Long mask = null;
-                if (org.hswebframework.utils.StringUtils.isNumber(data)) {
-                    mask = org.hswebframework.utils.StringUtils.toLong(data);
+                if (org.hswebframework.utils.StringUtils.isNumber(o)) {
+                    mask = org.hswebframework.utils.StringUtils.toLong(o);
                 }
                 if (mask != null) {
-                    return multiValueConvert
-                            .apply(EnumDict.getByMask(allOptionSupplier, mask)
-                                    .stream()
-                                    .map(EnumDict::getValue)
-                                    .map(String::valueOf));
+                    return EnumDict.getByMask(allOptionSupplier, mask)
+                            .stream()
+                            .map(EnumDict::getValue)
+                            .map(String::valueOf)
+                            .collect(Collectors.joining(","));
                 }
             }
-            List<Object> lst = splitter.apply(String.valueOf(data));
-            return multiValueConvert
-                    .apply(allOptionSupplier.get()
-                            .stream()
-                            .filter(e -> e.eq(lst))
-                            .map(EnumDict::getValue)
-                            .map(String::valueOf));
+            return allOptionSupplier.get()
+                    .stream()
+                    .filter(e -> e.eq(o))
+                    .map(EnumDict::getValue)
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(","));
         }
-        return data;
+        return o;
     }
 
 }

@@ -7,10 +7,8 @@ import org.hswebframework.ezorm.core.OptionConverter;
 import org.hswebframework.web.dict.EnumDict;
 
 import java.util.*;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 public class EnumDictOptionConverter<T extends EnumDict> implements OptionConverter {
@@ -19,11 +17,7 @@ public class EnumDictOptionConverter<T extends EnumDict> implements OptionConver
 
     @Getter
     @Setter
-    protected Function<Stream<String>, String> dictToText = stream -> stream.collect(Collectors.joining(","));
-
-    @Setter
-    @Getter
-    protected Function<String, List<Object>> splitter = str -> Arrays.asList(str.split("[, ; ；]"));
+    protected boolean multi;
 
     @Getter
     @Setter
@@ -57,7 +51,7 @@ public class EnumDictOptionConverter<T extends EnumDict> implements OptionConver
     public Object converterValue(Object o) {
         List<Object> values;
         if (o instanceof String) {
-            values = splitter.apply((String) o);
+            values = Arrays.asList(((String) o).split("[, ; ；]"));
         } else if (o instanceof Object[]) {
             values = Arrays.asList(((Object[]) o));
         } else if (o instanceof Collection) {
@@ -68,13 +62,14 @@ public class EnumDictOptionConverter<T extends EnumDict> implements OptionConver
         if (writeObject) {
             return allOptionSupplier.get()
                     .stream()
-                    .filter(e -> e.eq(values))
+                    .filter(e -> e.eq(o))
                     .collect(Collectors.toSet());
         }
-        return dictToText.apply(allOptionSupplier.get()
+        return allOptionSupplier.get()
                 .stream()
-                .filter(e -> e.eq(values))
+                .filter(e -> e.eq(o))
                 .map(EnumDict::getText)
-                .map(String::valueOf));
+                .map(String::valueOf)
+                .collect(Collectors.joining(","));
     }
 }

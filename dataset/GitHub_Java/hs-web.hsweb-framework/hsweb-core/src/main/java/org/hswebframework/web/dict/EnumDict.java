@@ -9,6 +9,7 @@ import com.alibaba.fastjson.parser.JSONToken;
 import com.alibaba.fastjson.parser.deserializer.ObjectDeserializer;
 import com.alibaba.fastjson.serializer.JSONSerializable;
 import com.alibaba.fastjson.serializer.JSONSerializer;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -79,9 +80,7 @@ public interface EnumDict<V> extends JSONSerializable {
         if (v instanceof Collection) {
             return ((Collection) v).stream().anyMatch(this::eq);
         }
-        if (v instanceof Map) {
-            v = ((Map) v).getOrDefault("value", ((Map) v).get("text"));
-        }
+        v = ((Map) v).getOrDefault("value", ((Map) v).get("text"));
         return this == v
                 || getValue() == v
                 || getValue().equals(v)
