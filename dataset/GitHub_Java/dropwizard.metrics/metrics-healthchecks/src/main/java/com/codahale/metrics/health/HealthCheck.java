@@ -14,7 +14,7 @@ public abstract class HealthCheck {
      * or unhealthy (with either an error message or a thrown exception and optional details).
      */
     public static class Result {
-        private static final Result HEALTHY = new Result(true, null, null);
+        private static final Result HEALTHY = new ResultBuilder(true).build();
         private static final int PRIME = 31;
 
         /**
@@ -33,7 +33,7 @@ public abstract class HealthCheck {
          * @return a healthy {@link Result} with an additional message
          */
         public static Result healthy(String message) {
-            return new Result(true, message, null);
+            return new ResultBuilder(true).withMessage(message).build();
         }
 
         /**
@@ -57,7 +57,7 @@ public abstract class HealthCheck {
          * @return an unhealthy {@link Result} with the given message
          */
         public static Result unhealthy(String message) {
-            return new Result(false, message, null);
+            return new ResultBuilder(false).withMessage(message).build();
         }
 
         /**
@@ -81,17 +81,35 @@ public abstract class HealthCheck {
          * @return an unhealthy {@link Result} with the given {@code error}
          */
         public static Result unhealthy(Throwable error) {
-            return new Result(false, error.getMessage(), error);
+            return new ResultBuilder(error).build();
         }
 
-
 		/**
-         * Returns a new {@link ResultBuilder}
+         * Returns an healthy {@link ResultBuilder}
          *
-         * @return the {@link ResultBuilder}
+         * @return an healthy {@link ResultBuilder}
          */
-        public static ResultBuilder builder() {
-            return new ResultBuilder();
+        public static ResultBuilder healthyBuilder() {
+            return new ResultBuilder(true);
+        }
+
+        /**
+         * Returns an unhealthy {@link ResultBuilder}
+         *
+         * @return an unhealthy {@link ResultBuilder}
+         */
+        public static ResultBuilder unHealthyBuilder() {
+            return new ResultBuilder(false);
+        }
+
+        /**
+         * Returns an unhealthy {@link ResultBuilder} with the given {@code error}
+         *
+         * @param error an exception thrown during the health check
+         * @return an unhealthy {@link ResultBuilder}
+         */
+        public static ResultBuilder unHealthyBuilder(Throwable error) {
+            return new ResultBuilder(error);
         }
 
         private final boolean healthy;
@@ -99,18 +117,11 @@ public abstract class HealthCheck {
         private final Throwable error;
         private final Map<String, Object> details;
 
-        private Result(boolean isHealthy, String message, Throwable error) {
-            this.healthy = isHealthy;
-            this.message = message;
-            this.error = error;
-            this.details = null;
-        }
-
         private Result(ResultBuilder builder) {
             this.healthy = builder.healthy;
             this.message = builder.message;
             this.error = builder.error;
-            this.details = builder.details == null ? null : Collections.unmodifiableMap(builder.details);
+            this.details = Collections.unmodifiableMap(builder.details);
         }
 
         /**
@@ -198,37 +209,15 @@ public abstract class HealthCheck {
         private Throwable error;
         private Map<String, Object> details;
 
-        protected ResultBuilder() {
-            this.healthy = true;
+        protected ResultBuilder(boolean healthy) {
             this.details = new LinkedHashMap<String, Object>();
+            this.healthy = healthy;
         }
 
-		/**
-         * Configure an healthy result
-         * @return
-         */
-        public ResultBuilder healthy() {
-            this.healthy = true;
-            return this;
-        }
-
-		/**
-         * Configure an unhealthy result
-         * @return
-         */
-        public ResultBuilder unhealthy() {
-            this.healthy = false;
-            return this;
-        }
-
-        /**
-         * Configure an unhealthy result with an {@code error}
-         * @param error the error
-         * @return
-         */
-        public ResultBuilder unhealthy(Throwable error) {
+        protected ResultBuilder(Throwable error) {
+            this(false);
             this.error = error;
-            return this.unhealthy().withMessage(error.getMessage());
+            this.message = error.getMessage();
         }
 
 		/**
@@ -264,9 +253,6 @@ public abstract class HealthCheck {
          * @return this builder with the given detail added
          */
         public ResultBuilder withDetail(String key, Object data) {
-            if (this.details == null) {
-                this.details = new LinkedHashMap<String, Object>();
-            }
             this.details.put(key, data);
             return this;
         }

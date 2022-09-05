@@ -92,8 +92,7 @@ public class HealthCheckModuleTest {
         Map<String, Object> complex = new LinkedHashMap<String, Object>();
         complex.put("field", "value");
 
-        HealthCheck.Result result = HealthCheck.Result.builder()
-            .healthy()
+        HealthCheck.Result result = HealthCheck.Result.healthyBuilder()
             .withDetail("boolean", true)
             .withDetail("integer", 1)
             .withDetail("long", 2L)
