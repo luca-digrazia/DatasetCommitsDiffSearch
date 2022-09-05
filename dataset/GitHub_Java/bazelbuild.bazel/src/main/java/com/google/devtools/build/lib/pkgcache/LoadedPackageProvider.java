@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.pkgcache;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
@@ -27,14 +27,14 @@ import com.google.devtools.build.lib.packages.Target;
  */
 public final class LoadedPackageProvider {
   private final PackageProvider packageProvider;
-  private final ExtendedEventHandler eventHandler;
+  private final EventHandler eventHandler;
 
-  public LoadedPackageProvider(PackageProvider packageProvider, ExtendedEventHandler eventHandler) {
+  public LoadedPackageProvider(PackageProvider packageProvider, EventHandler eventHandler) {
     this.packageProvider = packageProvider;
     this.eventHandler = eventHandler;
   }
 
-  public ExtendedEventHandler getEventHandler() {
+  public EventHandler getEventHandler() {
     return eventHandler;
   }
 
