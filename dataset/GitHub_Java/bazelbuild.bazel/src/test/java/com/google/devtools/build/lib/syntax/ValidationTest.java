@@ -39,6 +39,11 @@ public class ValidationTest extends EvaluationTestCase {
   }
 
   @Test
+  public void testTopLevelForStatement() throws Exception {
+    checkError("'For' is not allowed as a top level statement", "for i in [1,2,3]: a = i\n");
+  }
+
+  @Test
   public void testReturnOutsideFunction() throws Exception {
     checkError("Return statements must be inside a function", "return 2\n");
   }
@@ -260,33 +265,37 @@ public class ValidationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testGetSkylarkType() throws Exception {
+  public void testParentWithSkylarkModule() throws Exception {
     Class<?> emptyTupleClass = Tuple.empty().getClass();
     Class<?> tupleClass = Tuple.of(1, "a", "b").getClass();
-    Class<?> mutableListClass = new MutableList<>(Tuple.of(1, 2, 3), env).getClass();
+    Class<?> mutableListClass = new MutableList(Tuple.of(1, 2, 3), env).getClass();
 
-    assertThat(EvalUtils.getSkylarkType(mutableListClass)).isEqualTo(MutableList.class);
+    assertThat(mutableListClass).isEqualTo(MutableList.class);
     assertThat(MutableList.class.isAnnotationPresent(SkylarkModule.class)).isTrue();
-    assertThat(EvalUtils.getSkylarkType(emptyTupleClass)).isEqualTo(Tuple.class);
-    assertThat(EvalUtils.getSkylarkType(tupleClass)).isEqualTo(Tuple.class);
+    assertThat(EvalUtils.getParentWithSkylarkModule(MutableList.class))
+        .isEqualTo(MutableList.class);
+    assertThat(EvalUtils.getParentWithSkylarkModule(emptyTupleClass)).isEqualTo(Tuple.class);
+    assertThat(EvalUtils.getParentWithSkylarkModule(tupleClass)).isEqualTo(Tuple.class);
+    // TODO(bazel-team): make a tuple not a list anymore.
+    assertThat(EvalUtils.getParentWithSkylarkModule(tupleClass)).isEqualTo(Tuple.class);
 
-    assertThat(EvalUtils.getSkylarkType(SkylarkClassObject.class))
-        .isEqualTo(SkylarkClassObject.class);
-    try {
-      EvalUtils.getSkylarkType(ClassObject.class);
-      throw new Exception("Should have raised IllegalArgumentException exception");
-    } catch (IllegalArgumentException e) {
-      assertThat(e.getMessage()).contains(
-          "interface com.google.devtools.build.lib.syntax.ClassObject is not allowed "
-          + "as a Skylark value");
-    }
+    // TODO(bazel-team): fix that?
+    assertThat(ClassObject.class.isAnnotationPresent(SkylarkModule.class)).isFalse();
+    assertThat(SkylarkClassObject.class.isAnnotationPresent(SkylarkModule.class))
+        .isTrue();
+    assertThat(
+            EvalUtils.getParentWithSkylarkModule(SkylarkClassObject.class)
+                == SkylarkClassObject.class)
+        .isTrue();
+    assertThat(EvalUtils.getParentWithSkylarkModule(ClassObject.class)).isNull();
   }
 
   @Test
   public void testSkylarkTypeEquivalence() throws Exception {
+    // All subclasses of SkylarkList are made equivalent
     Class<?> emptyTupleClass = Tuple.empty().getClass();
     Class<?> tupleClass = Tuple.of(1, "a", "b").getClass();
-    Class<?> mutableListClass = new MutableList<>(Tuple.of(1, 2, 3), env).getClass();
+    Class<?> mutableListClass = new MutableList(Tuple.of(1, 2, 3), env).getClass();
 
     assertThat(SkylarkType.of(mutableListClass)).isEqualTo(SkylarkType.LIST);
     assertThat(SkylarkType.of(emptyTupleClass)).isEqualTo(SkylarkType.TUPLE);
@@ -306,8 +315,7 @@ public class ValidationTest extends EvaluationTestCase {
     // TODO(bazel-team): move to some other place to remove dependency of syntax tests on Artifact?
     assertThat(SkylarkType.of(Artifact.SpecialArtifact.class))
         .isEqualTo(SkylarkType.of(Artifact.class));
-    assertThat(SkylarkType.of(RuleConfiguredTarget.class))
-        .isNotEqualTo(SkylarkType.of(SkylarkClassObject.class));
+    assertThat(SkylarkType.of(RuleConfiguredTarget.class)).isNotEqualTo(SkylarkType.of(SkylarkClassObject.class));
   }
 
   @Test

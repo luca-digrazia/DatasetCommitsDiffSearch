@@ -409,6 +409,13 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
+  public void testAttrCfg_deprecated() throws Exception {
+    Attribute attr = evalAttributeDefinition("attr.label(cfg = HOST_CFG, allow_files = True)")
+        .build("a1");
+    assertEquals(ConfigurationTransition.HOST, attr.getConfigurationTransition());
+  }
+
+  @Test
   public void testAttrCfg() throws Exception {
     Attribute attr = evalAttributeDefinition("attr.label(cfg = 'host', allow_files = True)")
         .build("a1");
@@ -981,7 +988,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     assertThat(dataConstructor.isExported()).isTrue();
     assertThat(dataConstructor.getPrintableName()).isEqualTo("data");
     assertThat(dataConstructor.getKey()).isEqualTo(
-        new SkylarkClassObjectConstructor.SkylarkKey(FAKE_LABEL, "data")
+        new SkylarkClassObjectConstructor.Key(FAKE_LABEL, "data")
     );
   }
 
@@ -1016,17 +1023,5 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
         "d2 = data2(y = 2)",
         "d = d1 + d2"
     );
-  }
-
-  @Test
-  public void structsAsDeclaredProvidersTest() throws Exception {
-    evalAndExport(
-        "data = struct(x = 1)"
-    );
-    SkylarkClassObject data = (SkylarkClassObject) lookup("data");
-    assertThat(SkylarkClassObjectConstructor.STRUCT.isExported()).isTrue();
-    assertThat(data.getConstructor()).isEqualTo(SkylarkClassObjectConstructor.STRUCT);
-    assertThat(data.getConstructor().getKey())
-        .isEqualTo(SkylarkClassObjectConstructor.STRUCT.getKey());
   }
 }

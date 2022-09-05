@@ -134,7 +134,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         ),
         @Param(
           name = "noneable",
-          type = Integer.class,
+          type = Object.class,
           defaultValue = "None",
           noneable = true,
           positional = false,
