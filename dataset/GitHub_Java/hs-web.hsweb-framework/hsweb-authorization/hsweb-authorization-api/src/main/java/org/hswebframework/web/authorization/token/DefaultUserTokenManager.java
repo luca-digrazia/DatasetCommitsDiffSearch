@@ -18,55 +18,51 @@
 
 package org.hswebframework.web.authorization.token;
 
-import org.hswebframework.web.authorization.exception.AccessDenyException;
-import org.hswebframework.web.authorization.token.event.UserTokenChangedEvent;
-import org.hswebframework.web.authorization.token.event.UserTokenCreatedEvent;
-import org.hswebframework.web.authorization.token.event.UserTokenRemovedEvent;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEvent;
-import org.springframework.context.ApplicationEventPublisher;
+import org.hswebframework.web.authorization.listener.AuthorizationListenerDispatcher;
+import org.hswebframework.web.authorization.token.event.UserSignInEvent;
 
-import java.util.*;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * 默认到用户令牌管理器，使用ConcurrentMap来存储令牌信息
+ * 授权容器,用来操作所有已经授权的用户
  *
  * @author zhouhao
  * @since 3.0
  */
 public class DefaultUserTokenManager implements UserTokenManager {
 
-    protected final ConcurrentMap<String, SimpleUserToken> tokenStorage;
-
-    protected final ConcurrentMap<String, Set<String>> userStorage;
+    protected final ConcurrentMap<String, SimpleUserToken> tokenUserStorage;
 
     public DefaultUserTokenManager() {
         this(new ConcurrentHashMap<>(256));
-
     }
 
-    public DefaultUserTokenManager(ConcurrentMap<String, SimpleUserToken> tokenStorage) {
-        this(tokenStorage, new ConcurrentHashMap<>());
+    public DefaultUserTokenManager(ConcurrentMap<String, SimpleUserToken> storage) {
+        tokenUserStorage = storage;
     }
 
-    public DefaultUserTokenManager(ConcurrentMap<String, SimpleUserToken> tokenStorage, ConcurrentMap<String, Set<String>> userStorage) {
-        this.tokenStorage = tokenStorage;
-        this.userStorage = userStorage;
-    }
+    //令牌超时事件,默认3600秒
+    private long timeout = 3600;
 
     //异地登录模式，默认允许异地登录
     private AllopatricLoginMode allopatricLoginMode = AllopatricLoginMode.allow;
 
     //事件转发器
-    private ApplicationEventPublisher eventPublisher;
+    private AuthorizationListenerDispatcher authorizationListenerDispatcher;
 
-    @Autowired(required = false)
-    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
-        this.eventPublisher = eventPublisher;
+    public void setAuthorizationListenerDispatcher(AuthorizationListenerDispatcher authorizationListenerDispatcher) {
+        this.authorizationListenerDispatcher = authorizationListenerDispatcher;
+    }
+
+    public void setTimeout(long timeout) {
+        this.timeout = timeout;
+    }
+
+    public long getTimeout() {
+        return timeout;
     }
 
     public void setAllopatricLoginMode(AllopatricLoginMode allopatricLoginMode) {
@@ -77,10 +73,6 @@ public class DefaultUserTokenManager implements UserTokenManager {
         return allopatricLoginMode;
     }
 
-    protected Set<String> getUserToken(String userId) {
-        return userStorage.computeIfAbsent(userId, key -> new HashSet<>());
-    }
-
     private SimpleUserToken checkTimeout(SimpleUserToken detail) {
         if (null == detail) {
             return null;
@@ -89,7 +81,7 @@ public class DefaultUserTokenManager implements UserTokenManager {
             return detail;
         }
         if (System.currentTimeMillis() - detail.getLastRequestTime() > detail.getMaxInactiveInterval()) {
-            changeTokenState(detail, TokenState.expired);
+            detail.setState(TokenState.expired);
             return detail;
         }
         return detail;
@@ -97,29 +89,18 @@ public class DefaultUserTokenManager implements UserTokenManager {
 
     @Override
     public SimpleUserToken getByToken(String token) {
-        if (token == null) {
-            return null;
-        }
-        return checkTimeout(tokenStorage.get(token));
+        return checkTimeout(tokenUserStorage.get(token));
     }
 
     @Override
     public List<UserToken> getByUserId(String userId) {
-        if (userId == null) {
-            return Collections.emptyList();
-        }
-        return getUserToken(userId)
-                .stream()
-                .map(tokenStorage::get)
-                .filter(Objects::nonNull)
+        return tokenUserStorage.values().stream()
+                .filter(detail -> detail.getUserId().equals(userId) && checkTimeout(detail) != null)
                 .collect(Collectors.toList());
     }
 
     @Override
     public boolean userIsLoggedIn(String userId) {
-        if (userId == null) {
-            return false;
-        }
         for (UserToken userToken : getByUserId(userId)) {
             if (userToken.isEffective()) {
                 return true;
@@ -130,90 +111,55 @@ public class DefaultUserTokenManager implements UserTokenManager {
 
     @Override
     public boolean tokenIsLoggedIn(String token) {
-        if (token == null) {
-            return false;
-        }
-        UserToken userToken = getByToken(token);
 
-        return userToken != null && !userToken.isExpired();
+        return getByToken(token) != null;
     }
 
     @Override
     public long totalUser() {
-        return userStorage.size();
+        return tokenUserStorage.values()
+                .stream()
+                .peek(this::checkTimeout)//检查是否已经超时
+                .filter(UserToken::isEffective)//只返回有效的
+                .map(UserToken::getUserId)
+                .distinct()//去重复
+                .count();
     }
 
     @Override
     public long totalToken() {
-        return tokenStorage.size();
-    }
-
-    @Override
-    public void allLoggedUser(Consumer<UserToken> consumer) {
-        tokenStorage.values().forEach(consumer);
+        return tokenUserStorage.values()
+                .stream()
+                .peek(this::checkTimeout)//检查是否已经超时
+                .filter(UserToken::isEffective)//只返回有效的
+                .count();
     }
 
     @Override
     public List<UserToken> allLoggedUser() {
-        return new ArrayList<>(tokenStorage.values());
+        return tokenUserStorage.values()
+                .stream()
+                .map(this::checkTimeout)
+                .filter(UserToken::isEffective)
+                .collect(Collectors.toList());
     }
 
     @Override
     public void signOutByUserId(String userId) {
-        if (null == userId) {
-            return;
-        }
-        Set<String> tokens = getUserToken(userId);
-        tokens.forEach(token -> signOutByToken(token, false));
-        tokens.clear();
-        userStorage.remove(userId);
-    }
-
-    private void signOutByToken(String token, boolean removeUserToken) {
-        if (token == null) {
-            return;
-        }
-        SimpleUserToken tokenObject = tokenStorage.remove(token);
-        if (tokenObject != null) {
-            String userId = tokenObject.getUserId();
-            if (removeUserToken) {
-                Set<String> tokens = getUserToken(userId);
-                if (tokens.size() > 0) {
-                    tokens.remove(token);
-                }
-                if (tokens.size() == 0) {
-                    userStorage.remove(tokenObject.getUserId());
-                }
-            }
-            publishEvent(new UserTokenRemovedEvent(tokenObject));
-        }
+        getByUserId(userId).forEach(detail -> signOutByToken(detail.getToken()));
     }
 
     @Override
     public void signOutByToken(String token) {
-        signOutByToken(token, true);
-    }
-
-    protected void publishEvent(ApplicationEvent event) {
-        if (null != eventPublisher) {
-            eventPublisher.publishEvent(event);
-        }
-    }
-
-    public void changeTokenState(SimpleUserToken userToken, TokenState state) {
-        if (null != userToken) {
-            SimpleUserToken copy = userToken.copy();
-
-            userToken.setState(state);
-            syncToken(userToken);
-
-            publishEvent(new UserTokenChangedEvent(copy, userToken));
-        }
+        tokenUserStorage.remove(token);
     }
 
     @Override
     public void changeTokenState(String token, TokenState state) {
-        changeTokenState(getByToken(token), state);
+        SimpleUserToken userToken = getByToken(token);
+        if (null != userToken) {
+            userToken.setState(state);
+        }
     }
 
     @Override
@@ -225,58 +171,32 @@ public class DefaultUserTokenManager implements UserTokenManager {
     public UserToken signIn(String token, String type, String userId, long maxInactiveInterval) {
         SimpleUserToken detail = new SimpleUserToken(userId, token);
         detail.setType(type);
-        detail.setMaxInactiveInterval(maxInactiveInterval);
-
-        if (allopatricLoginMode == AllopatricLoginMode.deny) {
-            boolean hasAnotherToken = getByUserId(userId)
-                    .stream()
-                    .map(SimpleUserToken.class::cast)
-                    .peek(this::checkTimeout)
-                    .anyMatch(UserToken::isEffective);
-            if (hasAnotherToken) {
-                throw new AccessDenyException("该用户已在其他地方登陆");
-            }
-        } else if (allopatricLoginMode == AllopatricLoginMode.offlineOther) {
-            //将在其他地方登录的用户设置为离线
-            List<UserToken> oldToken = getByUserId(userId);
-            for (UserToken userToken : oldToken) {
-                changeTokenState(userToken.getToken(), TokenState.offline);
-            }
+        if (null != authorizationListenerDispatcher) {
+            authorizationListenerDispatcher.doEvent(new UserSignInEvent(detail));
         }
-        detail.setState(TokenState.effective);
-        tokenStorage.put(token, detail);
-
-        getUserToken(userId).add(token);
-
-        publishEvent(new UserTokenCreatedEvent(detail));
+        if (allopatricLoginMode == AllopatricLoginMode.deny) {
+            detail.setState(TokenState.deny);
+        } else if (allopatricLoginMode == AllopatricLoginMode.offlineOther) {
+            detail.setState(TokenState.effective);
+            SimpleUserToken oldToken = (SimpleUserToken) getByUserId(userId);
+            if (oldToken != null) {
+                //踢下线
+                oldToken.setState(TokenState.offline);
+            }
+        } else {
+            detail.setState(TokenState.effective);
+        }
+        detail.setMaxInactiveInterval(maxInactiveInterval);
+        tokenUserStorage.put(token, detail);
         return detail;
     }
 
     @Override
     public void touch(String token) {
-        SimpleUserToken userToken = tokenStorage.get(token);
+        SimpleUserToken userToken = tokenUserStorage.get(token);
         if (null != userToken) {
             userToken.touch();
-            syncToken(userToken);
         }
     }
 
-    @Override
-    public void checkExpiredToken() {
-        for (SimpleUserToken token : tokenStorage.values()) {
-            checkTimeout(token);
-            if (token.isExpired()) {
-                signOutByToken(token.getToken());
-            }
-        }
-    }
-
-    /**
-     * 同步令牌信息,如果使用redisson等来存储token，应该重写此方法并调用{@link this#tokenStorage}.put
-     *
-     * @param userToken 令牌
-     */
-    protected void syncToken(UserToken userToken) {
-        //do noting
-    }
 }

@@ -19,11 +19,9 @@
 package org.hswebframework.web.authorization.token;
 
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 
 /**
- * 用户令牌管理器,用于管理用户令牌
+ * 用户授权容器,用来操作所有已经授权的用户
  *
  * @author zhouhao
  * @since 3.0
@@ -39,7 +37,7 @@ public interface UserTokenManager {
     UserToken getByToken(String token);
 
     /**
-     * 根据用户id，获取全部令牌信息，如果没有则返回空集合而不是<code>null</code>
+     * 根据用户id，获取全部令牌信息，如果设置了不能跨地点登陆，返回值只可能是{@code null}或者size为1的list
      *
      * @param userId 用户id
      * @return 授权信息
@@ -69,16 +67,9 @@ public interface UserTokenManager {
     long totalToken();
 
     /**
-     * @return 所有token
+     * @return 所有被授权的用户
      */
     List<UserToken> allLoggedUser();
-
-    /**
-     * 遍历全部token信息
-     *
-     * @param consumer token消费者
-     */
-    void allLoggedUser(Consumer<UserToken> consumer);
 
     /**
      * 删除用户授权信息
@@ -90,8 +81,7 @@ public interface UserTokenManager {
     /**
      * 根据token删除
      *
-     * @param token 令牌
-     * @see org.hswebframework.web.authorization.token.event.UserTokenRemovedEvent
+     * @param token
      */
     void signOutByToken(String token);
 
@@ -100,8 +90,6 @@ public interface UserTokenManager {
      *
      * @param userId userId
      * @param state  状态
-     * @see org.hswebframework.web.authorization.token.event.UserTokenChangedEvent
-     * @see this#changeTokenState
      */
     void changeUserState(String userId, TokenState state);
 
@@ -110,18 +98,15 @@ public interface UserTokenManager {
      *
      * @param token token
      * @param state 状态
-     * @see org.hswebframework.web.authorization.token.event.UserTokenChangedEvent
      */
     void changeTokenState(String token, TokenState state);
 
     /**
      * 登记一个用户的token
      *
-     * @param token               token
-     * @param type                令牌类型
-     * @param userId              用户id
-     * @param maxInactiveInterval 最大不活动时间,超过后令牌状态{@link UserToken#getState()}将变为过期{@link TokenState#expired}
-     * @see org.hswebframework.web.authorization.token.event.UserTokenCreatedEvent
+     * @param token  token
+     * @param type   令牌类型
+     * @param userId 用户id
      */
     UserToken signIn(String token, String type, String userId, long maxInactiveInterval);
 
@@ -131,12 +116,4 @@ public interface UserTokenManager {
      * @param token token
      */
     void touch(String token);
-
-    /**
-     * 检查已过期的token,并将其remove
-     *
-     * @see this#signOutByToken(String)
-     */
-    void checkExpiredToken();
-
 }

@@ -54,13 +54,8 @@ public interface UserToken extends Serializable, Comparable<UserToken> {
     /**
      * @return 是否正常
      */
-    @Deprecated
     default boolean isEffective() {
-        return isNormal();
-    }
-
-    default boolean isNormal() {
-        return getState() == TokenState.normal;
+        return getState() == TokenState.effective;
     }
 
     /**
@@ -77,17 +72,8 @@ public interface UserToken extends Serializable, Comparable<UserToken> {
         return getState() == TokenState.offline;
     }
 
-    default boolean isLock() {
-        return getState() == TokenState.lock;
-    }
-
-    default boolean isDeny() {
-        return getState() == TokenState.deny;
-    }
-
-
     default boolean validate() {
-        if (!isNormal()) {
+        if (!isEffective()) {
             throw new UnAuthorizedException(getState());
         }
         return true;
@@ -95,9 +81,6 @@ public interface UserToken extends Serializable, Comparable<UserToken> {
 
     @Override
     default int compareTo(UserToken target) {
-        if (target == null) {
-            return 0;
-        }
-        return Long.compare(getSignInTime(), target.getSignInTime());
+        return Long.valueOf(getSignInTime()).compareTo(target.getSignInTime());
     }
 }

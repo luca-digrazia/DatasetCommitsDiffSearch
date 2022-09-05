@@ -13,11 +13,9 @@ import java.util.Map;
  */
 public class SessionIdUserTokenGenerator implements UserTokenGenerator, Serializable {
 
-    private static final long serialVersionUID = -9197243220777237431L;
-
     @Override
     public String getSupportTokenType() {
-        return TOKEN_TYPE_SESSION_ID;
+        return "sessionId";
     }
 
     @Override
@@ -32,11 +30,9 @@ public class SessionIdUserTokenGenerator implements UserTokenGenerator, Serializ
         String sessionId = request.getSession().getId();
 
         return new GeneratedToken() {
-            private static final long serialVersionUID = 3964183451883410929L;
-
             @Override
             public Map<String, Object> getResponse() {
-                return new java.util.HashMap<>();
+                return Collections.emptyMap();
             }
 
             @Override
@@ -46,7 +42,7 @@ public class SessionIdUserTokenGenerator implements UserTokenGenerator, Serializ
 
             @Override
             public String getType() {
-                return TOKEN_TYPE_SESSION_ID;
+                return "session-id-default";
             }
 
             @Override

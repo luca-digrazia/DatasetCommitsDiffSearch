@@ -3,7 +3,10 @@ package org.hswebframework.web.authorization.token;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Created by zhouhao on 2017/7/7.
+ * 用户令牌信息
+ *
+ * @author zhouhao
+ * @since 3.0
  */
 public class SimpleUserToken implements UserToken {
 
@@ -11,15 +14,28 @@ public class SimpleUserToken implements UserToken {
 
     private String token;
 
-    private TokenState state;
+    private String type = "default";
 
-    private AtomicLong requestTimesCounter=new AtomicLong(0);
+    private volatile TokenState state;
 
-    private volatile long lastRequestTime=System.currentTimeMillis();
+    private AtomicLong requestTimesCounter = new AtomicLong(0);
 
-    private volatile long firstRequestTime=System.currentTimeMillis();
+    private volatile long lastRequestTime = System.currentTimeMillis();
 
-    private long requestTimes;
+    private volatile long firstRequestTime = System.currentTimeMillis();
+
+    private volatile long requestTimes;
+
+    private long maxInactiveInterval;
+
+    @Override
+    public long getMaxInactiveInterval() {
+        return maxInactiveInterval;
+    }
+
+    public void setMaxInactiveInterval(long maxInactiveInterval) {
+        this.maxInactiveInterval = maxInactiveInterval;
+    }
 
     public SimpleUserToken(String userId, String token) {
         this.userId = userId;
@@ -84,8 +100,16 @@ public class SimpleUserToken implements UserToken {
         requestTimesCounter.set(requestTimes);
     }
 
-    public  void touch(){
+    public void touch() {
         requestTimesCounter.addAndGet(1);
-        lastRequestTime=System.currentTimeMillis();
+        lastRequestTime = System.currentTimeMillis();
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 }

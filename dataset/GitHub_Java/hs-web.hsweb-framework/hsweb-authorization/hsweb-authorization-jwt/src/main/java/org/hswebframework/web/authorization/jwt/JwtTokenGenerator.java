@@ -14,8 +14,9 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.hswebframework.web.authorization.jwt.JwtAuthorizedToken.TOKEN_TYPE;
-
+/**
+ *
+ */
 public class JwtTokenGenerator implements UserTokenGenerator {
 
     private JwtConfig jwtConfig;
@@ -26,7 +27,7 @@ public class JwtTokenGenerator implements UserTokenGenerator {
 
     @Override
     public String getSupportTokenType() {
-        return TOKEN_TYPE;
+        return "jwt";
     }
 
     private String createToken() {
@@ -38,7 +39,7 @@ public class JwtTokenGenerator implements UserTokenGenerator {
         String token = createToken();
         String userId = authentication.getUser().getId();
 
-        String subject = JSON.toJSONString(new JwtAuthorizedToken(token, userId));
+        String subject = JSON.toJSONString(new DefaultAuthorizedToken(token, userId));
 
         String jwtToken = createJWT(jwtConfig.getId(), subject, jwtConfig.getTtl());
 
@@ -47,8 +48,6 @@ public class JwtTokenGenerator implements UserTokenGenerator {
         int timeout = jwtConfig.getTtl();
 
         return new GeneratedToken() {
-            private static final long serialVersionUID = -4362122360342275321L;
-
             @Override
             public Map<String, Object> getResponse() {
                 Map<String, Object> map = new HashMap<>();
@@ -64,7 +63,7 @@ public class JwtTokenGenerator implements UserTokenGenerator {
 
             @Override
             public String getType() {
-                return TOKEN_TYPE;
+                return "jwt-default";
             }
 
             @Override
