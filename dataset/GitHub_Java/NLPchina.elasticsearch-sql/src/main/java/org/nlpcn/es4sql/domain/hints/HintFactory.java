@@ -20,22 +20,6 @@ public class HintFactory {
         if(hintAsString.startsWith("! USE_NESTED_LOOPS") || hintAsString.startsWith("! USE_NL")){
             return new Hint(HintType.USE_NESTED_LOOPS,null);
         }
-
-        if(hintAsString.startsWith("! SHARD_SIZE")){
-            String[] numbers =  getParamsFromHint(hintAsString, "! SHARD_SIZE");
-            //todo: check if numbers etc..
-            List<Object> params = new ArrayList<>();
-            for (String number : numbers){
-                if(number.equals("null") || number.equals("infinity")){
-                    params.add(null);
-                }
-                else {
-                    params.add(Integer.parseInt(number));
-                }
-            }
-            return new Hint(HintType.SHARD_SIZE,params.toArray());
-        }
-
         if(hintAsString.equals("! HASH_WITH_TERMS_FILTER"))
             return new Hint(HintType.HASH_WITH_TERMS_FILTER,null);
         if(hintAsString.startsWith("! JOIN_TABLES_LIMIT")){
@@ -89,20 +73,14 @@ public class HintFactory {
             String[] heighlights = getParamsFromHint(hintAsString,"! HIGHLIGHT");
             ArrayList hintParams = new ArrayList();
             hintParams.add(heighlights[0]);
-            if(heighlights.length > 1 ){
-                StringBuilder builder = new StringBuilder();
-                for(int i=1;i<heighlights.length;i++){
-                    if(i!=1){
-                        builder.append("\n");
-                    }
-                    builder.append(heighlights[i]);
-                }
-                String heighlightParam = builder.toString();
+            if(heighlights.length == 2){
+                String heighlightParam = heighlights[1];
+                heighlightParam = heighlightParam.replaceAll(" , ", "\n");
                 YAMLFactory yamlFactory = new YAMLFactory();
-                YAMLParser yamlParser = null;
+                YAMLParser parser1 = null;
                 try {
-                yamlParser = yamlFactory.createParser(heighlightParam.toCharArray());
-                YamlXContentParser yamlXContentParser = new YamlXContentParser(yamlParser);
+                parser1 = yamlFactory.createParser(heighlightParam.toCharArray());
+                YamlXContentParser yamlXContentParser = new YamlXContentParser(parser1);
                 Map<String, Object> map = yamlXContentParser.map();
                 hintParams.add(map);
                 } catch (IOException e) {
