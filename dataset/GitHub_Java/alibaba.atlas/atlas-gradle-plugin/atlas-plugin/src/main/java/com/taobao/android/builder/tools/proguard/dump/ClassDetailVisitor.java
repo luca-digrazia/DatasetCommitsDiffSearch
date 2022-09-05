@@ -237,7 +237,7 @@ public class ClassDetailVisitor extends AbstractClasslVisitor implements Attribu
         this.visitorDTO = visitorDTO;
     }
 
-    //class There are big problems with the order of uncertainty
+    //class 的顺序不确定有很大的问题
     @Override
     public void visitProgramClass(ProgramClass programClass) {
         programClass.constantPoolEntriesAccept(this);
@@ -354,7 +354,7 @@ public class ClassDetailVisitor extends AbstractClasslVisitor implements Attribu
 
             //keep it interface
             LibraryClass libraryClass = (LibraryClass)visitorDTO.libraryClassPool.getClass(clazzRefInfo.getClazzName());
-            //Determine if you can hit super class
+            //判断是否能命中super类
             if (null != libraryClass) {
 
                 ClazzRefInfo superRefInfo = getSuperClazzRef(libraryClass, method, args);
