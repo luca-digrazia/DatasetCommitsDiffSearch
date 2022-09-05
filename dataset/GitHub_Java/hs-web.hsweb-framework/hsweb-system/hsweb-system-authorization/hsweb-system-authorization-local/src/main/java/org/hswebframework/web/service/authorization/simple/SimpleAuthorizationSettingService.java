@@ -204,15 +204,15 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     @Cacheable(cacheNames = USER_MENU_CACHE_NAME, key = "'user-menu-list:'+#userId")
     public List<UserMenuEntity> getUserMenuAsList(String userId) {
         if (null == userId) {
-            return new java.util.ArrayList<>();
+            return Collections.emptyList();
         }
         UserEntity userEntity = userService.selectByPk(userId);
         if (userEntity == null) {
-            return new java.util.ArrayList<>();
+            return Collections.emptyList();
         }
         List<AuthorizationSettingEntity> entities = getUserSetting(userId);
         if (entities.isEmpty()) {
-            return new java.util.ArrayList<>();
+            return Collections.emptyList();
         }
         //用户持有的权限设置id集合
         List<String> settingIdList = entities.stream()
@@ -357,7 +357,7 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
                 detail.setActions(detail.getActions().stream().filter(allActions::contains).collect(Collectors.toSet()));
             }
             if (isEmpty(entity.getSupportDataAccessTypes())) {
-                detail.setDataAccesses(new java.util.ArrayList<>());
+                detail.setDataAccesses(Collections.emptyList());
             } else if (isNotEmpty(detail.getDataAccesses()) && !entity.getSupportDataAccessTypes().contains("*")) {
                 //重构为权限支持的数据权限控制方式,防止越权设置权限
                 detail.setDataAccesses(detail

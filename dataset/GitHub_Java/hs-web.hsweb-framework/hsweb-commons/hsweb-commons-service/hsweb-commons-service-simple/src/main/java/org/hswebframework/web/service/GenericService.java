@@ -19,10 +19,8 @@
 package org.hswebframework.web.service;
 
 import org.hswebframework.web.dao.CrudDao;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * TODO 完成注释
  *
  * @author zhouhao
  * @see DefaultDSLQueryService
@@ -33,10 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  */
 public interface GenericService<E, PK> extends
         DefaultDSLQueryService<E, PK>,
-        DefaultDSLUpdateService<E>,
-        DefaultDSLDeleteService<PK>,
+        DefaultDSLUpdateService<E,PK>,
+        DefaultDSLDeleteService<E,PK>,
         CrudService<E, PK> {
     @Override
-    @Transactional
     CrudDao<E, PK> getDao();
 }

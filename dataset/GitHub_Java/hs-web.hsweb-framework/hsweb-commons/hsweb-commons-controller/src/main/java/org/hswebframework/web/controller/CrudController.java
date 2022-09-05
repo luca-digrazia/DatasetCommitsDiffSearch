@@ -19,9 +19,9 @@
 package org.hswebframework.web.controller;
 
 import org.hswebframework.web.authorization.annotation.Authorize;
+import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.service.CrudService;
-import org.springframework.beans.BeanUtils;
 
 /**
  * 通用增删改查控制器
@@ -38,7 +38,7 @@ public interface CrudController<E, PK, Q extends Entity, M>
         extends QueryController<E, PK, Q>
         , UpdateController<E, PK, M>
         , CreateController<E, PK, M>
-        , DeleteController<PK> {
+        , DeleteController<E,PK> {
 
     @Override
     @SuppressWarnings("unchecked")
@@ -48,7 +48,6 @@ public interface CrudController<E, PK, Q extends Entity, M>
     @Override
     @Authorize(ignore = true)
     default E modelToEntity(M model, E entity) {
-        BeanUtils.copyProperties(model, entity);
-        return entity;
+        return FastBeanCopier.copy(model, entity);
     }
 }

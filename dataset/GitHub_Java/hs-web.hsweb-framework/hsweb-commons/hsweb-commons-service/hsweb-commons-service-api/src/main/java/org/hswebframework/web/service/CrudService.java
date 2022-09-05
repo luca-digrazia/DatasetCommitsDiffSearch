@@ -26,9 +26,9 @@ package org.hswebframework.web.service;
  */
 public interface CrudService<E, PK> extends
         QueryByEntityService<E>,
-        UpdateService<E>,
+        UpdateService<E,PK>,
         InsertService<E, PK>,
-        DeleteService<PK>,
+        DeleteService<E,PK>,
         CreateEntityService<E>,
         QueryService<E, PK> {
 }

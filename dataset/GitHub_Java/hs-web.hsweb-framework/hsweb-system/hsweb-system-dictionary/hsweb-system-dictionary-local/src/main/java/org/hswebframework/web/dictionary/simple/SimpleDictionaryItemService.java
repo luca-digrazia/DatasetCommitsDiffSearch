@@ -78,7 +78,7 @@ public class SimpleDictionaryItemService extends AbstractTreeSortService<Diction
     @Override
     public List<DictionaryItemEntity> selectByDictId(String dictId) {
         if (StringUtils.isNullOrEmpty(dictId)) {
-            return new java.util.ArrayList<>();
+            return Collections.emptyList();
         }
         return createQuery()
                 .where(DictionaryItemEntity.dictId, dictId)
