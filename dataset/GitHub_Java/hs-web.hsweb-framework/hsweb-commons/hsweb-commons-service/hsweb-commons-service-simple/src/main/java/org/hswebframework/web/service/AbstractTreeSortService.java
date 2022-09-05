@@ -119,7 +119,7 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
 
     @Override
     public PK insert(E entity) {
-        if (StringUtils.isEmpty(entity.getId())) {
+        if (entity.getId() == null) {
             entity.setId(getIDGenerator().generate());
         }
         applyPath(entity);
@@ -156,8 +156,8 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
     protected PK saveOrUpdateForSingle(E entity) {
         assertNotNull(entity);
         PK id = entity.getId();
-        if (StringUtils.isEmpty(id) || this.selectByPk(id) == null) {
-            if (StringUtils.isEmpty(id)) {
+        if (null == id || this.selectByPk(id) == null) {
+            if (null == id) {
                 entity.setId(getIDGenerator().generate());
             }
             applyPath(entity);
