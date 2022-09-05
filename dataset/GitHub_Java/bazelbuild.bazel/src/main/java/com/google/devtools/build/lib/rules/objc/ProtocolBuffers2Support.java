@@ -1,4 +1,4 @@
-// Copyright 2016 The Bazel Authors. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,15 +66,15 @@ final class ProtocolBuffers2Support {
 
   /**
    * Register the proto generation actions. These actions generate the ObjC/CPP code to be compiled
-   * by this rule.
+   * by this rule, and also generates the Xcode project call the protoc compiler to generate
+   * ObjC/CPP code.
    */
   public ProtocolBuffers2Support registerGenerationActions() throws InterruptedException {
     ruleContext.registerAction(
         new FileWriteAction(
             ruleContext.getActionOwner(),
             getProtoInputsFile(),
-            getProtoInputsFileContents(
-                attributes.filterWellKnownProtos(attributes.getProtoFiles())),
+            getProtoInputsFileContents(attributes.getProtoFiles()),
             false));
 
     ruleContext.registerAction(
@@ -83,7 +83,7 @@ final class ProtocolBuffers2Support {
             .addInput(attributes.getProtoCompiler())
             .addInputs(attributes.getProtoCompilerSupport())
             .addInput(getProtoInputsFile())
-            .addTransitiveInputs(attributes.getProtoFiles())
+            .addInputs(attributes.getProtoFiles())
             .addInputs(attributes.getOptionsFile().asSet())
             .addOutputs(getGeneratedProtoOutputs(getHeaderExtension()))
             .addOutputs(getGeneratedProtoOutputs(getSourceExtension()))
@@ -232,7 +232,7 @@ final class ProtocolBuffers2Support {
 
   private Iterable<Artifact> getGeneratedProtoOutputs(String extension) {
     ImmutableList.Builder<Artifact> builder = new ImmutableList.Builder<>();
-    for (Artifact protoFile : attributes.filterWellKnownProtos(attributes.getProtoFiles())) {
+    for (Artifact protoFile : attributes.getProtoFiles()) {
       String protoFileName = FileSystemUtils.removeExtension(protoFile.getFilename());
       String generatedOutputName;
       if (attributes.outputsCpp()) {
