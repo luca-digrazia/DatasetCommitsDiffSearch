@@ -1,8 +1,6 @@
 package com.codahale.metrics.annotation;
 
-import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
-import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
@@ -24,8 +22,6 @@ import java.lang.annotation.Target;
  *
  * @since 4.0.0
  */
-@Inherited
-@Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.METHOD })
 public @interface Counted {
