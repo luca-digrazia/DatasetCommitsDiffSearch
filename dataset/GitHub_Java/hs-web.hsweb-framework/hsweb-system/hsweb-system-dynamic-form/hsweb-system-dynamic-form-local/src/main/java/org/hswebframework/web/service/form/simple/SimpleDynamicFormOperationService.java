@@ -8,7 +8,6 @@ import org.hswebframework.ezorm.rdb.RDBDatabase;
 import org.hswebframework.ezorm.rdb.RDBQuery;
 import org.hswebframework.ezorm.rdb.RDBTable;
 import org.hswebframework.web.NotFoundException;
-import org.hswebframework.web.bean.FastBeanCopier;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.DeleteParamEntity;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
@@ -26,9 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 @Service("dynamicFormOperationService")
@@ -117,30 +114,11 @@ public class SimpleDynamicFormOperationService implements DynamicFormOperationSe
 
     @Override
     @SneakyThrows
-    public <T> T insert(String formId, T entity) {
+    public <T> void insert(String formId, T entity) {
         RDBTable<T> table = getTable(formId);
         Insert<T> insert = table.createInsert();
         eventPublisher.publishEvent(new FormDataInsertBeforeEvent<>(formId, table, entity));
         insert.value(entity).exec();
-        return entity;
-    }
-
-    @Override
-    @SneakyThrows
-    public <T> T saveOrUpdate(String formId, T entity) {
-
-        Map<String, Object> map = FastBeanCopier.copy(entity, new HashMap<>(), FastBeanCopier.include(idProperty));
-
-        Object id = map.get(idProperty);
-        if (id == null) {
-            return insert(formId, entity);
-        }
-        int total = getTable(formId).createQuery().where(idProperty, id).total();
-        if (total > 0) {
-            return updateById(formId, String.valueOf(id), entity);
-        }
-
-        return insert(formId, entity);
     }
 
     @Override
@@ -156,21 +134,21 @@ public class SimpleDynamicFormOperationService implements DynamicFormOperationSe
 
     @Override
     @SneakyThrows
-    public int deleteById(String formId, Object id) {
+    public int deleteById(String formId, String id) {
         Objects.requireNonNull(id, "主键不能为空");
         RDBTable table = getTable(formId);
-        return table.createDelete().where(idProperty, id).exec();
+        return table.createDelete().where("id", id).exec();
     }
 
     @Override
     @SneakyThrows
-    public <T> T updateById(String formId, Object id, T data) {
+    public <T> T updateById(String formId, String id, T data) {
         Objects.requireNonNull(id, "主键不能为空");
         RDBTable<T> table = getTable(formId);
         eventPublisher.publishEvent(new FormDataUpdateBeforeEvent<>(formId, table, data, id));
         table.createUpdate()
                 .set(data)
-                .where(idProperty, id)
+                .where("id", id)
                 .exec();
         return data;
     }
