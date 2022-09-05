@@ -20,7 +20,6 @@ package org.hswebframework.web.authorization.annotation;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.access.DataAccessController;
 import org.hswebframework.web.authorization.Permission;
-import org.hswebframework.web.authorization.define.Phased;
 
 import java.lang.annotation.*;
 
@@ -68,16 +67,8 @@ public @interface RequiresDataAccess {
      */
     Class<DataAccessController> controllerClass() default DataAccessController.class;
 
-    Phased phased() default Phased.before;
-
     /**
      * @return id参数名称
      */
     String idParamName() default "id";
-
-    /**
-     * @return 是否忽略, 忽略后将不进行权限控制
-     */
-    boolean ignore() default false;
-
 }
