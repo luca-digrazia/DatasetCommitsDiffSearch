@@ -35,7 +35,7 @@ import javax.annotation.Nullable;
 @SkylarkModule(
   name = "objc",
   category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT,
-  doc = "A configuration fragment for Objective-C."
+  doc = "A configuration fragment for Objective-C"
 )
 @Immutable
 public class ObjcConfiguration extends BuildConfiguration.Fragment {
@@ -173,10 +173,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
   /**
    * Returns whether dSYM generation is enabled.
    */
-  @SkylarkCallable(
-      name = "generate_dsym",
-      doc = "Whether to generate debug symbol(.dSYM) artifacts.",
-      structField = true)
   public boolean generateDsym() {
     return generateDsym;
   }
