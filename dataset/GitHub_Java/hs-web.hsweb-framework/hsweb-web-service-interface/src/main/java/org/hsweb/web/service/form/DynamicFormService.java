@@ -1,7 +1,5 @@
 package org.hsweb.web.service.form;
 
-import org.hsweb.ezorm.meta.TableMetaData;
-import org.hsweb.ezorm.run.Database;
 import org.hsweb.web.bean.common.*;
 import org.hsweb.web.bean.po.form.Form;
 
@@ -15,9 +13,7 @@ import java.util.Map;
  */
 public interface DynamicFormService {
 
-    Database getDefaultDatabase();
-
-    TableMetaData parseMeta(Form form) throws Exception;
+    Object parseMeta(Form form) throws Exception;
 
     void deploy(Form form) throws Exception;
 
@@ -29,7 +25,7 @@ public interface DynamicFormService {
 
     int total(String name, QueryParam param) throws Exception;
 
-    String insert(String name,Map<String, Object> data) throws Exception;
+    String insert(String name, InsertParam<Map<String, Object>> data) throws Exception;
 
     String saveOrUpdate(String name, Map<String, Object> map) throws Exception;
 
