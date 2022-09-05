@@ -20,11 +20,13 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
+
 import javax.annotation.Nullable;
 
 /**
@@ -147,7 +149,8 @@ public class BuiltinFunction extends BaseFunction {
       }
     }
 
-    Profiler.instance().startTask(ProfilerTask.SKYLARK_BUILTIN_FN, getName());
+    Profiler.instance().startTask(ProfilerTask.SKYLARK_BUILTIN_FN,
+        this.getClass().getName() + "#" + getName());
     // Last but not least, actually make an inner call to the function with the resolved arguments.
     try {
       env.enterScope(this, ast, env.getGlobals());
