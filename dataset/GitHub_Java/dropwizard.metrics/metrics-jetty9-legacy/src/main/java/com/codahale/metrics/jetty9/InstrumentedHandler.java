@@ -3,6 +3,7 @@ package com.codahale.metrics.jetty9;
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.RatioGauge;
 import com.codahale.metrics.Timer;
 import org.eclipse.jetty.http.HttpMethod;
 import org.eclipse.jetty.server.AsyncContextState;
@@ -132,7 +133,58 @@ public class InstrumentedHandler extends HandlerWrapper {
         this.moveRequests = metricRegistry.timer(name(prefix, "move-requests"));
         this.otherRequests = metricRegistry.timer(name(prefix, "other-requests"));
 
+        metricRegistry.register(name(prefix, "percent-4xx-1m"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[3].getOneMinuteRate(),
+                        requests.getOneMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, "percent-4xx-5m"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[3].getFiveMinuteRate(),
+                        requests.getFiveMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, "percent-4xx-15m"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[3].getFifteenMinuteRate(),
+                        requests.getFifteenMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, "percent-5xx-1m"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[4].getOneMinuteRate(),
+                        requests.getOneMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, "percent-5xx-5m"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[4].getFiveMinuteRate(),
+                        requests.getFiveMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, "percent-5xx-15m"), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[4].getFifteenMinuteRate(),
+                        requests.getFifteenMinuteRate());
+            }
+        });
+
+
         this.listener = new AsyncListener() {
+            private long startTime;
+
             @Override
             public void onTimeout(AsyncEvent event) throws IOException {
                 asyncTimeouts.mark();
@@ -140,6 +192,7 @@ public class InstrumentedHandler extends HandlerWrapper {
 
             @Override
             public void onStartAsync(AsyncEvent event) throws IOException {
+                startTime = System.currentTimeMillis();
                 event.getAsyncContext().addListener(this);
             }
 
@@ -150,8 +203,9 @@ public class InstrumentedHandler extends HandlerWrapper {
             @Override
             public void onComplete(AsyncEvent event) throws IOException {
                 final AsyncContextState state = (AsyncContextState) event.getAsyncContext();
-                final Request request = (Request) state.getRequest();
-                updateResponses(request);
+                final HttpServletRequest request = (HttpServletRequest) state.getRequest();
+                final HttpServletResponse response = (HttpServletResponse) state.getResponse();
+                updateResponses(request, response, startTime);
                 if (!state.getHttpChannelState().isDispatched()) {
                     activeSuspended.dec();
                 }
@@ -197,7 +251,7 @@ public class InstrumentedHandler extends HandlerWrapper {
                 }
                 activeSuspended.inc();
             } else if (state.isInitial()) {
-                updateResponses(request);
+                updateResponses(httpRequest, httpResponse, start);
             }
             // else onCompletion will handle it.
         }
@@ -233,13 +287,13 @@ public class InstrumentedHandler extends HandlerWrapper {
         }
     }
 
-    private void updateResponses(Request request) {
-        final int response = request.getResponse().getStatus() / 100;
-        if (response >= 1 && response <= 5) {
-            responses[response - 1].mark();
+    private void updateResponses(HttpServletRequest request, HttpServletResponse response, long start) {
+        final int responseStatus = response.getStatus() / 100;
+        if (responseStatus >= 1 && responseStatus <= 5) {
+            responses[responseStatus - 1].mark();
         }
         activeRequests.dec();
-        final long elapsedTime = System.currentTimeMillis() - request.getTimeStamp();
+        final long elapsedTime = System.currentTimeMillis() - start;
         requests.update(elapsedTime, TimeUnit.MILLISECONDS);
         requestTimer(request.getMethod()).update(elapsedTime, TimeUnit.MILLISECONDS);
     }
