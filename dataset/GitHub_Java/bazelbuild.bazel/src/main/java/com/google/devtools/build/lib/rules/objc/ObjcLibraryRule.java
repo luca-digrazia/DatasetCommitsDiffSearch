@@ -53,7 +53,8 @@ public class ObjcLibraryRule implements RuleDefinition {
         .name("objc_library")
         .factoryClass(ObjcLibrary.class)
         .ancestors(BaseRuleClasses.BaseRule.class, ObjcRuleClasses.CompilingRule.class,
-            ObjcRuleClasses.AlwaysLinkRule.class, ObjcRuleClasses.XcodegenRule.class)
+            ObjcRuleClasses.CrosstoolRule.class, ObjcRuleClasses.AlwaysLinkRule.class, 
+            ObjcRuleClasses.XcodegenRule.class)
         .build();
   }
 }

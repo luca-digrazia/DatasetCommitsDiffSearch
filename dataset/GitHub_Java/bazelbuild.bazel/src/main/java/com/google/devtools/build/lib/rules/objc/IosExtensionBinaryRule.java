@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 
 /**
  * Rule definition for ios_extension_binary.
@@ -30,7 +29,7 @@ public class IosExtensionBinaryRule implements RuleDefinition {
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
         .requiresConfigurationFragments(ObjcConfiguration.class, J2ObjcConfiguration.class,
-            AppleConfiguration.class, CppConfiguration.class)
+            AppleConfiguration.class)
         /*<!-- #BLAZE_RULE(ios_extension_binary).IMPLICIT_OUTPUTS -->
         <ul>
          <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
