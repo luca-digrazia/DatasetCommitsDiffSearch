@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -67,13 +66,11 @@ public class BoostDictDefineRepository extends DefaultDictDefineRepository {
     public List<DictDefine> getAllDefine() {
         List<DictDefine> all = dictionaryService.select()
                 .stream()
-                .filter(e -> DataStatus.STATUS_ENABLED.equals(e.getStatus()))
                 .map(dict -> DefaultDictDefine.builder()
                         .id(dict.getId())
                         .comments(dict.getDescribe())
-                        .items(dict.getItems() == null ? Collections.emptyList() : (List) new ArrayList<>(dict.getItems()))
-                        .build())
-                .collect(Collectors.toList());
+                        .items((List) new ArrayList<>(dict.getItems()))
+                        .build()).collect(Collectors.toList());
 
         all.addAll(super.getAllDefine());
         return all;
