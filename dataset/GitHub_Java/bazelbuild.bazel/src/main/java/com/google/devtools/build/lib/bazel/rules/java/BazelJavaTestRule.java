@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.bazel.rules.java;
 
+import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
@@ -24,7 +25,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.BaseJavaBinaryRule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -55,10 +55,7 @@ public final class BazelJavaTestRule implements RuleDefinition {
         .setImplicitOutputsFunction(BazelJavaRuleClasses.JAVA_BINARY_IMPLICIT_OUTPUTS)
         // Proguard can be run over java_test targets using the --java_optimization_mode flag.
         // Primarily this is intended to help test changes to Proguard.
-        .add(attr(":proguard", LABEL)
-            .cfg(HostTransition.INSTANCE)
-            .value(JavaSemantics.PROGUARD)
-            .exec())
+        .add(attr(":proguard", LABEL).cfg(HOST).value(JavaSemantics.PROGUARD).exec())
         .add(attr(":extra_proguard_specs", LABEL_LIST).value(JavaSemantics.EXTRA_PROGUARD_SPECS))
         .override(attr("stamp", TRISTATE).value(TriState.NO))
         .override(attr("use_testrunner", BOOLEAN).value(true))
@@ -66,7 +63,11 @@ public final class BazelJavaTestRule implements RuleDefinition {
         // Input files for test actions collecting code coverage
         .add(
             attr("$lcov_merger", LABEL)
-                .value(env.getLabel("@bazel_tools//tools/test:LcovMerger")))
+                .value(env.getLabel("@bazel_tools//tools/test:LcovMerger_deploy.jar")))
+        // Used in the one-per-build coverage report generation action.
+        .add(
+            attr("$jacoco_runtime", LABEL)
+                .value(env.getLabel("@bazel_tools//tools/jdk:jacoco-blaze-agent")))
         .add(
             attr("$jacocorunner", LABEL)
                 .value(
