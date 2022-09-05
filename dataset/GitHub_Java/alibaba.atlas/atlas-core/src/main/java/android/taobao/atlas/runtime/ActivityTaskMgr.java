@@ -264,9 +264,7 @@ public class ActivityTaskMgr {
     }
 
     public void popFromActivityStack(Activity activity) {
-        if(sReminderDialog!=null &&
-                (sReminderDialog.getContext()==activity ||
-                        (sReminderDialog.getContext() instanceof ContextWrapper && ((ContextWrapper)sReminderDialog.getContext()).getBaseContext()==activity))){
+        if(sReminderDialog!=null && sReminderDialog.getContext()==activity){
             try{
                 sReminderDialog.dismiss();
             }catch (Throwable e){}finally {

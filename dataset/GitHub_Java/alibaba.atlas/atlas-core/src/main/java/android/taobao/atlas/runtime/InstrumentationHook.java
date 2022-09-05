@@ -233,13 +233,11 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.preference.PreferenceManager;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
-import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleClassLoader;
 import android.taobao.atlas.framework.BundleImpl;
 import android.taobao.atlas.framework.Framework;
 import android.taobao.atlas.hack.AtlasHacks;
-import android.taobao.atlas.hack.Hack;
 import android.taobao.atlas.runtime.newcomponent.activity.ActivityBridge;
 import android.taobao.atlas.util.FileUtils;
 import android.taobao.atlas.util.StringUtils;
@@ -249,7 +247,6 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.content.BroadcastReceiver;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -367,13 +364,13 @@ public class InstrumentationHook extends Instrumentation {
 		// Get package name and component name
 		String packageName = null;
 		String componentName = null;
-
-		ResolveInfo resolveInfo = context.getPackageManager().resolveActivity(intent, 0);
-		if (resolveInfo != null && resolveInfo.activityInfo != null) {
-			packageName = resolveInfo.activityInfo.packageName;
-			if(!TextUtils.isEmpty(resolveInfo.activityInfo.targetActivity)) {
-				componentName = resolveInfo.activityInfo.targetActivity;
-			}else{
+		if (intent.getComponent() != null) {
+			packageName = intent.getComponent().getPackageName();
+			componentName = intent.getComponent().getClassName();
+		} else {
+			ResolveInfo resolveInfo = context.getPackageManager().resolveActivity(intent, 0);
+			if (resolveInfo != null && resolveInfo.activityInfo != null) {
+				packageName = resolveInfo.activityInfo.packageName;
 				componentName = resolveInfo.activityInfo.name;
 			}
 		}
@@ -568,14 +565,6 @@ public class InstrumentationHook extends Instrumentation {
         }
 
         try {
-			BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(className);
-			if(info!=null){
-				BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(info.getPkgName());
-				if(impl==null || !impl.checkValidate()){
-					Log.e("Instrumentation","bundleInvalid: "+info.getPkgName());
-					throw new ClassNotFoundException("bundleInvalid");
-				}
-			}
             activity = mBase.newActivity(cl, className, intent);
         } catch (ClassNotFoundException e) {
         	String launchActivityName = "";
@@ -1067,17 +1056,6 @@ public class InstrumentationHook extends Instrumentation {
     @Override
     public void callActivityOnDestroy(Activity activity) {
         mBase.callActivityOnDestroy(activity);
-		if(activity!=null && activity.getBaseContext() instanceof ContextImplHook){
-			try {
-				Hack.HackedMethod scheduleFinalCleanup = AtlasHacks.ContextImpl.method("scheduleFinalCleanup",String.class,String.class);
-				if(scheduleFinalCleanup.getMethod()!=null){
-					scheduleFinalCleanup.invoke(((ContextImplHook)activity.getBaseContext()).getBaseContext(),
-							activity.getClass().getName(),"Activity");
-				}
-			} catch (Throwable e) {
-				e.printStackTrace();
-			}
-		}
     }
 
     @Override
