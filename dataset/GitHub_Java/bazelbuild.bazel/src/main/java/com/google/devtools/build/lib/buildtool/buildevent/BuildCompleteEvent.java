@@ -14,31 +14,19 @@
 
 package com.google.devtools.build.lib.buildtool.buildevent;
 
-import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
-
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
-import com.google.devtools.build.lib.buildeventstream.BuildEventId;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildFinished;
-import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildtool.BuildResult;
-import java.util.Collection;
 
 /**
  * This event is fired from BuildTool#stopRequest().
- *
- * <p>This class also implements the {@link BuildFinished} event of the build event protocol (BEP).
  */
-public final class BuildCompleteEvent implements BuildEvent {
+public final class BuildCompleteEvent {
   private final BuildResult result;
 
   /**
    * Construct the BuildCompleteEvent.
    */
   public BuildCompleteEvent(BuildResult result) {
-    this.result = checkNotNull(result);
+    this.result = result;
   }
 
   /**
@@ -46,25 +34,5 @@ public final class BuildCompleteEvent implements BuildEvent {
    */
   public BuildResult getResult() {
     return result;
-  }
-
-  @Override
-  public BuildEventId getEventId() {
-    return BuildEventId.buildFinished();
-  }
-
-  @Override
-  public Collection<BuildEventId> getChildrenEvents() {
-    return ImmutableList.of();
-  }
-
-  @Override
-  public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
-    BuildFinished finished =
-        BuildFinished.newBuilder()
-            .setOverallSuccess(result.getSuccess())
-            .setFinishTimeMillis(result.getStopTime())
-            .build();
-    return GenericBuildEvent.protoChaining(this).setFinished(finished).build();
   }
 }
