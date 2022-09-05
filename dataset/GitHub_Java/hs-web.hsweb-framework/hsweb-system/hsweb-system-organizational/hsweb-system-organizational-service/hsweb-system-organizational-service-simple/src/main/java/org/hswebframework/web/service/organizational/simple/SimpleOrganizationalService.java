@@ -16,24 +16,23 @@
  */
 package org.hswebframework.web.service.organizational.simple;
 
-import org.hswebframework.web.BusinessException;
 import org.hswebframework.web.commons.entity.DataStatus;
-import org.hswebframework.web.dao.organizational.DepartmentDao;
 import org.hswebframework.web.dao.organizational.OrganizationalDao;
-import org.hswebframework.web.entity.organizational.DepartmentEntity;
 import org.hswebframework.web.entity.organizational.OrganizationalEntity;
 import org.hswebframework.web.id.IDGenerator;
-import org.hswebframework.web.service.DefaultDSLQueryService;
-import org.hswebframework.web.service.EnableCacheAllEvictTreeSortService;
+import org.hswebframework.web.service.AbstractTreeSortService;
 import org.hswebframework.web.service.organizational.OrganizationalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -43,13 +42,10 @@ import java.util.Objects;
  */
 @Service("organizationalService")
 @CacheConfig(cacheNames = "organizational")
-public class SimpleOrganizationalService extends EnableCacheAllEvictTreeSortService<OrganizationalEntity, String>
+public class SimpleOrganizationalService extends AbstractTreeSortService<OrganizationalEntity, String>
         implements OrganizationalService {
     @Autowired
     private OrganizationalDao organizationalDao;
-
-    @Autowired
-    private DepartmentDao departmentDao;
 
     @Override
     public OrganizationalDao getDao() {
@@ -62,21 +58,48 @@ public class SimpleOrganizationalService extends EnableCacheAllEvictTreeSortServ
     }
 
     @Override
-    public int deleteByPk(String id) {
-        if (DefaultDSLQueryService.createQuery(departmentDao)
-                .where(DepartmentEntity.orgId, id)
-                .total() > 0) {
-            throw new BusinessException("机构下存在部门信息,无法删除");
-        }
+    @Caching(evict = {
+            @CacheEvict(key = "'id:'+#result"),
+            @CacheEvict(key = "'code:'+#entity.code"),
+            @CacheEvict(allEntries = true, condition = "#entity.children!=null")
+    })
+    public String insert(OrganizationalEntity entity) {
+        entity.setStatus(DataStatus.STATUS_ENABLED);
+        return super.insert(entity);
+    }
 
-        return super.deleteByPk(id);
+    @Override
+    @Cacheable(key = "'id:'+#id")
+    public OrganizationalEntity selectByPk(String id) {
+        return super.selectByPk(id);
     }
 
     @Override
     @CacheEvict(allEntries = true)
-    public String insert(OrganizationalEntity entity) {
-        entity.setStatus(DataStatus.STATUS_ENABLED);
-        return super.insert(entity);
+    public int updateByPk(List<OrganizationalEntity> data) {
+        return super.updateByPk(data);
+    }
+
+    @Caching(evict = {
+            @CacheEvict(key = "'id:'+#id"),
+            @CacheEvict(key = "'code:'+#entity.code"),
+            @CacheEvict(allEntries = true, condition = "#entity.children!=null")
+    })
+    @Override
+    public int updateByPk(String id, OrganizationalEntity entity) {
+        return super.updateByPk(id, entity);
+    }
+
+    @Override
+    @CacheEvict(allEntries = true)
+    public int updateBatch(Collection<OrganizationalEntity> data) {
+        return super.updateBatch(data);
+    }
+
+    @Override
+    @CacheEvict(allEntries = true)
+    public int deleteByPk(String id) {
+        return super.deleteByPk(id);
     }
 
     @Override
@@ -103,19 +126,7 @@ public class SimpleOrganizationalService extends EnableCacheAllEvictTreeSortServ
     @Transactional(readOnly = true)
     @Cacheable(key = "'code:'+#code")
     public OrganizationalEntity selectByCode(String code) {
-        if (StringUtils.isEmpty(code)) {
-            return null;
-        }
+        if (StringUtils.isEmpty(code)) return null;
         return createQuery().where(OrganizationalEntity.code, code).single();
-    }
-
-    @Override
-    @Cacheable(key = "'name:'+#name")
-    @Transactional(readOnly = true)
-    public OrganizationalEntity selectByName(String name) {
-        if (StringUtils.isEmpty(name)) {
-            return null;
-        }
-        return createQuery().where(OrganizationalEntity.name, name).single();
     }
 }

@@ -31,8 +31,10 @@ public interface OrganizationalService extends
         TreeService<OrganizationalEntity, String>
         , CrudService<OrganizationalEntity, String> {
 
-    List<String> getAllCanUseRoleIds();
+    void disable(String id);
 
-    List<String> getCanUseRoleIds(List<String> orgIds);
+    void enable(String id);
+
+    OrganizationalEntity selectByCode(String code);
 
 }
