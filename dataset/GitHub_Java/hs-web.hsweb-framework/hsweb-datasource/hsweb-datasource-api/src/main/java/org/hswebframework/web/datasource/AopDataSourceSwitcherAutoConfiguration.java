@@ -18,7 +18,6 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -92,12 +91,11 @@ public class AopDataSourceSwitcherAutoConfiguration {
 
                 Consumer<MethodInterceptorContext> before = context -> {
                 };
-                AtomicBoolean dataSourceChanged = new AtomicBoolean(true);
+
                 if (matcher != null) {
                     before = before.andThen(context -> {
                         Strategy strategy = matcher.getStrategy(context);
                         if (strategy == null) {
-                            dataSourceChanged.set(false);
                             logger.warn("strategy matcher found:{}, but strategy is null!", matcher);
                         } else {
                             logger.debug("switch datasource.use strategy:{}", strategy);
@@ -119,10 +117,8 @@ public class AopDataSourceSwitcherAutoConfiguration {
                                         DataSourceHolder.switcher().use(id);
                                     }
                                 } catch (RuntimeException e) {
-                                    dataSourceChanged.set(false);
                                     throw e;
                                 } catch (Exception e) {
-                                    dataSourceChanged.set(false);
                                     throw new RuntimeException(e.getMessage(), e);
                                 }
                             }
@@ -146,9 +142,7 @@ public class AopDataSourceSwitcherAutoConfiguration {
                 try {
                     return methodInvocation.proceed();
                 } finally {
-                    if (dataSourceChanged.get()) {
-                        DataSourceHolder.switcher().useLast();
-                    }
+                    DataSourceHolder.switcher().useLast();
                     DataSourceHolder.tableSwitcher().reset();
                 }
             });
@@ -156,21 +150,19 @@ public class AopDataSourceSwitcherAutoConfiguration {
 
         @Override
         public boolean matches(Method method, Class<?> aClass) {
-            Class<?> targetClass = ClassUtils.getUserClass(aClass);
-
-            CacheKey key = new CacheKey(targetClass, method);
+            CacheKey key = new CacheKey(aClass, method);
             matchers.stream()
-                    .filter(matcher -> matcher.match(targetClass, method))
+                    .filter(matcher -> matcher.match(aClass, method))
                     .findFirst()
                     .ifPresent((matcher) -> cache.put(key, matcher));
+
 
             boolean datasourceMatched = cache.containsKey(key);
             boolean tableMatched = false;
             if (null != tableSwitcher) {
-                CachedTableSwitchStrategyMatcher.CacheKey tableCacheKey = new CachedTableSwitchStrategyMatcher
-                        .CacheKey(targetClass, method);
+                CachedTableSwitchStrategyMatcher.CacheKey tableCacheKey = new CachedTableSwitchStrategyMatcher.CacheKey(aClass, method);
                 tableSwitcher.stream()
-                        .filter(matcher -> matcher.match(targetClass, method))
+                        .filter(matcher -> matcher.match(aClass, method))
                         .findFirst()
                         .ifPresent((matcher) -> tableCache.put(tableCacheKey, matcher));
                 tableMatched = tableCache.containsKey(tableCacheKey);
