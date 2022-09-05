@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.UnmodifiableIterator;
@@ -69,8 +68,7 @@ public final class Aspect implements Iterable<TransitiveInfoProvider> {
 
 
   @Nullable
-  @VisibleForTesting
-  public <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
+  <P extends TransitiveInfoProvider> P getProvider(Class<P> providerClass) {
     AnalysisUtils.checkProvider(providerClass);
 
     return providerClass.cast(providers.get(providerClass));

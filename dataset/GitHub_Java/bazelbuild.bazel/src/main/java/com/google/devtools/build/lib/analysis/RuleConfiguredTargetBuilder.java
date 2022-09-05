@@ -97,7 +97,6 @@ public final class RuleConfiguredTargetBuilder {
         RuleContext.getFilesToRun(runfilesSupport, filesToBuild), runfilesSupport, executable);
     add(FileProvider.class, new FileProvider(ruleContext.getLabel(), filesToBuild));
     add(FilesToRunProvider.class, filesToRunProvider);
-    addSkylarkTransitiveInfo(FilesToRunProvider.SKYLARK_NAME, filesToRunProvider);
 
     if (runfilesSupport != null) {
       // If a binary is built, build its runfiles, too
