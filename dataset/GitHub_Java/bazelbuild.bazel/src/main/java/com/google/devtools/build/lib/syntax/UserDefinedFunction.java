@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.ProfilerTask;
 
 /**
  * The actual function registered in the environment. This function is defined in the
@@ -59,7 +57,6 @@ public class UserDefinedFunction extends BaseFunction {
       env.update(name, arguments[i++]);
     }
 
-    long startTimeProfiler = Profiler.nanoTimeMaybe();
     Statement lastStatement = null;
     try {
       for (Statement stmt : statements) {
@@ -77,8 +74,6 @@ public class UserDefinedFunction extends BaseFunction {
           new EvalExceptionWithStackTrace(ex, lastStatement.getLocation());
       real.registerStatement(lastStatement);
       throw real;
-    } finally {
-      Profiler.instance().logSimpleTask(startTimeProfiler, ProfilerTask.SKYLARK_USER_FN, getName());
     }
     return Environment.NONE;
   }
