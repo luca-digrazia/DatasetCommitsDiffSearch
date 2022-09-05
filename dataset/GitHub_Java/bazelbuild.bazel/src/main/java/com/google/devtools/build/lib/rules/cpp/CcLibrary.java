@@ -120,7 +120,6 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             .fromCommon(common)
 
             .addLinkopts(common.getLinkopts())
-            .addSources(common.getCAndCppSources())
             .addPublicHeaders(CcCommon.getHeaders(ruleContext))
             .enableCcNativeLibrariesProvider()
             .enableCompileProviders()

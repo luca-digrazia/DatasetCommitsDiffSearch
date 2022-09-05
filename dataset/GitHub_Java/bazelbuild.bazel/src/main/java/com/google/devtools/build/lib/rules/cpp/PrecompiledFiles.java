@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ public final class PrecompiledFiles {
   }
 
   public Iterable<LibraryToLink> getPicStaticLibraries() {
-    return LinkerInputs.opaqueLibrariesToLink(ArtifactCategory.STATIC_LIBRARY,
+    return LinkerInputs.opaqueLibrariesToLink(
         FileType.filter(files, CppFileTypes.PIC_ARCHIVE,
             CppFileTypes.ALWAYS_LINK_PIC_LIBRARY));
   }

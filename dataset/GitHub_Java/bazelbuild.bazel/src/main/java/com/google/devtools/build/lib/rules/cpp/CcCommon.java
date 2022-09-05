@@ -100,6 +100,11 @@ public final class CcCommon {
 
   private final ImmutableList<Pair<Artifact, Label>> cAndCppSources;
 
+  /**
+   * The expanded linkopts for this rule.
+   */
+  private final ImmutableList<String> linkopts;
+
   private final RuleContext ruleContext;
 
   public CcCommon(RuleContext ruleContext, FeatureConfiguration featureConfiguration) {
@@ -107,6 +112,7 @@ public final class CcCommon {
     this.cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     this.featureConfiguration = featureConfiguration;
     this.cAndCppSources = collectCAndCppSources();
+    linkopts = initLinkopts();
   }
 
   /**
@@ -114,20 +120,7 @@ public final class CcCommon {
    * options to use when building this target and anything that depends on it.
    */
   public ImmutableList<String> getLinkopts() {
-    Preconditions.checkState(hasAttribute("linkopts", Type.STRING_LIST));
-    List<String> ourLinkopts = ruleContext.attributes().get("linkopts", Type.STRING_LIST);
-    List<String> result = new ArrayList<>();
-    if (ourLinkopts != null) {
-      boolean allowDashStatic = !cppConfiguration.forceIgnoreDashStatic()
-          && (cppConfiguration.getDynamicMode() != DynamicMode.FULLY);
-      for (String linkopt : ourLinkopts) {
-        if (linkopt.equals("-static") && !allowDashStatic) {
-          continue;
-        }
-        CppHelper.expandAttribute(ruleContext, result, "linkopts", linkopt, true);
-      }
-    }
-    return ImmutableList.copyOf(result);
+    return linkopts;
   }
 
   public ImmutableList<String> getCopts() {
@@ -371,6 +364,29 @@ public final class CcCommon {
       }
     }
     return defines;
+  }
+
+  /**
+   * Collects our own linkopts from the rule attribute. This determines linker
+   * options to use when building this library and anything that depends on it.
+   */
+  private final ImmutableList<String> initLinkopts() {
+    if (!hasAttribute("linkopts", Type.STRING_LIST)) {
+      return ImmutableList.<String>of();
+    }
+    List<String> ourLinkopts = ruleContext.attributes().get("linkopts", Type.STRING_LIST);
+    List<String> result = new ArrayList<>();
+    if (ourLinkopts != null) {
+      boolean allowDashStatic = !cppConfiguration.forceIgnoreDashStatic()
+          && (cppConfiguration.getDynamicMode() != DynamicMode.FULLY);
+      for (String linkopt : ourLinkopts) {
+        if (linkopt.equals("-static") && !allowDashStatic) {
+          continue;
+        }
+        CppHelper.expandAttribute(ruleContext, result, "linkopts", linkopt, true);
+      }
+    }
+    return ImmutableList.copyOf(result);
   }
 
   /**

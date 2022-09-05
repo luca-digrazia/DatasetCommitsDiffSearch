@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,24 +66,6 @@ public class CcLinkingOutputs {
 
   public ImmutableList<LibraryToLink> getExecutionDynamicLibraries() {
     return executionDynamicLibraries;
-  }
-
-  /**
-   * Returns all libraries in this CcLinkingOutputs with the same library identifier - i.e., those
-   * which would be considered different forms of the same library by getPreferredLibrary.
-   */
-  public List<LibraryToLink> getLibrariesWithSameIdentifierAs(LibraryToLink input) {
-    Iterable<LibraryToLink> allLibraries =
-        Iterables.concat(
-            staticLibraries, picStaticLibraries, dynamicLibraries, executionDynamicLibraries);
-    ImmutableList.Builder<LibraryToLink> result = new ImmutableList.Builder<>();
-    for (LibraryToLink library : allLibraries) {
-      if (libraryIdentifierOf(library.getOriginalLibraryArtifact())
-          .equals(libraryIdentifierOf(input.getOriginalLibraryArtifact()))) {
-        result.add(library);
-      }
-    }
-    return result.build();
   }
 
   /**
