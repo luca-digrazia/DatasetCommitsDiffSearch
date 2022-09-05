@@ -16,6 +16,7 @@ package com.google.devtools.build.android;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
@@ -43,7 +44,6 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -135,11 +135,7 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
   }
 
   public static final char[] START_RESOURCES =
-      ("<?xml version=\"1.0\" encoding='utf-8' standalone='no'?>\n"
-              + "<resources xmlns:xliff=\""
-              + XmlResourceValues.XLIFF_NAMESPACE
-              + "\">")
-          .toCharArray();
+      ("<resources xmlns:xliff=\"" + XmlResourceValues.XLIFF_NAMESPACE + "\">").toCharArray();
   public static final char[] END_RESOURCES = "</resources>".toCharArray();
   private static final char[] LINE_END = "\n".toCharArray();
   private static final PngCruncher NOOP_CRUNCHER =
@@ -327,7 +323,6 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
                   StandardOpenOption.CREATE_NEW,
                   StandardOpenOption.WRITE)) {
             writer.write(START_RESOURCES);
-            writer.write(LINE_END);
             Path previousSource = null;
             for (FullyQualifiedName key :
                 Ordering.natural().immutableSortedCopy(segments.keySet())) {
@@ -397,24 +392,10 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
 
     @Override
     public StartTag setTo(String value) {
-      if (!optional || value != null) {
+      if (!(optional && Strings.isNullOrEmpty(value))) {
         owner.attributes.add(" " + name + "=\"" + value + "\"");
       }
       return owner;
-    }
-
-    @Override
-    public ValueJoiner setFrom(final Iterable<String> values) {
-      return new ValueJoiner() {
-        @Override
-        public StartTag joinedBy(String separator) {
-          Iterator<String> valuesIterator = values.iterator();
-          if (!optional || valuesIterator.hasNext()) {
-            setTo(Joiner.on(separator).join(valuesIterator));
-          }
-          return owner;
-        }
-      };
     }
   }
 
@@ -468,7 +449,7 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
 
     @Override
     public ValuesResourceDefinition closeUnaryTag() {
-      writer.mapper.add("\n<" + tagName + Joiner.on("").join(attributes) + "/>");
+      writer.mapper.add("<" + tagName + Joiner.on("").join(attributes) + "/>");
       return writer;
     }
 
@@ -540,7 +521,6 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
     @Override
     public void save() {
       Preconditions.checkArgument(tagStack.isEmpty(), "Unfinished tags %s", tagStack);
-      mapper.add("\n"); // Safe to add a line break to separate from other definitions.
       mapper.finish();
     }
 
@@ -649,6 +629,7 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
     public Path write(Path previousSource, Writer writer) throws IOException {
       for (String line : lines) {
         writer.write(line);
+        writer.write(LINE_END);
       }
       return previousSource;
     }
