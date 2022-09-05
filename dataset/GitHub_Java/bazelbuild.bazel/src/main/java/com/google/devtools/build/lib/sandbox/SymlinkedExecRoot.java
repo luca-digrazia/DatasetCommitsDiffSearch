@@ -48,7 +48,7 @@ public final class SymlinkedExecRoot implements SandboxExecRoot {
     cleanFileSystem(inputs.keySet());
     FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, sandboxExecRoot);
     createParentDirectoriesForInputs(createdDirs, inputs.keySet());
-    createInputs(inputs);
+    createSymlinksForInputs(inputs);
     createWritableDirectories(createdDirs, writableDirs);
     createDirectoriesForOutputs(createdDirs, outputs);
   }
@@ -92,31 +92,24 @@ public final class SymlinkedExecRoot implements SandboxExecRoot {
       throws IOException {
     for (PathFragment inputPath : inputs) {
       Path dir = sandboxExecRoot.getRelative(inputPath).getParentDirectory();
-      Preconditions.checkArgument(
-          dir.startsWith(sandboxExecRoot), "Bad relative path: '%s'", inputPath);
+      Preconditions.checkArgument(dir.startsWith(sandboxExecRoot));
       FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, dir);
     }
   }
 
-  private void createInputs(Map<PathFragment, Path> inputs) throws IOException {
+  private void createSymlinksForInputs(Map<PathFragment, Path> inputs) throws IOException {
     // All input files are relative to the execroot.
     for (Entry<PathFragment, Path> entry : inputs.entrySet()) {
       Path key = sandboxExecRoot.getRelative(entry.getKey());
       FileStatus keyStat = key.statNullable(Symlinks.NOFOLLOW);
       if (keyStat != null) {
         if (keyStat.isSymbolicLink()
-            && entry.getValue() != null
             && key.readSymbolicLink().equals(entry.getValue().asFragment())) {
           continue;
         }
         key.delete();
       }
-      // A null value means that we're supposed to create an empty file as the input.
-      if (entry.getValue() != null) {
-        key.createSymbolicLink(entry.getValue());
-      } else {
-        FileSystemUtils.createEmptyFile(key);
-      }
+      key.createSymbolicLink(entry.getValue());
     }
   }
 
