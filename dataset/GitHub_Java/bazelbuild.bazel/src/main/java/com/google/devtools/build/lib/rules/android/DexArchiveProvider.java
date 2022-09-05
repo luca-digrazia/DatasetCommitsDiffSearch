@@ -18,17 +18,17 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.base.Function;
 import com.google.common.collect.HashBasedTable;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableTable;
 import com.google.common.collect.Table;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import java.util.LinkedHashMap;
-import java.util.Map;
+
 import java.util.Set;
+
+import javax.annotation.Nullable;
 
 /**
  * Provider of transitively available dex archives corresponding to Jars.  A dex archive is a zip of
@@ -56,8 +56,6 @@ public class DexArchiveProvider implements TransitiveInfoProvider {
 
     private final Table<ImmutableSet<String>, Artifact, Artifact> dexArchives =
         HashBasedTable.create();
-    private final NestedSetBuilder<ImmutableTable<ImmutableSet<String>, Artifact, Artifact>>
-        transitiveDexArchives = NestedSetBuilder.stableOrder();
 
     public Builder() {
     }
@@ -68,7 +66,7 @@ public class DexArchiveProvider implements TransitiveInfoProvider {
      */
     public Builder addTransitiveProviders(Iterable<DexArchiveProvider> providers) {
       for (DexArchiveProvider provider : providers) {
-        transitiveDexArchives.addTransitive(provider.dexArchives);
+        dexArchives.putAll(provider.dexArchives);
       }
       return this;
     }
@@ -87,7 +85,7 @@ public class DexArchiveProvider implements TransitiveInfoProvider {
       Artifact old =
           dexArchives.put(
               ImmutableSet.copyOf(dexopts), checkNotNull(dexedJar, "dexedJar"), dexArchive);
-      checkArgument(old == null || old.equals(dexArchive),
+      checkArgument(old == null || old.equals(dexedJar),
           "We already had mapping %s-%s for dexopts %s, so we don't also need %s",
           dexedJar, old, dexopts, dexArchive);
       return this;
@@ -97,30 +95,28 @@ public class DexArchiveProvider implements TransitiveInfoProvider {
      * Returns the finished {@link DexArchiveProvider}.
      */
     public DexArchiveProvider build() {
-      return new DexArchiveProvider(
-          transitiveDexArchives.add(ImmutableTable.copyOf(dexArchives)).build());
+      return new DexArchiveProvider(ImmutableTable.copyOf(dexArchives));
     }
   }
 
   /** Map from Jar artifacts to the corresponding dex archives. */
-  private final NestedSet<ImmutableTable<ImmutableSet<String>, Artifact, Artifact>> dexArchives;
+  private final ImmutableTable<ImmutableSet<String>, Artifact, Artifact> dexArchives;
 
-  private DexArchiveProvider(
-      NestedSet<ImmutableTable<ImmutableSet<String>, Artifact, Artifact>> dexArchives) {
+  private DexArchiveProvider(ImmutableTable<ImmutableSet<String>, Artifact, Artifact> dexArchives) {
     this.dexArchives = dexArchives;
   }
 
-  /**
-   * Returns a flat map from Jars to dex archives transitively produced for the given dexopts.
-   */
-  public Map<Artifact, Artifact> archivesForDexopts(ImmutableSet<String> dexopts) {
-    // Can't use ImmutableMap because we can encounter the same key-value pair multiple times.
-    // Use LinkedHashMap in case someone tries to iterate this map (not the case as of 2/2017).
-    LinkedHashMap<Artifact, Artifact> result = new LinkedHashMap<>();
-    for (ImmutableTable<ImmutableSet<String>, Artifact, Artifact> partialMapping : dexArchives) {
-      result.putAll(partialMapping.row(dexopts));
-    }
-    return result;
+  public Function<Artifact, Artifact> archivesForDexopts(ImmutableSet<String> dexopts) {
+    final ImmutableMap<Artifact, Artifact> dexArchivesForDexopts = dexArchives.row(dexopts);
+    return new Function<Artifact, Artifact>() {
+      /** Maps Jars to available dex archives and returns the given Jar otherwise. */
+      @Override
+      @Nullable
+      public Artifact apply(@Nullable Artifact jar) {
+        Artifact dexArchive = dexArchivesForDexopts.get(jar);
+        return dexArchive != null ? dexArchive : jar; // return null iff input == null
+      }
+    };
   }
 
   @Override
