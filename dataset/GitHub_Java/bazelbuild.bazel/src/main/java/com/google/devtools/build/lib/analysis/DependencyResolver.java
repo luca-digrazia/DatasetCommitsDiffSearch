@@ -49,7 +49,6 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -90,21 +89,17 @@ public abstract class DependencyResolver {
         };
 
     private final Label label;
-
-    @Nullable private final BuildConfiguration configuration;
-
+    private final BuildConfiguration configuration;
     private final ImmutableSet<Class<? extends ConfiguredAspectFactory>> aspects;
 
-    public Dependency(
-        Label label,
-        @Nullable BuildConfiguration configuration,
+    public Dependency(Label label, BuildConfiguration configuration,
         ImmutableSet<Class<? extends ConfiguredAspectFactory>> aspects) {
-      this.label = Preconditions.checkNotNull(label);
+      this.label = label;
       this.configuration = configuration;
-      this.aspects = Preconditions.checkNotNull(aspects);
+      this.aspects = aspects;
     }
 
-    public Dependency(Label label, @Nullable BuildConfiguration configuration) {
+    public Dependency(Label label, BuildConfiguration configuration) {
       this(label, configuration, ImmutableSet.<Class<? extends ConfiguredAspectFactory>>of());
     }
 
@@ -112,36 +107,12 @@ public abstract class DependencyResolver {
       return label;
     }
 
-    @Nullable
     public BuildConfiguration getConfiguration() {
       return configuration;
     }
 
     public ImmutableSet<Class<? extends ConfiguredAspectFactory>> getAspects() {
       return aspects;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(label, configuration, aspects);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (!(other instanceof Dependency)) {
-        return false;
-      }
-      Dependency otherDep = (Dependency) other;
-      return label.equals(otherDep.label)
-          && (configuration == otherDep.configuration
-              || (configuration != null && configuration.equals(otherDep.configuration)))
-          && aspects.equals(otherDep.aspects);
-    }
-
-    @Override
-    public String toString() {
-      return String.format(
-          "Dependency{label=%s, configuration=%s, aspects=%s}", label, configuration, aspects);
     }
   }
 
