@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -35,7 +36,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -859,13 +859,9 @@ public final class LinkCommandLine extends CommandLine {
     // Need to wrap static libraries with whole-archive option
     for (String option : linkerInputs) {
       if (!globalNeedWholeArchive && Link.LINK_LIBRARY_FILETYPES.matches(option)) {
-        if (macosx) {
-          argv.add("-Wl,-force_load," + option);
-        } else {
-          argv.add("-Wl,-whole-archive");
-          argv.add(option);
-          argv.add("-Wl,-no-whole-archive");
-        }
+        argv.add(macosx ? "-Wl,-all_load" : "-Wl,-whole-archive");
+        argv.add(option);
+        argv.add(macosx ? "-Wl,-noall_load" : "-Wl,-no-whole-archive");
       } else {
         argv.add(option);
       }
