@@ -79,12 +79,6 @@ public class ArtifactTest {
   }
 
   @Test
-  public void testEmptyLabelIsNone() throws Exception {
-    Artifact artifact = new Artifact(new PathFragment("src/a"), rootDir);
-    assertThat(artifact.getOwnerLabel()).isNull();
-  }
-
-  @Test
   public void testComparison() throws Exception {
     PathFragment aPath = new PathFragment("src/a");
     PathFragment bPath = new PathFragment("src/b");
@@ -182,7 +176,7 @@ public class ArtifactTest {
     List<String> paths = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     Artifact.addExpandedExecPathStrings(getFooBarArtifacts(actionGraph, true), paths,
-        ActionInputHelper.actionGraphArtifactExpander(actionGraph));
+        ActionInputHelper.actionGraphMiddlemanExpander(actionGraph));
     assertThat(paths).containsExactly("bar1.h", "bar1.h", "bar2.h", "bar3.h");
   }
 
@@ -191,7 +185,7 @@ public class ArtifactTest {
     List<PathFragment> paths = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     Artifact.addExpandedExecPaths(getFooBarArtifacts(actionGraph, true), paths,
-        ActionInputHelper.actionGraphArtifactExpander(actionGraph));
+        ActionInputHelper.actionGraphMiddlemanExpander(actionGraph));
     assertThat(paths).containsExactly(
         new PathFragment("bar1.h"),
         new PathFragment("bar1.h"),
@@ -201,11 +195,11 @@ public class ArtifactTest {
 
   @Test
   public void testAddExpandedArtifacts() throws Exception {
-    List<ArtifactFile> expanded = new ArrayList<>();
+    List<Artifact> expanded = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     List<Artifact> original = getFooBarArtifacts(actionGraph, true);
     Artifact.addExpandedArtifacts(original, expanded,
-        ActionInputHelper.actionGraphArtifactExpander(actionGraph));
+        ActionInputHelper.actionGraphMiddlemanExpander(actionGraph));
 
     List<Artifact> manuallyExpanded = new ArrayList<>();
     for (Artifact artifact : original) {
@@ -232,7 +226,7 @@ public class ArtifactTest {
     List<String> paths = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     Artifact.addExpandedExecPathStrings(getFooBarArtifacts(actionGraph, true), paths,
-        ActionInputHelper.actionGraphArtifactExpander(actionGraph));
+        ActionInputHelper.actionGraphMiddlemanExpander(actionGraph));
     assertThat(paths).containsExactly("bar1.h", "bar1.h", "bar2.h", "bar3.h");
   }
 
@@ -241,7 +235,7 @@ public class ArtifactTest {
     List<PathFragment> paths = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     Artifact.addExpandedExecPaths(getFooBarArtifacts(actionGraph, true), paths,
-        ActionInputHelper.actionGraphArtifactExpander(actionGraph));
+        ActionInputHelper.actionGraphMiddlemanExpander(actionGraph));
     assertThat(paths).containsExactly(
         new PathFragment("bar1.h"),
         new PathFragment("bar1.h"),
@@ -249,14 +243,13 @@ public class ArtifactTest {
         new PathFragment("bar3.h"));
   }
 
-  // TODO consider tests for the future
   @Test
   public void testAddExpandedArtifactsNewActionGraph() throws Exception {
-    List<ArtifactFile> expanded = new ArrayList<>();
+    List<Artifact> expanded = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     List<Artifact> original = getFooBarArtifacts(actionGraph, true);
     Artifact.addExpandedArtifacts(original, expanded,
-        ActionInputHelper.actionGraphArtifactExpander(actionGraph));
+        ActionInputHelper.actionGraphMiddlemanExpander(actionGraph));
 
     List<Artifact> manuallyExpanded = new ArrayList<>();
     for (Artifact artifact : original) {
@@ -342,27 +335,6 @@ public class ArtifactTest {
         String.format("%s/%s", artifact.getDirname(), artifact.getFilename());
 
     assertThat(constructed).isEqualTo("aaa/bbb/ccc/ddd");
-  }
-
-  @Test
-  public void testIsSourceArtifact() throws Exception {
-    assertThat(
-        new Artifact(scratch.file("/src/foo.cc"), Root.asSourceRoot(scratch.dir("/")),
-            new PathFragment("src/foo.cc"))
-            .isSourceArtifact())
-        .isTrue();
-    assertThat(
-        new Artifact(scratch.file("/genfiles/aaa/bar.out"),
-            Root.asDerivedRoot(scratch.dir("/genfiles"), scratch.dir("/genfiles/aaa")))
-            .isSourceArtifact())
-        .isFalse();
-
-  }
-
-  @Test
-  public void testGetRoot() throws Exception {
-    Root root = Root.asDerivedRoot(scratch.dir("/newRoot"));
-    assertThat(new Artifact(scratch.file("/newRoot/foo"), root).getRoot()).isEqualTo(root);
   }
 
   private Artifact createDirNameArtifact() throws Exception {

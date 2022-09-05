@@ -13,18 +13,22 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.testutil.Scratch;
-import java.util.Collection;
-import java.util.Collections;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Collection;
+import java.util.Collections;
 
 @RunWith(JUnit4.class)
 public class FailActionTest {
@@ -35,21 +39,18 @@ public class FailActionTest {
   private Artifact anOutput;
   private Collection<Artifact> outputs;
   private FailAction failAction;
-  private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
-  protected MutableActionGraph actionGraph = new MapBasedActionGraph(actionKeyContext);
+  protected MutableActionGraph actionGraph = new MapBasedActionGraph();
 
   @Before
   public final void setUp() throws Exception  {
     errorMessage = "An error just happened.";
-    anOutput =
-        new Artifact(
-            scratch.file("/out/foo"),
-            ArtifactRoot.asDerivedRoot(scratch.dir("/"), scratch.dir("/out")));
+    anOutput = new Artifact(scratch.file("/out/foo"),
+        Root.asDerivedRoot(scratch.dir("/"), scratch.dir("/out")));
     outputs = ImmutableList.of(anOutput);
     failAction = new FailAction(NULL_ACTION_OWNER, outputs, errorMessage);
     actionGraph.registerAction(failAction);
-    assertThat(actionGraph.getGeneratingAction(anOutput)).isSameAs(failAction);
+    assertSame(failAction, actionGraph.getGeneratingAction(anOutput));
   }
 
   @Test
@@ -58,7 +59,7 @@ public class FailActionTest {
       failAction.execute(null);
       fail();
     } catch (ActionExecutionException e) {
-      assertThat(e).hasMessageThat().isEqualTo(errorMessage);
+      assertThat(e).hasMessage(errorMessage);
     }
   }
 
@@ -74,6 +75,6 @@ public class FailActionTest {
 
   @Test
   public void testPrimaryOutput() {
-    assertThat(failAction.getPrimaryOutput()).isSameAs(anOutput);
+    assertSame(anOutput, failAction.getPrimaryOutput());
   }
 }
