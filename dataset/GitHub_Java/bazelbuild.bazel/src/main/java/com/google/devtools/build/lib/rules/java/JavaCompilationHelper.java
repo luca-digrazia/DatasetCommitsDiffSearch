@@ -20,14 +20,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
-import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -63,7 +61,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
   private final ImmutableList<String> customJavacOpts;
   private final ImmutableList<String> customJavacJvmOpts;
   private final List<Artifact> translations = new ArrayList<>();
-  private boolean translationsFrozen;
+  private boolean translationsFrozen = false;
   private final JavaSemantics semantics;
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
@@ -79,7 +77,12 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
       ImmutableList<String> javacOpts, JavaTargetAttributes.Builder attributes) {
-    this(ruleContext, semantics, javacOpts, attributes, "");
+    super(ruleContext);
+    this.attributes = attributes;
+    this.customJavacOpts = javacOpts;
+    this.customJavacJvmOpts =
+        ImmutableList.copyOf(JavaToolchainProvider.getDefaultJavacJvmOptions(ruleContext));
+    this.semantics = semantics;
   }
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
@@ -92,22 +95,6 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
       builtAttributes = attributes.build();
     }
     return builtAttributes;
-  }
-
-  public RuleContext getRuleContext() {
-    return ruleContext;
-  }
-
-  private AnalysisEnvironment getAnalysisEnvironment() {
-    return ruleContext.getAnalysisEnvironment();
-  }
-
-  private BuildConfiguration getConfiguration() {
-    return ruleContext.getConfiguration();
-  }
-
-  private JavaConfiguration getJavaConfiguration() {
-    return ruleContext.getFragment(JavaConfiguration.class);
   }
 
   /**
@@ -479,7 +466,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     for (Artifact sourceFile : attributes.getSourceFiles()) {
       resources.put(semantics.getDefaultJavaResourcePath(sourceFile.getRootRelativePath()), sourceFile);
     }
-    SingleJarActionBuilder.createSourceJarAction(ruleContext, resources, resourceJars, outputJar);
+    createSourceJarAction(resources, resourceJars, outputJar);
   }
 
   /**

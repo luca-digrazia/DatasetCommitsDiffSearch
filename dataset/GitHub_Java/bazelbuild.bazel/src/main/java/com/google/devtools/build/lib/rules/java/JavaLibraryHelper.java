@@ -19,6 +19,7 @@ import static com.google.devtools.build.lib.analysis.config.BuildConfiguration.S
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.UnmodifiableIterator;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -180,6 +181,11 @@ public final class JavaLibraryHelper {
 
       @Override
       public Object get(String providerKey) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public UnmodifiableIterator<TransitiveInfoProvider> iterator() {
         throw new UnsupportedOperationException();
       }
     };
@@ -365,8 +371,7 @@ public final class JavaLibraryHelper {
 
   private JavaRunfilesProvider collectJavaRunfiles(
       JavaCompilationArtifacts javaCompilationArtifacts) {
-    Runfiles runfiles = new Runfiles.Builder(
-        ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles())
+    Runfiles runfiles = new Runfiles.Builder(ruleContext.getWorkspaceName())
         // Compiled templates as well, for API.
         .addArtifacts(javaCompilationArtifacts.getRuntimeJars())
         .addTargets(deps, JavaRunfilesProvider.TO_RUNFILES)
