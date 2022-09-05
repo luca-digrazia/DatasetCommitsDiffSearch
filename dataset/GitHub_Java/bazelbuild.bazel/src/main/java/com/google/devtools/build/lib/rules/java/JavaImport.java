@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -131,7 +132,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .add(CppCompilationContext.class, transitiveCppDeps)
         .add(JavaSourceJarsProvider.class, new JavaSourceJarsProvider(
             transitiveJavaSourceJars, srcJars))
-        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveJavaSourceJars)
+        .add(TopLevelArtifactProvider.class, TopLevelArtifactProvider.of(
+            JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveJavaSourceJars))
         .build();
   }
 

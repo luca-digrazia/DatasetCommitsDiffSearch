@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
+import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -235,7 +236,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             new JavaRuntimeClasspathProvider(common.getRuntimeClasspath()))
         .add(JavaSourceJarsProvider.class,
             new JavaSourceJarsProvider(transitiveSourceJars, srcJars))
-        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
+        .add(TopLevelArtifactProvider.class, TopLevelArtifactProvider.of(
+            JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars))
         .build();
   }
 
