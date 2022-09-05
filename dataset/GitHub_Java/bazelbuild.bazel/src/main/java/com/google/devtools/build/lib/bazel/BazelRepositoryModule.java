@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.bazel;
 import static com.google.common.hash.Hashing.sha256;
 import static com.google.devtools.build.lib.bazel.repository.HttpDownloader.getHash;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.bazel.repository.HttpJarFunction;
 import com.google.devtools.build.lib.bazel.repository.JarFunction;
 import com.google.devtools.build.lib.bazel.repository.LocalRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.MavenJarFunction;
-import com.google.devtools.build.lib.bazel.repository.MavenServerFunction;
 import com.google.devtools.build.lib.bazel.repository.NewGitRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.NewHttpArchiveFunction;
 import com.google.devtools.build.lib.bazel.repository.NewLocalRepositoryFunction;
@@ -142,19 +142,19 @@ public class BazelRepositoryModule extends BlazeModule {
   private static final SkyValueDirtinessChecker HTTP_DOWNLOAD_CHECKER =
       new SkyValueDirtinessChecker() {
         @Override
-        public boolean applies(SkyKey skyKey) {
-          return skyKey.functionName().equals(HttpDownloadFunction.NAME);
-        }
-
-        @Override
-        public SkyValue createNewValue(SkyKey key, TimestampGranularityMonitor tsgm) {
+        @Nullable
+        public Optional<SkyValue> maybeCreateNewValue(SkyKey key,
+            TimestampGranularityMonitor tsgm) {
           throw new UnsupportedOperationException();
         }
 
         @Override
         @Nullable
-        public DirtyResult check(
+        public DirtyResult maybeCheck(
             SkyKey skyKey, SkyValue skyValue, TimestampGranularityMonitor tsgm) {
+          if (!skyKey.functionName().equals(HttpDownloadFunction.NAME)) {
+            return null;
+          }
           HttpDownloadValue httpDownloadValue = (HttpDownloadValue) skyValue;
           Path path = httpDownloadValue.getPath();
           try {
@@ -220,7 +220,6 @@ public class BazelRepositoryModule extends BlazeModule {
     builder.put(ZipFunction.NAME, new ZipFunction());
     builder.put(TarGzFunction.NAME, new TarGzFunction());
     builder.put(FileFunction.NAME, new FileFunction());
-    builder.put(MavenServerFunction.NAME, new MavenServerFunction(directories));
     return builder.build();
   }
 }

@@ -360,9 +360,9 @@ public abstract class BlazeModule {
   }
 
   /**
-   * Perform module specific check of current command environment.
+   * Perform module specific check of current blaze runtime.
    */
-  public void checkEnvironment(CommandEnvironment env) {
+  public void checkRuntime(BlazeRuntime runtime) {
   }
 
   /**

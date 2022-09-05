@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,13 +45,6 @@ public class BuildSummaryStatsModule extends BlazeModule {
     this.reporter = env.getReporter();
     this.eventBus = env.getEventBus();
     eventBus.register(this);
-  }
-
-  @Override
-  public void afterCommand() {
-    this.criticalPathComputer = null;
-    this.eventBus = null;
-    this.reporter = null;
   }
 
   @Subscribe

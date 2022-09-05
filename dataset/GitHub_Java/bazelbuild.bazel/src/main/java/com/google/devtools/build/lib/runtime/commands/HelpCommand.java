@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import com.google.devtools.build.docgen.BlazeRuleHelpPrinter;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
@@ -135,8 +134,6 @@ public final class HelpCommand implements BlazeCommand {
 
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
-    env.getEventBus().post(new NoBuildEvent());
-
     BlazeRuntime runtime = env.getRuntime();
     OutErr outErr = env.getReporter().getOutErr();
     Options helpOptions = options.getOptions(Options.class);
@@ -159,7 +156,7 @@ public final class HelpCommand implements BlazeCommand {
       emitTargetSyntaxHelp(outErr, getOptionCategories(runtime));
       return ExitCode.SUCCESS;
     } else if (helpSubject.equals("info-keys")) {
-      emitInfoKeysHelp(env, outErr);
+      emitInfoKeysHelp(runtime, outErr);
       return ExitCode.SUCCESS;
     } else if (helpSubject.equals("completion")) {
       emitCompletionHelp(runtime, outErr);
@@ -218,8 +215,8 @@ public final class HelpCommand implements BlazeCommand {
     outErr.printOutLn("BAZEL_COMMAND_LIST=\"" + SPACE_JOINER.join(commands) + "\"");
 
     outErr.printOutLn("BAZEL_INFO_KEYS=\"");
-    for (String name : InfoCommand.getHardwiredInfoItemNames(Constants.PRODUCT_NAME)) {
-        outErr.printOutLn(name);
+    for (InfoKey key : InfoKey.values()) {
+        outErr.printOutLn(key.getName());
     }
     outErr.printOutLn("\"");
 
@@ -253,8 +250,8 @@ public final class HelpCommand implements BlazeCommand {
                                     OptionsParser.HelpVerbosity.MEDIUM));
   }
 
-  private void emitInfoKeysHelp(CommandEnvironment env, OutErr outErr) {
-    for (InfoItem item : InfoCommand.getInfoItemMap(env,
+  private void emitInfoKeysHelp(BlazeRuntime runtime, OutErr outErr) {
+    for (BlazeModule.InfoItem item : InfoCommand.getInfoItemMap(runtime,
         OptionsParser.newOptionsParser(
             ImmutableList.<Class<? extends OptionsBase>>of())).values()) {
       outErr.printOut(String.format("%-23s %s\n", item.getName(), item.getDescription()));

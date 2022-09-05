@@ -76,7 +76,7 @@ public final class QueryCommand implements BlazeCommand {
     QueryOptions queryOptions = options.getOptions(QueryOptions.class);
 
     try {
-      env.setupPackageCache(
+      runtime.setupPackageCache(
           options.getOptions(PackageCacheOptions.class),
           runtime.getDefaultsPackageContent());
     } catch (InterruptedException e) {
@@ -108,7 +108,7 @@ public final class QueryCommand implements BlazeCommand {
 
     Set<Setting> settings = queryOptions.toSettings();
     AbstractBlazeQueryEnvironment<Target> queryEnv = newQueryEnvironment(
-        env,
+        runtime,
         queryOptions.keepGoing,
         QueryOutputUtils.orderResults(queryOptions, formatter),
         queryOptions.universeScope, queryOptions.loadingPhaseThreads,
@@ -143,7 +143,7 @@ public final class QueryCommand implements BlazeCommand {
     try {
       QueryOutputUtils.output(queryOptions, result, formatter, output,
           queryOptions.aspectDeps.createResolver(
-              env.getPackageManager(), env.getReporter()));
+              runtime.getPackageManager(), env.getReporter()));
     } catch (ClosedByInterruptException | InterruptedException e) {
       env.getReporter().handle(Event.error("query interrupted"));
       return ExitCode.INTERRUPTED;
@@ -161,28 +161,29 @@ public final class QueryCommand implements BlazeCommand {
   }
 
   @VisibleForTesting // for com.google.devtools.deps.gquery.test.QueryResultTestUtil
-  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(CommandEnvironment env,
+  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(BlazeRuntime runtime,
       boolean keepGoing, boolean orderedResults, int loadingPhaseThreads,
       Set<Setting> settings) {
-    return newQueryEnvironment(env, keepGoing, orderedResults, ImmutableList.<String>of(),
+    return newQueryEnvironment(runtime, keepGoing, orderedResults, ImmutableList.<String>of(),
         loadingPhaseThreads, settings);
   }
 
-  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(CommandEnvironment env,
+  public static AbstractBlazeQueryEnvironment<Target> newQueryEnvironment(BlazeRuntime runtime,
       boolean keepGoing, boolean orderedResults, List<String> universeScope,
-      int loadingPhaseThreads, Set<Setting> settings) {
+      int loadingPhaseThreads,
+      Set<Setting> settings) {
     ImmutableList.Builder<QueryFunction> functions = ImmutableList.builder();
-    for (BlazeModule module : env.getRuntime().getBlazeModules()) {
+    for (BlazeModule module : runtime.getBlazeModules()) {
       functions.addAll(module.getQueryFunctions());
     }
     return AbstractBlazeQueryEnvironment.newQueryEnvironment(
-        env.getPackageManager().newTransitiveLoader(),
-        env.getSkyframeExecutor(),
-        env.getPackageManager(),
-        env.getPackageManager().getTargetPatternEvaluator(),
-        keepGoing, orderedResults, universeScope, loadingPhaseThreads, env.getReporter(),
+        runtime.getPackageManager().newTransitiveLoader(),
+        runtime.getSkyframeExecutor(),
+        runtime.getPackageManager(),
+        runtime.getTargetPatternEvaluator(),
+        keepGoing, orderedResults, universeScope, loadingPhaseThreads, runtime.getReporter(),
         settings,
         functions.build(),
-        env.getPackageManager().getPackagePath());
+        runtime.getPackageManager().getPackagePath());
   }
 }

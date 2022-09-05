@@ -70,7 +70,7 @@ public final class FetchCommand implements BlazeCommand {
     }
 
     try {
-      env.setupPackageCache(
+      runtime.setupPackageCache(
           options.getOptions(PackageCacheOptions.class),
           runtime.getDefaultsPackageContent());
     } catch (InterruptedException e) {
@@ -105,7 +105,7 @@ public final class FetchCommand implements BlazeCommand {
     query = "deps(" + query + ")";
 
     AbstractBlazeQueryEnvironment<Target> queryEnv = QueryCommand.newQueryEnvironment(
-        env, options.getOptions(FetchOptions.class).keepGoing, false,
+        runtime, options.getOptions(FetchOptions.class).keepGoing, false,
         Lists.<String>newArrayList(), 200, Sets.<Setting>newHashSet());
 
     // 1. Parse query:

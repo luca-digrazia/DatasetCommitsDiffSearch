@@ -336,6 +336,7 @@ public class ExecutionTool {
    * @param buildId UUID of the build id
    * @param analysisResult the analysis phase output
    * @param buildResult the mutable build result
+   * @param skyframeExecutor the skyframe executor (if any)
    * @param packageRoots package roots collected from loading phase and BuildConfigutaionCollection
    * creation
    */
@@ -355,7 +356,8 @@ public class ExecutionTool {
     // Create symlinks only after we've verified that we're actually
     // supposed to build something.
     if (getWorkspace().getFileSystem().supportsSymbolicLinks()) {
-      List<BuildConfiguration> targetConfigurations = configurations.getTargetConfigurations();
+      List<BuildConfiguration> targetConfigurations =
+          getView().getConfigurationCollection().getTargetConfigurations();
       // TODO(bazel-team): This is not optimal - we retain backwards compatibility in the case where
       // there's only a single configuration, but we don't create any symlinks in the multi-config
       // case. Can we do better? [multi-config]
@@ -375,7 +377,7 @@ public class ExecutionTool {
     }
 
     ActionCache actionCache = getActionCache();
-    SkyframeExecutor skyframeExecutor = env.getSkyframeExecutor();
+    SkyframeExecutor skyframeExecutor = runtime.getSkyframeExecutor();
     Builder builder = createBuilder(request, executor, actionCache, skyframeExecutor);
 
     //
@@ -808,7 +810,7 @@ public class ExecutionTool {
 
   private ActionCache getActionCache() throws LocalEnvironmentException {
     try {
-      return env.getPersistentActionCache();
+      return runtime.getPersistentActionCache();
     } catch (IOException e) {
       // TODO(bazel-team): (2010) Ideally we should just remove all cache data and reinitialize
       // caches.

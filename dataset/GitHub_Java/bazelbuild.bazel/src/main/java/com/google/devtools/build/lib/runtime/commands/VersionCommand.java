@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.Command;
@@ -35,7 +34,7 @@ import com.google.devtools.common.options.OptionsProvider;
          shortDescription = "Prints version information for %{product}.")
 public final class VersionCommand implements BlazeCommand {
   @Override
-  public void editOptions(OptionsParser optionsParser) {}
+  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
 
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
@@ -44,7 +43,6 @@ public final class VersionCommand implements BlazeCommand {
       env.getReporter().handle(Event.error("Version information not available"));
       return ExitCode.COMMAND_LINE_ERROR;
     }
-    env.getEventBus().post(new NoBuildEvent());
     env.getReporter().getOutErr().printOutLn(info.getSummary());
     return ExitCode.SUCCESS;
   }

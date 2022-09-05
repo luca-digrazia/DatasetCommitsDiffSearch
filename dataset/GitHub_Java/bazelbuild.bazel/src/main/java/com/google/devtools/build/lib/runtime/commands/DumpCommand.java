@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,6 +72,12 @@ public class DumpCommand implements BlazeCommand {
         help = "Dump virtual filesystem cache content.")
     public boolean dumpVfs;
 
+    @Option(name = "artifacts",
+        defaultValue = "false",
+        category = "verbosity",
+        help = "Dump artifact factory content.")
+    public boolean dumpArtifacts;
+
     @Option(name = "action_cache",
         defaultValue = "false",
         category = "verbosity",
@@ -118,12 +124,9 @@ public class DumpCommand implements BlazeCommand {
     BlazeRuntime runtime = env.getRuntime();
     DumpOptions dumpOptions = options.getOptions(DumpOptions.class);
 
-    boolean anyOutput =
-        dumpOptions.dumpPackages
-            || dumpOptions.dumpVfs
-            || dumpOptions.dumpActionCache
-            || dumpOptions.dumpRuleClasses
-            || (dumpOptions.dumpSkyframe != SkyframeDumpOption.OFF);
+    boolean anyOutput = dumpOptions.dumpPackages || dumpOptions.dumpVfs
+        || dumpOptions.dumpArtifacts || dumpOptions.dumpActionCache
+        || dumpOptions.dumpRuleClasses || (dumpOptions.dumpSkyframe != SkyframeDumpOption.OFF);
     if (!anyOutput) {
       Map<String, String> categories = new HashMap<>();
       categories.put("verbosity", "Options that control what internal state is dumped");
@@ -145,7 +148,7 @@ public class DumpCommand implements BlazeCommand {
       boolean success = true;
 
       if (dumpOptions.dumpPackages) {
-        env.getPackageManager().dump(out);
+        runtime.getPackageManager().dump(out);
         out.println();
       }
 
@@ -155,8 +158,14 @@ public class DumpCommand implements BlazeCommand {
         out.println();
       }
 
+      if (dumpOptions.dumpArtifacts) {
+        success = false;
+        env.getReporter().handle(Event.error("Cannot dump artifacts in Skyframe full mode. "
+            + "Use --skyframe instead"));
+      }
+
       if (dumpOptions.dumpActionCache) {
-        success &= dumpActionCache(env, out);
+        success &= dumpActionCache(runtime, out);
         out.println();
       }
 
@@ -178,11 +187,11 @@ public class DumpCommand implements BlazeCommand {
     }
   }
 
-  private boolean dumpActionCache(CommandEnvironment env, PrintStream out) {
+  private boolean dumpActionCache(BlazeRuntime runtime, PrintStream out) {
     try {
-      env.getPersistentActionCache().dump(out);
+      runtime.getPersistentActionCache().dump(out);
     } catch (IOException e) {
-      env.getReporter().handle(Event.error("Cannot dump action cache: " + e.getMessage()));
+      runtime.getReporter().handle(Event.error("Cannot dump action cache: " + e.getMessage()));
       return false;
     }
     return true;

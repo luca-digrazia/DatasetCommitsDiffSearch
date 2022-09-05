@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -125,8 +125,8 @@ public final class CleanCommand implements BlazeCommand {
       Path outputBase, Options cleanOptions, String symlinkPrefix) throws IOException,
       ShutdownBlazeServerException, CommandException, ExecException, InterruptedException {
     BlazeRuntime runtime = env.getRuntime();
-    if (env.getOutputService() != null) {
-      env.getOutputService().clean();
+    if (runtime.getOutputService() != null) {
+      runtime.getOutputService().clean();
     }
     if (cleanOptions.expunge) {
       LOG.info("Expunging...");
@@ -173,7 +173,7 @@ public final class CleanCommand implements BlazeCommand {
     }
     // remove convenience links
     OutputDirectoryLinksUtils.removeOutputDirectoryLinks(
-        runtime.getWorkspaceName(), runtime.getWorkspace(), env.getReporter(), symlinkPrefix);
+        runtime.getWorkspaceName(), runtime.getWorkspace(), runtime.getReporter(), symlinkPrefix);
     // shutdown on expunge cleans
     if (cleanOptions.expunge || cleanOptions.expunge_async) {
       throw new ShutdownBlazeServerException(0);

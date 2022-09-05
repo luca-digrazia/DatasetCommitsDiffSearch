@@ -177,7 +177,7 @@ public class RunCommand implements BlazeCommand  {
         return ExitCode.COMMAND_LINE_ERROR;
       }
       for (ConfiguredTarget target : targetsBuilt) {
-        ExitCode targetValidation = fullyValidateTarget(env, target);
+        ExitCode targetValidation = fullyValidateTarget(runtime, target);
         if (targetValidation != ExitCode.SUCCESS) {
           return targetValidation;
         }
@@ -294,7 +294,7 @@ public class RunCommand implements BlazeCommand  {
       String unisolatedCommand = CommandFailureUtils.describeCommand(
           CommandDescriptionForm.COMPLETE_UNISOLATED,
           cmdLine, null, workingDir.getPathString());
-      if (writeScript(env, runOptions.scriptPath, unisolatedCommand)) {
+      if (writeScript(runtime, runOptions.scriptPath, unisolatedCommand)) {
         return ExitCode.SUCCESS;
       } else {
         return ExitCode.RUN_FAILURE;
@@ -305,7 +305,7 @@ public class RunCommand implements BlazeCommand  {
         null, "Running command line: " + ShellEscaper.escapeJoinAll(prettyCmdLine)));
 
     com.google.devtools.build.lib.shell.Command command = new CommandBuilder()
-        .addArgs(cmdLine).setEnv(env.getClientEnv()).setWorkingDir(workingDir).build();
+        .addArgs(cmdLine).setEnv(runtime.getClientEnv()).setWorkingDir(workingDir).build();
 
     try {
       // Restore a raw EventHandler if it is registered. This allows for blaze run to produce the
@@ -375,15 +375,15 @@ public class RunCommand implements BlazeCommand  {
     return workingDir;
   }
 
-  private boolean writeScript(CommandEnvironment env, PathFragment scriptPathFrag, String cmd) {
+  private boolean writeScript(BlazeRuntime runtime, PathFragment scriptPathFrag, String cmd) {
     final String SH_SHEBANG = "#!/bin/sh";
-    Path scriptPath = env.getWorkingDirectory().getRelative(scriptPathFrag);
+    Path scriptPath = runtime.getWorkingDirectory().getRelative(scriptPathFrag);
     try {
       FileSystemUtils.writeContent(scriptPath, StandardCharsets.ISO_8859_1,
           SH_SHEBANG + "\n" + cmd + " \"$@\"");
       scriptPath.setExecutable(true);
     } catch (IOException e) {
-      env.getReporter().handle(Event.error("Error writing run script:" + e.getMessage()));
+      runtime.getReporter().handle(Event.error("Error writing run script:" + e.getMessage()));
       return false;
     }
     return true;
@@ -458,17 +458,17 @@ public class RunCommand implements BlazeCommand  {
    * @param target ConfiguredTarget to validate
    * @return ExitCode.SUCCESS if all checks succeeded, otherwise a different error code.
    */
-  private ExitCode fullyValidateTarget(CommandEnvironment env, ConfiguredTarget target) {
+  private ExitCode fullyValidateTarget(BlazeRuntime runtime, ConfiguredTarget target) {
     String targetError = validateTarget(target.getTarget());
 
     if (targetError != null) {
-      env.getReporter().handle(Event.error(targetError));
+      runtime.getReporter().handle(Event.error(targetError));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
     Artifact executable = target.getProvider(FilesToRunProvider.class).getExecutable();
     if (executable == null) {
-      env.getReporter().handle(Event.error(notExecutableError(target.getTarget())));
+      runtime.getReporter().handle(Event.error(notExecutableError(target.getTarget())));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
@@ -478,12 +478,12 @@ public class RunCommand implements BlazeCommand  {
     Path executablePath = executable.getPath();
     try {
       if (!executablePath.exists() || !executablePath.isExecutable()) {
-        env.getReporter().handle(Event.error(
+        runtime.getReporter().handle(Event.error(
             null, "Non-existent or non-executable " + executablePath));
         return ExitCode.BLAZE_INTERNAL_ERROR;
       }
     } catch (IOException e) {
-      env.getReporter().handle(Event.error(
+      runtime.getReporter().handle(Event.error(
           "Error checking " + executablePath.getPathString() + ": " + e.getMessage()));
       return ExitCode.LOCAL_ENVIRONMENTAL_ERROR;
     }

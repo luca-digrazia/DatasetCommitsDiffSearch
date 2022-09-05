@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -69,7 +69,7 @@ public final class ProjectFileSupport {
           optionsParser.getOptions(PackageCacheOptions.class).packagePath,
           env.getReporter(),
           runtime.getWorkspace(),
-          env.getWorkingDirectory()).getPathEntries();
+          runtime.getWorkingDirectory()).getPathEntries();
       ProjectFile projectFile = projectFileProvider.getProjectFile(packagePath, projectFilePath);
       env.getReporter().handle(Event.info("Using " + projectFile.getName()));
 

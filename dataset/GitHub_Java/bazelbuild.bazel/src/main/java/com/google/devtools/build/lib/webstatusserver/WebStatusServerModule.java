@@ -18,9 +18,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.runtime.BlazeModule;
-import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.BlazeServerStartupOptions;
 import com.google.devtools.build.lib.runtime.Command;
+import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.Clock;
 import com.google.devtools.common.options.OptionsBase;
@@ -33,6 +33,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -90,12 +91,13 @@ public class WebStatusServerModule extends BlazeModule {
   }
 
   @Override
-  public void beforeCommand(BlazeRuntime blazeRuntime, Command command) throws AbruptExitException {
+  public void beforeCommand(Command command, CommandEnvironment env)
+      throws AbruptExitException {
     if (!running) {
       return;
     }
     collector =
-        new WebStatusEventCollector(blazeRuntime.getEventBus(), blazeRuntime.getReporter(), this);
+        new WebStatusEventCollector(env.getEventBus(), env.getReporter(), this);
   }
 
   public void commandStarted() {
@@ -146,9 +148,9 @@ public class WebStatusServerModule extends BlazeModule {
     public void handle(HttpExchange exchange) throws IOException {
       exchange.getResponseHeaders().put("Content-Type", ImmutableList.of("text/plain"));
       exchange.sendResponseHeaders(200, response.length());
-      OutputStream os = exchange.getResponseBody();
-      os.write(response.getBytes());
-      os.close();
+      try (OutputStream os = exchange.getResponseBody()) {
+        os.write(response.getBytes(StandardCharsets.UTF_8));
+      }
     }
   }
 
