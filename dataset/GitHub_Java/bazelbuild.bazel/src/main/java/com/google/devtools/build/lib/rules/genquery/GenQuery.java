@@ -44,6 +44,7 @@ import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
@@ -55,7 +56,6 @@ import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
 import com.google.devtools.build.lib.query2.engine.QueryException;
-import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
@@ -78,6 +78,7 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.ValueOrException;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -88,6 +89,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -166,7 +168,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
   // The transitive closure of these targets is an upper estimate on the labels
   // the query will touch
-  private static Set<Target> getScope(RuleContext context) throws InterruptedException {
+  private Set<Target> getScope(RuleContext context) {
     List<Label> scopeLabels = context.attributes().get("scope", BuildType.LABEL_LIST);
     Set<Target> scope = Sets.newHashSetWithExpectedSize(scopeLabels.size());
     for (Label scopePart : scopeLabels) {
@@ -197,9 +199,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   }
 
   @Nullable
-  private static Pair<ImmutableMap<PackageIdentifier, Package>, ImmutableMap<Label, Target>>
-      constructPackageMap(SkyFunction.Environment env, Collection<Target> scope)
-          throws InterruptedException {
+  private Pair<ImmutableMap<PackageIdentifier, Package>, ImmutableMap<Label, Target>>
+  constructPackageMap(SkyFunction.Environment env, Collection<Target> scope) {
     // It is not necessary for correctness to construct intermediate NestedSets; we could iterate
     // over individual targets in scope immediately. However, creating a composite NestedSet first
     // saves us from iterating over the same sub-NestedSets multiple times.
@@ -280,6 +281,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       // time we get there.
       formatter =  OutputFormatter.getFormatter(
           Preconditions.checkNotNull(outputFormatters), queryOptions.outputFormat);
+
       // All the packages are already loaded at this point, so there is no need
       // to start up many threads. 4 are started up to make good use of multiple
       // cores.
@@ -296,7 +298,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
               getEventHandler(ruleContext),
               settings,
               ImmutableList.<QueryFunction>of(),
-              QueryExpressionEvalListener.NullListener.<Target>instance(),
               /*packagePath=*/null);
       queryResult = (DigraphQueryEvalResult<Target>) queryEnvironment.evaluateQuery(query, targets);
     } catch (SkyframeRestartQueryException e) {
@@ -374,9 +375,10 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     }
 
     @Override
-    public Map<String, ResolvedTargets<Target>> preloadTargetPatterns(
-        EventHandler eventHandler, Collection<String> patterns, boolean keepGoing)
-        throws TargetParsingException, InterruptedException {
+    public Map<String, ResolvedTargets<Target>> preloadTargetPatterns(EventHandler eventHandler,
+                                                               Collection<String> patterns,
+                                                               boolean keepGoing)
+        throws TargetParsingException {
       Preconditions.checkArgument(!keepGoing);
       boolean ok = true;
       Map<String, ResolvedTargets<Target>> preloadedPatterns =
