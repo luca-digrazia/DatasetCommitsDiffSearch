@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,52 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * {@link #work(boolean)} method will throw {@link InterruptedException}.
  */
 public class AbstractQueueVisitor {
+
+  /**
+   * Configuration parameters for {@link ThreadPoolExecutor} construction.
+   */
+  public static class ThreadPoolExecutorParams {
+    private final int corePoolSize;
+    private final int maxPoolSize;
+    private final long keepAliveTime;
+    private final TimeUnit units;
+    private final String poolName;
+    private final BlockingQueue<Runnable> workQueue;
+
+    public ThreadPoolExecutorParams(int corePoolSize, int maxPoolSize, long keepAliveTime,
+        TimeUnit units, String poolName, BlockingQueue<Runnable> workQueue) {
+      this.corePoolSize = corePoolSize;
+      this.maxPoolSize = maxPoolSize;
+      this.keepAliveTime = keepAliveTime;
+      this.units = units;
+      this.poolName = poolName;
+      this.workQueue = workQueue;
+    }
+
+    public int getCorePoolSize() {
+      return corePoolSize;
+    }
+
+    public int getMaxPoolSize() {
+      return maxPoolSize;
+    }
+
+    public long getKeepAliveTime() {
+      return keepAliveTime;
+    }
+
+    public TimeUnit getUnits() {
+      return units;
+    }
+
+    public String getPoolName() {
+      return poolName;
+    }
+
+    public BlockingQueue<Runnable> getWorkQueue() {
+      return workQueue;
+    }
+  }
 
   /**
    * Default factory function for constructing {@link ThreadPoolExecutor}s.
@@ -319,9 +365,8 @@ public class AbstractQueueVisitor {
    * rethrown, since it may indicate a programming bug. If callers handle the unchecked exception,
    * they may check the interrupted bit to see if the pool was interrupted.
    *
-   * @param interruptWorkers if true, interrupt worker threads if main thread gets an interrupt or
-   *        if a worker throws a critical error (see {@link #isCriticalError(Throwable)}). If
-   *        false, just wait for them to terminate normally.
+   * @param interruptWorkers if true, interrupt worker threads when main thread gets an interrupt.
+   *        If false, just wait for them to terminate normally.
    */
   protected void work(boolean interruptWorkers) throws InterruptedException {
     if (concurrent) {
@@ -588,7 +633,7 @@ public class AbstractQueueVisitor {
 
   /**
    * If this returns true, that means the exception {@code e} is critical
-   * and all running actions should be stopped. {@link Error}s are always considered critical.
+   * and all running actions should be stopped.
    *
    * <p>Default value - always false. If different behavior is needed
    * then we should override this method in subclasses.
@@ -597,10 +642,6 @@ public class AbstractQueueVisitor {
    */
   protected boolean isCriticalError(Throwable e) {
     return false;
-  }
-
-  private boolean isCriticalErrorInternal(Throwable e) {
-    return isCriticalError(e) || (e instanceof Error);
   }
 
   private void setRejectedExecutionHandler() {
@@ -619,7 +660,7 @@ public class AbstractQueueVisitor {
    * to stop all jobs inside {@link #awaitTermination(boolean)}.
    */
   private synchronized void markToStopAllJobsIfNeeded(Throwable e) {
-    if (isCriticalErrorInternal(e) && !jobsMustBeStopped) {
+    if (isCriticalError(e) && !jobsMustBeStopped) {
       jobsMustBeStopped = true;
       synchronized (zeroRemainingTasks) {
         zeroRemainingTasks.notify();

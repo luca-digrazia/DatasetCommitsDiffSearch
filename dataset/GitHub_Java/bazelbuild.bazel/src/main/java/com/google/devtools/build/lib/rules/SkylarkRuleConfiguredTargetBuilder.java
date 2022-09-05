@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
@@ -41,7 +42,6 @@ import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Type;
 
 /**
  * A helper class to build Rule Configured Targets via runtime loaded rule implementations
@@ -62,8 +62,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
           .setGlobals(
               ruleContext.getRule().getRuleClassObject().getRuleDefinitionEnvironment().getGlobals())
           .setEventHandler(ruleContext.getAnalysisEnvironment().getEventHandler())
-          .build(); // NB: loading phase functions are not available: this is analysis already,
-                    // so we do *not* setLoadingPhase().
+          .build(); // NB: we do *not* setLoadingPhase()
       Object target = ruleImplementation.call(
           ImmutableList.<Object>of(skylarkRuleContext),
           ImmutableMap.<String, Object>of(),
