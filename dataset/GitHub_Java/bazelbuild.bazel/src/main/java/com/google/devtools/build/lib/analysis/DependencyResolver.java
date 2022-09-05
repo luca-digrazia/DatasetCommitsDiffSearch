@@ -26,10 +26,8 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectClass;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -376,9 +374,7 @@ public abstract class DependencyResolver {
   }
 
   /**
-   * Returns the BuildOptions if the rule's attribute triggers a split in this configuration, or
-   * the empty collection if the attribute does not trigger a split transition or if the split
-   * transition does not apply.
+   * Returns true if the rule's attribute triggers a split in this configuration.
    *
    * <p>Even though the attribute may have a split, splits don't have to apply in every
    * configuration (see {@link Attribute.SplitTransition#split}).
@@ -543,14 +539,13 @@ public abstract class DependencyResolver {
     ImmutableSet.Builder<AspectDescriptor> result = ImmutableSet.builder();
 
     for (Aspect aspectCandidate : aspectCandidates) {
-      AdvertisedProviderSet advertisedProviders = ruleClass.getAdvertisedProviders();
-      boolean requireAspect = advertisedProviders.canHaveAnyProvider();
+      boolean requireAspect = ruleClass.canHaveAnyProvider();
 
       if (!requireAspect) {
         ImmutableList<ImmutableSet<Class<?>>> providersList =
             aspectCandidate.getDefinition().getRequiredProviders();
         for (ImmutableSet<Class<?>> providers : providersList) {
-          if (Sets.difference(providers, advertisedProviders.getNativeProviders()).isEmpty()) {
+          if (Sets.difference(providers, ruleClass.getAdvertisedProviders()).isEmpty()) {
             requireAspect = true;
             break;
           }
