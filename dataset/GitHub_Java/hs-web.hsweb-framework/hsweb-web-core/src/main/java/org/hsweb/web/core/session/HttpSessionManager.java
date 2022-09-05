@@ -7,6 +7,8 @@ import java.util.Set;
 
 public interface HttpSessionManager {
 
+    HttpSession getSessionBySessionId(String sessionId);
+
     /**
      * 根据登陆用户的ID 获取SessionId
      *
@@ -39,10 +41,10 @@ public interface HttpSessionManager {
     /**
      * 添加一个用户
      *
-     * @param userId  用户ID
+     * @param user  用户
      * @param session HttpSession
      */
-    void addUser(String userId, HttpSession session) ;
+    void addUser(User user, HttpSession session) ;
 
     Set<User> tryGetAllUser();
 
@@ -73,4 +75,6 @@ public interface HttpSessionManager {
      * @param userId 用户ID
      */
     boolean isLogin(String userId);
+
+    void addListener(HttpSessionManagerListener listener);
 }
