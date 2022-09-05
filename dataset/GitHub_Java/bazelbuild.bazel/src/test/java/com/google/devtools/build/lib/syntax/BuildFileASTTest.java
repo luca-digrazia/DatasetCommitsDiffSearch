@@ -25,10 +25,12 @@ import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
-import java.io.IOException;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
 
 /**
  * Unit tests for BuildFileAST.
@@ -49,7 +51,7 @@ public class BuildFileASTTest extends EvaluationTestCase {
    */
   private BuildFileAST parseBuildFile(String... lines) throws IOException {
     Path file = scratch.file("/a/build/file/BUILD", lines);
-    return BuildFileAST.parseBuildFile(file, getEventHandler());
+    return BuildFileAST.parseBuildFile(file, getEventHandler(), false);
   }
 
   @Test
@@ -59,7 +61,7 @@ public class BuildFileASTTest extends EvaluationTestCase {
         "",
         "x = [1,2,'foo',4] + [1,2, \"%s%d\" % ('foo', 1)]");
 
-    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, getEventHandler());
+    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, getEventHandler(), false);
 
     assertTrue(buildfile.exec(env, getEventHandler()));
 
@@ -80,7 +82,7 @@ public class BuildFileASTTest extends EvaluationTestCase {
         "z = x + y");
 
     setFailFast(false);
-    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, getEventHandler());
+    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, getEventHandler(), false);
 
     assertFalse(buildfile.exec(env, getEventHandler()));
     Event e = assertContainsError("unsupported operand type(s) for +: 'int' and 'list'");
@@ -140,7 +142,7 @@ public class BuildFileASTTest extends EvaluationTestCase {
   public void testWithSyntaxErrorsDoesNotPrintDollarError() throws Exception {
     setFailFast(false);
     BuildFileAST buildFile = parseBuildFile(
-        "abi = cxx_abi + '-glibc-' + glibc_version + '-' + $(TARGET_CPU) + '-' + sysname",
+        "abi = cxx_abi + '-glibc-' + glibc_version + '-' + generic_cpu + '-' + sysname",
         "libs = [abi + opt_level + '/lib/libcc.a']",
         "shlibs = [abi + opt_level + '/lib/libcc.so']",
         "+* shlibs", // syntax error at '+'

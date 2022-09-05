@@ -43,7 +43,7 @@ public class InputFileTest {
   private PackageFactoryApparatus packages = new PackageFactoryApparatus(events.reporter());
 
   @Before
-  public final void writeFiles() throws Exception  {
+  public void setUp() throws Exception {
     Path buildfile =
         scratch.file(
             "pkg/BUILD",
