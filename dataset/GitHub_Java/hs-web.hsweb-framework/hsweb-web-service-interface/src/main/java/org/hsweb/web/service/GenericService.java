@@ -1,7 +1,7 @@
 package org.hsweb.web.service;
 
-import org.hsweb.web.bean.common.PagerResult;
-import org.hsweb.web.bean.common.QueryParam;
+import org.hsweb.web.bean.param.PagerResult;
+import org.hsweb.web.bean.param.QueryParam;
 
 import java.util.List;
 
@@ -36,11 +36,12 @@ public interface GenericService<Po, Pk> {
     /**
      * 修改记录信息
      *
+     * @param pk   要修改对象的主键
      * @param data 要修改的对象
      * @return 影响记录数
      * @throws Exception 异常信息
      */
-    int update(Po data) throws Exception;
+    int update(Pk pk, Po data) throws Exception;
 
     /**
      * 批量修改记录
