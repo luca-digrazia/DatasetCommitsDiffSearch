@@ -232,7 +232,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public  class BundleImpl implements Bundle {
+public final class BundleImpl implements Bundle {
 
     /**
      * the bundle location.
@@ -252,7 +252,7 @@ public  class BundleImpl implements Bundle {
     /**
      * the bundle state.
      */
-    volatile int state;
+    int                             state;
 
     /**
      * the bundle classloader.
@@ -307,11 +307,11 @@ public  class BundleImpl implements Bundle {
                     this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag, dexPatchVersion);
                 }catch(Throwable e){
                     bundleDir = bcontext.bundleDir;
-                    this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag, -1l);
+                    this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag, -1);
                 }
             }else {
                 bundleDir = bcontext.bundleDir;
-                this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag,-1l);
+                this.archive = new BundleArchive(location, bundleDir, bcontext.bundle_tag,-1);
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -340,12 +340,6 @@ public  class BundleImpl implements Bundle {
 
     }
 
-    public BundleImpl(String location) {
-        this.location = location;
-        this.state = RESOLVED;
-
-    }
-
     private synchronized void resolveBundle() throws BundleException {
 
         if (this.archive == null) {
@@ -365,7 +359,7 @@ public  class BundleImpl implements Bundle {
             if(dependencies!=null) {
                 for (String str : dependencies) {
                     BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(str);
-                    if (impl != null && !AtlasBundleInfoManager.instance().isMbundle(str)) {
+                    if (impl != null) {
                         nativeLibDir += ":";
                         File dependencyLibDir = new File(impl.getArchive().getCurrentRevision().mappingInternalDirectory(), "lib");
                         nativeLibDir += dependencyLibDir;
@@ -451,20 +445,20 @@ public  class BundleImpl implements Bundle {
         throw new IllegalStateException("Cannot stop bundle now");
     }
 
-    public /*synchronized*/ void startBundle() {
-        if (checkIsActive()) {
-            return;
-        }
-        startBundleLocked();
-    }
     /**
      * the actual starting happens here.
      *
      * @throws BundleException if the bundle cannot be resolved or the Activator throws an exception.
      */
-    public synchronized void startBundleLocked() {
-        if (checkIsActive()) {
+    public synchronized void startBundle() {
+        if (state == UNINSTALLED) {
+            throw new IllegalStateException("Cannot start uninstalled bundle " + toString());
+        }
+        if (state == ACTIVE) {
             return;
+        }
+        if (state == INSTALLED) {
+            throw new RuntimeException("can not start bundle which is not resolved");
         }
         state = STARTING;
         Framework.notifyBundleListeners(BundleEvent.BEFORE_STARTED, this);
@@ -474,19 +468,6 @@ public  class BundleImpl implements Bundle {
         }
 
 
-    }
-
-    private boolean checkIsActive() {
-        if (state == UNINSTALLED) {
-            throw new IllegalStateException("Cannot start uninstalled bundle " + toString());
-        }
-        if (state == ACTIVE) {
-            return true;
-        }
-        if (state == INSTALLED) {
-            throw new RuntimeException("can not start bundle which is not resolved");
-        }
-        return false;
     }
 
     public void setActive(){
@@ -585,9 +566,9 @@ public  class BundleImpl implements Bundle {
         Framework.bundles.remove(getLocation());
         Framework.notifyBundleListeners(BundleEvent.UNINSTALLED, this);
     }
-
-    public /*synchronized*/ void optDexFile() {
-        this.getArchive().optDexFile();
+    
+    public synchronized void optDexFile() {
+    	this.getArchive().optDexFile();
     }
 
     /**
