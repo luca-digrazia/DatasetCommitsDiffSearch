@@ -120,7 +120,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   // TODO(janakr): Unify with RecursivePackageProviderBackedTargetPatternResolver's constant.
   private static final int BATCH_CALLBACK_SIZE = 10000;
   private static final int DEFAULT_THREAD_COUNT = Runtime.getRuntime().availableProcessors();
-  private static final int MAX_QUERY_EXPRESSION_LOG_CHARS = 1000;
   private static final Logger LOG = Logger.getLogger(SkyQueryEnvironment.class.getName());
   private static final Function<Target, Label> TARGET_LABEL_FUNCTION =
       new Function<Target, Label>() {
@@ -231,13 +230,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     ExecutorUtil.interruptibleShutdown(threadPool);
   }
 
-  private static String getLogString(QueryExpression queryExpression) {
-    String queryExpressionString = queryExpression.toString();
-    return queryExpressionString.length() <= MAX_QUERY_EXPRESSION_LOG_CHARS
-        ? queryExpressionString
-        : queryExpressionString.substring(0, MAX_QUERY_EXPRESSION_LOG_CHARS) + "...[truncated]";
-  }
-
   @Override
   public QueryExpression transformParsedQuery(QueryExpression queryExpression) {
     // Transform each occurrence of an expressions of the form 'rdeps(<universeScope>, <T>)' to
@@ -269,10 +261,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       }
     };
     QueryExpression transformedQueryExpression = queryExpression.getMapped(rdepsToAllRDepsMapper);
-    LOG.info(String.format(
-        "transformed query [%s] to [%s]",
-        getLogString(queryExpression),
-        getLogString(transformedQueryExpression)));
+    LOG.info(String.format("transformed query [%s] to [%s]", queryExpression,
+        transformedQueryExpression));
     return transformedQueryExpression;
   }
 
