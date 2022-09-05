@@ -13,8 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
+import com.google.devtools.build.android.AndroidDataSet.KeyValueConsumer;
 import com.google.devtools.build.android.xml.AttrXmlResourceValue;
 import com.google.devtools.build.android.xml.IdXmlResourceValue;
 import com.google.devtools.build.android.xml.PluralXmlResourceValue;
@@ -38,7 +37,7 @@ import javax.xml.stream.events.StartElement;
 import javax.xml.stream.events.XMLEvent;
 
 /**
- * {@link XmlResourceValues} provides methods for getting {@link XmlResourceValue} derived classes.
+ * XmlValues provides methods for getting XmlValue derived classes.
  *
  * <p>Acts a static factory class containing the general xml parsing logic for resources
  * that are declared inside the &lt;resources&gt; tag.
@@ -59,7 +58,7 @@ public class XmlResourceValues {
   private static final QName ATTR_TYPE = QName.valueOf("type");
 
   static XmlResourceValue parsePlurals(XMLEventReader eventReader) throws XMLStreamException {
-    ImmutableMap.Builder<String, String> values = ImmutableMap.builder();
+    Map<String, String> values = new HashMap<>();
     for (XMLEvent element = eventReader.nextTag();
         !isEndTag(element, TAG_PLURALS);
         element = eventReader.nextTag()) {
@@ -69,7 +68,7 @@ public class XmlResourceValues {
             eventReader.getElementText());
       }
     }
-    return PluralXmlResourceValue.of(values.build());
+    return PluralXmlResourceValue.of(values);
   }
 
   static XmlResourceValue parseStyle(XMLEventReader eventReader, StartElement start)
@@ -102,12 +101,12 @@ public class XmlResourceValues {
         members.add(getElementName(attr));
         overwritingConsumer.consume(
             fqnFactory.create(ResourceType.ATTR, getElementName(attr)),
-            DataResourceXml.of(path, parseAttr(eventReader, start)));
+            XmlDataResource.of(path, parseAttr(eventReader, start)));
       }
     }
     nonOverwritingConsumer.consume(
         fqnFactory.create(ResourceType.STYLEABLE, getElementName(start)),
-        DataResourceXml.of(path, StyleableXmlResourceValue.of(members)));
+        XmlDataResource.of(path, StyleableXmlResourceValue.of(members)));
   }
 
   static XmlResourceValue parseAttr(XMLEventReader eventReader, StartElement start)

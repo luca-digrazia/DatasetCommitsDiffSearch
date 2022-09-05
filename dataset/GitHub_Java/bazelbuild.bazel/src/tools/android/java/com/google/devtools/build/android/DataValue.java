@@ -13,8 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import java.io.IOException;
-import java.io.OutputStream;
+import java.nio.file.Path;
 
 /**
  * Represents the value associated with DataKey interface for resource and asset values.
@@ -24,13 +23,7 @@ import java.io.OutputStream;
 public interface DataValue {
 
   /**
-   * Provides the DataSource, which contains metadata about the original xml it was derived from.
+   * Provides the Path to the file from which the DataValue was derived.
    */
-  DataSource source();
-
-  /**
-   * Serializes to a supplied stream and returns the number of bytes written.
-   */
-  int serializeTo(
-      DataKey key, DataSourceTable sourceTable, OutputStream output) throws IOException;
+  Path source();
 }
