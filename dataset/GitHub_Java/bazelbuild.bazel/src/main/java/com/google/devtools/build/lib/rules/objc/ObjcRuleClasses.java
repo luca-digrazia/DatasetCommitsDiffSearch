@@ -67,6 +67,7 @@ public class ObjcRuleClasses {
   static final PathFragment LIPO = new PathFragment(BIN_DIR + "/lipo");
   static final PathFragment IBTOOL = new PathFragment(IosSdkCommands.IBTOOL_PATH);
   static final PathFragment SWIFT_STDLIB_TOOL = new PathFragment(BIN_DIR + "/swift-stdlib-tool");
+  static final PathFragment STRIP = new PathFragment(BIN_DIR + "/strip");
 
   private static final PathFragment JAVA = new PathFragment("/usr/bin/java");
 
@@ -397,10 +398,6 @@ public class ObjcRuleClasses {
           the same structure passed to this argument, so
           <code>["res/foo.png"]</code> will end up in
           <code>Payload/foo.app/res/foo.png</code>.
-          <p>Note that in the generated XCode project file, all files in the top directory of
-          the specified files will be included in the Xcode-generated app bundle. So
-          specifying <code>["res/foo.png"]</code> will lead to the inclusion of all files in
-          directory <code>res</code>.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("structured_resources", LABEL_LIST)
               .legacyAllowAnyFileType()
