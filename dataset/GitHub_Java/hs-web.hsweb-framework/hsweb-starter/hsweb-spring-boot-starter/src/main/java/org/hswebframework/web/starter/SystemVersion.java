@@ -183,9 +183,9 @@ public class SystemVersion extends Version {
 
 @Slf4j
 class Version implements Comparable<Version> {
-    protected String  name;
-    protected String  comment;
-    protected String  website;
+    protected String name;
+    protected String comment;
+    protected String website;
     protected int     majorVersion    = 1;
     protected int     minorVersion    = 0;
     protected int     revisionVersion = 0;
@@ -203,11 +203,7 @@ class Version implements Comparable<Version> {
             return;
         }
         boolean snapshot = version.toLowerCase().contains("snapshot");
-        version = version.toLowerCase()
-                .replace(".snapshot", "")
-                .replace("-snapshot", "")
-                .replace("-rc", "")
-                .replace("-release", "");
+        version = version.toLowerCase().replace(".snapshot", "").replace("-snapshot", "");
         String[] ver = version.split("[.]");
         Integer[] numberVer = ListUtils.stringArr2intArr(ver);
         if (numberVer.length < 1 || Arrays.stream(numberVer).anyMatch(Objects::isNull)) {
@@ -293,7 +289,13 @@ class Version implements Comparable<Version> {
                 return -1;
             }
             if (o.getMinorVersion() == this.getMinorVersion()) {
-                return Integer.compare(this.getRevisionVersion(), o.getRevisionVersion());
+                if (o.getRevisionVersion() > this.getRevisionVersion()) {
+                    return -1;
+                }
+                if (o.getRevisionVersion() == this.getRevisionVersion()) {
+                    return 0;
+                }
+                return 1;
             } else {
                 return 1;
             }
@@ -303,17 +305,18 @@ class Version implements Comparable<Version> {
     }
 
     public String versionToString() {
-        return String.valueOf(majorVersion) + "." +
-                minorVersion + "." +
-                revisionVersion + (snapshot ? "-SNAPSHOT" : "");
+        return new StringBuilder()
+                .append(majorVersion).append(".")
+                .append(minorVersion).append(".")
+                .append(revisionVersion).append(snapshot ? "-SNAPSHOT" : "").toString();
     }
 
     @Override
     public String toString() {
-        return name + " version " +
-                majorVersion + "." +
-                minorVersion + "." +
-                revisionVersion + (snapshot ? "-SNAPSHOT" : "");
+        return new StringBuilder(name).append(" version ")
+                .append(majorVersion).append(".")
+                .append(minorVersion).append(".")
+                .append(revisionVersion).append(snapshot ? "-SNAPSHOT" : "").toString();
     }
 
 }

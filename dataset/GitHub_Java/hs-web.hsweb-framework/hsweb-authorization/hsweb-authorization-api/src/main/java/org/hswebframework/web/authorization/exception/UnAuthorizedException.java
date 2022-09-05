@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2019 http://www.hswebframework.org
+ *  * Copyright 2016 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@
 package org.hswebframework.web.authorization.exception;
 
 import org.hswebframework.web.authorization.token.TokenState;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
  * 未授权异常
@@ -28,7 +26,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * @author zhouhao
  * @since 3.0
  */
-@ResponseStatus(HttpStatus.UNAUTHORIZED)
 public class UnAuthorizedException extends RuntimeException {
     private static final long serialVersionUID = 2422918455013900645L;
 

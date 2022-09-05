@@ -44,7 +44,7 @@ public class ValidationException extends BusinessException {
 
     public List<ValidateResults.Result> getResults() {
         if (results == null) {
-            return new java.util.ArrayList<>();
+            return Collections.emptyList();
         }
         return results.getResults();
     }
