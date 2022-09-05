@@ -28,13 +28,10 @@ import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
-import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 
@@ -111,14 +108,13 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     if (directories == null) {
       return null;
     }
-    Label crosstoolTopLabel = RedirectChaser.followRedirects(env,
+    Label crosstoolTop = RedirectChaser.followRedirects(env,
         options.get(CppOptions.class).crosstoolTop, "crosstool_top");
-    if (crosstoolTopLabel == null) {
+    if (crosstoolTop == null) {
       return null;
     }
-
     CrosstoolConfigurationLoader.CrosstoolFile file =
-        CrosstoolConfigurationLoader.readCrosstool(env, crosstoolTopLabel);
+        CrosstoolConfigurationLoader.readCrosstool(env, crosstoolTop);
     if (file == null) {
       return null;
     }
@@ -151,42 +147,15 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       }
     } else {
       fdoZip = directories.getWorkspace().getRelative(cppOptions.fdoOptimize);
-      try {
-        // We don't check for file existence, but at least the filename should be well-formed.
-        FileSystemUtils.checkBaseName(fdoZip.getBaseName());
-      } catch (IllegalArgumentException e) {
-        throw new InvalidConfigurationException(e);
-      }
     }
 
     Label ccToolchainLabel;
-    Target crosstoolTop;
-
     try {
-      crosstoolTop = env.getTarget(crosstoolTopLabel);
-    } catch (NoSuchThingException e) {
-      throw new IllegalStateException(e);  // Should have been found out during redirect chasing
-    }
-
-    if (crosstoolTop instanceof Rule
-        && ((Rule) crosstoolTop).getRuleClass().equals("cc_toolchain_suite")) {
-      Rule ccToolchainSuite = (Rule) crosstoolTop;
-      ccToolchainLabel = NonconfigurableAttributeMapper.of(ccToolchainSuite)
-          .get("toolchains", Type.LABEL_DICT_UNARY)
-          .get(toolchain.getTargetCpu());
-      if (ccToolchainLabel == null) {
-        throw new InvalidConfigurationException(String.format(
-            "cc_toolchain_suite '%s' does not contain a toolchain for CPU '%s'",
-            crosstoolTopLabel, toolchain.getTargetCpu()));
-      }
-    } else {
-      try {
-        ccToolchainLabel = crosstoolTopLabel.getRelative("cc-compiler-" + toolchain.getTargetCpu());
-      } catch (Label.SyntaxException e) {
-        throw new InvalidConfigurationException(String.format(
-            "'%s' is not a valid CPU. It should only consist of characters valid in labels",
-            toolchain.getTargetCpu()));
-      }
+      ccToolchainLabel = crosstoolTop.getRelative("cc-compiler-" + toolchain.getTargetCpu());
+    } catch (Label.SyntaxException e) {
+      throw new InvalidConfigurationException(String.format(
+          "'%s' is not a valid CPU. It should only consist of characters valid in labels",
+          toolchain.getTargetCpu()));
     }
 
     Target ccToolchain;
@@ -207,6 +176,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     }
 
     return new CppConfigurationParameters(toolchain, file.getMd5(), options,
-        fdoZip, directories.getExecRoot(), crosstoolTopLabel, ccToolchainLabel);
+        fdoZip, directories.getExecRoot(), crosstoolTop, ccToolchainLabel);
   }
 }

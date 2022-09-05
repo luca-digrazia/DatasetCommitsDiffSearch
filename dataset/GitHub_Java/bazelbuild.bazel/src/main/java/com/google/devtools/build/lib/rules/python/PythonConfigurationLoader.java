@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,10 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.cpp.CrosstoolConfigurationLoader;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 
 import javax.annotation.Nullable;
@@ -67,7 +67,7 @@ public class PythonConfigurationLoader implements ConfigurationFragmentFactory {
     }
 
     CrosstoolConfig.CToolchain toolchain = getToolchain(
-        env, buildOptions, buildOptions.get(CppOptions.class).crosstoolTop());
+        env, buildOptions, buildOptions.get(CppOptions.class).crosstoolTop);
     if (toolchain == null) {
       return null;
     }
