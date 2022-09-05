@@ -192,10 +192,6 @@ public class CsvReporter extends ScheduledReporter {
     private final String meterFormat;
     private final String timerFormat;
 
-    private final String timerHeader;
-    private final String meterHeader;
-    private final String histogramHeader;
-
     private CsvReporter(MetricRegistry registry,
                         File directory,
                         Locale locale,
@@ -217,10 +213,6 @@ public class CsvReporter extends ScheduledReporter {
         this.histogramFormat = String.join(separator, "%d", "%d", "%f", "%d", "%f", "%f", "%f", "%f", "%f", "%f", "%f");
         this.meterFormat = String.join(separator, "%d", "%f", "%f", "%f", "%f", "events/%s");
         this.timerFormat = String.join(separator, "%d", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "%f", "calls/%s", "%s");
-
-        this.timerHeader = String.join(separator, "count", "max", "mean", "min", "stddev", "p50", "p75", "p95", "p98", "p99", "p999", "mean_rate", "m1_rate", "m5_rate", "m15_rate", "rate_unit", "duration_unit");
-        this.meterHeader = String.join(separator, "count", "mean_rate", "m1_rate", "m5_rate", "m15_rate", "rate_unit");
-        this.histogramHeader = String.join(separator, "count", "max", "mean", "min", "stddev", "p50", "p75", "p95", "p98", "p99", "p999");
     }
 
     @Override
@@ -258,7 +250,7 @@ public class CsvReporter extends ScheduledReporter {
 
         report(timestamp,
                 name,
-                timerHeader,
+                "count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit,duration_unit",
                 timerFormat,
                 timer.getCount(),
                 convertDuration(snapshot.getMax()),
@@ -282,7 +274,7 @@ public class CsvReporter extends ScheduledReporter {
     private void reportMeter(long timestamp, String name, Meter meter) {
         report(timestamp,
                 name,
-                meterHeader,
+                "count,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit",
                 meterFormat,
                 meter.getCount(),
                 convertRate(meter.getMeanRate()),
@@ -297,7 +289,7 @@ public class CsvReporter extends ScheduledReporter {
 
         report(timestamp,
                 name,
-                histogramHeader,
+                "count,max,mean,min,stddev,p50,p75,p95,p98,p99,p999",
                 histogramFormat,
                 histogram.getCount(),
                 snapshot.getMax(),
@@ -328,7 +320,7 @@ public class CsvReporter extends ScheduledReporter {
                 try (PrintWriter out = new PrintWriter(new OutputStreamWriter(
                         new FileOutputStream(file, true), UTF_8))) {
                     if (!fileAlreadyExists) {
-                        out.println("t" + separator + header);
+                        out.println("t," + header);
                     }
                     out.printf(locale, String.format(locale, "%d" + separator + "%s%n", timestamp, line), values);
                 }
