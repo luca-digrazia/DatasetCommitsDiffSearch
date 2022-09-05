@@ -1,8 +1,6 @@
 package org.hswebframework.web.api.crud.entity;
 
 import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import org.hswebframework.ezorm.core.NestConditional;
 import org.hswebframework.ezorm.core.dsl.Query;
@@ -28,13 +26,11 @@ import java.util.function.Consumer;
  * @see QueryParam
  * @since 3.0
  */
-@Slf4j
 public class QueryParamEntity extends QueryParam {
 
     private static final long serialVersionUID = 8097500947924037523L;
 
     @Getter
-    @Deprecated
     private String termExpression;
 
     @Getter
@@ -42,11 +38,6 @@ public class QueryParamEntity extends QueryParam {
 
     @Getter
     private String orderBy;
-
-    //总数,设置了此值时,在分页查询的时候将不执行count.
-    @Getter
-    @Setter
-    private Integer total;
 
     /**
      * 创建一个空的查询参数实体,该实体无任何参数.
@@ -135,20 +126,18 @@ public class QueryParamEntity extends QueryParam {
      * </pre>
      *
      * @param termExpression 表达式
-     * @since 3.0.5
+     * @see 3.0.5
      */
-    @Deprecated
     public void setTermExpression(String termExpression) {
         this.termExpression = termExpression;
-        log.warn("termExpression is deprecated,please use where.");
-        setWhere(termExpression);
+        setTerms(TermExpressionParser.parse(termExpression));
     }
 
     /**
      * 表达式方式排序
      *
      * @param orderBy 表达式
-     * @since 4.0.1
+     * @see 4.0.1
      */
     public void setOrderBy(String orderBy) {
         this.orderBy = orderBy;
@@ -156,14 +145,13 @@ public class QueryParamEntity extends QueryParam {
     }
 
     /**
-     * 表达式查询条件,没有SQL注入问题,放心使用
+     * 表达式查询条件
      *
      * @param where 表达式
-     * @since 4.0.1
      */
     public void setWhere(String where) {
         this.where = where;
-        setTerms(TermExpressionParser.parse(termExpression));
+        setTermExpression(where);
     }
 
     @Override
