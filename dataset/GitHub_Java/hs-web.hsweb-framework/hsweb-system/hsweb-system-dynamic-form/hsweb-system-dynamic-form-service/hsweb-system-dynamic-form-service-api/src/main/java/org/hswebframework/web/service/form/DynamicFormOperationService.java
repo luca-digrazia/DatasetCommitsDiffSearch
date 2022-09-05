@@ -1,5 +1,6 @@
 package org.hswebframework.web.service.form;
 
+import org.hsweb.ezorm.core.dsl.Query;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.DeleteParamEntity;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
@@ -10,8 +11,9 @@ import java.util.List;
 /**
  * 动态表单操作接口,用于对动态表单进行增删改查操作
  *
- * @author zhouhao
  * @since 3.0
+ * @author zhouhao
+ *
  */
 public interface DynamicFormOperationService {
     <T> PagerResult<T> selectPager(String formId, QueryParamEntity paramEntity);
@@ -24,13 +26,9 @@ public interface DynamicFormOperationService {
 
     <T> int update(String formId, UpdateParamEntity<T> paramEntity);
 
-    <T> T updateById(String formId, String id, T data);
-
     <T> void insert(String formId, T entity);
 
     int delete(String formId, DeleteParamEntity paramEntity);
-
-    int deleteById(String formId, String id);
 
 
 }
