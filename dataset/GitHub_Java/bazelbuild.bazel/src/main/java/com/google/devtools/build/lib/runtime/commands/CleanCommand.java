@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.analysis.NoBuildEvent;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
 import com.google.devtools.build.lib.events.Event;
@@ -86,11 +86,10 @@ public final class CleanCommand implements BlazeCommand {
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options)
       throws ShutdownBlazeServerException {
+    BlazeRuntime runtime = env.getRuntime();
     Options cleanOptions = options.getOptions(Options.class);
     cleanOptions.expunge_async = cleanOptions.cleanStyle.equals("expunge_async");
     cleanOptions.expunge = cleanOptions.cleanStyle.equals("expunge");
-
-    env.getEventBus().post(new NoBuildEvent());
 
     if (!cleanOptions.expunge && !cleanOptions.expunge_async
         && !cleanOptions.cleanStyle.isEmpty()) {
@@ -108,7 +107,7 @@ public final class CleanCommand implements BlazeCommand {
     try {
       String symlinkPrefix =
           options.getOptions(BuildRequest.BuildRequestOptions.class).getSymlinkPrefix();
-      actuallyClean(env, env.getOutputBase(), cleanOptions, symlinkPrefix);
+      actuallyClean(env, runtime.getOutputBase(), cleanOptions, symlinkPrefix);
       return ExitCode.SUCCESS;
     } catch (IOException e) {
       env.getReporter().handle(Event.error(e.getMessage()));
@@ -163,11 +162,9 @@ public final class CleanCommand implements BlazeCommand {
     } else {
       LOG.info("Output cleaning...");
       runtime.clearCaches();
-      // In order to be sure that we delete everything, delete the workspace directory both for
-      // --deep_execroot and for --nodeep_execroot.
       for (String directory : new String[] {
-          env.getWorkspaceName(), "execroot/" + env.getWorkspaceName() }) {
-        Path child = outputBase.getRelative(directory);
+          BlazeDirectories.RELATIVE_OUTPUT_PATH, runtime.getWorkspaceName() }) {
+        Path child = outputBase.getChild(directory);
         if (child.exists()) {
           LOG.finest("Cleaning " + child);
           FileSystemUtils.deleteTreesBelow(child);
@@ -176,7 +173,7 @@ public final class CleanCommand implements BlazeCommand {
     }
     // remove convenience links
     OutputDirectoryLinksUtils.removeOutputDirectoryLinks(
-        env.getWorkspaceName(), env.getWorkspace(), env.getReporter(), symlinkPrefix);
+        runtime.getWorkspaceName(), runtime.getWorkspace(), env.getReporter(), symlinkPrefix);
     // shutdown on expunge cleans
     if (cleanOptions.expunge || cleanOptions.expunge_async) {
       throw new ShutdownBlazeServerException(0);
