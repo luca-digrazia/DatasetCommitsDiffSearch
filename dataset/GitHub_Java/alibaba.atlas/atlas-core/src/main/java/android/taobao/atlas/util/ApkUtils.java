@@ -368,7 +368,8 @@ public class ApkUtils {
                 channel.write(ByteBuffer.wrap(buffers, 0, realLength));
             }
         } catch (IOException e) {
-            AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLE_SOURCE_UNZIP_FAIL, null, e);
+            AtlasMonitor.getInstance().trace(AtlasMonitor.CONTAINER_BUNDLE_SOURCE_UNZIP_FAIL,
+                    false, "0", e==null? "":e.getMessage(),"");
             throw new IOException(e);
         } finally {
             if (input != null) try {

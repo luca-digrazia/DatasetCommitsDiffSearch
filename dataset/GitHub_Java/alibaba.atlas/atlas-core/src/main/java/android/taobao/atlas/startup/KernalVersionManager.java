@@ -217,7 +217,6 @@ import android.os.Process;
 import android.taobao.atlas.startup.patch.KernalConstants;
 import android.taobao.atlas.startup.patch.KernalFileLock;
 import android.text.TextUtils;
-import android.util.Log;
 import android.util.Pair;
 import java.io.*;
 import java.util.ArrayList;
@@ -331,9 +330,8 @@ public class KernalVersionManager {
                 input.close();
             } catch (Throwable e) {
                 updateMonitor(KernalConstants.DD_BASELINEINFO_FAIL, e==null?"":e.getMessage());
-                killChildProcesses(KernalConstants.baseContext);
-                BASELINEINFO.delete();
                 rollbackHardly();
+                killChildProcesses(KernalConstants.baseContext);
                 android.os.Process.killProcess(Process.myPid());
             }
         }
@@ -393,7 +391,6 @@ public class KernalVersionManager {
     }
 
     public boolean isCachePreVersion(){
-        Log.e("KernalVersionManager","can no be inlined");
         return cachePreVersion;
     }
 

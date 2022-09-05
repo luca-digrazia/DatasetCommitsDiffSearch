@@ -261,17 +261,13 @@ public class DelegateResources extends Resources {
     }
 
     public static void addBundleResources(String assetPath)  throws Exception{
-        synchronized (DelegateResources.class) {
-            updateResources(RuntimeVariables.delegateResources, assetPath, BUNDLE_RES);
-        }
+        updateResources(RuntimeVariables.delegateResources, assetPath, BUNDLE_RES);
     }
 
     public static void addApkpatchResources(String assetPath) throws Exception{
         AtlasHacks.defineAndVerify();
         sKernalPathPath = assetPath;
-        synchronized (DelegateResources.class) {
-            updateResources(RuntimeVariables.delegateResources, assetPath, APK_RES);
-        }
+        updateResources(RuntimeVariables.delegateResources, assetPath, APK_RES);
     }
 
     public static String getCurrentAssetpathStr(AssetManager manager){
@@ -296,7 +292,7 @@ public class DelegateResources extends Resources {
     }
 
 
-    private static void updateResources(Resources res,String assetPath,int assertType) throws Exception{
+    private synchronized static void updateResources(Resources res,String assetPath,int assertType) throws Exception{
         if(sAssetManagerProcessor==null){
             sAssetManagerProcessor = new AssetManagerProcessor();
         }

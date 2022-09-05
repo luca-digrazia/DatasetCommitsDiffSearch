@@ -216,10 +216,22 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.ServiceInfo;
+import android.os.AsyncTask;
+import android.os.Looper;
+import android.taobao.atlas.framework.FrameworkProperties;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.text.TextUtils;
+import android.util.Log;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.lang.reflect.Field;
 import java.util.*;
 
 /**
@@ -311,6 +323,23 @@ public class AtlasBundleInfoManager {
             }
         }
 
+    }
+
+    /*
+    * Get all dependent bundles for the designated bundle
+    */
+    public boolean getHasSO(String bundleName){
+
+        InitBundleInfoByVersionIfNeed();
+        if (mCurrentBundleListing == null || mCurrentBundleListing.getBundles()==null || mCurrentBundleListing.getBundles().size() == 0){
+            return false;
+        }
+
+        BundleListing.BundleInfo info = mCurrentBundleListing.getBundles().get(bundleName);
+        if(info!=null){
+            return info.isHasSO();
+        }
+        return false;
     }
 
     public String getBundleForComponet(String componentName){
@@ -452,7 +481,15 @@ public class AtlasBundleInfoManager {
      */
     private synchronized void InitBundleInfoByVersionIfNeed(){
         if(mCurrentBundleListing==null){
-            String bundleInfoStr = (String)RuntimeVariables.getFrameworkProperty("bundleInfo");
+            String bundleInfoStr = null;
+            try {
+                Field field = FrameworkProperties.class.getDeclaredField("bundleInfo");
+                field.setAccessible(true);
+                bundleInfoStr = (String)field.get(FrameworkProperties.class);
+            }catch(Throwable e){
+                e.printStackTrace();
+            }
+
             if(!TextUtils.isEmpty(bundleInfoStr)) {
                 try {
                     LinkedHashMap<String,BundleListing.BundleInfo> infos = BundleListingUtil.parseArray(bundleInfoStr);

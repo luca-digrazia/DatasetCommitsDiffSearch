@@ -217,7 +217,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleImpl;
-import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
@@ -273,7 +272,7 @@ public class SecurityHandler implements BundleListener {
             /**
              * Skip bundle security check once updated.
              */
-            if(BaselineInfoManager.instance().isUpdated(bundle.getLocation()) || BaselineInfoManager.instance().isDexPatched(bundle.getLocation())){
+            if(((BundleImpl)bundle).getArchive().getCurrentRevision().isUpdated()){
                 return;
             }
 
