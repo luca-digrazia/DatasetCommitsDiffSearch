@@ -50,9 +50,7 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
 
     filesToBuild.addAll(common.getCompiledArchive().asSet());
 
-    new CompilationSupport(ruleContext)
-        .registerCompileAndArchiveActions(commonBuilder.build())
-        .registerFullyLinkAction(common.getObjcProvider());
+    new CompilationSupport(ruleContext).registerCompileAndArchiveActions(commonBuilder.build());
 
     new XcodeSupport(ruleContext)
         .addFilesToBuild(filesToBuild)
