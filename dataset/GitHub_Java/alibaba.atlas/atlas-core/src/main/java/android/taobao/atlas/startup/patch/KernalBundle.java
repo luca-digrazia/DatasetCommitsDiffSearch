@@ -253,7 +253,7 @@ public class KernalBundle{
     public static String KERNAL_BUNDLE_NAME = "com.taobao.maindex";
 
     public static KernalBundle kernalBundle = null;
-    public static boolean patchWithApk = false;
+
     public static boolean checkloadKernalBundle(Application application,String currentProcessName) {
         File updateDir = null;
         File dexPatchDir = null;
@@ -394,21 +394,9 @@ public class KernalBundle{
         if ((dexFile != null&&dexFile.length>0) || archive.getLibraryDirectory().exists()) {
             installKernalBundle(KernalConstants.baseContext.getClassLoader(),archive.getArchiveFile(),archive.getOdexFile(),archive.getLibraryDirectory());
             boolean needReplaceClassLoader = needReplaceClassLoader(application);
-            boolean dexPatch = dexFile[dexFile.length - 1].getName().contains(KernalBundleArchive.DEXPATCH_DIR);
-            int newFrameworkPropertiesDexIndex;
-            if (dexPatch) {
-                newFrameworkPropertiesDexIndex = dexFile.length > 1 ? dexFile.length - 2 : dexFile.length - 1;
-            } else {
-                newFrameworkPropertiesDexIndex = dexFile.length - 1;
-            }
-            //临时处理方案，需要替换为dexopt时传入classsLoader以兼容8.0
-            patchWithApk = dexPatch &&
-                    (TextUtils.isEmpty(KernalVersionManager.instance().currentVersionName()) || !KernalVersionManager.instance().currentVersionName().equals(KernalConstants.INSTALLED_VERSIONNAME));
-            if (!needReplaceClassLoader) {
+            int newFrameworkPropertiesDexIndex = dexFile[dexFile.length-1].getName().indexOf(KernalBundleArchive.DEXPATCH_DIR)>=0 ? dexFile.length-2 : dexFile.length-1;
+            if(!needReplaceClassLoader) {
                 FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", application.getClassLoader());
-            }else if(patchWithApk){
-                FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", application.getClassLoader());
-                replaceClassLoader = new NClassLoader(".",KernalBundle.class.getClassLoader().getParent());
             }else{
                 replaceClassLoader = new NClassLoader(".",KernalBundle.class.getClassLoader().getParent());
                 FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", replaceClassLoader);
@@ -472,11 +460,9 @@ public class KernalBundle{
     }
 
     public void patchKernalResource(Application application) throws Exception{
-        if(!patchWithApk) {
-            Class DelegateResourcesClazz = application.getClassLoader().loadClass("android.taobao.atlas.runtime.DelegateResources");
-            DelegateResourcesClazz.getDeclaredMethod("addApkpatchResources", String.class)
-                    .invoke(DelegateResourcesClazz, archive.getArchiveFile().getAbsolutePath());
-        }
+        Class DelegateResourcesClazz = application.getClassLoader().loadClass("android.taobao.atlas.runtime.DelegateResources");
+        DelegateResourcesClazz.getDeclaredMethod("addApkpatchResources", String.class)
+                .invoke(DelegateResourcesClazz, archive.getArchiveFile().getAbsolutePath());
     }
 
     public int getState() {
