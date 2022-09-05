@@ -7,6 +7,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.mockito.stubbing.Stubber;
 
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
@@ -16,6 +17,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.*;
 
 public abstract class AbstractPollingReporterTest {
@@ -27,8 +29,8 @@ public abstract class AbstractPollingReporterTest {
 
     @Before
     public void init() throws Exception {
-        when(clock.getTick()).thenReturn(1234L);
-        when(clock.getTime()).thenReturn(5678L);
+        when(clock.tick()).thenReturn(1234L);
+        when(clock.time()).thenReturn(5678L);
         registry = new TestMetricsRegistry();
         out = new ByteArrayOutputStream();
         reporter = createReporter(registry, out, clock);
@@ -132,38 +134,69 @@ public abstract class AbstractPollingReporterTest {
 
     static Counter createCounter(long count) throws Exception {
         final Counter mock = mock(Counter.class);
-        when(mock.getCount()).thenReturn(count);
-        return mock;
+        when(mock.count()).thenReturn(count);
+        return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
+            @Override
+            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+                processor.processCounter(name, mock, context);
+            }
+        }));
     }
 
     static Histogram createHistogram() throws Exception {
         final Histogram mock = mock(Histogram.class);
         setupSummarizableMock(mock);
         setupSamplingMock(mock);
-        return mock;
+        return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
+            @Override
+            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+                processor.processHistogram(name, mock, context);
+            }
+        }));
     }
 
     
     static Gauge<String> createGauge() throws Exception {
         @SuppressWarnings("unchecked")
         final Gauge<String> mock = mock(Gauge.class);
-        when(mock.getValue()).thenReturn("gaugeValue");
-        return mock;
+        when(mock.value()).thenReturn("gaugeValue");
+        return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
+            @Override
+            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+                processor.processGauge(name, mock, context);
+            }
+        }));
     }
 
 
     static Timer createTimer() throws Exception {
         final Timer mock = mock(Timer.class);
-        when(mock.getDurationUnit()).thenReturn(TimeUnit.MILLISECONDS);
+        when(mock.durationUnit()).thenReturn(TimeUnit.MILLISECONDS);
         setupSummarizableMock(mock);
         setupMeteredMock(mock);
         setupSamplingMock(mock);
-        return mock;
+        return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
+            @Override
+            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+                processor.processTimer(name, mock, context);
+            }
+        }));
     }
 
     static Meter createMeter() throws Exception {
         final Meter mock = mock(Meter.class);
         setupMeteredMock(mock);
+        return configureMatcher(mock, doAnswer(new MetricsProcessorAction() {
+            @Override
+            void delegateToProcessor(MetricProcessor<Object> processor, MetricName name, Object context) throws Exception {
+                processor.processMeter(name, mock, context);
+            }
+        }));
+    }
+
+    @SuppressWarnings("unchecked")
+    static <T extends Metric> T configureMatcher(T mock, Stubber stub) throws Exception {
+        stub.when(mock).processWith(any(MetricProcessor.class), any(MetricName.class), any());
         return mock;
     }
 
@@ -182,20 +215,20 @@ public abstract class AbstractPollingReporterTest {
     }
 
     static void setupSummarizableMock(Summarizable summarizable) {
-        when(summarizable.getMin()).thenReturn(1d);
-        when(summarizable.getMax()).thenReturn(3d);
-        when(summarizable.getMean()).thenReturn(2d);
-        when(summarizable.getStdDev()).thenReturn(1.5d);
+        when(summarizable.min()).thenReturn(1d);
+        when(summarizable.max()).thenReturn(3d);
+        when(summarizable.mean()).thenReturn(2d);
+        when(summarizable.stdDev()).thenReturn(1.5d);
     }
 
     static void setupMeteredMock(Metered metered) {
-        when(metered.getCount()).thenReturn(1L);
-        when(metered.getOneMinuteRate()).thenReturn(1d);
-        when(metered.getFiveMinuteRate()).thenReturn(5d);
-        when(metered.getFifteenMinuteRate()).thenReturn(15d);
-        when(metered.getMeanRate()).thenReturn(2d);
-        when(metered.getEventType()).thenReturn("eventType");
-        when(metered.getRateUnit()).thenReturn(TimeUnit.SECONDS);
+        when(metered.count()).thenReturn(1L);
+        when(metered.oneMinuteRate()).thenReturn(1d);
+        when(metered.fiveMinuteRate()).thenReturn(5d);
+        when(metered.fifteenMinuteRate()).thenReturn(15d);
+        when(metered.meanRate()).thenReturn(2d);
+        when(metered.eventType()).thenReturn("eventType");
+        when(metered.rateUnit()).thenReturn(TimeUnit.SECONDS);
     }
 
     static void setupSamplingMock(Sampling sampling) {
