@@ -94,16 +94,12 @@ public abstract class GenericEntityService<E extends GenericEntity<PK>, PK>
                     .where(GenericEntity.id, pk)
                     .exec();
         } else {
-            if (!physicalDeleteByPk(pk)) {
-                logger.warn("物理删除数据失败,主键:{}", pk);
-            }
+            physicalDeleteByPk(pk);
         }
         return old;
     }
 
     protected boolean physicalDeleteByPk(PK pk) {
-        //createDelete().where(GenericEntity.id,pk).exec()>0;
-
         return getDao().deleteByPk(pk) > 0;
     }
 
