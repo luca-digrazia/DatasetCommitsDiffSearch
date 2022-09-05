@@ -13,10 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bazel;
 
-import static com.google.common.base.StandardSystemProperty.USER_NAME;
-
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -37,14 +34,10 @@ import com.google.devtools.build.lib.analysis.BuildInfoHelper;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.KeyType;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.GotOptionsEvent;
-import com.google.devtools.build.lib.shell.CommandException;
-import com.google.devtools.build.lib.shell.CommandResult;
-import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.NetUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -55,77 +48,38 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Provides information about the workspace (e.g. source control context, current machine, current
  * user, etc).
- *
- * <p>Note that the <code>equals()</code> method is necessary so that Skyframe knows when to
- * invalidate the node representing the workspace status action.
  */
 public class BazelWorkspaceStatusModule extends BlazeModule {
   private static class BazelWorkspaceStatusAction extends WorkspaceStatusAction {
     private final Artifact stableStatus;
     private final Artifact volatileStatus;
-    private final Options options;
+    private final AtomicReference<Options> options;
+    
     private final String username;
     private final String hostname;
     private final long timestamp;
-    private final com.google.devtools.build.lib.shell.Command getWorkspaceStatusCommand;
 
     private BazelWorkspaceStatusAction(
-        WorkspaceStatusAction.Options options,
-        BlazeRuntime runtime,
+        AtomicReference<WorkspaceStatusAction.Options> options,
         Artifact stableStatus,
         Artifact volatileStatus) {
       super(BuildInfoHelper.BUILD_INFO_ACTION_OWNER, Artifact.NO_ARTIFACTS,
           ImmutableList.of(stableStatus, volatileStatus));
-      this.options = Preconditions.checkNotNull(options);
+      this.options = options;
       this.stableStatus = stableStatus;
       this.volatileStatus = volatileStatus;
-      this.username = USER_NAME.value();
+      this.username = System.getProperty("user.name");
       this.hostname = NetUtil.findShortHostName();
       this.timestamp = System.currentTimeMillis();
-      this.getWorkspaceStatusCommand =
-          options.workspaceStatusCommand.equals(PathFragment.EMPTY_FRAGMENT)
-              ? null
-              : new CommandBuilder()
-                  .addArgs(options.workspaceStatusCommand.toString())
-                  // Pass client env, because certain SCM client(like
-                  // perforce, git) relies on environment variables to work
-                  // correctly.
-                  .setEnv(runtime.getClientEnv())
-                  .setWorkingDir(runtime.getWorkspace())
-                  .useShell(true)
-                  .build();
     }
 
     @Override
     public String describeStrategy(Executor executor) {
-      return "";
-    }
-
-    private String getAdditionalWorkspaceStatus(ActionExecutionContext actionExecutionContext)
-        throws ActionExecutionException {
-      try {
-        if (this.getWorkspaceStatusCommand != null) {
-          actionExecutionContext
-              .getExecutor()
-              .getEventHandler()
-              .handle(
-                  Event.progress(
-                      "Getting additional workspace status by running "
-                          + options.workspaceStatusCommand));
-          CommandResult result = this.getWorkspaceStatusCommand.execute();
-          if (result.getTerminationStatus().success()) {
-            return new String(result.getStdout());
-          }
-          throw new ActionExecutionException(
-              "workspace status command failed: " + result.getTerminationStatus(), this, true);
-        }
-      } catch (CommandException e) {
-        throw new ActionExecutionException(e, this, true);
-      }
       return "";
     }
 
@@ -136,26 +90,20 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
         Joiner joiner = Joiner.on('\n');
         String info =
             joiner.join(
-                BuildInfo.BUILD_EMBED_LABEL + " " + options.embedLabel,
+                BuildInfo.BUILD_EMBED_LABEL + " " + options.get().embedLabel,
                 BuildInfo.BUILD_HOST + " " + hostname,
                 BuildInfo.BUILD_USER + " " + username);
         FileSystemUtils.writeContent(stableStatus.getPath(), info.getBytes(StandardCharsets.UTF_8));
-        String volatileInfo =
-            joiner.join(
-                BuildInfo.BUILD_TIMESTAMP + " " + timestamp,
-                getAdditionalWorkspaceStatus(actionExecutionContext));
+        String volatileInfo = BuildInfo.BUILD_TIMESTAMP + " " + timestamp + "\n";
 
         FileSystemUtils.writeContent(
             volatileStatus.getPath(), volatileInfo.getBytes(StandardCharsets.UTF_8));
       } catch (IOException e) {
-        throw new ActionExecutionException(
-            "Failed to run workspace status command " + options.workspaceStatusCommand,
-            e,
-            this,
-            true);
+        throw new ActionExecutionException(e, this, true);
       }
     }
 
+    // TODO(bazel-team): Add test for equals, add hashCode.
     @Override
     public boolean equals(Object o) {
       if (!(o instanceof BazelWorkspaceStatusAction)) {
@@ -164,13 +112,12 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
 
       BazelWorkspaceStatusAction that = (BazelWorkspaceStatusAction) o;
       return this.stableStatus.equals(that.stableStatus)
-          && this.volatileStatus.equals(that.volatileStatus)
-          && this.options.equals(that.options);
+          && this.volatileStatus.equals(that.volatileStatus);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(stableStatus, volatileStatus, options);
+      return Objects.hash(stableStatus, volatileStatus);
     }
 
     @Override
@@ -225,7 +172,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
       Artifact volatileArtifact = factory.getConstantMetadataArtifact(
           new PathFragment("volatile-status.txt"), root, artifactOwner);
 
-      return new BazelWorkspaceStatusAction(options, runtime, stableArtifact, volatileArtifact);
+      return new BazelWorkspaceStatusAction(options, stableArtifact, volatileArtifact);
     }
   }
 
@@ -235,15 +182,11 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     public ImmutableMap<String, Key> getStableKeys() {
       return ImmutableMap.of(
           BuildInfo.BUILD_EMBED_LABEL,
-          Key.of(KeyType.STRING, options.embedLabel, "redacted"),
+          Key.of(KeyType.STRING, options.get().embedLabel, "redacted"),
           BuildInfo.BUILD_HOST,
           Key.of(KeyType.STRING, "hostname", "redacted"),
           BuildInfo.BUILD_USER,
-          Key.of(KeyType.STRING, "username", "redacted"),
-          BuildInfo.BUILD_SCM_REVISION,
-          Key.of(KeyType.STRING, "0", "0"),
-          BuildInfo.BUILD_SCM_STATUS,
-          Key.of(KeyType.STRING, "", "redacted"));
+          Key.of(KeyType.STRING, "username", "redacted"));
     }
 
     @Override
@@ -253,7 +196,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
   }
 
   private BlazeRuntime runtime;
-  private WorkspaceStatusAction.Options options;
+  private AtomicReference<WorkspaceStatusAction.Options> options = new AtomicReference<>();
 
   @Override
   public void beforeCommand(BlazeRuntime runtime, Command command) {
@@ -270,7 +213,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
 
   @Subscribe
   public void gotOptionsEvent(GotOptionsEvent event) {
-    options = event.getOptions().getOptions(WorkspaceStatusAction.Options.class);
+    options.set(event.getOptions().getOptions(WorkspaceStatusAction.Options.class));
   }
 
   @Override
