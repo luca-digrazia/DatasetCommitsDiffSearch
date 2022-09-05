@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
@@ -23,11 +24,13 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 
 /**
- * Implementation for {$code experimental_ios_test} rule in Bazel.
+ * Implementation for {@code experimental_ios_test} rule in Bazel.
  *
- * <p>Note that this will be renamed to ${code ios_test}, and {@link
+ * <p>Note that this will be renamed to {@code ios_test}, and {@link
  * com.google.devtools.build.lib.bazel.rules.objc.BazelIosTest} will be removed when it is slightly
  * more feature complete.
  */
@@ -36,14 +39,16 @@ public final class ExperimentalIosTest extends IosTest {
   public ConfiguredTarget create(RuleContext ruleContext, ObjcCommon common,
       XcodeProvider xcodeProvider, NestedSet<Artifact> filesToBuild) throws InterruptedException {
 
-    Runfiles.Builder runfilesBuilder = new Runfiles.Builder();
-    NestedSetBuilder<Artifact> filesToBuildBuilder = NestedSetBuilder.<Artifact>stableOrder();
-    filesToBuildBuilder.addTransitive(filesToBuild);
+    Runfiles.Builder runfilesBuilder = new Runfiles.Builder(ruleContext.getWorkspaceName())
+        .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
+    NestedSetBuilder<Artifact> filesToBuildBuilder = NestedSetBuilder.<Artifact>stableOrder()
+        .addTransitive(filesToBuild);
 
-    TestSupport testSupport = new TestSupport(ruleContext)
-        .registerTestRunnerActionsForSimulator()
-        .addRunfiles(runfilesBuilder)
-        .addFilesToBuild(filesToBuildBuilder);
+    TestSupport testSupport =
+        new TestSupport(ruleContext)
+            .registerTestRunnerActions()
+            .addRunfiles(runfilesBuilder)
+            .addFilesToBuild(filesToBuildBuilder);
 
     Artifact executable = testSupport.generatedTestScript();
 
@@ -55,6 +60,13 @@ public final class ExperimentalIosTest extends IosTest {
         .setFilesToBuild(filesToBuildBuilder.build())
         .add(XcodeProvider.class, xcodeProvider)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
+        .add(
+            ExecutionInfoProvider.class,
+            new ExecutionInfoProvider(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, "")))
+        .addProvider(
+            InstrumentedFilesProvider.class,
+            new CompilationSupport(ruleContext).getInstrumentedFilesProvider(common))
+        .addProviders(testSupport.getExtraProviders())
         .setRunfilesSupport(runfilesSupport, executable)
         .build();
   }

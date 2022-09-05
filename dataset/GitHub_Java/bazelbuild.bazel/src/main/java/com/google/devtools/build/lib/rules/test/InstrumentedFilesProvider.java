@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.test;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.util.Pair;
 
 /**
  * A provider of instrumented file sources and instrumentation metadata.
@@ -50,17 +49,4 @@ public interface InstrumentedFilesProvider extends TransitiveInfoProvider {
   // particular because baseline coverage is language-specific (it requires a parser for the
   // specific language), and we don't want to depend on all language parsers from any single rule.
   NestedSet<Artifact> getBaselineCoverageArtifacts();
-
-  /**
-   * Extra files that are needed on the inputs of test actions for coverage collection to happen,
-   * for example, {@code gcov}.
-   *
-   * <p>They aren't mentioned in the instrumented files manifest.
-   */
-  NestedSet<Artifact> getCoverageSupportFiles();
-
-  /**
-   * Environment variables that need to be set for tests collecting code coverage.
-   */
-  NestedSet<Pair<String, String>> getCoverageEnvironment();
 }

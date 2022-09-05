@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
@@ -115,7 +114,6 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     switch (hasReleaseBundlingSupport) {
       case YES:
         ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-        AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
         // TODO(bazel-team): Remove once all bundle users are migrated to ios_application.
         ReleaseBundlingSupport releaseBundlingSupport = new ReleaseBundlingSupport(
             ruleContext, objcProvider, LinkedBinary.LOCAL_AND_DEPENDENCIES,
@@ -128,7 +126,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
             .validateAttributes();
 
         xcTestAppProvider = Optional.of(releaseBundlingSupport.xcTestAppProvider());
-        if (appleConfiguration.getBundlingPlatform() == Platform.IOS_SIMULATOR) {
+        if (objcConfiguration.getBundlingPlatform() == Platform.SIMULATOR) {
           Artifact runnerScript = intermediateArtifacts.runnerScript();
           Artifact ipaFile = ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA);
           releaseBundlingSupport.registerGenerateRunnerScriptAction(runnerScript, ipaFile);
@@ -199,7 +197,8 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
                 ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProvider.class))
             .addDepCcHeaderProviders(
                 ruleContext.getPrerequisites("deps", Mode.TARGET, CppCompilationContext.class))
-            .addDepCcLinkProviders(ruleContext)
+            .addDepCcLinkProviders(
+                ruleContext.getPrerequisites("deps", Mode.TARGET, CcLinkParamsProvider.class))
             .addDepObjcProviders(
                 ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
             .addNonPropagatedDepObjcProviders(

@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,17 +71,11 @@ public class TestSupport {
     // testIpa is the app actually containing the tests
     Artifact testIpa = testIpa();
 
-    String runMemleaks =
-        ruleContext.getFragment(ObjcConfiguration.class).runMemleaks() ? "true" : "false";
-
     // The substitutions below are common for simulator and lab device.
-    ImmutableList.Builder<Substitution> substitutions =
-        new ImmutableList.Builder<Substitution>()
-            .add(Substitution.of("%(memleaks)s", runMemleaks))
-            .add(Substitution.of("%(test_app_ipa)s", testIpa.getRootRelativePathString()))
-            .add(Substitution.of("%(test_app_name)s", baseNameWithoutIpa(testIpa)))
-            .add(
-                Substitution.of("%(plugin_jars)s", Artifact.joinRootRelativePaths(":", plugins())));
+    ImmutableList.Builder<Substitution> substitutions = new ImmutableList.Builder<Substitution>()
+        .add(Substitution.of("%(test_app_ipa)s", testIpa.getRootRelativePathString()))
+        .add(Substitution.of("%(test_app_name)s", baseNameWithoutIpa(testIpa)))
+        .add(Substitution.of("%(plugin_jars)s", Artifact.joinRootRelativePaths(":", plugins())));
 
     // xctestIpa is the app bundle being tested
     Optional<Artifact> xctestIpa = xctestIpa();
@@ -226,33 +220,27 @@ public class TestSupport {
    * builder.
    */
   public Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> getExtraProviders() {
-    ObjcConfiguration configuration = ruleContext.getFragment(ObjcConfiguration.class);
-
-    ImmutableMap.Builder<String, String> envBuilder = ImmutableMap.builder();
-
-    envBuilder.putAll(configuration.getEnvironmentForDarwin());
-
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      envBuilder.put("COVERAGE_GCOV_PATH",
-          ruleContext.getHostPrerequisiteArtifact(":gcov").getExecPathString());
+      return ImmutableMap.<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>of(
+          TestEnvironmentProvider.class, new TestEnvironmentProvider(gcovEnv()));
     }
+    return ImmutableMap.of();
+  }
 
-    return ImmutableMap.<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>of(
-        TestEnvironmentProvider.class, new TestEnvironmentProvider(envBuilder.build()));
+  /**
+   * Returns a map of extra environment variable names to their values used to point to gcov binary,
+   * which should be added to the test action environment, if coverage is enabled.
+   */
+  private ImmutableMap<String, String> gcovEnv() {
+    return ImmutableMap.of(
+        "COVERAGE_GCOV_PATH", ruleContext.getHostPrerequisiteArtifact(":gcov").getExecPathString());
   }
 
   /**
    * Jar files for plugins to the test runner. May be empty.
    */
   private NestedSet<Artifact> plugins() {
-    NestedSetBuilder<Artifact> pluginArtifacts = NestedSetBuilder.stableOrder();
-    pluginArtifacts.addTransitive(
-        PrerequisiteArtifacts.nestedSet(ruleContext, "plugins", Mode.TARGET));
-    if (ruleContext.getFragment(ObjcConfiguration.class).runMemleaks()) {
-      pluginArtifacts.addTransitive(
-          PrerequisiteArtifacts.nestedSet(ruleContext, IosTest.MEMLEAKS_PLUGIN, Mode.TARGET));
-    }
-    return pluginArtifacts.build();
+    return PrerequisiteArtifacts.nestedSet(ruleContext, "plugins", Mode.TARGET);
   }
 
   /**

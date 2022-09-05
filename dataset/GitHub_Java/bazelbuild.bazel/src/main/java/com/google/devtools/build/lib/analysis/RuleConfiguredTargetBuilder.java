@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.rules.extra.ExtraActionMapProvider;
 import com.google.devtools.build.lib.rules.extra.ExtraActionSpec;
 import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
@@ -45,7 +46,12 @@ import com.google.devtools.build.lib.rules.test.TestActionBuilder;
 import com.google.devtools.build.lib.rules.test.TestEnvironmentProvider;
 import com.google.devtools.build.lib.rules.test.TestProvider;
 import com.google.devtools.build.lib.rules.test.TestProvider.TestParams;
+import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Type;
 
 import java.util.LinkedHashMap;
@@ -341,8 +347,12 @@ public final class RuleConfiguredTargetBuilder {
    */
   public RuleConfiguredTargetBuilder addSkylarkTransitiveInfo(
       String name, Object value, Location loc) throws EvalException {
-
-    SkylarkProviderValidationUtil.validateAndThrowEvalException(name, value, loc);
+    try {
+      checkSkylarkObjectSafe(value);
+    } catch (IllegalArgumentException e) {
+      throw new EvalException(loc, String.format("Value of provider '%s' is of an illegal type: %s",
+          name, e.getMessage()));
+    }
     skylarkProviders.put(name, value);
     return this;
   }
@@ -352,9 +362,67 @@ public final class RuleConfiguredTargetBuilder {
    */
   public RuleConfiguredTargetBuilder addSkylarkTransitiveInfo(
       String name, Object value) {
-    SkylarkProviderValidationUtil.checkSkylarkObjectSafe(value);
+    checkSkylarkObjectSafe(value);
     skylarkProviders.put(name, value);
     return this;
+  }
+
+  /**
+   * Check if the value provided by a Skylark provider is safe (i.e. can be a
+   * TransitiveInfoProvider value).
+   */
+  private void checkSkylarkObjectSafe(Object value) {
+    if (!isSimpleSkylarkObjectSafe(value.getClass())
+        // Java transitive Info Providers are accessible from Skylark.
+        && !(value instanceof TransitiveInfoProvider)) {
+      checkCompositeSkylarkObjectSafe(value);
+    }
+  }
+
+  private void checkCompositeSkylarkObjectSafe(Object object) {
+    if (object instanceof SkylarkApiProvider) {
+      return;
+    } else if (object instanceof SkylarkList) {
+      SkylarkList list = (SkylarkList) object;
+      if (list.isEmpty()) {
+        // Try not to iterate over the list if avoidable.
+        return;
+      }
+      // The list can be a tuple or a list of composite items.
+      for (Object listItem : list) {
+        checkSkylarkObjectSafe(listItem);
+      }
+      return;
+    } else if (object instanceof SkylarkNestedSet) {
+      // SkylarkNestedSets cannot have composite items.
+      Class<?> contentType = ((SkylarkNestedSet) object).getContentType().getType();
+      if (!contentType.equals(Object.class) && !isSimpleSkylarkObjectSafe(contentType)) {
+        throw new IllegalArgumentException(EvalUtils.getDataTypeName(contentType));
+      }
+      return;
+    } else if (object instanceof Map<?, ?>) {
+      for (Map.Entry<?, ?> entry : ((Map<?, ?>) object).entrySet()) {
+        checkSkylarkObjectSafe(entry.getKey());
+        checkSkylarkObjectSafe(entry.getValue());
+      }
+      return;
+    } else if (object instanceof ClassObject) {
+      ClassObject struct = (ClassObject) object;
+      for (String key : struct.getKeys()) {
+        checkSkylarkObjectSafe(struct.getValue(key));
+      }
+      return;
+    }
+    throw new IllegalArgumentException(EvalUtils.getDataTypeName(object));
+  }
+
+  private boolean isSimpleSkylarkObjectSafe(Class<?> type) {
+    return type.equals(String.class)
+        || type.equals(Integer.class)
+        || type.equals(Boolean.class)
+        || Artifact.class.isAssignableFrom(type)
+        || type.equals(Label.class)
+        || type.equals(Runtime.NoneType.class);
   }
 
   /**

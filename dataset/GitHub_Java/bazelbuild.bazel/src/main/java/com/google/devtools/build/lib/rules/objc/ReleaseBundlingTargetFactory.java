@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,8 +21,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
@@ -80,7 +78,7 @@ public abstract class ReleaseBundlingTargetFactory implements RuleConfiguredTarg
     XcodeSupport xcodeSupport = new XcodeSupport(ruleContext)
         .addFilesToBuild(filesToBuild)
         .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), xcodeProductType,
-            ruleContext.getFragment(AppleConfiguration.class).getDependencySingleArchitecture(),
+            ObjcRuleClasses.objcConfiguration(ruleContext).getDependencySingleArchitecture(),
             configurationDistinguisher)
         .addDummySource(xcodeProviderBuilder);
 
@@ -112,7 +110,7 @@ public abstract class ReleaseBundlingTargetFactory implements RuleConfiguredTarg
    * (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set in the
    * configuration).
    */
-  protected DottedVersion bundleMinimumOsVersion(RuleContext ruleContext) {
+  protected String bundleMinimumOsVersion(RuleContext ruleContext) {
     return ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs();
   }
 

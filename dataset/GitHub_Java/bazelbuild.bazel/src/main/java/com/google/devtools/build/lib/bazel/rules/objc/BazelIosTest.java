@@ -14,9 +14,9 @@
 
 package com.google.devtools.build.lib.bazel.rules.objc;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -24,34 +24,47 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.objc.ExecutionRequirements;
 import com.google.devtools.build.lib.rules.objc.IosTest;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon;
+import com.google.devtools.build.lib.rules.objc.TestSupport;
 import com.google.devtools.build.lib.rules.objc.XcodeProvider;
+import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
 
 /**
  * Implementation for ios_test rule in Bazel.
  */
 public final class BazelIosTest extends IosTest {
-  static final String IOS_TEST_ON_BAZEL_ATTR = "$ios_test_on_bazel";
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext, ObjcCommon common,
       XcodeProvider xcodeProvider, NestedSet<Artifact> filesToBuild) throws InterruptedException {
-    Artifact testRunner = ruleContext.getPrerequisiteArtifact(IOS_TEST_ON_BAZEL_ATTR, Mode.TARGET);
-    Runfiles runfiles = new Runfiles.Builder()
-        .addArtifact(testRunner)
-        .build();
+
+    Runfiles.Builder runfilesBuilder = new Runfiles.Builder(ruleContext.getWorkspaceName())
+        .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
+    NestedSetBuilder<Artifact> filesToBuildBuilder = NestedSetBuilder.<Artifact>stableOrder()
+        .addTransitive(filesToBuild);
+
+    TestSupport testSupport =
+        new TestSupport(ruleContext)
+            .registerTestRunnerActions()
+            .addRunfiles(runfilesBuilder)
+            .addFilesToBuild(filesToBuildBuilder);
+
+    Artifact executable = testSupport.generatedTestScript();
+
+    Runfiles runfiles = runfilesBuilder.build();
     RunfilesSupport runfilesSupport =
-        RunfilesSupport.withExecutable(ruleContext, runfiles, testRunner);
+        RunfilesSupport.withExecutable(ruleContext, runfiles, executable);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .setFilesToBuild(NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(filesToBuild)
-            .add(testRunner)
-            .build())
+        .setFilesToBuild(filesToBuildBuilder.build())
         .add(XcodeProvider.class, xcodeProvider)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .setRunfilesSupport(runfilesSupport, testRunner)
+        .add(
+            ExecutionInfoProvider.class,
+            new ExecutionInfoProvider(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, "")))
+        .addProviders(testSupport.getExtraProviders())
+        .setRunfilesSupport(runfilesSupport, executable)
         .build();
   }
 }
