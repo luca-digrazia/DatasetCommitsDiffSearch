@@ -21,9 +21,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.AnsiTerminal;
-import com.google.devtools.build.lib.util.io.AnsiTerminalWriter;
-import com.google.devtools.build.lib.util.io.LineCountingAnsiTerminalWriter;
-import com.google.devtools.build.lib.util.io.LineWrappingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.OutErr;
 
 import org.joda.time.Duration;
@@ -264,29 +261,33 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
       }
     }
 
-    LineCountingAnsiTerminalWriter countingWriter = new LineCountingAnsiTerminalWriter(terminal);
-    AnsiTerminalWriter terminalWriter =
-        new LineWrappingAnsiTerminalWriter(countingWriter, terminalWidth - 1);
-
     if (useColor) {
-      terminalWriter.okStatus();
+      terminal.textGreen();
     }
-    terminalWriter.append(prefix);
-    terminalWriter.normal();
+    int prefixWidth = prefix.length();
+    terminal.writeString(prefix);
+    terminal.resetTerminal();
     if (showTimestamp) {
       String timestamp = timestamp();
-      terminalWriter.append(timestamp);
+      prefixWidth += timestamp.length();
+      terminal.writeString(timestamp);
     }
+    int numLines = 0;
     Iterator<String> lines = LINEBREAK_SPLITTER.split(rest).iterator();
     String firstLine = lines.next();
-    terminalWriter.append(firstLine);
-    terminalWriter.newline();
+    terminal.writeString(firstLine);
+    // Subtract one, because when the line length is the same as the terminal
+    // width, the terminal doesn't line-advance, so we don't want to erase
+    // two lines.
+    numLines += (prefixWidth + firstLine.length() - 1) / terminalWidth + 1;
+    crlf();
     while (lines.hasNext()) {
       String line = lines.next();
-      terminalWriter.append(line);
-      terminalWriter.newline();
+      terminal.writeString(line);
+      crlf();
+      numLines += (line.length() - 1) / terminalWidth + 1;
     }
-    numLinesPreviousErasable = countingWriter.getWrittenLines();
+    numLinesPreviousErasable = numLines;
   }
 
   /**
