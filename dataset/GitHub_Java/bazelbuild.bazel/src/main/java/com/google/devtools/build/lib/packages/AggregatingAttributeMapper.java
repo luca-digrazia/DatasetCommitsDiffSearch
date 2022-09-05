@@ -18,11 +18,11 @@ import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -87,7 +87,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         // (computed) values and look for labels.
         for (Object value : visitAttribute(attribute.getName(), attribute.getType())) {
           if (value != null) {
-            for (Label label : extractLabels(type, value)) {
+            for (Label label : type.getLabels(value)) {
               observer.acceptLabelAttribute(label, attribute);
             }
           }
@@ -101,7 +101,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
           if (includeSelectKeys && !Type.Selector.isReservedLabel(selectorEntry.getKey())) {
             observer.acceptLabelAttribute(selectorEntry.getKey(), attribute);
           }
-          for (Label value : extractLabels(type, selectorEntry.getValue())) {
+          for (Label value : type.getLabels(selectorEntry.getValue())) {
             observer.acceptLabelAttribute(value, attribute);
           }
         }
@@ -146,7 +146,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
       for (Object value : visitAttribute(attrName, attrType)) {
         if (value != null) {
           duplicates.addAll(CollectionUtils.duplicatedElementsOf(
-              ImmutableList.copyOf(extractLabels(attrType, value))));
+              ImmutableList.copyOf(attrType.getLabels(value))));
         }
       }
     } else {
@@ -161,10 +161,10 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         // they're in different selector paths (since only one path can actually get chosen).
         Set<Label> selectorLabels = new LinkedHashSet<>();
         for (Object selectorValue : selector.getEntries().values()) {
-          Iterable<Label> labelsInSelectorValue = extractLabels(attrType, selectorValue);
+          Collection<Label> labelsInSelectorValue = attrType.getLabels(selectorValue);
           // Duplicates within a single path are not okay.
           duplicates.addAll(CollectionUtils.duplicatedElementsOf(labelsInSelectorValue));
-          Iterables.addAll(selectorLabels, labelsInSelectorValue);
+          selectorLabels.addAll(labelsInSelectorValue);
         }
         combinedLabels.addAll(selectorLabels);
       }

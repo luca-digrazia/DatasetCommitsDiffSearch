@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.packages;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
 import javax.annotation.Nullable;
 
@@ -28,8 +27,6 @@ import javax.annotation.Nullable;
  * data before exposing it to consumers.
  */
 public abstract class AbstractAttributeMapper implements AttributeMap {
-
-  private static final PathFragment VISIBILITY = new PathFragment("visibility");
 
   private final Package pkg;
   private final RuleClass ruleClass;
@@ -157,20 +154,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
     Object value = get(attribute.getName(), type);
     if (value != null) { // null values are particularly possible for computed defaults.
       for (Label label : type.getLabels(value)) {
-        Label absoluteLabel;
-        if (attribute.isImplicit() || attribute.isLateBound()
-          || !attributes.isAttributeValueExplicitlySpecified(attribute)) {
-          // Implicit dependencies are not usually present in remote repositories. They are
-          // generally tools, which go to the main repository.
-          absoluteLabel = label;
-        } else if (label.getPackageIdentifier().getRepository().isDefault()
-            && VISIBILITY.equals(label.getPackageIdentifier().getPackageFragment())) {
-          // //visibility: labels must also be special-cased :(
-          absoluteLabel = label;
-        } else {
-          absoluteLabel = ruleLabel.resolveRepositoryRelative(label);
-        }
-        observer.acceptLabelAttribute(absoluteLabel, attribute);
+        observer.acceptLabelAttribute(label, attribute);
       }
     }
   }
