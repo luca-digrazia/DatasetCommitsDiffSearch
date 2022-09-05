@@ -36,7 +36,7 @@ abstract class AbstractFileSystem extends FileSystem {
   protected static final Profiler profiler = Profiler.instance();
 
   @Override
-  protected InputStream getInputStream(Path path) throws IOException {
+  protected InputStream getInputStream(Path path) throws FileNotFoundException {
     // This loop is a workaround for an apparent bug in FileInputStrean.open, which delegates
     // ultimately to JVM_Open in the Hotspot JVM.  This call is not EINTR-safe, so we must do the
     // retry here.
