@@ -38,8 +38,6 @@ public interface DefaultQueryByEntityService<E>
      *
      * @param param 查询参数
      * @return 分页查询结果
-     * @see QueryParamEntity
-     * @see QueryParamEntity#newQuery()
      */
     @Override
     default PagerResult<E> selectPager(Entity param) {
@@ -73,7 +71,6 @@ public interface DefaultQueryByEntityService<E>
      * @param param 查询参数
      * @return 查询结果
      * @see QueryParamEntity
-     * @see QueryParamEntity#newQuery()
      */
     @Override
     @Transactional(readOnly = true)
@@ -90,8 +87,6 @@ public interface DefaultQueryByEntityService<E>
      *
      * @param param 查询参数
      * @return 查询结果，实现mapper中的sql应指定默认值，否则可能抛出异常
-     * @see QueryParamEntity
-     * @see QueryParamEntity#newQuery()
      */
     @Override
     @Transactional(readOnly = true)
@@ -107,8 +102,6 @@ public interface DefaultQueryByEntityService<E>
      *
      * @param param 查询条件
      * @return 单个查询结果
-     * @see QueryParamEntity
-     * @see QueryParamEntity#newQuery()
      */
     @Override
     @Transactional(readOnly = true)
