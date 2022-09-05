@@ -465,10 +465,15 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
    */
   private static final ImmutableSet<Key<?>> NON_SUBTRACTABLE_KEYS =
       ImmutableSet.<Key<?>>of(
+          ASSET_CATALOG,
+          BUNDLE_FILE,
+          BUNDLE_IMPORT_DIR,
           DEFINE,
           DYNAMIC_FRAMEWORK_DIR,
           DYNAMIC_FRAMEWORK_FILE,
           FLAG,
+          GENERAL_RESOURCE_DIR,
+          GENERAL_RESOURCE_FILE,
           MERGE_ZIP,
           ROOT_MERGE_ZIP,
           FRAMEWORK_SEARCH_PATH_ONLY,
@@ -478,7 +483,12 @@ public final class ObjcProvider extends SkylarkClassObject implements Transitive
           LINKOPT,
           SDK_DYLIB,
           SDK_FRAMEWORK,
-          WEAK_SDK_FRAMEWORK);
+          STORYBOARD,
+          STRINGS,
+          WEAK_SDK_FRAMEWORK,
+          XCASSETS_DIR,
+          XCDATAMODEL,
+          XIB);
 
   /**
    * Returns the skylark key for the given string, or null if no such key exists or is available
