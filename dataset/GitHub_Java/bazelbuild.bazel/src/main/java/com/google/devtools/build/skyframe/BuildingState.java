@@ -358,7 +358,7 @@ public class BuildingState {
     return result.build();
   }
 
-  protected Collection<SkyKey> markRebuildingAndGetAllRemainingDirtyDirectDeps() {
+  Collection<SkyKey> markRebuildingAndGetAllRemainingDirtyDirectDeps() {
     Preconditions.checkState(dirtyState == DirtyState.NEEDS_REBUILDING, this);
     Collection<SkyKey> result = getAllRemainingDirtyDirectDeps();
     dirtyState = DirtyState.REBUILDING;
