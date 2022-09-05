@@ -130,7 +130,8 @@ public class InMemoryNodeEntry implements NodeEntry {
    * The transient state of this entry, after it has been created but before it is done. It allows
    * us to keep the current state of the entry across invalidation and successive evaluations.
    */
-  @VisibleForTesting @Nullable protected BuildingState buildingState = new BuildingState();
+  @VisibleForTesting
+  protected BuildingState buildingState = new BuildingState();
 
   /**
    * Construct a InMemoryNodeEntry. Use ONLY in Skyframe evaluation and graph implementations.
@@ -183,7 +184,7 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   /**
    * If {@code isDone()}, returns the ordered list of sets of grouped direct dependencies that were
-   * added in {@link #addTemporaryDirectDeps}.
+   * added in {@link addTemporaryDirectDeps}.
    */
   public synchronized Iterable<Iterable<SkyKey>> getGroupedDirectDeps() {
     assertKeepEdges();
@@ -198,7 +199,7 @@ public class InMemoryNodeEntry implements NodeEntry {
     return ValueWithMetadata.getMaybeErrorInfo(value);
   }
 
-  protected synchronized Set<SkyKey> setStateFinishedAndReturnReverseDeps() {
+  private synchronized Set<SkyKey> setStateFinishedAndReturnReverseDeps() {
     // Get reverse deps that need to be signaled.
     ImmutableSet<SkyKey> reverseDepsToSignal = buildingState.getReverseDepsToSignal();
     REVERSE_DEPS_UTIL.consolidateData(this);
