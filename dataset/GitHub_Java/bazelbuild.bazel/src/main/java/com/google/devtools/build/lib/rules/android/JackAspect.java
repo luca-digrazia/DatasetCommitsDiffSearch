@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,72 +14,81 @@
 
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.LABEL;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.Aspect;
+import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.packages.AspectDefinition;
+import com.google.devtools.build.lib.packages.AspectParameters;
+import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidSdkLabel;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
-import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
 import java.util.List;
 
 /** Aspect to provide Jack support to rules which have java sources. */
-public final class JackAspect implements ConfiguredAspectFactory {
-  private Label getLabel(String path) {
-    try {
-      return Label.parseAbsolute(path);
-    } catch (SyntaxException ex) {
-      throw new IllegalArgumentException(ex);
-    }
+public final class JackAspect extends NativeAspectClass implements ConfiguredAspectFactory {
+  public static final String NAME = "JackAspect";
+  private final String toolsRepository;
+
+  /**
+   * Creates a JackAspect using the provided tools repository path.
+   *
+   * @param toolsRepository the path to the tools repository
+   */
+  public JackAspect(String toolsRepository) {
+    this.toolsRepository = toolsRepository;
   }
 
   @Override
-  public AspectDefinition getDefinition() {
-    return new AspectDefinition.Builder("JackAspect")
-        .requireProvider(JavaSourceInfoProvider.class)
-        .add(attr("$jack", LABEL).cfg(HOST).exec().value(getLabel("//tools/android/jack:jack")))
-        .add(attr("$jill", LABEL).cfg(HOST).exec().value(getLabel("//tools/android/jack:jill")))
-        .add(
-            attr("$resource_extractor", LABEL)
-                .cfg(HOST)
-                .exec()
-                .value(getLabel("//tools/android/jack:resource_extractor")))
-        .add(
-            attr("$java_jack", LABEL)
-                .cfg(HOST)
-                .value(getLabel("//tools/android/jack:android_jack")))
-        .attributeAspect("deps", JackAspect.class)
-        .attributeAspect("exports", JackAspect.class)
-        .attributeAspect("runtime_deps", JackAspect.class)
+  public AspectDefinition getDefinition(AspectParameters params) {
+    Label androidSdk;
+    try {
+      androidSdk = Label.parseAbsolute(toolsRepository + AndroidRuleClasses.DEFAULT_SDK);
+    } catch (LabelSyntaxException e) {
+      throw new IllegalStateException(e);
+    }
+
+    return new AspectDefinition.Builder(this)
+        .requireProviders(JavaSourceInfoProvider.class)
+        .add(attr(":android_sdk", LABEL)
+              .allowedRuleClasses("android_sdk")
+              .value(new AndroidSdkLabel(androidSdk)))
+        .propagateAlongAttribute("deps")
+        .propagateAlongAttribute("exports")
+        .propagateAlongAttribute("runtime_deps")
+        .requiresConfigurationFragments(AndroidConfiguration.class)
         .build();
   }
 
   @Override
-  public Aspect create(ConfiguredTarget base, RuleContext ruleContext) {
+  public ConfiguredAspect create(
+      ConfiguredTarget base, RuleContext ruleContext, AspectParameters params) {
+    if (base.getProvider(JackLibraryProvider.class) != null) {
+      return new ConfiguredAspect.Builder(this, params, ruleContext).build();
+    }
     JavaSourceInfoProvider sourceProvider = base.getProvider(JavaSourceInfoProvider.class);
-
     PathFragment rulePath = ruleContext.getLabel().toPathFragment();
-
     PathFragment jackLibraryPath = rulePath.replaceName("lib" + rulePath.getBaseName() + ".jack");
-
     Artifact jackLibraryOutput =
         ruleContext
             .getAnalysisEnvironment()
             .getDerivedArtifact(jackLibraryPath, ruleContext.getBinOrGenfilesDirectory());
-
+    if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
+      return null;
+    }
+    AndroidSdkProvider androidSdk = AndroidSdkProvider.fromRuleContext(ruleContext);
     JackCompilationHelper jackHelper =
         new JackCompilationHelper.Builder()
             // blaze infrastructure
@@ -87,7 +96,10 @@ public final class JackAspect implements ConfiguredAspectFactory {
             // configuration
             .setOutputArtifact(jackLibraryOutput)
             // tools
-            .setAndroidBaseLibraryForJack(ruleContext.getHostPrerequisiteArtifact("$java_jack"))
+            .setJackBinary(androidSdk.getJack())
+            .setJillBinary(androidSdk.getJill())
+            .setResourceExtractorBinary(androidSdk.getResourceExtractor())
+            .setJackBaseClasspath(androidSdk.getJavaBaseClasspathForJack())
             // sources
             .addJavaSources(sourceProvider.getSourceFiles())
             .addSourceJars(sourceProvider.getSourceJars())
@@ -100,16 +112,11 @@ public final class JackAspect implements ConfiguredAspectFactory {
             .addDeps(getPotentialDependency(ruleContext, "deps"))
             .addRuntimeDeps(getPotentialDependency(ruleContext, "runtime_deps"))
             .build();
-    if (jackHelper == null) {
-      return null;
-    }
-
     JackLibraryProvider result =
         JavaCommon.isNeverLink(ruleContext)
             ? jackHelper.compileAsNeverlinkLibrary()
             : jackHelper.compileAsLibrary();
-
-    return new Aspect.Builder().addProvider(JackLibraryProvider.class, result).build();
+    return new ConfiguredAspect.Builder(this, params, ruleContext).addProvider(result).build();
   }
 
   /** Gets a list of targets on the given LABEL_LIST attribute if it exists, else an empty list. */

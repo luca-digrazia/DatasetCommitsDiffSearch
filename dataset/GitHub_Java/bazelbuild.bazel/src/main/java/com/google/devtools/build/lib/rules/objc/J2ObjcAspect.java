@@ -759,7 +759,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     }
 
     return builder
-        .addIncludes(headerSearchPaths)
+        .addUserHeaderSearchPaths(headerSearchPaths)
         .setIntermediateArtifacts(intermediateArtifacts)
         .build();
   }

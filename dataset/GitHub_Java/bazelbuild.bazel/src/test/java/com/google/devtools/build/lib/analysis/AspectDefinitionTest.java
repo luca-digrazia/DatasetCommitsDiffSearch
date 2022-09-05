@@ -19,18 +19,18 @@ import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.ConfigAwareAspectBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import org.junit.Test;
@@ -74,8 +74,12 @@ public class AspectDefinitionTest {
     Attribute implicit = attr("$runtime", BuildType.LABEL)
         .value(Label.parseAbsoluteUnchecked("//run:time"))
         .build();
-    LateBoundDefault<Void, Label> latebound =
-        LateBoundDefault.fromConstant(Label.parseAbsoluteUnchecked("//run:away"));
+    LateBoundLabel<String> latebound = new LateBoundLabel<String>() {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, String configuration) {
+          return Label.parseAbsoluteUnchecked("//run:away");
+        }
+    };
     AspectDefinition simple = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
         .add(implicit)
         .add(attr(":latebound", BuildType.LABEL).value(latebound))
@@ -256,21 +260,16 @@ public class AspectDefinitionTest {
             .containsExactly(Integer.class, String.class);
   }
 
-  private static class FooFragment extends BuildConfiguration.Fragment {}
-  private static class BarFragment extends BuildConfiguration.Fragment {}
-
   @Test
   public void testRequiresHostConfigurationFragments_PropagatedToConfigurationFragmentPolicy()
       throws Exception {
-    AspectDefinition requiresFragments =
-        ConfigAwareAspectBuilder.of(new AspectDefinition.Builder(TEST_ASPECT_CLASS))
-            .requiresHostConfigurationFragments(FooFragment.class, BarFragment.class)
-            .originalBuilder()
-            .build();
+    AspectDefinition requiresFragments = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
+        .requiresHostConfigurationFragments(Integer.class, String.class)
+        .build();
     assertThat(requiresFragments.getConfigurationFragmentPolicy()).isNotNull();
     assertThat(
         requiresFragments.getConfigurationFragmentPolicy().getRequiredConfigurationFragments())
-            .containsExactly(FooFragment.class, BarFragment.class);
+            .containsExactly(Integer.class, String.class);
   }
 
   @Test
@@ -289,12 +288,9 @@ public class AspectDefinitionTest {
   @Test
   public void testRequiresHostConfigurationFragmentNames_PropagatedToConfigurationFragmentPolicy()
       throws Exception {
-    AspectDefinition requiresFragments =
-        ConfigAwareAspectBuilder.of(new AspectDefinition.Builder(TEST_ASPECT_CLASS))
-            .requiresHostConfigurationFragmentsBySkylarkModuleName(
-                ImmutableList.of("test_fragment"))
-            .originalBuilder()
-            .build();
+    AspectDefinition requiresFragments = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
+        .requiresHostConfigurationFragmentsBySkylarkModuleName(ImmutableList.of("test_fragment"))
+        .build();
     assertThat(requiresFragments.getConfigurationFragmentPolicy()).isNotNull();
     assertThat(
         requiresFragments.getConfigurationFragmentPolicy()
@@ -304,12 +300,10 @@ public class AspectDefinitionTest {
 
   @Test
   public void testEmptySkylarkConfigurationFragmentPolicySetup_HasNonNullPolicy() throws Exception {
-    AspectDefinition noPolicy =
-        ConfigAwareAspectBuilder.of(new AspectDefinition.Builder(TEST_ASPECT_CLASS))
-            .requiresHostConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
-            .originalBuilder()
-            .requiresConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
-            .build();
+    AspectDefinition noPolicy = new AspectDefinition.Builder(TEST_ASPECT_CLASS)
+        .requiresConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
+        .requiresHostConfigurationFragmentsBySkylarkModuleName(ImmutableList.<String>of())
+        .build();
     assertThat(noPolicy.getConfigurationFragmentPolicy()).isNotNull();
   }
 

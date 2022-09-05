@@ -21,8 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
-import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
+import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -66,8 +65,11 @@ public final class CommandHelper {
   @VisibleForTesting
   public static int maxCommandLength = OS.getCurrent() == OS.WINDOWS ? 8000 : 64000;
 
-  /** {@link RunfilesSupplier}s for tools used by this rule. */
-  private final SkylarkList<RunfilesSupplier> toolsRunfilesSuppliers;
+  /**
+   *  A map of remote path prefixes and corresponding runfiles manifests for tools
+   *  used by this rule.
+   */
+  private final SkylarkDict<PathFragment, Artifact> remoteRunfileManifestMap;
 
   /**
    * Use labelMap for heuristically expanding labels (does not include "outs")
@@ -97,14 +99,15 @@ public final class CommandHelper {
   public CommandHelper(
       RuleContext ruleContext,
       Iterable<? extends TransitiveInfoCollection> tools,
-      ImmutableMap<Label, ? extends Iterable<Artifact>> labelMap) {
+      ImmutableMap<Label, Iterable<Artifact>> labelMap) {
     this.ruleContext = ruleContext;
 
     ImmutableList.Builder<Artifact> resolvedToolsBuilder = ImmutableList.builder();
-    ImmutableList.Builder<RunfilesSupplier> toolsRunfilesBuilder = ImmutableList.builder();
+    ImmutableMap.Builder<PathFragment, Artifact> remoteRunfileManifestBuilder =
+        ImmutableMap.builder();
     Map<Label, Collection<Artifact>> tempLabelMap = new HashMap<>();
 
-    for (Map.Entry<Label, ? extends Iterable<Artifact>> entry : labelMap.entrySet()) {
+    for (Map.Entry<Label, Iterable<Artifact>> entry : labelMap.entrySet()) {
       Iterables.addAll(mapGet(tempLabelMap, entry.getKey()), entry.getValue());
     }
 
@@ -122,7 +125,11 @@ public final class CommandHelper {
       if (executableArtifact != null) {
         mapGet(tempLabelMap, label).add(executableArtifact);
         // Also send the runfiles when running remotely.
-        toolsRunfilesBuilder.add(tool.getRunfilesSupplier());
+        Artifact runfilesManifest = tool.getRunfilesManifest();
+        if (runfilesManifest != null) {
+          remoteRunfileManifestBuilder.put(
+              BaseSpawn.runfilesForFragment(executableArtifact.getExecPath()), runfilesManifest);
+        }
       } else {
         // Map all depArtifacts to the respective label using the multimaps.
         mapGet(tempLabelMap, label).addAll(files);
@@ -130,7 +137,7 @@ public final class CommandHelper {
     }
 
     this.resolvedTools = SkylarkList.createImmutable(resolvedToolsBuilder.build());
-    this.toolsRunfilesSuppliers = SkylarkList.createImmutable(toolsRunfilesBuilder.build());
+    this.remoteRunfileManifestMap = SkylarkDict.copyOf(null, remoteRunfileManifestBuilder.build());
     ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> labelMapBuilder =
         ImmutableMap.builder();
     for (Entry<Label, Collection<Artifact>> entry : tempLabelMap.entrySet()) {
@@ -143,8 +150,8 @@ public final class CommandHelper {
     return resolvedTools;
   }
 
-  public SkylarkList<RunfilesSupplier> getToolsRunfilesSuppliers() {
-    return toolsRunfilesSuppliers;
+  public SkylarkDict<PathFragment, Artifact> getRemoteRunfileManifestMap() {
+    return remoteRunfileManifestMap;
   }
 
   // Returns the value in the specified corresponding to 'key', creating and
@@ -297,7 +304,7 @@ public final class CommandHelper {
    */
   private PathFragment shellPath(Map<String, String> executionInfo) {
     // Use vanilla /bin/bash for actions running on mac machines.
-    return executionInfo.containsKey(ExecutionRequirements.REQUIRES_DARWIN)
-        ? PathFragment.create("/bin/bash") : ruleContext.getConfiguration().getShellExecutable();
+    return executionInfo.containsKey("requires-darwin")
+        ? new PathFragment("/bin/bash") : ruleContext.getConfiguration().getShellExecutable();
   }
 }
