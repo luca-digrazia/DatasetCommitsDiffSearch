@@ -9,7 +9,6 @@ import reactor.cache.CacheMono;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Collection;
 import java.util.function.Supplier;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -39,16 +38,6 @@ public class UnSupportedReactiveCache<E> implements ReactiveCache<E> {
     @Override
     public Mono<Void> evict(Object key) {
         return Mono.empty();
-    }
-
-    @Override
-    public Mono<Void> evictAll(Iterable<?> key) {
-        return Mono.empty();
-    }
-
-    @Override
-    public Flux<E> getAll(Object... keys) {
-        return Flux.empty();
     }
 
     @Override

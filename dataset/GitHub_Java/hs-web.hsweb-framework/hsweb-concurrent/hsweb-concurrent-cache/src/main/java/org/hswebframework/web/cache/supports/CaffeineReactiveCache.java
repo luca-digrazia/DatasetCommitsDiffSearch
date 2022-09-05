@@ -7,9 +7,6 @@ import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.Arrays;
-import java.util.Collection;
-
 @SuppressWarnings("all")
 @AllArgsConstructor
 public class CaffeineReactiveCache<E> implements ReactiveCache<E> {
@@ -18,7 +15,7 @@ public class CaffeineReactiveCache<E> implements ReactiveCache<E> {
 
     @Override
     public Flux<E> getFlux(Object key) {
-        return (Flux) Flux.defer(() -> {
+        return (Flux)Flux.defer(() -> {
             Object v = cache.getIfPresent(key);
             if (v == null) {
                 return Flux.empty();
@@ -55,19 +52,6 @@ public class CaffeineReactiveCache<E> implements ReactiveCache<E> {
                         .then();
             }
             return Mono.error(new UnsupportedOperationException("unsupport publisher:" + data));
-        });
-    }
-
-    @Override
-    public Mono<Void> evictAll(Iterable<?> key) {
-        return Mono.fromRunnable(() -> cache.invalidateAll(key));
-    }
-
-    @Override
-    public Flux<E> getAll(Object... keys) {
-        return Flux.<E>defer(() -> {
-            return Flux.fromIterable(cache.getAllPresent(Arrays.asList(keys)).values())
-                    .map(e -> (E) e);
         });
     }
 
