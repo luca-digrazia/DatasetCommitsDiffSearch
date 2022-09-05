@@ -17,15 +17,10 @@ package com.google.devtools.build.lib.bazel.repository.skylark;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
-import com.google.devtools.build.lib.skyframe.FileSymlinkException;
-import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.InconsistentFilesystemException;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
@@ -33,14 +28,9 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.StringUtilities;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
-import com.google.devtools.build.skyframe.SkyKey;
 
 import java.io.File;
 import java.io.IOException;
@@ -66,7 +56,6 @@ public class SkylarkRepositoryContext {
   private final Path outputDirectory;
   private final SkylarkClassObject attrObject;
   private final SkylarkOS osObject;
-  private final Environment env;
 
   /**
    * In native code, private values start with $. In Skylark, private values start with _, because
@@ -82,11 +71,9 @@ public class SkylarkRepositoryContext {
   /**
    * Create a new context (ctx) object for a skylark repository rule ({@code rule} argument).
    */
-  SkylarkRepositoryContext(
-      Rule rule, Path outputDirectory, Environment environment, Map<String, String> env) {
+  SkylarkRepositoryContext(Rule rule, Path outputDirectory, Map<String, String> env) {
     this.rule = rule;
     this.outputDirectory = outputDirectory;
-    this.env = environment;
     this.osObject = new SkylarkOS(env);
     AggregatingAttributeMapper attrs = AggregatingAttributeMapper.of(rule);
     ImmutableMap.Builder<String, Object> attrBuilder = new ImmutableMap.Builder<>();
@@ -119,34 +106,15 @@ public class SkylarkRepositoryContext {
   @SkylarkCallable(
     name = "path",
     doc =
-        "Returns a path from a string or a label. If the path is relative, it will resolve "
-            + "relative to the output directory. If the path is a label, it will resolve to "
-            + "the path of the corresponding file. Note that remote repositories are executed "
-            + "during the analysis phase and thus cannot depends on a target result (the "
-            + "label should point to a non-generated file)."
+        "Returns a path from a string. If the path is relative, it will resolved relative "
+            + "to the output directory."
   )
-  public SkylarkPath path(Object path) throws EvalException {
-    return getPath("path()", path);
-  }
-
-  private SkylarkPath getPath(String method, Object path) throws EvalException {
-    if (path instanceof String) {
-      PathFragment pathFragment = new PathFragment(path.toString());
-      if (pathFragment.isAbsolute()) {
-        return new SkylarkPath(outputDirectory.getFileSystem().getPath(path.toString()));
-      } else {
-        return new SkylarkPath(outputDirectory.getRelative(pathFragment));
-      }
-    } else if (path instanceof Label) {
-      SkylarkPath result = getPathFromLabel((Label) path);
-      if (result == null) {
-        SkylarkRepositoryFunction.restart();
-      }
-      return result;
-    } else if (path instanceof SkylarkPath) {
-      return (SkylarkPath) path;
+  public SkylarkPath path(String path) {
+    PathFragment pathFragment = new PathFragment(path);
+    if (pathFragment.isAbsolute()) {
+      return new SkylarkPath(outputDirectory.getFileSystem().getPath(path));
     } else {
-      throw new EvalException(Location.BUILTIN, method + " can only take a string or a label.");
+      return new SkylarkPath(outputDirectory.getRelative(pathFragment));
     }
   }
 
@@ -154,20 +122,16 @@ public class SkylarkRepositoryContext {
     name = "symlink",
     doc =
         "Create a symlink on the filesystem, the destination of the symlink should be in the "
-            + "output directory. <code>from</code> can also be a label to a file."
+            + "output directory."
   )
-  public void symlink(Object from, Object to) throws RepositoryFunctionException, EvalException {
-    SkylarkPath fromPath = getPath("symlink()", from);
-    SkylarkPath toPath = getPath("symlink()", to);
+  public void symlink(SkylarkPath from, SkylarkPath to) throws RepositoryFunctionException {
     try {
-      checkInOutputDirectory(toPath);
-      makeDirectories(toPath.path);
-      toPath.path.createSymbolicLink(fromPath.path);
+      checkInOutputDirectory(to);
+      to.path.createSymbolicLink(from.path);
     } catch (IOException e) {
       throw new RepositoryFunctionException(
           new IOException(
-              "Could not create symlink from " + fromPath + " to " + toPath + ": " + e.getMessage(),
-              e),
+              "Could not create symlink from " + from + " to " + to + ": " + e.getMessage(), e),
           Transience.TRANSIENT);
     }
   }
@@ -181,7 +145,7 @@ public class SkylarkRepositoryContext {
   }
 
   @SkylarkCallable(name = "file", documented = false)
-  public void createFile(Object path) throws RepositoryFunctionException, EvalException {
+  public void createFile(SkylarkPath path) throws RepositoryFunctionException {
     createFile(path, "");
   }
 
@@ -189,42 +153,12 @@ public class SkylarkRepositoryContext {
     name = "file",
     doc = "Generate a file in the output directory with the provided content"
   )
-  public void createFile(Object path, String content)
-      throws RepositoryFunctionException, EvalException {
-    SkylarkPath p = getPath("file()", path);
+  public void createFile(SkylarkPath path, String content) throws RepositoryFunctionException {
     try {
-      checkInOutputDirectory(p);
-      makeDirectories(p.path);
-      try (OutputStream stream = p.path.getOutputStream()) {
+      checkInOutputDirectory(path);
+      makeDirectories(path.path);
+      try (OutputStream stream = path.path.getOutputStream()) {
         stream.write(content.getBytes(StandardCharsets.UTF_8));
-      }
-    } catch (IOException e) {
-      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
-    }
-  }
-
-  @SkylarkCallable(
-    name = "template",
-    doc =
-        "Generate a new file using a <code>template</code>. Every occurrence in "
-            + "<code>template</code> of a key of <code>substitutions</code> will be replaced by "
-            + "the corresponding value. The result is written in <code>path</code>."
-  )
-  public void createFileFromTemplate(
-      Object path, Object template, Map<String, String> substitutions)
-      throws RepositoryFunctionException, EvalException {
-    SkylarkPath p = getPath("template()", path);
-    SkylarkPath t = getPath("template()", template);
-    try {
-      checkInOutputDirectory(p);
-      makeDirectories(p.path);
-      String tpl = FileSystemUtils.readContent(t.path, StandardCharsets.UTF_8);
-      for (Map.Entry<String, String> substitution : substitutions.entrySet()) {
-        tpl =
-            StringUtilities.replaceAllLiteral(tpl, substitution.getKey(), substitution.getValue());
-      }
-      try (OutputStream stream = p.path.getOutputStream()) {
-        stream.write(tpl.getBytes(StandardCharsets.UTF_8));
       }
     } catch (IOException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
@@ -318,46 +252,5 @@ public class SkylarkRepositoryContext {
   @Override
   public String toString() {
     return "repository_ctx[" + rule.getLabel() + "]";
-  }
-
-  // Resolve the label given by value into a file path.
-  private SkylarkPath getPathFromLabel(Label label) throws EvalException {
-    // Look for package.
-    SkyKey pkgSkyKey = PackageLookupValue.key(label.getPackageIdentifier());
-    PackageLookupValue pkgLookupValue = (PackageLookupValue) env.getValue(pkgSkyKey);
-    if (pkgLookupValue == null) {
-      return null;
-    }
-    if (!pkgLookupValue.packageExists()) {
-      throw new EvalException(
-          Location.BUILTIN, "Unable to load package for " + label + ": not found.");
-    }
-
-    // And now for the file
-    Path packageRoot = pkgLookupValue.getRoot();
-    RootedPath rootedPath = RootedPath.toRootedPath(packageRoot, label.toPathFragment());
-    SkyKey fileSkyKey = FileValue.key(rootedPath);
-    FileValue fileValue = null;
-    try {
-      fileValue =
-          (FileValue)
-              env.getValueOrThrow(
-                  fileSkyKey,
-                  IOException.class,
-                  FileSymlinkException.class,
-                  InconsistentFilesystemException.class);
-    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
-      throw new EvalException(Location.BUILTIN, new IOException(e));
-    }
-
-    if (fileValue == null) {
-      return null;
-    }
-    if (!fileValue.isFile()) {
-      throw new EvalException(
-          Location.BUILTIN, "Not a file: " + rootedPath.asPath().getPathString());
-    }
-
-    return new SkylarkPath(rootedPath.asPath());
   }
 }

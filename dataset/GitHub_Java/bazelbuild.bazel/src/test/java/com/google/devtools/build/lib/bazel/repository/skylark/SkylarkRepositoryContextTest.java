@@ -35,13 +35,11 @@ import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skyframe.SkyFunction;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -89,12 +87,7 @@ public class SkylarkRepositoryContextTest {
             .externalPackageData()
             .createAndAddRepositoryRule(
                 packageBuilder, buildRuleClass(attributes), null, kwargs, ast);
-    context =
-        new SkylarkRepositoryContext(
-            rule,
-            outputDirectory,
-            Mockito.mock(SkyFunction.Environment.class),
-            ImmutableMap.of("FOO", "BAR"));
+    context = new SkylarkRepositoryContext(rule, outputDirectory, ImmutableMap.of("FOO", "BAR"));
   }
 
   protected void setUpContexForRule(String name) throws Exception {
@@ -169,15 +162,5 @@ public class SkylarkRepositoryContextTest {
             CharStreams.toString(
                 new InputStreamReader(path.getInputStream(), StandardCharsets.UTF_8)))
         .isEqualTo(content);
-  }
-
-  @Test
-  public void testDirectoryListing() throws Exception {
-    setUpContexForRule("test");
-    scratch.file("/my/folder/a");
-    scratch.file("/my/folder/b");
-    scratch.file("/my/folder/c");
-    assertThat(context.path("/my/folder").readdir()).containsExactly(
-        context.path("/my/folder/a"), context.path("/my/folder/b"), context.path("/my/folder/c"));
   }
 }
