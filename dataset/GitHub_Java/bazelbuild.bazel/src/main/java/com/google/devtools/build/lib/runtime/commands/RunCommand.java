@@ -63,6 +63,7 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -275,11 +276,11 @@ public class RunCommand implements BlazeCommand  {
           runUnderValue += " " + ShellEscaper.escapeJoinAll(opts);
         }
       }
-      cmdLine.add(configuration.getShellExecutable().getPathString());
+      cmdLine.add(configuration.getShExecutable().getPathString());
       cmdLine.add("-c");
       cmdLine.add(runUnderValue + " " + executablePath.getPathString() + " " +
           ShellEscaper.escapeJoinAll(args));
-      prettyCmdLine.add(configuration.getShellExecutable().getPathString());
+      prettyCmdLine.add(configuration.getShExecutable().getPathString());
       prettyCmdLine.add("-c");
       prettyCmdLine.add(runUnderValue + " " + prettyExecutablePath.getPathString() + " " +
           ShellEscaper.escapeJoinAll(args));
@@ -373,8 +374,8 @@ public class RunCommand implements BlazeCommand  {
     }
 
     SymlinkTreeHelper helper = new SymlinkTreeHelper(
-        manifest.getPath(),
-        runfilesSupport.getRunfilesDirectory(),
+        manifest.getExecPath(),
+        runfilesDir,
         false);
     helper.createSymlinksUsingCommand(env.getExecRoot(), target.getConfiguration(),
         env.getBlazeWorkspace().getBinTools());
