@@ -381,7 +381,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Iterable<ConfiguredTarget> getDirectPrerequisites(ConfiguredTarget target)
       throws InterruptedException {
-    return view.getDirectPrerequisitesForTesting(reporter, target, masterConfig);
+    return view.getDirectPrerequisites(target, masterConfig);
   }
 
   /**
@@ -431,8 +431,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * given configured target.
    */
   protected RuleContext getRuleContext(ConfiguredTarget target) throws InterruptedException {
-    return view.getRuleContextForTesting(
-        reporter, target, new StubAnalysisEnvironment(), masterConfig);
+    return view.getRuleContextForTesting(target, new StubAnalysisEnvironment(), masterConfig);
   }
 
   /**
@@ -591,7 +590,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected ConfiguredTarget getConfiguredTarget(String label, BuildConfiguration config)
       throws NoSuchPackageException, NoSuchTargetException,
       LabelSyntaxException, InterruptedException {
-    return getConfiguredTarget(Label.parseAbsolute(label), config);
+    ensureTargetsVisited(label);
+    return view.getConfiguredTargetForTesting(getTarget(label), config);
   }
 
   /**
@@ -601,7 +601,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected ConfiguredTarget getConfiguredTarget(Label label, BuildConfiguration config)
       throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
     ensureTargetsVisited(label);
-    return view.getConfiguredTargetForTesting(reporter, label, config);
+    return view.getConfiguredTargetForTesting(getTarget(label), config);
   }
 
   /**
@@ -690,7 +690,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       throws IOException, Exception {
     Target rule = scratchRule(packageName, ruleName, lines);
     if (ensureTargetsVisited(rule.getLabel())) {
-      return view.getConfiguredTargetForTesting(reporter, rule.getLabel(), config);
+      return view.getConfiguredTargetForTesting(rule, config);
     } else {
       return null;
     }
