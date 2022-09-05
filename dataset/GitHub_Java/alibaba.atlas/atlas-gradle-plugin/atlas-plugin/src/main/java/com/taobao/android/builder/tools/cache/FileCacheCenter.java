@@ -283,8 +283,6 @@ public class FileCacheCenter {
 
             logger.log(type + "." + key + " query local cache  " + localCacheFile.getAbsolutePath() + " success");
             return localCacheFile;
-        }else {
-            logger.log(type + "." + key + " miss local cache  " + localCacheFile.getAbsolutePath());
         }
 
         if (null == networkCache || !remote) {

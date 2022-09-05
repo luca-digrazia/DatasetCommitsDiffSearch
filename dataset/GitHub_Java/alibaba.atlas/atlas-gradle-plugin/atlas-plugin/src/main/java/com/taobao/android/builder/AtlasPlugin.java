@@ -209,36 +209,69 @@
 
 package com.taobao.android.builder;
 
-import com.taobao.android.builder.manager.AtlasConfigurationHelper;
-import com.taobao.android.builder.tasks.helper.AtlasListTask;
-import com.taobao.android.builder.tools.PluginTypeUtils;
-import org.gradle.api.Action;
-import org.gradle.api.GradleException;
-import org.gradle.api.Project;
-import org.gradle.api.artifacts.Configuration;
-import org.gradle.internal.reflect.Instantiator;
-
-import javax.inject.Inject;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
+
+import javax.inject.Inject;
+
+import com.android.build.gradle.AndroidGradleOptions;
+import com.taobao.android.builder.manager.AtlasConfigurationHelper;
+import com.taobao.android.builder.manager.Version;
+import com.taobao.android.builder.tasks.helper.AtlasListTask;
+import com.taobao.android.builder.tools.PluginTypeUtils;
+import com.taobao.android.builder.tools.log.LogOutputListener;
+import org.gradle.api.Action;
+import org.gradle.api.GradleException;
+import org.gradle.api.Plugin;
+import org.gradle.api.Project;
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.tasks.StopExecutionException;
+import org.gradle.internal.reflect.Instantiator;
 
 /**
- * Created by shenghua.nish on 2016-05-17 Often in the morning.
+ * Created by shenghua.nish on 2016-05-17 上午11:26.
  *
  * @author shenghua.nish, wuzhong
  */
-public class AtlasPlugin extends AtlasBasePlugin {
+public class AtlasPlugin implements Plugin<Project> {
+
+    public static final String BUNDLE_COMPILE = "bundleCompile";
+    public static final String PROVIDED_COMPILE = "providedCompile";
+
+    protected Project project;
+    public static final Pattern PLUGIN_ACCEPTABLE_VERSIONS = Pattern.compile("2\\.[3-9].*");
+    public static final String PLUGIN_MIN_VERSIONS = "2.3.0";
+
+    public static final Pattern JDK_VERSIONS = Pattern.compile("1\\.[8-9].*");
+    public static final String JDK_MIN_VERSIONS = "1.8";
+
+    protected Instantiator instantiator;
+    public static String creator = "AtlasPlugin" + Version.ANDROID_GRADLE_PLUGIN_VERSION;
+
+    private AtlasConfigurationHelper atlasConfigurationHelper;
 
     @Inject
     public AtlasPlugin(Instantiator instantiator) {
-        super(instantiator);
+
+        this.instantiator = instantiator;
+
     }
 
     @Override
     public void apply(Project project) {
-        super.apply(project);
+
+        this.project = project;
+
+        LogOutputListener.addListener(project);
+
+        checkPluginSetup();
+
+        atlasConfigurationHelper = getConfigurationHelper(project);
 
         atlasConfigurationHelper.createLibCompenents();
+
+        atlasConfigurationHelper.createExtendsion();
 
         if (PluginTypeUtils.isAppProject(project)) {
 
@@ -256,6 +289,7 @@ public class AtlasPlugin extends AtlasBasePlugin {
                 project.getDependencies().add("compile", "com.taobao.android:atlasupdate:1.1.4.5");
                 project.getDependencies().add("compile", "com.taobao.android:atlas_core:5.0.6-rc21@aar");
             }
+
             atlasConfigurationHelper.hookAtlasDependencyManager();
 
         }
@@ -269,27 +303,59 @@ public class AtlasPlugin extends AtlasBasePlugin {
                 //3. update extension
                 atlasConfigurationHelper.updateExtensionAfterEvaluate();
 
-                //4. Set up the android builder
+                //4. 设置android builder
                 try {
                     atlasConfigurationHelper.createBuilderAfterEvaluate();
                 } catch (Exception e) {
                     throw new GradleException("update builder failed", e);
                 }
 
-                //5. Configuration tasks
+                //5. 配置任务
                 atlasConfigurationHelper.configTasksAfterEvaluate();
 
                 project.getTasks().create("atlasList", AtlasListTask.class);
             }
         });
-
     }
 
-    @Override
     protected AtlasConfigurationHelper getConfigurationHelper(Project project) {
         return new AtlasConfigurationHelper(project,
                                             instantiator,
                                             creator);
+    }
+
+    /**
+     * 判断插件的依赖配置是否正确
+     */
+    private void checkPluginSetup() {
+
+        if (!PluginTypeUtils.usedGooglePlugin(project)) {
+            throw new StopExecutionException("Atlas plugin need android plugin to run!");
+        }
+
+        String androidVersion = com.android.builder.Version.ANDROID_GRADLE_PLUGIN_VERSION;
+        //判断Android plugin的version
+        if (!PLUGIN_ACCEPTABLE_VERSIONS.matcher(androidVersion).matches()) {
+            String errorMessage = String.format("Android Gradle plugin version %s is required. Current version is %s. ",
+                                                PLUGIN_MIN_VERSIONS, androidVersion);
+            throw new StopExecutionException(errorMessage);
+        }
+
+        //check jdk version
+        String jdkVersion = System.getProperty("java.version");
+        if (!JDK_VERSIONS.matcher(jdkVersion).matches()) {
+            String errorMessage = String.format("JDK version %s is required. Current version is %s. ",
+                                                JDK_MIN_VERSIONS, jdkVersion);
+            throw new StopExecutionException(errorMessage);
+        }
+
+        if (AndroidGradleOptions.isBuildCacheEnabled(project)) {
+            //project.setProperty(AndroidGradleOptions.PROPERTY_ENABLE_BUILD_CACHE, false);
+            String errorMessage = "android.enableBuildCache is disabled by atlas, we will open it later, "
+                + "\r\n please `add android.enableBuildCache false` to gradle.properties";
+            //throw new StopExecutionException(errorMessage);
+        }
+
     }
 
 }

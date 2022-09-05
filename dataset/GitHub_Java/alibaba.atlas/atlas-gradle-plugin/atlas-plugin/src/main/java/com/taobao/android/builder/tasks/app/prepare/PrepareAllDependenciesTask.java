@@ -209,11 +209,6 @@
 
 package com.taobao.android.builder.tasks.app.prepare;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-
 import com.android.build.gradle.AndroidGradleOptions;
 import com.android.build.gradle.internal.LibraryCache;
 import com.android.build.gradle.internal.api.AppVariantContext;
@@ -222,6 +217,7 @@ import com.android.build.gradle.internal.tasks.BaseTask;
 import com.android.build.gradle.internal.tasks.PrepareLibraryTask;
 import com.android.build.gradle.internal.variant.BaseVariantOutputData;
 import com.android.builder.model.AndroidLibrary;
+import com.google.common.collect.Lists;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.SoLibrary;
@@ -230,12 +226,23 @@ import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.concurrent.ExecutorServicesHelper;
 import org.apache.commons.io.FileUtils;
 import org.dom4j.DocumentException;
+import org.gradle.api.Project;
+import org.gradle.api.tasks.InputFiles;
+import org.gradle.api.tasks.OutputDirectories;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.util.GUtil;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import static com.android.SdkConstants.DOT_JAR;
+import static com.android.SdkConstants.FD_AAR_LIBS;
+
 /**
- * 1. You can improve performance by controlling concurrency yourself
- * 2. solib Decompression preparation
+ * 1. 自己控制并发，可以提高性能
+ * 2. solib 的解压准备
  *
  * @author wuzhong
  */
@@ -249,37 +256,37 @@ public class PrepareAllDependenciesTask extends BaseTask {
 
     AppVariantContext appVariantContext;
 
-    ////@InputFiles
-    //public List<File> getInputDependencies() {
-    //
-    //    List<File> files = new ArrayList<>();
-    //
-    //    for (SoLibrary soLibrary : atlasDependencyTree.getAllSoLibraries()) {
-    //        files.add(soLibrary.getSoLibFile());
-    //    }
-    //
-    //    for (final AndroidLibrary aarBundle : atlasDependencyTree.getAllAndroidLibrarys()) {
-    //        files.add(aarBundle.getBundle());
-    //    }
-    //
-    //    return files;
-    //}
-    //
-    ////@OutputDirectories
-    //public List<File> getOutputDirs() {
-    //    List<File> files = new ArrayList<>();
-    //    for (SoLibrary soLibrary : atlasDependencyTree.getAllSoLibraries()) {
-    //        files.add(soLibrary.getFolder());
-    //    }
-    //    for (final AndroidLibrary aarBundle : atlasDependencyTree.getAllAndroidLibrarys()) {
-    //        files.add(aarBundle.getFolder());
-    //    }
-    //    return files;
-    //}
+    @InputFiles
+    public List<File> getInputDependencies() {
+
+        List<File> files = new ArrayList<>();
+
+        for (SoLibrary soLibrary : atlasDependencyTree.getAllSoLibraries()) {
+            files.add(soLibrary.getSoLibFile());
+        }
+
+        for (final AndroidLibrary aarBundle : atlasDependencyTree.getAllAndroidLibrarys()) {
+            files.add(aarBundle.getBundle());
+        }
+
+        return files;
+    }
+
+    @OutputDirectories
+    public List<File> getOutputDirs(){
+        List<File> files = new ArrayList<>();
+        for (SoLibrary soLibrary : atlasDependencyTree.getAllSoLibraries()) {
+            files.add(soLibrary.getFolder());
+        }
+        for (final AndroidLibrary aarBundle : atlasDependencyTree.getAllAndroidLibrarys()) {
+            files.add(aarBundle.getFolder());
+        }
+        return files;
+    };
 
     @TaskAction
     void run() throws ExecutionException, InterruptedException, IOException, DocumentException {
-
+        AtlasBuildContext.appVariantContext = appVariantContext;
         ExecutorServicesHelper executorServicesHelper = new ExecutorServicesHelper(taskName,
                                                                                    getLogger(),
                                                                                    0);
@@ -333,6 +340,50 @@ public class PrepareAllDependenciesTask extends BaseTask {
 
         executorServicesHelper.execute(runnables);
 
+        Project project = getProject();
+        if (isLocalJarEnabled(project)) {
+            for (final AndroidLibrary aarBundle : atlasDependencyTree.getAllAndroidLibrarys()) {
+                List<File> localJars = getLocalJars(aarBundle.getFolder());
+                //System.out.println("get local libs");
+                for (File file : localJars) {
+                    project.getLogger().info("add local jar to dependency " + file.getAbsolutePath() + "->" + aarBundle
+                        .getResolvedCoordinates().toString());
+                }
+
+                aarBundle.getLocalJars().addAll(localJars);
+
+                //getLocalJars(project, bundle, androidDependency);
+            }
+        }
+
+    }
+
+    private boolean isLocalJarEnabled(Project project) {
+        boolean localJarEnabled = AtlasBuildContext.sBuilderAdapter.localJarEnabled;
+        if (project.hasProperty("localJarEnabled")) {
+            localJarEnabled = "true".equals(project.property("localJarEnabled"));
+        }
+        return localJarEnabled;
+    }
+
+    private List<File> getLocalJars(File rootDir) {
+        List<File> localJars = Lists.newArrayList();
+        List<File> rootDirs = new ArrayList<>();
+        rootDirs.add(new File(rootDir, FD_AAR_LIBS));
+        rootDirs.add(new File(rootDir, "jars/"+FD_AAR_LIBS));
+
+        for (File root : rootDirs){
+            File[] jarList = root.listFiles();
+            if (jarList != null) {
+                for (File jars : jarList) {
+                    if (jars.isFile() && jars.getName().endsWith(DOT_JAR)) {
+                        localJars.add(jars);
+                    }
+                }
+            }
+        }
+
+        return localJars;
     }
 
     private void prepareLibrary(AndroidLibrary library) {
@@ -368,7 +419,6 @@ public class PrepareAllDependenciesTask extends BaseTask {
     public static class ConfigAction extends MtlBaseTaskAction<PrepareAllDependenciesTask> {
 
         AppVariantContext appVariantContext;
-
         public ConfigAction(AppVariantContext appVariantContext,
                             BaseVariantOutputData baseVariantOutputData) {
             super(appVariantContext, baseVariantOutputData);
@@ -389,7 +439,7 @@ public class PrepareAllDependenciesTask extends BaseTask {
         public void execute(PrepareAllDependenciesTask prepareAllDependenciesTask) {
 
             super.execute(prepareAllDependenciesTask);
-            prepareAllDependenciesTask.appVariantContext = appVariantContext;
+            prepareAllDependenciesTask.appVariantContext =appVariantContext;
             prepareAllDependenciesTask.appVariantOutputContext = getAppVariantOutputContext();
 
             prepareAllDependenciesTask.atlasDependencyTree = AtlasBuildContext.androidDependencyTrees.get(
