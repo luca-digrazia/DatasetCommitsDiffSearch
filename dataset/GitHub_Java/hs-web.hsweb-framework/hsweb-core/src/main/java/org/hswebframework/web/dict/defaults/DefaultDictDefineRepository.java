@@ -1,6 +1,16 @@
 package org.hswebframework.web.dict.defaults;
 
+import lombok.extern.slf4j.Slf4j;
+import org.hswebframework.utils.StringUtils;
 import org.hswebframework.web.dict.*;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.core.io.support.ResourcePatternResolver;
+import org.springframework.core.type.classreading.MetadataReader;
+import org.springframework.core.type.classreading.SimpleMetadataReaderFactory;
+import org.springframework.util.ReflectionUtils;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.Field;
 import java.util.*;
@@ -10,84 +20,71 @@ import java.util.stream.Collectors;
  * @author zhouhao
  * @since 3.0
  */
+@Slf4j
 public class DefaultDictDefineRepository implements DictDefineRepository {
-    protected Map<String, DictDefine> parsedDict = new HashMap<>();
+    protected static final Map<String, DictDefine> parsedDict = new HashMap<>();
 
-    public void registerDefine(DictDefine define) {
+    public static void registerDefine(DictDefine define) {
+        if (define == null) {
+            return;
+        }
         parsedDict.put(define.getId(), define);
     }
 
-    @Override
-    public DictDefine getDefine(String id) {
-        return parsedDict.get(id);
-    }
+    @SuppressWarnings("all")
+    public static DictDefine parseEnumDict(Class<?> type) {
 
-    private List<Field> parseField(Class type) {
-        if (type == Object.class) {
-            return Collections.emptyList();
+        Dict dict = type.getAnnotation(Dict.class);
+        if (!type.isEnum()) {
+            throw new UnsupportedOperationException("unsupported type " + type);
         }
-        List<Field> lst = new ArrayList<>();
-        lst.addAll(Arrays.asList(type.getDeclaredFields()));
-        lst.addAll(parseField(type.getSuperclass()));
-
-        return lst;
-    }
-
-    @Override
-    public List<ClassDictDefine> getDefine(Class type) {
-        return this.parseDefine(type);
-    }
-
-    protected List<ClassDictDefine> parseDefine(Class type) {
-        List<ClassDictDefine> defines = new ArrayList<>();
-
-        for (Field field : parseField(type)) {
-            Dict dict = field.getAnnotation(Dict.class);
-            if (dict == null) {
-                continue;
-            }
-            String id = dict.id();
-            DictDefine dictDefine = getDefine(id);
-            if (dictDefine instanceof ClassDictDefine) {
-                defines.add(((ClassDictDefine) dictDefine));
+        List<EnumDict<?>> items = new ArrayList<>();
+        for (Object enumConstant : type.getEnumConstants()) {
+            if (enumConstant instanceof EnumDict) {
+                items.add((EnumDict) enumConstant);
             } else {
-                DefaultClassDictDefine define;
-                if (dictDefine != null) {
-                    List<ItemDefine> items = dictDefine.getItems()
-                            .stream()
-                            .map(item -> DefaultItemDefine.builder()
-                                    .text(item.getText())
-                                    .value(item.getValue())
-                                    .comments(String.join(",", item.getComments()))
-                                    .build())
-                            .collect(Collectors.toList());
-                    define = DefaultClassDictDefine.builder()
-                            .id(id)
-                            .alias(dictDefine.getAlias())
-                            .comments(dictDefine.getComments())
-                            .field(field.getName())
-                            .items(items)
-                            .build();
-
-                } else {
-                    List<ItemDefine> items = Arrays
-                            .stream(dict.items())
-                            .map(item -> DefaultItemDefine.builder()
-                                    .text(item.text())
-                                    .value(item.value())
-                                    .comments(String.join(",", item.comments()))
-                                    .build()).collect(Collectors.toList());
-                    define = DefaultClassDictDefine.builder()
-                            .id(id)
-                            .alias(dict.alias())
-                            .comments(dict.comments())
-                            .field(field.getName())
-                            .items(items)
-                            .build();
-                }
-                defines.add(define);
+                Enum e = ((Enum) enumConstant);
+                items.add(DefaultItemDefine.builder()
+                        .value(e.name())
+                        .text(e.name())
+                        .ordinal(e.ordinal())
+                        .build());
             }
         }
-        return defines;
+
+        DefaultDictDefine define = new DefaultDictDefine();
+        if (dict != null) {
+            define.setId(dict.value());
+            define.setComments(dict.comments());
+            define.setAlias(dict.alias());
+        } else {
+
+            String id = StringUtils.camelCase2UnderScoreCase(type.getSimpleName()).replace("_", "-");
+            if (id.startsWith("-")) {
+                id = id.substring(1);
+            }
+            define.setId(id);
+            define.setAlias(type.getSimpleName());
+//            define.setComments();
+        }
+        define.setItems(items);
+        log.trace("parse enum dict : {} as : {}", type, define.getId());
+        return define;
+
+    }
+
+    @Override
+    public Mono<DictDefine> getDefine(String id) {
+        return Mono.justOrEmpty(parsedDict.get(id));
+    }
+
+    @Override
+    public Flux<DictDefine> getAllDefine() {
+        return Flux.fromIterable(parsedDict.values());
+    }
+
+    @Override
+    public void addDefine(DictDefine dictDefine) {
+        registerDefine(dictDefine);
     }
 }

@@ -62,7 +62,7 @@ public class EasyormRepositoryRegistrar implements ImportBeanDefinitionRegistrar
         for (Resource resource : resourcePatternResolver.getResources(path)) {
             MetadataReader reader = metadataReaderFactory.getMetadataReader(resource);
             String className = reader.getClassMetadata().getClassName();
-            Class<?> entityType = org.springframework.util.ClassUtils.forName(className,null);
+            Class entityType = Class.forName(className);
             if (Arrays.stream(anno)
                     .noneMatch(ann -> AnnotationUtils.findAnnotation(entityType, ann) != null)) {
                 continue;
