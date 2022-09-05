@@ -23,9 +23,6 @@ import javax.ws.rs.core.Configuration;
 import javax.ws.rs.ext.Provider;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -108,19 +105,19 @@ public class InstrumentedResourceMethodApplicationListener implements Applicatio
      * different response codes
      */
     private static class ResponseMeterMetric {
-        public final List<Meter> meters;
+        public final Meter[] meters;
 
         public ResponseMeterMetric(final MetricRegistry registry,
                                    final ResourceMethod method,
                                    final ResponseMetered responseMetered) {
             final String metricName = chooseName(responseMetered.name(), responseMetered.absolute(), method);
-            this.meters = Collections.unmodifiableList(Arrays.asList(
+            this.meters = new Meter[]{
                     registry.meter(name(metricName, "1xx-responses")), // 1xx
                     registry.meter(name(metricName, "2xx-responses")), // 2xx
                     registry.meter(name(metricName, "3xx-responses")), // 3xx
                     registry.meter(name(metricName, "4xx-responses")), // 4xx
                     registry.meter(name(metricName, "5xx-responses"))  // 5xx
-            ));
+            };
         }
     }
 
@@ -254,12 +251,12 @@ public class InstrumentedResourceMethodApplicationListener implements Applicatio
                     ContainerResponse containerResponse = event.getContainerResponse();
                     if (containerResponse == null) {
                         if (event.getException() != null) {
-                            metric.meters.get(4).mark();
+                            metric.meters[4].mark();
                         }
                     } else {
                         final int responseStatus = containerResponse.getStatus() / 100;
                         if (responseStatus >= 1 && responseStatus <= 5) {
-                            metric.meters.get(responseStatus - 1).mark();
+                            metric.meters[responseStatus - 1].mark();
                         }
                     }
                 }
