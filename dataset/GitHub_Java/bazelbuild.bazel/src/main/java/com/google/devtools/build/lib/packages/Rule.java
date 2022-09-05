@@ -604,11 +604,6 @@ public final class Rule implements Target {
   }
 
   @Override
-  public boolean isConfigurable() {
-    return true;
-  }
-
-  @Override
   @SuppressWarnings("unchecked")
   public Set<DistributionType> getDistributions() {
     if (isAttrDefined("distribs", BuildType.DISTRIBUTIONS)
@@ -704,7 +699,7 @@ public final class Rule implements Target {
       BinaryPredicate<Rule, Attribute> predicate) {
     LinkedHashMultimap<Attribute, Label> labels = LinkedHashMultimap.create();
     for (Attribute attribute : this.getAttributes()) {
-      for (AspectClass candidateClass : attribute.getAspects()) {
+      for (Class<? extends AspectFactory<?, ?, ?>> candidateClass : attribute.getAspects()) {
         AspectFactory<?, ?, ?> candidate = AspectFactory.Util.create(candidateClass);
         AspectDefinition.addAllAttributesOfAspect(Rule.this, labels,
             candidate.getDefinition(), predicate);

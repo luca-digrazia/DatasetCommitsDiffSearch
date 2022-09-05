@@ -448,8 +448,7 @@ public class PackageDeserializer {
     Package.Builder builder;
     try {
       builder = new Package.Builder(
-          PackageIdentifier
-              .create(packagePb.getRepository(), new PathFragment(packagePb.getName())),
+          new PackageIdentifier(packagePb.getRepository(), new PathFragment(packagePb.getName())),
           null);
     } catch (LabelSyntaxException e) {
       throw new PackageDeserializationException(e);
