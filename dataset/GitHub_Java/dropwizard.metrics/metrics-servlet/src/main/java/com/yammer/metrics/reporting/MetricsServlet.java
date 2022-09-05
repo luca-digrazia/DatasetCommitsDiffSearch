@@ -185,6 +185,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         json.writeFieldName("jvm");
         json.writeStartObject();
         {
+
             json.writeFieldName("vm");
             json.writeStartObject();
             {
@@ -192,7 +193,6 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
                 json.writeStringField("version", vm.version());
             }
             json.writeEndObject();
-
             json.writeFieldName("memory");
             json.writeStartObject();
             {
@@ -218,33 +218,6 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
                 json.writeEndObject();
             }
             json.writeEndObject();
-
-            final Map<String, VirtualMachineMetrics.BufferPoolStats> bufferPoolStats = vm.getBufferPoolStats();
-            if (!bufferPoolStats.isEmpty()) {
-                json.writeFieldName("buffers");
-                json.writeStartObject();
-                {
-                    json.writeFieldName("direct");
-                    json.writeStartObject();
-                    {
-                        json.writeNumberField("count", bufferPoolStats.get("direct").getCount());
-                        json.writeNumberField("memoryUsed", bufferPoolStats.get("direct").getMemoryUsed());
-                        json.writeNumberField("totalCapacity", bufferPoolStats.get("direct").getTotalCapacity());
-                    }
-                    json.writeEndObject();
-
-                    json.writeFieldName("mapped");
-                    json.writeStartObject();
-                    {
-                        json.writeNumberField("count", bufferPoolStats.get("mapped").getCount());
-                        json.writeNumberField("memoryUsed", bufferPoolStats.get("mapped").getMemoryUsed());
-                        json.writeNumberField("totalCapacity", bufferPoolStats.get("mapped").getTotalCapacity());
-                    }
-                    json.writeEndObject();
-                }
-                json.writeEndObject();
-            }
-
 
             json.writeNumberField("daemon_thread_count", vm.daemonThreadCount());
             json.writeNumberField("thread_count", vm.threadCount());
@@ -297,7 +270,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
                                                  subEntry.getKey(),
                                                  new Context(json, showFullSamples));
                         } catch (Exception e) {
-                            LOGGER.warn("Error writing out {}", subEntry.getKey(), e);
+                            LOGGER.warn("Error writing out " + subEntry.getKey(), e);
                         }
                     }
                 }
