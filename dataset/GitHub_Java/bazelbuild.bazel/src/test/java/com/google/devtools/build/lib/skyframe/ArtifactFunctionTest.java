@@ -49,6 +49,12 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -56,10 +62,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link ArtifactFunction}.
@@ -183,8 +185,8 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     file(input1.getPath(), "source contents");
     evaluate(
         Iterables.toArray(
-            ArtifactSkyKey.mandatoryKeys(ImmutableSet.of(input2, input1, input2)), SkyKey.class));
-    SkyValue value = evaluateArtifactValue(output);
+            ArtifactValue.mandatoryKeys(ImmutableSet.of(input2, input1, input2)), SkyKey.class));
+    ArtifactValue value = evaluateArtifactValue(output);
     assertThat(((AggregatingArtifactValue) value).getInputs())
         .containsExactly(Pair.of(input1, create(input1)), Pair.of(input2, create(input2)));
   }
@@ -245,7 +247,7 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     try {
       value.getModifiedTime();
       fail("mtime for non-empty file should not be stored.");
-    } catch (UnsupportedOperationException e) {
+    } catch (IllegalStateException e) {
       // Expected.
     }
   }
@@ -331,10 +333,10 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     TreeFileArtifact treeFileArtifact2 = createFakeTreeFileArtifact(artifact, "child2", "hello2");
 
     TreeArtifactValue value = (TreeArtifactValue) evaluateArtifactValue(artifact);
-    assertNotNull(value.getChildValues().get(treeFileArtifact1));
-    assertNotNull(value.getChildValues().get(treeFileArtifact2));
-    assertNotNull(value.getChildValues().get(treeFileArtifact1).getDigest());
-    assertNotNull(value.getChildValues().get(treeFileArtifact2).getDigest());
+    assertNotNull(value.getChildValue(treeFileArtifact1));
+    assertNotNull(value.getChildValue(treeFileArtifact2));
+    assertNotNull(value.getChildValue(treeFileArtifact1).getDigest());
+    assertNotNull(value.getChildValue(treeFileArtifact2).getDigest());
   }
 
   @Test
@@ -354,10 +356,10 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
         ActionsTestUtil.createDummySpawnActionTemplate(artifact1, artifact2));
 
     TreeArtifactValue value = (TreeArtifactValue) evaluateArtifactValue(artifact2);
-    assertNotNull(value.getChildValues().get(treeFileArtifact1));
-    assertNotNull(value.getChildValues().get(treeFileArtifact2));
-    assertNotNull(value.getChildValues().get(treeFileArtifact1).getDigest());
-    assertNotNull(value.getChildValues().get(treeFileArtifact2).getDigest());
+    assertNotNull(value.getChildValue(treeFileArtifact1));
+    assertNotNull(value.getChildValue(treeFileArtifact2));
+    assertNotNull(value.getChildValue(treeFileArtifact1).getDigest());
+    assertNotNull(value.getChildValue(treeFileArtifact2).getDigest());
   }
 
   @Test
@@ -382,10 +384,10 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
         ActionsTestUtil.createDummySpawnActionTemplate(artifact2, artifact3));
 
     TreeArtifactValue value = (TreeArtifactValue) evaluateArtifactValue(artifact3);
-    assertNotNull(value.getChildValues().get(treeFileArtifact1));
-    assertNotNull(value.getChildValues().get(treeFileArtifact2));
-    assertNotNull(value.getChildValues().get(treeFileArtifact1).getDigest());
-    assertNotNull(value.getChildValues().get(treeFileArtifact2).getDigest());
+    assertNotNull(value.getChildValue(treeFileArtifact1));
+    assertNotNull(value.getChildValue(treeFileArtifact2));
+    assertNotNull(value.getChildValue(treeFileArtifact1).getDigest());
+    assertNotNull(value.getChildValue(treeFileArtifact2).getDigest());
   }
 
   private void file(Path path, String contents) throws Exception {
@@ -449,13 +451,14 @@ public class ArtifactFunctionTest extends ArtifactFunctionTestCase {
     return ((FileArtifactValue) evaluateArtifactValue(artifact));
   }
 
-  private SkyValue evaluateArtifactValue(Artifact artifact) throws Throwable {
+  private ArtifactValue evaluateArtifactValue(Artifact artifact) throws Throwable {
     return evaluateArtifactValue(artifact, /*isMandatory=*/ true);
   }
 
-  private SkyValue evaluateArtifactValue(Artifact artifact, boolean mandatory) throws Throwable {
-    SkyKey key = ArtifactSkyKey.key(artifact, mandatory);
-    EvaluationResult<SkyValue> result = evaluate(ImmutableList.of(key).toArray(new SkyKey[0]));
+  private ArtifactValue evaluateArtifactValue(Artifact artifact, boolean mandatory)
+      throws Throwable {
+    SkyKey key = ArtifactValue.key(artifact, mandatory);
+    EvaluationResult<ArtifactValue> result = evaluate(ImmutableList.of(key).toArray(new SkyKey[0]));
     if (result.hasError()) {
       throw result.getError().getException();
     }
