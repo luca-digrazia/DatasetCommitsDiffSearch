@@ -18,9 +18,6 @@ public class MetricsModule extends Module {
     static final Version VERSION = new Version(3, 1, 3, "", "com.codahale.metrics", "metrics-json");
 
     private static class GaugeSerializer extends StdSerializer<Gauge> {
-
-        private static final long serialVersionUID = 1L;
-
         private GaugeSerializer() {
             super(Gauge.class);
         }
@@ -42,9 +39,6 @@ public class MetricsModule extends Module {
     }
 
     private static class CounterSerializer extends StdSerializer<Counter> {
-
-        private static final long serialVersionUID = 1L;
-
         private CounterSerializer() {
             super(Counter.class);
         }
@@ -60,9 +54,6 @@ public class MetricsModule extends Module {
     }
 
     private static class HistogramSerializer extends StdSerializer<Histogram> {
-
-        private static final long serialVersionUID = 1L;
-
         private final boolean showSamples;
 
         private HistogramSerializer(boolean showSamples) {
@@ -97,9 +88,6 @@ public class MetricsModule extends Module {
     }
 
     private static class MeterSerializer extends StdSerializer<Meter> {
-
-        private static final long serialVersionUID = 1L;
-
         private final String rateUnit;
         private final double rateFactor;
 
@@ -125,9 +113,6 @@ public class MetricsModule extends Module {
     }
 
     private static class TimerSerializer extends StdSerializer<Timer> {
-
-        private static final long serialVersionUID = 1L;
-
         private final String rateUnit;
         private final double rateFactor;
         private final String durationUnit;
@@ -184,9 +169,7 @@ public class MetricsModule extends Module {
     }
 
     private static class MetricRegistrySerializer extends StdSerializer<MetricRegistry> {
-
-        private static final long serialVersionUID = 1L;
-
+      
         private final MetricFilter filter;
         
         private MetricRegistrySerializer(MetricFilter filter) {
