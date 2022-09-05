@@ -30,15 +30,16 @@ import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SelectorList;
 import com.google.devtools.build.lib.syntax.SelectorValue;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Test of type-conversions for build-specific types.
@@ -65,7 +66,7 @@ public class BuildTypeTest {
             /* symlinkBehavior */ null,
             /* stripPrefix */ null);
     assertEquals(input, BuildType.FILESET_ENTRY.convert(input, null, currentRule));
-    assertThat(collectLabels(BuildType.FILESET_ENTRY, input)).containsExactly(entryLabel);
+    assertThat(BuildType.FILESET_ENTRY.extractLabels(input)).containsExactly(entryLabel);
   }
 
   @Test
@@ -89,7 +90,7 @@ public class BuildTypeTest {
             /* symlinkBehavior */ null,
             /* stripPrefix */ null));
     assertEquals(input, BuildType.FILESET_ENTRY_LIST.convert(input, null, currentRule));
-    assertThat(collectLabels(BuildType.FILESET_ENTRY_LIST, input)).containsExactly(
+    assertThat(BuildType.FILESET_ENTRY_LIST.extractLabels(input)).containsExactly(
         entry1Label, entry2Label);
   }
 
@@ -123,7 +124,7 @@ public class BuildTypeTest {
         "//conditions:b", "also not a label",
         BuildType.Selector.DEFAULT_CONDITION_KEY, "whatever");
     try {
-      new Selector<>(input, null, currentRule, BuildType.LABEL);
+      new Selector<Label>(input, null, currentRule, BuildType.LABEL);
       fail("Expected Selector instantiation to fail since the input isn't a selection of labels");
     } catch (ConversionException e) {
       assertThat(e.getMessage()).contains("invalid label 'not a label'");
@@ -139,7 +140,7 @@ public class BuildTypeTest {
         "not a label", "//a:a",
         BuildType.Selector.DEFAULT_CONDITION_KEY, "whatever");
     try {
-      new Selector<>(input, null, currentRule, BuildType.LABEL);
+      new Selector<Label>(input, null, currentRule, BuildType.LABEL);
       fail("Expected Selector instantiation to fail since the key isn't a label");
     } catch (ConversionException e) {
       assertThat(e.getMessage()).contains("invalid label 'not a label'");
@@ -157,7 +158,7 @@ public class BuildTypeTest {
         BuildType.Selector.DEFAULT_CONDITION_KEY, "//d:d");
     assertEquals(
         Label.create("@//d", "d"),
-        new Selector<>(input, null, currentRule, BuildType.LABEL).getDefault());
+        new Selector<Label>(input, null, currentRule, BuildType.LABEL).getDefault());
   }
 
   @Test
@@ -270,19 +271,19 @@ public class BuildTypeTest {
   @Test
   public void testUnconditionalSelects() throws Exception {
     assertFalse(
-        new Selector<>(
+        new Selector<Label>(
             ImmutableMap.of("//conditions:a", "//a:a"),
             null, currentRule, BuildType.LABEL
         ).isUnconditional());
     assertFalse(
-        new Selector<>(
+        new Selector<Label>(
             ImmutableMap.of(
                 "//conditions:a", "//a:a",
                 BuildType.Selector.DEFAULT_CONDITION_KEY, "//b:b"),
             null, currentRule, BuildType.LABEL
         ).isUnconditional());
     assertTrue(
-        new Selector<>(
+        new Selector<Label>(
             ImmutableMap.of(
                 BuildType.Selector.DEFAULT_CONDITION_KEY, "//b:b"),
             null, currentRule, BuildType.LABEL
@@ -413,18 +414,5 @@ public class BuildTypeTest {
   public void testFilesetTypeDefinition() throws Exception {
     assertEquals("FilesetEntry",  EvalUtils.getDataTypeName(makeFilesetEntry()));
     assertFalse(EvalUtils.isImmutable(makeFilesetEntry()));
-  }
-
-  private static <T> Iterable<T> collectLabels(Type<T> type, Object value)
-      throws InterruptedException {
-    ImmutableList.Builder<T> result = ImmutableList.builder();
-    type.visitLabels(new Type.LabelVisitor() {
-      @SuppressWarnings("unchecked")
-      @Override
-      public void visit(Object object) throws InterruptedException {
-        result.add((T) object);
-      }
-    }, value);
-    return result.build();
   }
 }
