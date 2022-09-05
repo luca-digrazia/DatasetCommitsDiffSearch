@@ -152,12 +152,7 @@ public class AggMaker {
     private AbstractAggregationBuilder addFieldToAgg(MethodField field, ValuesSourceMetricsAggregationBuilder builder) {
         KVValue kvValue = field.getParams().get(0);
         if (kvValue.key != null && kvValue.key.equals("script")) {
-            if (kvValue.value instanceof MethodField) {
-                return builder.script(new Script(((MethodField) kvValue.value).getParams().get(1).toString()));
-            } else {
-                return builder.script(new Script(kvValue.value.toString()));
-            }
-
+            return builder.script(new Script(((MethodField) kvValue.value).getParams().get(1).toString()));
         } else if (kvValue.key != null && kvValue.value.toString().trim().startsWith("def")) {
             return builder.script(new Script(kvValue.value.toString()));
         } else if (kvValue.key != null && (kvValue.key.equals("nested") || kvValue.key.equals("reverse_nested"))) {
@@ -624,8 +619,8 @@ public class AggMaker {
                     break;
             }
         }
-        if (include != null || exclude != null) {
-            topHits.setFetchSource(include, exclude);
+        if(include != null || exclude != null){
+            topHits.setFetchSource(include,exclude);
         }
         return topHits;
     }
