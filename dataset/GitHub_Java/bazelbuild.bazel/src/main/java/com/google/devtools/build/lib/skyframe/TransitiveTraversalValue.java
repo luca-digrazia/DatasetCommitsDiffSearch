@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -41,9 +39,7 @@ import javax.annotation.Nullable;
 @Immutable
 @ThreadSafe
 public class TransitiveTraversalValue implements SkyValue {
-  
-  private static final Interner<SkyKey> KEY_INTERNER = Interners.newWeakInterner();
-  
+
   @Nullable private final ImmutableSet<String> providers;
   @Nullable private final String firstErrorMessage;
 
@@ -129,7 +125,6 @@ public class TransitiveTraversalValue implements SkyValue {
 
   @ThreadSafe
   public static SkyKey key(Label label) {
-    // Intern in order to save memory.
-    return KEY_INTERNER.intern(new SkyKey(SkyFunctions.TRANSITIVE_TRAVERSAL, label));
+    return new SkyKey(SkyFunctions.TRANSITIVE_TRAVERSAL, label);
   }
 }
