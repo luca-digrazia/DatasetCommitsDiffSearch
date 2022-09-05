@@ -19,12 +19,11 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
@@ -43,9 +42,7 @@ import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
@@ -511,43 +508,11 @@ public class BuildRequest implements OptionsClassProvider {
 
   /** Creates a new TopLevelArtifactContext from this build request. */
   public TopLevelArtifactContext getTopLevelArtifactContext() {
-    return new TopLevelArtifactContext(
+    return new TopLevelArtifactContext(getCommandName(),
+        getBuildOptions().compileOnly, getBuildOptions().compilationPrerequisitesOnly,
+        getBuildOptions().buildDefaultArtifacts,
         getOptions(ExecutionOptions.class).testStrategy.equals("exclusive"),
-        determineOutputGroups());
-  }
-
-  private ImmutableSortedSet<String> determineOutputGroups() {
-    Set<String> current = new HashSet<>();
-    current.add(TopLevelArtifactProvider.TEMP_FILES);
-    current.add(TopLevelArtifactProvider.HIDDEN_TOP_LEVEL);
-    current.add(TopLevelArtifactProvider.DEFAULT);
-    current.addAll(getBuildOptions().outputGroups);
-
-    if (getOptions(Options.class).collectCodeCoverage && runTests) {
-      current.add(TopLevelArtifactProvider.BASELINE_COVERAGE);
-    }
-
-    BuildRequestOptions options = getOptions(BuildRequestOptions.class);
-    if (!options.buildDefaultArtifacts) {
-      current.remove(TopLevelArtifactProvider.DEFAULT);
-      current.remove(TopLevelArtifactProvider.HIDDEN_TOP_LEVEL);
-    }
-
-    if (options.compileOnly) {
-      current.add(TopLevelArtifactProvider.FILES_TO_COMPILE);
-      current.remove(TopLevelArtifactProvider.BASELINE_COVERAGE);
-      current.remove(TopLevelArtifactProvider.DEFAULT);
-      current.remove(TopLevelArtifactProvider.HIDDEN_TOP_LEVEL);
-    }
-
-    if (options.compilationPrerequisitesOnly) {
-      current.add(TopLevelArtifactProvider.COMPILATION_PREREQUISITES);
-      current.remove(TopLevelArtifactProvider.BASELINE_COVERAGE);
-      current.remove(TopLevelArtifactProvider.DEFAULT);
-      current.remove(TopLevelArtifactProvider.HIDDEN_TOP_LEVEL);
-    }
-
-    return ImmutableSortedSet.copyOf(current);
+        ImmutableSet.<String>copyOf(getBuildOptions().outputGroups), shouldRunTests());
   }
 
   public String getSymlinkPrefix() {

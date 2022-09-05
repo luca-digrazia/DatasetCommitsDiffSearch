@@ -34,7 +34,7 @@ public final class TopLevelArtifactContext {
   private final String buildCommand;
   private final boolean compileOnly;
   private final boolean compilationPrerequisitesOnly;
-  private final boolean buildDefaultArtifacts;
+  private final boolean filesToRun;
   private final boolean runTestsExclusively;
   private final ImmutableSet<String> outputGroups;
   private final boolean shouldRunTests;
@@ -45,7 +45,7 @@ public final class TopLevelArtifactContext {
     this.buildCommand = buildCommand;
     this.compileOnly = compileOnly;
     this.compilationPrerequisitesOnly = compilationPrerequisitesOnly;
-    this.buildDefaultArtifacts = filesToRun;
+    this.filesToRun = filesToRun;
     this.runTestsExclusively = runTestsExclusively;
     this.outputGroups = outputGroups;
     this.shouldRunTests = shouldRunTests;
@@ -68,7 +68,7 @@ public final class TopLevelArtifactContext {
 
   /** Returns the value of the (undocumented) --build_default_artifacts flag. */
   public boolean buildDefaultArtifacts() {
-    return buildDefaultArtifacts;
+    return filesToRun;
   }
 
   /** Whether to run tests in exclusive mode. */
@@ -95,7 +95,6 @@ public final class TopLevelArtifactContext {
       return buildCommand.equals(otherContext.buildCommand)
           && compileOnly == otherContext.compileOnly
           && compilationPrerequisitesOnly == otherContext.compilationPrerequisitesOnly
-          && buildDefaultArtifacts == otherContext.buildDefaultArtifacts
           && runTestsExclusively == otherContext.runTestsExclusively
           && outputGroups.equals(otherContext.outputGroups)
           && shouldRunTests == otherContext.shouldRunTests;
@@ -107,6 +106,6 @@ public final class TopLevelArtifactContext {
   @Override
   public int hashCode() {
     return Objects.hash(buildCommand, compileOnly, compilationPrerequisitesOnly,
-        buildDefaultArtifacts, runTestsExclusively, outputGroups, shouldRunTests);
+        runTestsExclusively, outputGroups, shouldRunTests);
   }
 }
