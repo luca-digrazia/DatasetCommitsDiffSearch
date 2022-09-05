@@ -20,10 +20,10 @@ import com.google.devtools.build.lib.vfs.Path.PathFactory;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributes;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
@@ -45,54 +45,18 @@ public class WindowsFileSystem extends JavaIoFileSystem {
         Preconditions.checkState(parent instanceof WindowsPath);
         return new WindowsPath(parent.getFileSystem(), childName, (WindowsPath) parent);
       }
-
-      @Override
-      public TranslatedPath translatePath(Path parent, String child) {
-        if (parent != null && parent.isRootDirectory()) {
-          // This is a top-level directory. It's either a drive name ("C:" or "c") or some other
-          // Unix path (e.g. "/usr").
-          //
-          // We need to translate it to an absolute Windows path. The correct way would be looking
-          // up /etc/mtab to see if any mount point matches the prefix of the path, and change the
-          // prefix to the mounted path. Looking up /etc/mtab each time we create a path however
-          // would be too expensive so we use a heuristic instead.
-          //
-          // If the name looks like a volume name ("C:" or "c") then we treat it as such, otherwise
-          // we make it relative to UNIX_ROOT, thus "/usr" becomes "C:/tools/msys64/usr".
-          //
-          // This heuristic ignores other mount points as well as procfs.
-
-          // TODO(bazel-team): get rid of this heuristic and translate paths using /etc/mtab.
-          // Figure out how to handle non-top-level mount points (e.g. "/usr/bin" is mounted to
-          // "/bin"), which is problematic because Paths are created segment by segment, so
-          // individual Path objects don't know they are parts of a mount point path.
-          // Another challenge is figuring out how and when to read /etc/mtab. A simple approach is
-          // to do it in determineUnixRoot, but then we won't pick up mount changes during the
-          // lifetime of the Bazel server process. A correct approach would be to establish a
-          // Skyframe FileValue-dependency on it, but it's unclear how this class could request or
-          // retrieve Skyframe-computed data.
-
-          if (WindowsPath.isWindowsVolumeName(child)) {
-            child = WindowsPath.getDriveLetter((WindowsPath) parent, child) + ":";
-          } else {
-            Preconditions.checkNotNull(
-                UNIX_ROOT,
-                "Could not determine Unix path root or it is not an absolute Windows path. Set the "
-                    + "\"%s\" JVM argument, or export the \"%s\" environment variable for the MSYS "
-                    + "bash and have /usr/bin/cygpath installed. Parent is \"%s\", name is \"%s\".",
-                WINDOWS_UNIX_ROOT_JVM_ARG,
-                BAZEL_SH_ENV_VAR,
-                parent,
-                child);
-            parent = parent.getRelative(UNIX_ROOT);
-          }
-        }
-        return new TranslatedPath(parent, child);
-      }
     };
   }
 
   private static final class WindowsPath extends Path {
+
+    private static final String WINDOWS_UNIX_ROOT_JVM_ARG = "bazel.windows_unix_root";
+    private static final String BAZEL_SH_ENV_VAR = "BAZEL_SH";
+
+    // Absolute Windows path specifying the root of absolute Unix paths.
+    // This is typically the MSYS installation root, e.g. C:\\tools\\msys64
+    private static final PathFragment UNIX_ROOT =
+        determineUnixRoot(WINDOWS_UNIX_ROOT_JVM_ARG, BAZEL_SH_ENV_VAR);
 
     // The drive letter is '\0' if and only if this Path is the filesystem root "/".
     private char driveLetter;
@@ -103,8 +67,8 @@ public class WindowsFileSystem extends JavaIoFileSystem {
     }
 
     private WindowsPath(FileSystem fileSystem, String name, WindowsPath parent) {
-      super(fileSystem, name, parent);
-      this.driveLetter = getDriveLetter(parent, name);
+      super(fileSystem, translateName(parent, name), translateParent(parent, name));
+      this.driveLetter = getDriveLetter((WindowsPath) getParentDirectory(), getBaseName());
     }
 
     @Override
@@ -172,7 +136,52 @@ public class WindowsFileSystem extends JavaIoFileSystem {
           && Character.isLetter(name.charAt(0));
     }
 
-    private static char getDriveLetter(WindowsPath parent, String name) {
+    private static String translateName(WindowsPath parent, String name) {
+      if (parent != null && parent.isRootDirectory() && name.length() == 1) {
+        // Path is /c (or similar), which is equivalent to C:/
+        return name.toUpperCase() + ":";
+      } else {
+        return name;
+      }
+    }
+
+    /**
+     * Heuristic to translate absolute Unix paths to Windows paths.
+     *
+     * <p>Unix paths under MSYS should be resolved using /etc/mtab, but reading that every time we
+     * create a Path object would be too expensive.
+     *
+     * <p>As a heuristic, we check if the paths looks like an absolute Unix path (e.g. "/usr/lib")
+     * and make it relative to the MSYS root (yielding "c:/tools/msys64/usr/lib"), but only if the
+     * path doesn't also look like an absolute path on a drive (e.g. /c/windows which means
+     * C:/windows).
+     *
+     * <p>This is an imperfect workaround because the user may have other paths mounted as well, and
+     * this heuristic won't handle those properly, but it's good enough.
+     *
+     * <p>The correct long-term solution is to update all tools on Windows to output Windows paths
+     * and lock down WindowsPath creation to disallow absolute Unix paths.
+     */
+    private static WindowsPath translateParent(WindowsPath parent, String name) {
+      if (parent != null && parent.isRootDirectory() && !isWindowsVolumeName(name)) {
+        // This is a top-level directory which is not a drive name, e.g. "/usr".
+        // Make it relative to UNIX_ROOT.
+        Preconditions.checkNotNull(
+            UNIX_ROOT,
+            "Could not determine Unix path root or it is not an absolute Windows path. Set the "
+                + "\"%s\" JVM argument, or export the \"%s\" environment variable for the MSYS bash"
+                + " and have /usr/bin/cygpath installed",
+            WINDOWS_UNIX_ROOT_JVM_ARG,
+            BAZEL_SH_ENV_VAR);
+
+        return (WindowsPath) parent.getRelative(UNIX_ROOT);
+      } else {
+        // This is not a top-level directory.
+        return parent;
+      }
+    }
+
+    private char getDriveLetter(WindowsPath parent, String name) {
       if (parent == null) {
         return '\0';
       } else {
@@ -188,14 +197,6 @@ public class WindowsFileSystem extends JavaIoFileSystem {
       }
     }
   }
-
-  private static final String WINDOWS_UNIX_ROOT_JVM_ARG = "bazel.windows_unix_root";
-  private static final String BAZEL_SH_ENV_VAR = "BAZEL_SH";
-
-  // Absolute Windows path specifying the root of absolute Unix paths.
-  // This is typically the MSYS installation root, e.g. C:\\tools\\msys64
-  private static final PathFragment UNIX_ROOT =
-      determineUnixRoot(WINDOWS_UNIX_ROOT_JVM_ARG, BAZEL_SH_ENV_VAR);
 
   public static final LinkOption[] NO_OPTIONS = new LinkOption[0];
   public static final LinkOption[] NO_FOLLOW = new LinkOption[] {LinkOption.NOFOLLOW_LINKS};
@@ -268,7 +269,7 @@ public class WindowsFileSystem extends JavaIoFileSystem {
   @Override
   protected boolean fileIsSymbolicLink(File file) {
     try {
-      if (isJunction(file)) {
+      if (file.isDirectory() && isJunction(file.toPath())) {
         return true;
       }
     } catch (IOException e) {
@@ -284,10 +285,12 @@ public class WindowsFileSystem extends JavaIoFileSystem {
   @Override
   protected FileStatus stat(Path path, boolean followSymlinks) throws IOException {
     File file = getIoFile(path);
-    final DosFileAttributes attributes;
+    final BasicFileAttributes attributes;
     try {
-      attributes = getAttribs(file, followSymlinks);
-    } catch (IOException e) {
+      attributes =
+          Files.readAttributes(
+              file.toPath(), BasicFileAttributes.class, symlinkOpts(followSymlinks));
+    } catch (java.nio.file.FileSystemException e) {
       throw new FileNotFoundException(path + ERR_NO_SUCH_FILE_OR_DIR);
     }
 
@@ -344,7 +347,7 @@ public class WindowsFileSystem extends JavaIoFileSystem {
   protected boolean isDirectory(Path path, boolean followSymlinks) {
     if (!followSymlinks) {
       try {
-        if (isJunction(getIoFile(path))) {
+        if (isJunction(getIoFile(path).toPath())) {
           return false;
         }
       } catch (IOException e) {
@@ -376,9 +379,10 @@ public class WindowsFileSystem extends JavaIoFileSystem {
   // TODO(laszlocsomor): fix https://github.com/bazelbuild/bazel/issues/1735 and use the JNI method
   // in WindowsFileOperations.
   @VisibleForTesting
-  static boolean isJunction(File file) throws IOException {
-    if (Files.exists(file.toPath(), symlinkOpts(/* followSymlinks */ false))) {
-      DosFileAttributes attributes = getAttribs(file, /* followSymlinks */ false);
+  static boolean isJunction(java.nio.file.Path p) throws IOException {
+    if (Files.exists(p, symlinkOpts(/* followSymlinks */ false))) {
+      DosFileAttributes attributes =
+          Files.readAttributes(p, DosFileAttributes.class, symlinkOpts(/* followSymlinks */ false));
 
       if (attributes.isRegularFile()) {
         return false;
@@ -393,12 +397,6 @@ public class WindowsFileSystem extends JavaIoFileSystem {
     return false;
   }
 
-  private static DosFileAttributes getAttribs(File file, boolean followSymlinks)
-      throws IOException {
-    return Files.readAttributes(
-        file.toPath(), DosFileAttributes.class, symlinkOpts(followSymlinks));
-  }
-
   private static PathFragment determineUnixRoot(String jvmArgName, String bazelShEnvVar) {
     // Get the path from a JVM argument, if specified.
     String path = System.getProperty(jvmArgName);
@@ -410,24 +408,24 @@ public class WindowsFileSystem extends JavaIoFileSystem {
       String bash = System.getenv(bazelShEnvVar);
       Process process = null;
       try {
-        process = Runtime.getRuntime().exec("cmd.exe /C " + bash + " -c \"/usr/bin/cygpath -m /\"");
+        process = Runtime.getRuntime().exec(bash + "-c \"/usr/bin/cygpath -m /\"");
 
         // Wait 3 seconds max, that should be enough to run this command.
         process.waitFor(3, TimeUnit.SECONDS);
 
         if (process.exitValue() == 0) {
-          path = readAll(process.getInputStream());
-        } else {
-          System.err.print(
-              String.format(
-                  "ERROR: %s (exit code: %d)%n",
-                  readAll(process.getErrorStream()), process.exitValue()));
+          char[] buf = new char[256];
+          try (InputStreamReader r = new InputStreamReader(process.getInputStream())) {
+            int len = 0;
+            while ((len = r.read(buf)) > 0) {
+              path = path + new String(buf, 0, len);
+            }
+          }
         }
       } catch (InterruptedException | IOException e) {
         // Silently ignore failure. Either MSYS is installed at a different location, or not
         // installed at all, or some error occurred. We can't do anything anymore but throw an
         // exception if someone tries to create a Path from an absolute Unix path.
-        return null;
       }
     }
 
@@ -438,17 +436,5 @@ public class WindowsFileSystem extends JavaIoFileSystem {
     } else {
       return result;
     }
-  }
-
-  private static String readAll(InputStream s) throws IOException {
-    String result = "";
-    int len;
-    char[] buf = new char[4096];
-    try (InputStreamReader r = new InputStreamReader(s)) {
-      while ((len = r.read(buf)) > 0) {
-        result += new String(buf, 0, len);
-      }
-    }
-    return result;
   }
 }
