@@ -566,7 +566,7 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testInvalidAssignment() throws Exception {
     newTest().testIfErrorContains(
-        "cannot assign to 'x + 1'", "x + 1 = 2");
+        "can only assign to variables and tuples, not to 'x + 1'", "x + 1 = 2");
   }
 
   @Test
