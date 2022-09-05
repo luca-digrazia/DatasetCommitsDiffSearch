@@ -7,21 +7,20 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.ValuesSourceAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.geogrid.GeoHashGridBuilder;
-
+import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramBuilder;
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval;
 import org.elasticsearch.search.aggregations.bucket.histogram.Histogram;
 import org.elasticsearch.search.aggregations.bucket.histogram.HistogramBuilder;
+import org.elasticsearch.search.aggregations.bucket.nested.NestedBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.RangeBuilder;
 import org.elasticsearch.search.aggregations.bucket.range.date.DateRangeBuilder;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsBuilder;
+import org.elasticsearch.search.aggregations.metrics.MetricsAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.ValuesSourceMetricsAggregationBuilder;
 import org.elasticsearch.search.aggregations.metrics.geobounds.GeoBoundsBuilder;
 import org.elasticsearch.search.aggregations.metrics.percentiles.PercentilesBuilder;
@@ -34,8 +33,8 @@ import org.nlpcn.es4sql.domain.KVValue;
 import org.nlpcn.es4sql.domain.MethodField;
 import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
-import org.nlpcn.es4sql.parse.ChildrenType;
 import org.nlpcn.es4sql.parse.NestedType;
+import org.nlpcn.es4sql.query.join.NestedLoopsElasticRequestBuilder;
 
 public class AggMaker {
 
@@ -56,7 +55,7 @@ public class AggMaker {
                 Map<String, Object> paramsAsMap = methodField.getParamsAsMap();
                 Where where = (Where) paramsAsMap.get("where");
                 return AggregationBuilders.filter(paramsAsMap.get("alias").toString()).
-                        filter(QueryMaker.explan(where));
+                        filter(FilterMaker.explan(where));
             }
             return makeRangeGroup(methodField);
 		} else {
@@ -81,26 +80,26 @@ public class AggMaker {
 		switch (field.getName().toUpperCase()) {
 		case "SUM":
 			builder = AggregationBuilders.sum(field.getAlias());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
 		case "MAX":
 			builder = AggregationBuilders.max(field.getAlias());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
 		case "MIN":
 			builder =  AggregationBuilders.min(field.getAlias());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
 		case "AVG":
 			builder =  AggregationBuilders.avg(field.getAlias());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
 		case "STATS":
 			builder =  AggregationBuilders.stats(field.getAlias());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
         case "EXTENDED_STATS":
             builder =  AggregationBuilders.extendedStats(field.getAlias());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
         case "PERCENTILES":
             builder = AggregationBuilders.percentiles(field.getAlias());
             addSpecificPercentiles((PercentilesBuilder) builder,field.getParams());
-            return addFieldToAgg(field, builder);
+            return addFieldOrScriptToAggregation(field, builder);
 		case "TOPHITS":
 			return makeTopHitsAgg(field);
         case "SCRIPTED_METRIC":
@@ -138,73 +137,60 @@ public class AggMaker {
         return alias.replaceAll("\\[","(").replaceAll("\\]",")");
     }
 
-    private AbstractAggregationBuilder addFieldToAgg(MethodField field, ValuesSourceMetricsAggregationBuilder builder) {
+    private AbstractAggregationBuilder addFieldOrScriptToAggregation(MethodField field, ValuesSourceMetricsAggregationBuilder builder) {
         KVValue kvValue = field.getParams().get(0);
-        if (kvValue.key != null && kvValue.key.equals("script")){
-            return builder.script(new Script(((MethodField) kvValue.value).getParams().get(1).toString()));
+        if(kvValue.key!=null && kvValue.key.equals("script") ){
+            //todo: support different lang script
+           return builder.script(((MethodField)kvValue.value).getParams().get(1).toString());
         }
-        else  if (kvValue.key!=null && ( kvValue.key.equals("nested") || kvValue.key.equals("reverse_nested")) ) {
+        else  if (kvValue.key!=null && ( kvValue.key.equals("nested") || kvValue.key.equals("reverse_nested")) ){
             NestedType nestedType = (NestedType) kvValue.value;
-            
             builder.field(nestedType.field);
-            
             AggregationBuilder nestedBuilder;
-            
             String nestedAggName = nestedType.field + "@NESTED";
-            
-            if (nestedType.isReverse()) {
-                if (nestedType.path != null && nestedType.path.startsWith("~")) {
+            if(nestedType.isReverse()) {
+                if(nestedType.path!=null && nestedType.path.startsWith("~")){
                     String realPath = nestedType.path.substring(1);
                     nestedBuilder = AggregationBuilders.nested(nestedAggName).path(realPath);
                     nestedBuilder = nestedBuilder.subAggregation(builder);
-                    return AggregationBuilders.reverseNested(nestedAggName + "_REVERSED").subAggregation(nestedBuilder);
-                } else {
+                    return AggregationBuilders.reverseNested(nestedAggName+"_REVERSED").subAggregation(nestedBuilder);
+                }
+                else{
                     nestedBuilder = AggregationBuilders.reverseNested(nestedAggName).path(nestedType.path);
                 }
-            } else {
+            }
+            else {
                 nestedBuilder = AggregationBuilders.nested(nestedAggName).path(nestedType.path);
             }
-            
             return nestedBuilder.subAggregation(builder);
         }
-        else  if (kvValue.key!=null && ( kvValue.key.equals("children"))) {
-        	ChildrenType childrenType = (ChildrenType) kvValue.value;
-        	
-        	builder.field(childrenType.field);
-        	
-        	AggregationBuilder childrenBuilder;
-        	
-        	String childrenAggName = childrenType.field + "@CHILDREN";
-        	
-        	childrenBuilder = AggregationBuilders.children(childrenAggName).childType(childrenType.childType);
-        	
-        	return childrenBuilder;
-        }
-
         return builder.field(kvValue.toString());
     }
 
     private AggregationBuilder<?> makeRangeGroup(MethodField field) throws SqlParseException {
+
+        AggregationBuilder<?> aggregationBuilder;
 		switch (field.getName().toLowerCase()) {
 		case "range":
-			return rangeBuilder(field);
+            aggregationBuilder = rangeBuilder(field);break;
 		case "date_histogram":
-			return dateHistogram(field);
+            aggregationBuilder = dateHistogram(field);break;
 		case "date_range":
-			return dateRange(field);
+            aggregationBuilder = dateRange(field);break;
 		case "month":
-			return dateRange(field);
+            aggregationBuilder = dateRange(field);break;
 		case "histogram":
-			return histogram(field);
+            aggregationBuilder = histogram(field);break;
         case "geohash_grid":
-            return geohashGrid(field);
+            aggregationBuilder = geohashGrid(field);break;
         case "geo_bounds":
-            return geoBounds(field);
+                aggregationBuilder = geoBounds(field);break;
         case "terms":
-                return termsAgg(field);
+                aggregationBuilder = termsAgg(field);break;
 		default:
 			throw new SqlParseException("can define this method " + field);
 		}
+       return aggregationBuilder;
 
 	}
 
@@ -224,7 +210,6 @@ public class AggMaker {
                 case "alias":
                 case "nested":
                 case "reverse_nested":
-                case "children":
                     break;
                 default:
                     throw new SqlParseException("geo_bounds err or not define field " + kv.toString());
@@ -255,7 +240,6 @@ public class AggMaker {
                 case "alias":
                 case "nested":
                 case "reverse_nested":
-                case "children":
                     break;
                 default:
                     throw new SqlParseException("terms aggregation err or not define field " + kv.toString());
@@ -284,49 +268,47 @@ public class AggMaker {
                 }
                continue;
             }
-            if(reduceScriptAdditionalParams.size() == 0) reduceScriptAdditionalParams = null;
 
             switch (param.getKey().toLowerCase()) {
                 case "map_script":
-                    scriptedMetricBuilder.mapScript(new Script(paramValue));
+                    scriptedMetricBuilder.mapScript(paramValue);
                     break;
                 case "map_script_id":
-                    scriptedMetricBuilder.mapScript(new Script(paramValue, ScriptService.ScriptType.INDEXED, null, null));
+                    scriptedMetricBuilder.mapScriptId(paramValue);
                     break;
                 case "map_script_file":
-                    scriptedMetricBuilder.mapScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, null));
+                    scriptedMetricBuilder.mapScriptFile(paramValue);
                     break;
                 case "init_script":
-                    scriptedMetricBuilder.initScript(new Script(paramValue));
+                    scriptedMetricBuilder.initScript(paramValue);
                     break;
                 case "init_script_id":
-                    scriptedMetricBuilder.initScript(new Script(paramValue, ScriptService.ScriptType.INDEXED, null, null));
+                    scriptedMetricBuilder.initScriptId(paramValue);
                     break;
                 case "init_script_file":
-                    scriptedMetricBuilder.initScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, null));
+                    scriptedMetricBuilder.initScriptFile(paramValue);
                     break;
                 case "combine_script":
-                    scriptedMetricBuilder.combineScript(new Script(paramValue));
+                    scriptedMetricBuilder.combineScript(paramValue);
                     break;
                 case "combine_script_id":
-                    scriptedMetricBuilder.combineScript(new Script(paramValue, ScriptService.ScriptType.INDEXED, null, null));
+                    scriptedMetricBuilder.combineScriptId(paramValue);
                     break;
                 case "combine_script_file":
-                    scriptedMetricBuilder.combineScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, null));
+                    scriptedMetricBuilder.combineScriptFile(paramValue);
                     break;
                 case "reduce_script":
-                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.INLINE,null,reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScript(paramValue);
                     break;
                 case "reduce_script_id":
-                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.INDEXED, null, reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScriptId(paramValue);
                     break;
                 case "reduce_script_file":
-                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScriptFile(paramValue);
                     break;
                 case "alias":
                 case "nested":
                 case "reverse_nested":
-                case "children":
                     break;
                 default:
                     throw new SqlParseException("scripted_metric err or not define field " + param.getKey());
@@ -337,6 +319,8 @@ public class AggMaker {
             scriptedMetricBuilder.params(scriptAdditionalParams);
         }
 
+        if(reduceScriptAdditionalParams.size() > 0)
+            scriptedMetricBuilder.reduceParams(reduceScriptAdditionalParams);
         return scriptedMetricBuilder;
     }
 
@@ -362,7 +346,6 @@ public class AggMaker {
                 case "alias":
                 case "nested":
                 case "reverse_nested":
-                case "children":
                     break;
                 default:
                     throw new SqlParseException("geohash grid err or not define field " + kv.toString());
@@ -393,7 +376,7 @@ public class AggMaker {
 			} else if ("to".equals(kv.key)) {
                 dateRange.addUnboundedTo(kv.value);
                 continue;
-            } else if ("alias".equals(kv.key) || "nested".equals(kv.key) || "children".equals(kv.key)){
+            } else if ("alias".equals(kv.key)){
               continue;
 			} else {
 				ranges.add(value);
@@ -422,7 +405,7 @@ public class AggMaker {
 			value = kv.value.toString();
 			switch (kv.key.toLowerCase()) {
 			case "interval":
-				dateHistogram.interval(new DateHistogramInterval(kv.value.toString()));
+				dateHistogram.interval(new DateHistogram.Interval(kv.value.toString()));
 				break;
 			case "field":
 				dateHistogram.field(value);
@@ -431,14 +414,22 @@ public class AggMaker {
 				dateHistogram.format(value);
 				break;
 			case "time_zone":
-				dateHistogram.timeZone(value);
+			case "pre_zone":
+				dateHistogram.preZone(value);
 				break;
-
-            case "alias":
-            case "nested":
-            case "reverse_nested":
-            case "children":
-                break;
+			case "post_zone":
+				dateHistogram.postZone(value);
+				break;
+			case "post_offset":
+				dateHistogram.postOffset(value);
+				break;
+			case "pre_offset":
+				dateHistogram.preOffset(value);
+				break;
+                case "alias":
+                case "nested":
+                case "reverse_nested":
+                    break;
 			default:
 				throw new SqlParseException("date range err or not define field " + kv.toString());
 			}
@@ -479,7 +470,6 @@ public class AggMaker {
                 case "alias":
                 case "nested":
                 case "reverse_nested":
-                case "children":
                     break;
 				case "order":
 					Histogram.Order order = null;
@@ -540,8 +530,7 @@ public class AggMaker {
 
 		// Cardinality is approximate DISTINCT.
 		if ("DISTINCT".equals(field.getOption())) {
-            Integer precision_threshold = field.getParams().size()>1 ? (Integer)(field.getParams().get(1).value)  : 40000;
-			return AggregationBuilders.cardinality(field.getAlias()).precisionThreshold(precision_threshold).field(field.getParams().get(0).value.toString());
+			return AggregationBuilders.cardinality(field.getAlias()).precisionThreshold(40000).field(field.getParams().get(0).value.toString());
 		}
 
 		String fieldName = field.getParams().get(0).value.toString();
@@ -576,7 +565,6 @@ public class AggMaker {
             case "alias":
             case "nested":
             case "reverse_nested":
-            case "children":
                 break;
 			default:
 				topHits.addSort(kv.key, SortOrder.valueOf(kv.value.toString().toUpperCase()));
