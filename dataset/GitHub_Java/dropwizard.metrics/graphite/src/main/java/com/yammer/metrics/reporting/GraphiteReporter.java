@@ -95,10 +95,8 @@ public class GraphiteReporter implements Runnable {
             long epoch = System.currentTimeMillis() / 1000;
             printVmMetrics(epoch);
             printRegularMetrics(epoch);
-            writer.flush();
         } catch (Exception e) {
             e.printStackTrace();
-            writer.flush();
         }
     }
 
@@ -132,6 +130,7 @@ public class GraphiteReporter implements Runnable {
         try {
             writer.write(prefix);
             writer.write(data);
+            writer.flush();
         } catch (IOException e) {
             e.printStackTrace();
         }
