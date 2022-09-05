@@ -46,7 +46,6 @@ public class ObjcBundle implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> filesToBuild = NestedSetBuilder.emptySet(STABLE_ORDER);
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild)
         .addProvider(ObjcProvider.class, common.getObjcProvider())
-        .addNativeDeclaredProvider(common.getObjcProvider())
         .build();
   }
 }

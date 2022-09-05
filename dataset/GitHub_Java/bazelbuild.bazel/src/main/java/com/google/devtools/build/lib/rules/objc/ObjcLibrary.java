@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -29,6 +30,7 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
+import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
@@ -66,30 +68,41 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Constructs an {@link ObjcCommon} instance based on the attributes of the given rule context.
+   * Constructs an {@link ObjcCommon} instance based on the attributes of the given rule. The rule
+   * should inherit from {@link ObjcLibraryRule}..
    */
-  private ObjcCommon common(RuleContext ruleContext) {
+  static ObjcCommon common(RuleContext ruleContext, Iterable<SdkFramework> extraSdkFrameworks,
+      boolean alwayslink, Iterable<ObjcProvider> extraDepObjcProviders) {
+    CompilationArtifacts compilationArtifacts =
+        CompilationSupport.compilationArtifacts(ruleContext);
+
     return new ObjcCommon.Builder(ruleContext)
-        .setCompilationAttributes(
-            CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
+        .setCompilationAttributes(new CompilationAttributes(ruleContext))
         .setResourceAttributes(new ResourceAttributes(ruleContext))
+        .addExtraSdkFrameworks(extraSdkFrameworks)
         .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
-        .setCompilationArtifacts(CompilationSupport.compilationArtifacts(ruleContext))
+        .setCompilationArtifacts(compilationArtifacts)
         .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
         .addDepObjcProviders(
             ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
         .addNonPropagatedDepObjcProviders(
             ruleContext.getPrerequisites("non_propagated_deps", Mode.TARGET, ObjcProvider.class))
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
-        .setAlwayslink(ruleContext.attributes().get("alwayslink", Type.BOOLEAN))
+        .setAlwayslink(alwayslink)
         .setHasModuleMap()
+        .addDepObjcProviders(extraDepObjcProviders)
         .build();
   }
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    ObjcCommon common = common(ruleContext);
+    final ObjcCommon common =
+        common(
+            ruleContext,
+            ImmutableList.<SdkFramework>of(),
+            ruleContext.attributes().get("alwayslink", Type.BOOLEAN),
+            ImmutableList.<ObjcProvider>of());
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.<Artifact>stableOrder()

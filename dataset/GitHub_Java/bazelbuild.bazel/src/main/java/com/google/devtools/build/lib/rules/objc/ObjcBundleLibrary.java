@@ -24,10 +24,9 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
-import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.InvalidFamilyNameException;
 import com.google.devtools.build.lib.rules.objc.TargetDeviceFamily.RepeatedFamilyNameException;
@@ -57,12 +56,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    new BundleSupport(ruleContext,
-            appleConfiguration,
-            appleConfiguration.getMultiArchPlatform(PlatformType.IOS),
-            bundling,
-            new ExtraActoolArgs())
+    new BundleSupport(ruleContext, bundling)
         .registerActions(common.getObjcProvider())
         .validate(common.getObjcProvider())
         .addXcodeSettings(xcodeProviderBuilder);
@@ -90,6 +84,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
   private Bundling bundling(RuleContext ruleContext, ObjcCommon common) {
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
+    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     ImmutableSet<TargetDeviceFamily> families = null;
@@ -111,7 +106,7 @@ public class ObjcBundleLibrary implements RuleConfiguredTargetFactory {
         .setObjcProvider(common.getObjcProvider())
         .addInfoplistInputFromRule(ruleContext)
         .setIntermediateArtifacts(intermediateArtifacts)
-        .setMinimumOsVersion(appleConfiguration.getMinimumOsForPlatformType(PlatformType.IOS))
+        .setMinimumOsVersion(objcConfiguration.getMinimumOs())
         .setTargetDeviceFamilies(families)
         .build();
   }

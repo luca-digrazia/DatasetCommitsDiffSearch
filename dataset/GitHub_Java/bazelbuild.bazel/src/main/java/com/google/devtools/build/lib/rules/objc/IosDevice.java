@@ -39,12 +39,8 @@ public final class IosDevice implements RuleConfiguredTargetFactory {
     AppleConfiguration appleConfiguration = context.getFragment(AppleConfiguration.class);
     String iosVersionAttribute =
         context.attributes().get(IosDeviceRule.IOS_VERSION_ATTR_NAME, STRING);
-    XcodeVersionProperties xcodeVersionProperties =
-        (XcodeVersionProperties)
-            context.getPrerequisite(
-                IosDeviceRule.XCODE_ATTR_NAME,
-                Mode.TARGET,
-                XcodeVersionProperties.SKYLARK_CONSTRUCTOR.getKey());
+    XcodeVersionProperties xcodeVersionProperties = context.getPrerequisite(
+        IosDeviceRule.XCODE_ATTR_NAME, Mode.TARGET, XcodeVersionProperties.class);
 
     DottedVersion xcodeVersion = null;
     if (xcodeVersionProperties != null && xcodeVersionProperties.getXcodeVersion().isPresent()) {

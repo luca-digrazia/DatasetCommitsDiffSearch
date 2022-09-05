@@ -53,10 +53,12 @@ import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -85,7 +87,7 @@ public final class ConfiguredTargetFactory {
     if (ruleVisibility instanceof ConstantRuleVisibility) {
       return ((ConstantRuleVisibility) ruleVisibility).isPubliclyVisible()
           ? NestedSetBuilder.<PackageSpecification>create(
-              Order.STABLE_ORDER, PackageSpecification.everything())
+              Order.STABLE_ORDER, PackageSpecification.EVERYTHING)
           : NestedSetBuilder.<PackageSpecification>emptySet(Order.STABLE_ORDER);
     } else if (ruleVisibility instanceof PackageGroupsRuleVisibility) {
       PackageGroupsRuleVisibility packageGroupsVisibility =
@@ -255,7 +257,7 @@ public final class ConfiguredTargetFactory {
       return createFailConfiguredTarget(ruleContext);
     }
 
-    if (rule.getRuleClassObject().isSkylark()) {
+    if (rule.getRuleClassObject().isSkylarkExecutable()) {
       // TODO(bazel-team): maybe merge with RuleConfiguredTargetBuilder?
       return SkylarkRuleConfiguredTargetBuilder.buildRule(
           ruleContext,

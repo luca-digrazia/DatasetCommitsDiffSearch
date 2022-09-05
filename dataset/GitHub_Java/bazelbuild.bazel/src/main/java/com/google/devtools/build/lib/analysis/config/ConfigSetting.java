@@ -19,7 +19,6 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.LicensesProviderImpl;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -68,11 +67,10 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
     }
 
     return new RuleConfiguredTargetBuilder(ruleContext)
-        .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
-        .addProvider(FileProvider.class, FileProvider.EMPTY)
-        .addProvider(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
-        .addProvider(LicensesProviderImpl.EMPTY)
-        .addProvider(ConfigMatchingProvider.class, configMatcher)
+        .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
+        .add(FileProvider.class, FileProvider.EMPTY)
+        .add(FilesToRunProvider.class, FilesToRunProvider.EMPTY)
+        .add(ConfigMatchingProvider.class, configMatcher)
         .build();
   }
 

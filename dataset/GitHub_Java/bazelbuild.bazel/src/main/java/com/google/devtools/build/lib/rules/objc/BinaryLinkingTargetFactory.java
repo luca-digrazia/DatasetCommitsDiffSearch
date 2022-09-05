@@ -33,8 +33,8 @@ import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+import com.google.devtools.build.lib.rules.objc.ObjcCommon.CompilationAttributes;
 import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
-import com.google.devtools.build.lib.rules.objc.ProtoSupport.TargetType;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 
@@ -79,11 +79,10 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     ObjcProvider objcProvider = common.getObjcProvider();
     assertLibraryOrSources(objcProvider, ruleContext);
 
-    XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
-
     IntermediateArtifacts intermediateArtifacts =
         ObjcRuleClasses.intermediateArtifacts(ruleContext);
 
+    XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
     NestedSetBuilder<Artifact> filesToBuild =
         NestedSetBuilder.<Artifact>stableOrder()
             .add(intermediateArtifacts.strippedSingleArchitectureBinary());
@@ -101,30 +100,13 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
             ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcEntryClassProvider.class))
         .build();
 
-    ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    if (objcConfiguration.experimentalAutoTopLevelUnionObjCProtos()) {
-      ProtoSupport protoSupport =
-          new ProtoSupport(ruleContext, TargetType.LINKING_TARGET)
-              .registerActions()
-              .addXcodeProviderOptions(xcodeProviderBuilder);
-
-      ObjcCommon protoCommon = protoSupport.getCommon();
-      new CompilationSupport(
-              ruleContext,
-              protoSupport.getIntermediateArtifacts(),
-              new CompilationAttributes.Builder().build())
-          .registerCompileAndArchiveActions(protoCommon, protoSupport.getUserHeaderSearchPaths());
-    }
-
     CompilationSupport compilationSupport =
         new CompilationSupport(ruleContext)
             .registerCompileAndArchiveActions(common)
             .registerFullyLinkAction(common.getObjcProvider())
             .addXcodeSettings(xcodeProviderBuilder, common)
             .registerLinkActions(
-                objcProvider,
-                j2ObjcMappingFileProvider,
-                j2ObjcEntryClassProvider,
+                objcProvider, j2ObjcMappingFileProvider, j2ObjcEntryClassProvider,
                 getExtraLinkArgs(ruleContext),
                 ImmutableList.<Artifact>of(),
                 DsymOutputType.APP)
@@ -134,6 +116,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
     Optional<RunfilesSupport> maybeRunfilesSupport = Optional.absent();
     switch (hasReleaseBundlingSupport) {
       case YES:
+        ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
         AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
         // TODO(bazel-team): Remove once all bundle users are migrated to ios_application.
         ReleaseBundlingSupport releaseBundlingSupport =
@@ -217,13 +200,13 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
 
     ObjcCommon.Builder builder =
         new ObjcCommon.Builder(ruleContext)
-            .setCompilationAttributes(
-                CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
-            .setCompilationArtifacts(compilationArtifacts)
+            .setCompilationAttributes(new CompilationAttributes(ruleContext))
             .setResourceAttributes(new ResourceAttributes(ruleContext))
+            .setCompilationArtifacts(compilationArtifacts)
             .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
             .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
-            .addDeps(ruleContext.getPrerequisites("bundles", Mode.TARGET))
+            .addDepObjcProviders(
+                ruleContext.getPrerequisites("bundles", Mode.TARGET, ObjcProvider.class))
             .addNonPropagatedDepObjcProviders(
                 ruleContext.getPrerequisites(
                     "non_propagated_deps", Mode.TARGET, ObjcProvider.class))
@@ -239,11 +222,6 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
 
     if (ObjcRuleClasses.objcConfiguration(ruleContext).generateLinkmap()) {
       builder.setLinkmapFile(intermediateArtifacts.linkmap());
-    }
-
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).experimentalAutoTopLevelUnionObjCProtos()) {
-      ProtoSupport protoSupport = new ProtoSupport(ruleContext, TargetType.LINKING_TARGET);
-      builder.addExtraImportLibraries(protoSupport.getCommon().getCompiledArchive().asSet());
     }
 
     return builder.build();

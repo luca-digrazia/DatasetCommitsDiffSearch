@@ -199,8 +199,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   }
 
   @Nullable
-  private Pair<ImmutableMap<PackageIdentifier, Package>, ImmutableMap<Label, Target>>
-  constructPackageMap(SkyFunction.Environment env, Collection<Target> scope) {
+  private Pair<ImmutableMap<PackageIdentifier, Package>, Set<Label>> constructPackageMap(
+      SkyFunction.Environment env, Collection<Target> scope) {
     // It is not necessary for correctness to construct intermediate NestedSets; we could iterate
     // over individual targets in scope immediately. However, creating a composite NestedSet first
     // saves us from iterating over the same sub-NestedSets multiple times.
@@ -223,33 +223,23 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       Preconditions.checkState(!pkg.getPackage().containsErrors(), pkgId);
       packageMapBuilder.put(pkg.getPackage().getPackageIdentifier(), pkg.getPackage());
     }
-    ImmutableMap<PackageIdentifier, Package> packageMap = packageMapBuilder.build();
-    ImmutableMap.Builder<Label, Target> validTargetsMapBuilder = ImmutableMap.builder();
-    for (Label label : validTargets.build()) {
-      try {
-        Target target = packageMap.get(label.getPackageIdentifier()).getTarget(label.getName());
-        validTargetsMapBuilder.put(label, target);
-      } catch (NoSuchTargetException e) {
-        throw new IllegalStateException(e);
-      }
-    }
-    return Pair.of(packageMap, validTargetsMapBuilder.build());
+    return Pair.of(packageMapBuilder.build(), validTargets.build().toSet());
   }
 
   @Nullable
   private byte[] executeQuery(RuleContext ruleContext, QueryOptions queryOptions,
       Set<Target> scope, String query) throws InterruptedException {
     SkyFunction.Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
-    Pair<ImmutableMap<PackageIdentifier, Package>, ImmutableMap<Label, Target>> closureInfo =
+    Pair<ImmutableMap<PackageIdentifier, Package>, Set<Label>> closureInfo =
         constructPackageMap(env, scope);
     if (closureInfo == null) {
       return null;
     }
     ImmutableMap<PackageIdentifier, Package> packageMap = closureInfo.first;
-    ImmutableMap<Label, Target> validTargetsMap = closureInfo.second;
-    PackageProvider packageProvider = new PreloadedMapPackageProvider(packageMap, validTargetsMap);
+    Set<Label> validTargets = closureInfo.second;
+    PackageProvider packageProvider = new PreloadedMapPackageProvider(packageMap, validTargets);
     TargetPatternEvaluator evaluator = new SkyframeEnvTargetPatternEvaluator(env);
-    Predicate<Label> labelFilter = Predicates.in(validTargetsMap.keySet());
+    Predicate<Label> labelFilter = Predicates.in(validTargets);
 
     return doQuery(queryOptions, packageProvider, labelFilter, evaluator, query, ruleContext);
   }
@@ -493,36 +483,27 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   private static final class PreloadedMapPackageProvider implements PackageProvider {
 
     private final ImmutableMap<PackageIdentifier, Package> pkgMap;
-    private final ImmutableMap<Label, Target> labelToTarget;
+    private final Set<Label> targets;
 
     public PreloadedMapPackageProvider(ImmutableMap<PackageIdentifier, Package> pkgMap,
-        ImmutableMap<Label, Target> labelToTarget) {
+        Set<Label> targets) {
       this.pkgMap = pkgMap;
-      this.labelToTarget = labelToTarget;
+      this.targets = targets;
     }
 
     @Override
     public Package getPackage(EventHandler eventHandler, PackageIdentifier packageId)
-        throws NoSuchPackageException {
-      Package pkg = pkgMap.get(packageId);
-      if (pkg != null) {
-        return pkg;
-      }
-      // Prefer to throw a checked exception on error; malformed genquery should not crash.
-      throw new NoSuchPackageException(packageId, "is not within the scope of the query");
+        throws NoSuchPackageException, InterruptedException {
+      return Preconditions.checkNotNull(pkgMap.get(packageId));
     }
 
     @Override
     public Target getTarget(EventHandler eventHandler, Label label)
         throws NoSuchPackageException, NoSuchTargetException {
-      // Try to perform only one map lookup in the common case.
-      Target target = labelToTarget.get(label);
-      if (target != null) {
-        return target;
-      }
-      // Prefer to throw a checked exception on error; malformed genquery should not crash.
-      getPackage(eventHandler, label.getPackageIdentifier());  // maybe throw NoSuchPackageException
-      throw new NoSuchTargetException(label, "is not within the scope of the query");
+      Preconditions.checkState(targets.contains(label), label);
+      Package pkg = Preconditions.checkNotNull(pkgMap.get(label.getPackageIdentifier()), label);
+      Target target = Preconditions.checkNotNull(pkg.getTarget(label.getName()), label);
+      return target;
     }
 
     @Override

@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.android.sdklib.repository.FullRevision;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -29,11 +28,13 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ApkSigningMethod;
 import com.google.devtools.build.lib.rules.java.BaseJavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.syntax.Type;
+
+import com.android.sdklib.repository.FullRevision;
+
 import java.util.Collection;
 
 /**
@@ -68,13 +69,6 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     FilesToRunProvider aapt = ruleContext.getExecutablePrerequisite("aapt", Mode.HOST);
     FilesToRunProvider apkBuilder = ruleContext.getExecutablePrerequisite(
         "apkbuilder", Mode.HOST);
-    FilesToRunProvider apkSigner = ruleContext.getExecutablePrerequisite("apksigner", Mode.HOST);
-    ApkSigningMethod apkSigningMethod =
-        ruleContext.getFragment(AndroidConfiguration.class).getApkSigningMethod();
-    if (apkSigner == null && !apkSigningMethod.signLegacy()) {
-      ruleContext.throwWithRuleError(
-          "android_sdk attribute apksigner must be set to use signing method " + apkSigningMethod);
-    }
     FilesToRunProvider adb = ruleContext.getExecutablePrerequisite("adb", Mode.HOST);
     FilesToRunProvider dx = ruleContext.getExecutablePrerequisite("dx", Mode.HOST);
     FilesToRunProvider mainDexListCreator = ruleContext.getExecutablePrerequisite(
@@ -112,7 +106,7 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
     return new RuleConfiguredTargetBuilder(ruleContext)
         .add(
             AndroidSdkProvider.class,
-            AndroidSdkProvider.create(
+            new AndroidSdkProvider(
                 buildToolsVersion,
                 aaptSupportsMainDexGeneration,
                 frameworkAidl,
@@ -128,7 +122,6 @@ public class AndroidSdk implements RuleConfiguredTargetFactory {
                 aidl,
                 aapt,
                 apkBuilder,
-                apkSigner,
                 proguard,
                 zipalign,
                 jack,
