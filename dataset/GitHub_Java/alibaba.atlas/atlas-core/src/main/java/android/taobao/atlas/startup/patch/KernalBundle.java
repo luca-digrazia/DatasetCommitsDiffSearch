@@ -403,7 +403,7 @@ public class KernalBundle{
             }
             //临时处理方案，需要替换为dexopt时传入classsLoader以兼容8.0
             patchWithApk = dexPatch &&
-                    (TextUtils.isEmpty(KernalVersionManager.instance().currentVersionName()) || KernalVersionManager.instance().currentVersionName().equals(KernalConstants.INSTALLED_VERSIONNAME));
+                    (TextUtils.isEmpty(KernalVersionManager.instance().currentVersionName()) || !KernalVersionManager.instance().currentVersionName().equals(KernalConstants.INSTALLED_VERSIONNAME));
             if (!needReplaceClassLoader) {
                 FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", application.getClassLoader());
             }else if(patchWithApk){
@@ -635,15 +635,14 @@ public class KernalBundle{
                 }
 
                 //增加kernal bundle
-                expandFieldArray(dexPathList, "dexElements", element);
-//                if (Build.VERSION.SDK_INT > 20 && !vmSafeMode) {
-//                     success = replaceElement(dexPathList, "dexElements", element[0]);
-//                    if(!success){
-//                        throw new IOException("replaceElement failed");
-//                    }
-//                } else {
-//                    expandFieldArray(dexPathList, "dexElements", element);
-//                }
+                if (Build.VERSION.SDK_INT > 20 && !vmSafeMode) {
+                     success = replaceElement(dexPathList, "dexElements", element[0]);
+                    if(!success){
+                        throw new IOException("replaceElement failed");
+                    }
+                } else {
+                    expandFieldArray(dexPathList, "dexElements", element);
+                }
             }
             //增加kernal bundle library
             if (libraryDirectory!=null && !TextUtils.isEmpty(libraryDirectory.getAbsolutePath()) && libraryDirectory.exists()) {
