@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.syntax.GlobCriteria;
 import com.google.devtools.build.lib.syntax.GlobList;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
+import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -43,7 +44,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,23 +55,11 @@ public class PackageDeserializer {
 
   private static final Logger LOG = Logger.getLogger(PackageDeserializer.class.getName());
 
-  /**
-   * Provides the deserializer with tools it needs to build a package from its serialized form.
-   */
-  public interface PackageDeserializationEnvironment {
-
-    /** Converts the serialized package's path string into a {@link Path} object. */
-    Path getPath(String buildFilePath);
-
-    /** Returns a {@link RuleClass} object for the serialized rule. */
-    RuleClass getRuleClass(Build.Rule rulePb, Location ruleLocation);
-  }
-
-  // Workaround for Java serialization making it tough to pass in a deserialization environment
-  // manually.
+  // Workaround for Java serialization not allowing to pass in a context manually.
   // volatile is needed to ensure that the objects are published safely.
-  // TODO(bazel-team): Subclass ObjectOutputStream to pass this through instead.
-  public static volatile PackageDeserializationEnvironment defaultPackageDeserializationEnvironment;
+  // TODO(bazel-team): Subclass ObjectOutputStream to pass through environment variables.
+  public static volatile RuleClassProvider defaultRuleClassProvider;
+  public static volatile FileSystem defaultDeserializerFileSystem;
 
   private class Context {
     private final Package.Builder packageBuilder;
@@ -132,9 +120,15 @@ public class PackageDeserializer {
       }
     }
 
-    void deserializeRule(Build.Rule rulePb) throws PackageDeserializationException {
-      Location ruleLocation = deserializeLocation(rulePb.getParseableLocation());
-      RuleClass ruleClass = packageDeserializationEnvironment.getRuleClass(rulePb, ruleLocation);
+    void deserializeRule(Build.Rule rulePb)
+        throws PackageDeserializationException {
+      String ruleClassName = rulePb.getRuleClass();
+      RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(ruleClassName);
+      if (ruleClass == null) {
+        throw new PackageDeserializationException(
+            String.format("Invalid rule class '%s'", ruleClassName));
+      }
+
       Map<String, ParsedAttributeValue> attributeValues = new HashMap<>();
       for (Build.Attribute attrPb : rulePb.getAttributeList()) {
         Type<?> type = ruleClass.getAttributeByName(attrPb.getName()).getType();
@@ -142,6 +136,7 @@ public class PackageDeserializer {
       }
 
       Label ruleLabel = deserializeLabel(rulePb.getName());
+      Location ruleLocation = deserializeLocation(rulePb.getParseableLocation());
       try {
         Rule rule = ruleClass.createRuleWithParsedAttributeValues(
             ruleLabel, packageBuilder, ruleLocation, attributeValues,
@@ -155,7 +150,8 @@ public class PackageDeserializer {
     }
   }
 
-  private final PackageDeserializationEnvironment packageDeserializationEnvironment;
+  private final FileSystem fileSystem;
+  private final RuleClassProvider ruleClassProvider;
 
   @Immutable
   private static final class ExplicitLocation extends Location {
@@ -198,38 +194,17 @@ public class PackageDeserializer {
     public LineAndColumn getEndLineAndColumn() {
       return new LineAndColumn(endLine, endColumn);
     }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(
-          path.hashCode(), startLine, startColumn, endLine, endColumn, internalHashCode());
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (other == null || !other.getClass().equals(getClass())) {
-        return false;
-      }
-      ExplicitLocation that = (ExplicitLocation) other;
-      return this.startLine == that.startLine
-          && this.startColumn == that.startColumn
-          && this.endLine == that.endLine
-          && this.endColumn == that.endColumn
-          && internalEquals(that)
-          && Objects.equals(this.path, that.path);
-    }
   }
 
-  /**
-   * Creates a {@link PackageDeserializer} using {@link #defaultPackageDeserializationEnvironment}.
-   */
-  public PackageDeserializer() {
-    this.packageDeserializationEnvironment = defaultPackageDeserializationEnvironment;
-  }
-
-  public PackageDeserializer(PackageDeserializationEnvironment packageDeserializationEnvironment) {
-    this.packageDeserializationEnvironment =
-        Preconditions.checkNotNull(packageDeserializationEnvironment);
+  public PackageDeserializer(FileSystem fileSystem, RuleClassProvider ruleClassProvider) {
+    if (fileSystem == null) {
+      fileSystem = defaultDeserializerFileSystem;
+    }
+    this.fileSystem = Preconditions.checkNotNull(fileSystem);
+    if (ruleClassProvider == null) {
+      ruleClassProvider = defaultRuleClassProvider;
+    }
+    this.ruleClassProvider = Preconditions.checkNotNull(ruleClassProvider);
   }
 
   /**
@@ -335,7 +310,7 @@ public class PackageDeserializer {
    */
   private void deserializeInternal(Build.Package packagePb, StoredEventHandler eventHandler,
       Package.Builder builder, InputStream in) throws PackageDeserializationException, IOException {
-    Path buildFile = packageDeserializationEnvironment.getPath(packagePb.getBuildFilePath());
+    Path buildFile = fileSystem.getPath(packagePb.getBuildFilePath());
     Preconditions.checkNotNull(buildFile);
     Context context = new Context(buildFile, builder);
     builder.setFilename(buildFile);
