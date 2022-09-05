@@ -36,7 +36,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -389,8 +388,8 @@ class Parser {
   }
 
   // create an error expression
-  private Identifier makeErrorExpression(int start, int end) {
-    return setLocation(new Identifier("$error$"), start, end);
+  private Ident makeErrorExpression(int start, int end) {
+    return setLocation(new Ident("$error$"), start, end);
   }
 
   // Convenience wrapper around ASTNode.setLocation that returns the node.
@@ -411,7 +410,7 @@ class Parser {
   }
 
   // create a funcall expression
-  private Expression makeFuncallExpression(Expression receiver, Identifier function,
+  private Expression makeFuncallExpression(Expression receiver, Ident function,
                                            List<Argument.Passed> args,
                                            int start, int end) {
     if (function.getLocation() == null) {
@@ -475,21 +474,21 @@ class Parser {
     int start = token.left;
     if (token.kind == TokenKind.STAR_STAR) { // kwarg
       nextToken();
-      Identifier ident = parseIdent();
+      Ident ident = parseIdent();
       return setLocation(new Parameter.StarStar<Expression, Expression>(
           ident.getName()), start, ident);
     } else if (token.kind == TokenKind.STAR) { // stararg
       int end = token.right;
       nextToken();
       if (token.kind == TokenKind.IDENTIFIER) {
-        Identifier ident = parseIdent();
+        Ident ident = parseIdent();
         return setLocation(new Parameter.Star<Expression, Expression>(ident.getName()),
             start, ident);
       } else {
         return setLocation(new Parameter.Star<Expression, Expression>(null), start, end);
       }
     } else {
-      Identifier ident = parseIdent();
+      Ident ident = parseIdent();
       if (token.kind == TokenKind.EQUALS) { // there's a default value
         nextToken();
         Expression expr = parseNonTupleExpression();
@@ -503,7 +502,7 @@ class Parser {
   }
 
   // funcall_suffix ::= '(' arg_list? ')'
-  private Expression parseFuncallSuffix(int start, Expression receiver, Identifier function) {
+  private Expression parseFuncallSuffix(int start, Expression receiver, Ident function) {
     List<Argument.Passed> args = Collections.emptyList();
     expect(TokenKind.LPAREN);
     int end;
@@ -523,7 +522,7 @@ class Parser {
   private Expression parseSelectorSuffix(int start, Expression receiver) {
     expect(TokenKind.DOT);
     if (token.kind == TokenKind.IDENTIFIER) {
-      Identifier ident = parseIdent();
+      Ident ident = parseIdent();
       if (token.kind == TokenKind.LPAREN) {
         return parseFuncallSuffix(start, receiver, ident);
       } else {
@@ -600,7 +599,7 @@ class Parser {
         new StringLiteral(labelName, '"')), location));
     args.add(setLocation(new Argument.Positional(
         new StringLiteral(file, '"')), location));
-    Identifier mockIdent = setLocation(new Identifier("mocksubinclude"), location);
+    Ident mockIdent = setLocation(new Ident("mocksubinclude"), location);
     Expression funCall = new FuncallExpression(null, mockIdent, args);
     return setLocation(new ExpressionStatement(funCall), location);
   }
@@ -681,7 +680,7 @@ class Parser {
         return literal;
       }
       case IDENTIFIER: {
-        Identifier ident = parseIdent();
+        Ident ident = parseIdent();
         if (token.kind == TokenKind.LPAREN) { // it's a function application
           return parseFuncallSuffix(start, null, ident);
         } else {
@@ -721,7 +720,7 @@ class Parser {
         List<Argument.Passed> args = new ArrayList<>();
         Expression expr = parsePrimaryWithSuffix();
         args.add(setLocation(new Argument.Positional(expr), start, expr));
-        return makeFuncallExpression(null, new Identifier("-"), args,
+        return makeFuncallExpression(null, new Ident("-"), args,
                                      start, token.right);
       }
       default: {
@@ -766,7 +765,7 @@ class Parser {
     // This is a dictionary access
     if (token.kind == TokenKind.RBRACKET) {
       expect(TokenKind.RBRACKET);
-      return makeFuncallExpression(receiver, new Identifier("$index"), args,
+      return makeFuncallExpression(receiver, new Ident("$index"), args,
                                    start, token.right);
     }
     // This is a slice (or substring)
@@ -780,7 +779,7 @@ class Parser {
     expect(TokenKind.RBRACKET);
 
     args.add(setLocation(new Argument.Positional(endExpr), loc2, endExpr));
-    return makeFuncallExpression(receiver, new Identifier("$slice"), args,
+    return makeFuncallExpression(receiver, new Ident("$slice"), args,
                                  start, token.right);
   }
 
@@ -934,12 +933,12 @@ class Parser {
     return makeErrorExpression(start, end);
   }
 
-  private Identifier parseIdent() {
+  private Ident parseIdent() {
     if (token.kind != TokenKind.IDENTIFIER) {
       expect(TokenKind.IDENTIFIER);
       return makeErrorExpression(token.left, token.right);
     }
-    Identifier ident = new Identifier(((String) token.value));
+    Ident ident = new Ident(((String) token.value));
     setLocation(ident, token.left, token.right);
     nextToken();
     return ident;
@@ -1070,7 +1069,7 @@ class Parser {
     return list;
   }
 
-  // load '(' STRING (COMMA [IDENTIFIER EQUALS] STRING)* COMMA? ')'
+  // load '(' STRING (COMMA STRING)* COMMA? ')'
   private void parseLoad(List<Statement> list) {
     int start = token.left;
     if (token.kind != TokenKind.STRING) {
@@ -1084,16 +1083,20 @@ class Parser {
     nextToken();
     expect(TokenKind.COMMA);
 
-    Map<Identifier, String> symbols = new HashMap<>();
-    parseLoadSymbol(symbols); // At least one symbol is required
-
+    List<Ident> symbols = new ArrayList<>();
+    if (token.kind == TokenKind.STRING) {
+      symbols.add(new Ident((String) token.value));
+    }
+    expect(TokenKind.STRING);
     while (token.kind != TokenKind.RPAREN && token.kind != TokenKind.EOF) {
       expect(TokenKind.COMMA);
       if (token.kind == TokenKind.RPAREN) {
         break;
       }
-
-      parseLoadSymbol(symbols);
+      if (token.kind == TokenKind.STRING) {
+        symbols.add(new Ident((String) token.value));
+      }
+      expect(TokenKind.STRING);
     }
     expect(TokenKind.RPAREN);
     
@@ -1103,57 +1106,12 @@ class Parser {
     // this only happens in Skylark. Consequently, we invoke it here to discover
     // invalid load paths in BUILD mode, too.
     try {
-      stmt.validatePath();
+      stmt.validateLoadPath();
     } catch (EvalException e) {
       syntaxError(pathToken, e.getMessage());
     }
 
     list.add(setLocation(stmt, start, token.left));
-  }
-
-  /**
-   * Parses the next symbol argument of a load statement and puts it into the output map.
-   *
-   * <p> The symbol is either "name" (STRING) or name = "declared" (IDENTIFIER EQUALS STRING).
-   * "Declared" refers to the original name in the bazel file that should be loaded.
-   * Moreover, it will be the key of the entry in the map.
-   * If no alias is used, "name" and "declared" will be identical.
-   */
-  private void parseLoadSymbol(Map<Identifier, String> symbols) {
-    Token nameToken, declaredToken;
-
-    if (token.kind == TokenKind.STRING) {
-      nameToken = token;
-      declaredToken = nameToken;
-    } else {
-      if (token.kind != TokenKind.IDENTIFIER) {
-        syntaxError(token, "Expected either a literal string or an identifier");
-      }
-
-      nameToken = token;
-
-      expect(TokenKind.IDENTIFIER);
-      expect(TokenKind.EQUALS);
-
-      declaredToken = token;
-    }
-
-    expect(TokenKind.STRING);
-
-    try {
-      Identifier identifier = new Identifier(nameToken.value.toString());
-
-      if (symbols.containsKey(identifier)) {
-        syntaxError(
-            nameToken, String.format("Symbol '%s' has already been loaded", identifier.getName()));
-      } else {
-        symbols.put(
-            setLocation(identifier, nameToken.left, token.left), declaredToken.value.toString());
-      }
-    } catch (NullPointerException npe) {
-      // This means that the value of at least one token is null. In this case, the previous
-      // expect() call has already logged an error.
-    }
   }
 
   private void parseTopLevelStatement(List<Statement> list) {
@@ -1164,7 +1122,7 @@ class Parser {
     // Check if there is an include
     if (token.kind == TokenKind.IDENTIFIER) {
       Token identToken = token;
-      Identifier ident = parseIdent();
+      Ident ident = parseIdent();
 
       if (ident.getName().equals("include")
           && token.kind == TokenKind.LPAREN
@@ -1242,8 +1200,7 @@ class Parser {
       Expression rvalue = parseExpression();
       if (expression instanceof FuncallExpression) {
         FuncallExpression func = (FuncallExpression) expression;
-        if (func.getFunction().getName().equals("$index")
-            && func.getObject() instanceof Identifier) {
+        if (func.getFunction().getName().equals("$index") && func.getObject() instanceof Ident) {
           // Special casing to translate 'ident[key] = value' to 'ident = ident + {key: value}'
           // Note that the locations of these extra expressions are fake.
           Preconditions.checkArgument(func.getArguments().size() == 1);
@@ -1317,7 +1274,7 @@ class Parser {
   private void parseFunctionDefStatement(List<Statement> list) {
     int start = token.left;
     expect(TokenKind.DEF);
-    Identifier ident = parseIdent();
+    Ident ident = parseIdent();
     expect(TokenKind.LPAREN);
     FunctionSignature.WithValues<Expression, Expression> args = parseFunctionSignature();
     expect(TokenKind.RPAREN);

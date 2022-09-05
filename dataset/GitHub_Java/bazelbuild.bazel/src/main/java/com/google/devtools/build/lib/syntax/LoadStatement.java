@@ -15,10 +15,9 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-import java.util.Map;
+import java.util.List;
 
 /**
  * Syntax node for an import statement.
@@ -27,28 +26,21 @@ public final class LoadStatement extends Statement {
 
   public static final String PATH_ERROR_MSG = "Path '%s' is not valid. "
       + "It should either start with a slash or refer to a file in the current directory.";
-  private final ImmutableMap<Identifier, String> symbols;
-  private final ImmutableList<Identifier> cachedSymbols; // to save time
+  private final ImmutableList<Ident> symbols;
   private final PathFragment importPath;
   private final String pathString;
 
   /**
    * Constructs an import statement.
-   *
-   * <p>Symbols maps a symbol to its original name under which it was defined in
-   * the bzl file that should be loaded.
-   * If aliasing is used, the value differs from it's key's symbol#getName().
-   * Otherwise, both values are identical.
    */
-  LoadStatement(String path, Map<Identifier, String> symbols) {
-    this.symbols = ImmutableMap.copyOf(symbols);
-    this.cachedSymbols = ImmutableList.copyOf(symbols.keySet());
+  LoadStatement(String path, List<Ident> symbols) {
+    this.symbols = ImmutableList.copyOf(symbols);
     this.importPath = new PathFragment(path + ".bzl");
     this.pathString = path;
   }
 
-  public ImmutableList<Identifier> getSymbols() {
-    return cachedSymbols;
+  public ImmutableList<Ident> getSymbols() {
+    return symbols;
   }
 
   public PathFragment getImportPath() {
@@ -57,22 +49,18 @@ public final class LoadStatement extends Statement {
 
   @Override
   public String toString() {
-    return String.format("load(\"%s\", %s)", importPath, Joiner.on(", ").join(cachedSymbols));
+    return String.format("load(\"%s\", %s)", importPath, Joiner.on(", ").join(symbols));
   }
 
   @Override
   void exec(Environment env) throws EvalException, InterruptedException {
-    for (Map.Entry<Identifier, String> entry : symbols.entrySet()) {
+    for (Ident i : symbols) {
       try {
-        Identifier current = entry.getKey();
-
-        if (current.isPrivate()) {
-          throw new EvalException(
-              getLocation(), "symbol '" + current + "' is private and cannot be imported");
+        if (i.getName().startsWith("_")) {
+          throw new EvalException(getLocation(), "symbol '" + i + "' is private and cannot "
+              + "be imported");
         }
-        // The key is the original name that was used to define the symbol
-        // in the loaded bzl file
-        env.importSymbol(getImportPath(), current, entry.getValue());
+        env.importSymbol(getImportPath(), i.getName());
       } catch (Environment.NoSuchVariableException | Environment.LoadFailedException e) {
         throw new EvalException(getLocation(), e.getMessage());
       }
@@ -86,21 +74,23 @@ public final class LoadStatement extends Statement {
 
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
-    validatePath();
+    validateLoadPath();
     
     if (!importPath.isAbsolute() && importPath.segmentCount() > 1) {
       throw new EvalException(getLocation(), String.format(PATH_ERROR_MSG, importPath));
     }
-    for (Identifier symbol : cachedSymbols) {
+    for (Ident symbol : symbols) {
       env.declare(symbol.getName(), getLocation());
     }
   }
 
   /**
-   * Throws an exception if the path argument to load() starts with more than one forward
+   * Throws an exception if the path argument to load() does starts with more than one forward
    * slash ('/')
+   *
+   * @throws EvalException if the path is empty or starts with two forward slashes
    */
-  public void validatePath() throws EvalException {
+  public void validateLoadPath() throws EvalException {
     String error = null;
 
     if (pathString.isEmpty()) {
