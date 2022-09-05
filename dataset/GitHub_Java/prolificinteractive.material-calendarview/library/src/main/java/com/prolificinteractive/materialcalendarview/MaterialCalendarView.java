@@ -13,7 +13,6 @@ import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.view.ViewPager;
-import android.support.v7.widget.AppCompatTextView;
 import android.util.AttributeSet;
 import android.util.SparseArray;
 import android.util.TypedValue;
@@ -258,7 +257,7 @@ public class MaterialCalendarView extends ViewGroup {
 
         buttonPast = new DirectionButton(getContext());
         buttonPast.setContentDescription(getContext().getString(R.string.previous));
-        title = new AppCompatTextView(getContext());
+        title = new TextView(getContext());
         buttonFuture = new DirectionButton(getContext());
         buttonFuture.setContentDescription(getContext().getString(R.string.next));
         pager = new CalendarPager(getContext());
@@ -1003,6 +1002,7 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
+     *
      * @return true if the week days names are shown
      */
     public boolean isShowWeekDays() {
@@ -1082,15 +1082,6 @@ public class MaterialCalendarView extends ViewGroup {
      */
     public boolean getTopbarVisible() {
         return topbar.getVisibility() == View.VISIBLE;
-    }
-
-    /**
-     * Get the current {@link CalendarMode} set of the Calendar.
-     *
-     * @return Whichever mode the calendar is currently in.
-     */
-    public CalendarMode getCalendarMode() {
-        return calendarMode;
     }
 
     @Override
