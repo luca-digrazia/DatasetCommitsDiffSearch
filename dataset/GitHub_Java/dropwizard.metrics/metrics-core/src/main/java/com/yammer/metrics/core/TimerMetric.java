@@ -1,6 +1,7 @@
 package com.yammer.metrics.core;
 
 import com.yammer.metrics.Metrics;
+import com.yammer.metrics.MetricsRegistry;
 import com.yammer.metrics.core.HistogramMetric.SampleType;
 
 import java.util.ArrayList;
@@ -12,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * A timer metric which aggregates timing durations and provides duration
  * statistics, plus throughput statistics via {@link MeterMetric}.
+ *
+ * @author coda
  */
 public class TimerMetric implements Metered {
     private final TimeUnit durationUnit, rateUnit;
@@ -211,7 +214,4 @@ public class TimerMetric implements Metered {
         return ns / TimeUnit.NANOSECONDS.convert(1, durationUnit);
     }
 
-    void stop() {
-        meter.stop();
-    }
 }

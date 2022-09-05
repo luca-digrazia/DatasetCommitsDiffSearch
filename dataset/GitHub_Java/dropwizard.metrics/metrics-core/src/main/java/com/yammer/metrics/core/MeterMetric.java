@@ -1,11 +1,11 @@
 package com.yammer.metrics.core;
 
 import com.yammer.metrics.Metrics;
+import com.yammer.metrics.MetricsRegistry;
 import com.yammer.metrics.stats.EWMA;
 import com.yammer.metrics.util.Utils;
 
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * A meter metric which measures mean throughput and one-, five-, and
  * fifteen-minute exponentially-weighted moving average throughputs.
  *
+ * @author coda
  * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
  */
 public class MeterMetric implements Metered {
@@ -54,17 +55,18 @@ public class MeterMetric implements Metered {
     private final long startTime = System.nanoTime();
     private final TimeUnit rateUnit;
     private final String eventType;
-    private final ScheduledFuture<?> future;
 
     private MeterMetric(ScheduledExecutorService tickThread, String eventType, TimeUnit rateUnit) {
         this.rateUnit = rateUnit;
         this.eventType = eventType;
-        this.future = tickThread.scheduleAtFixedRate(new Runnable() {
+
+        final Runnable job = new Runnable() {
             @Override
             public void run() {
                 tick();
             }
-        }, INTERVAL, INTERVAL, TimeUnit.SECONDS);
+        };
+        tickThread.scheduleAtFixedRate(job, INTERVAL, INTERVAL, TimeUnit.SECONDS);
     }
 
     @Override
@@ -137,9 +139,5 @@ public class MeterMetric implements Metered {
 
     private double convertNsRate(double ratePerNs) {
         return ratePerNs * (double) rateUnit.toNanos(1);
-    }
-
-    void stop() {
-        future.cancel(false);
     }
 }
