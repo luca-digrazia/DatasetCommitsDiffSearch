@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -47,7 +46,7 @@ public class AndroidResourcesProcessorBuilder {
   private List<String> resourceConfigs = Collections.emptyList();
   private List<String> uncompressedExtensions = Collections.emptyList();
   private Artifact apkOut;
-  private final AndroidSdkProvider sdk;
+  private final AndroidTools androidTools;
   private List<String> assetsToIgnore = Collections.emptyList();
   private SpawnAction.Builder spawnActionBuilder;
   private PathFragment workingDirectory;
@@ -60,10 +59,11 @@ public class AndroidResourcesProcessorBuilder {
   private Artifact symbolsTxt;
 
   /**
+   * @param androidTools A configured AndroidTools for the AndroidResourcesProcessor action.
    * @param ruleContext The RuleContext that was used to create the SpawnAction.Builder.
    */
-  public AndroidResourcesProcessorBuilder(RuleContext ruleContext) {
-    this.sdk = AndroidSdkProvider.fromRuleContext(ruleContext);
+  public AndroidResourcesProcessorBuilder(AndroidTools androidTools, RuleContext ruleContext) {
+    this.androidTools = androidTools;
     this.ruleContext = ruleContext;
     this.spawnActionBuilder = new SpawnAction.Builder();
   }
@@ -179,19 +179,17 @@ public class AndroidResourcesProcessorBuilder {
     List<String> args = new ArrayList<>();
 
     args.add("--aapt");
-    args.add(sdk.getAapt().getExecutable().getExecPathString());
+    args.add(androidTools.getAapt().getExecutable().getExecPathString());
 
-    Iterables.addAll(ins,
-        ruleContext.getExecutablePrerequisite(":android_resources_processor", Mode.HOST)
-            .getRunfilesSupport()
-            .getRunfilesArtifactsWithoutMiddlemen());
+    Iterables.addAll(ins, androidTools.getAndroidResourceProcessor().getRunfilesSupport()
+        .getRunfilesArtifactsWithoutMiddlemen());
 
     args.add("--annotationJar");
-    args.add(sdk.getAnnotationsJar().getExecPathString());
-    ins.add(sdk.getAnnotationsJar());
+    args.add(androidTools.getAnnotationsJar().getExecPathString());
+    ins.add(androidTools.getAnnotationsJar());
     args.add("--androidJar");
-    args.add(sdk.getAndroidJar().getExecPathString());
-    ins.add(sdk.getAndroidJar());
+    args.add(androidTools.getAndroidJar().getExecPathString());
+    ins.add(androidTools.getAndroidJar());
 
     args.add("--primaryData");
     addPrimaryResourceContainer(ins, args, primary);
@@ -284,12 +282,11 @@ public class AndroidResourcesProcessorBuilder {
 
     // Create the spawn action.
     ruleContext.registerAction(this.spawnActionBuilder
-        .addTool(sdk.getAapt())
+        .addTool(androidTools.getAapt())
         .addInputs(ImmutableList.<Artifact>copyOf(ins))
         .addOutputs(ImmutableList.<Artifact>copyOf(outs))
         .addArguments(ImmutableList.<String>copyOf(args))
-        .setExecutable(
-            ruleContext.getExecutablePrerequisite(":android_resources_processor", Mode.HOST))
+        .setExecutable(androidTools.getAndroidResourceProcessor())
         .setProgressMessage("Processing resources")
         .setMnemonic("AndroidAapt")
         .build(context));

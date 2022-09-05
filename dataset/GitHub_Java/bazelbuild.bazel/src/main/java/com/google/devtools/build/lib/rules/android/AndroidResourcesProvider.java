@@ -184,7 +184,7 @@ public final class AndroidResourcesProvider implements TransitiveInfoProvider {
 
     @Override
     public int hashCode() {
-      return Objects.hashCode(label);
+      return Objects.hash(label);
     }
 
     @Override

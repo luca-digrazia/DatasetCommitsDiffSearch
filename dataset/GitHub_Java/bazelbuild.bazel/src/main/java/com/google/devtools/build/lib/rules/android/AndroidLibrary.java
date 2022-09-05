@@ -57,9 +57,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext ruleContext) {
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
-    if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
-      return null;
-    }
+
     List<? extends TransitiveInfoCollection> deps =
         ruleContext.getPrerequisites("deps", Mode.TARGET);
     checkResourceInlining(ruleContext);
@@ -71,6 +69,11 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> transitiveProguardConfigs =
         collectTransitiveProguardConfigs(ruleContext);
     AndroidIdlProvider transitiveIdlImportData = collectTransitiveIdlImports(ruleContext);
+    AndroidTools tools = AndroidTools.fromRuleContext(ruleContext);
+    if (tools == null) {
+      return null;
+    }
+
     if (LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
       try {
         if (!LocalResourceContainer.validateRuleContext(ruleContext)) {
@@ -82,7 +85,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         ApplicationManifest applicationManifest = androidSemantics.getManifestForRule(ruleContext);
         ResourceApk resourceApk = applicationManifest.packWithDataAndResources(
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK),
-            ruleContext, transitiveResources,
+            ruleContext, transitiveResources, tools,
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_SYMBOLS_TXT),
             ImmutableList.<String>of(), /* configurationFilters */
@@ -94,10 +97,8 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             false,
             null /* proguardCfgOut */);
 
-        if (androidCommon.init(javaSemantics, androidSemantics,
-            resourceApk, transitiveIdlImportData, false, true) == null) {
-          return null;
-        }
+        androidCommon.init(javaSemantics, androidSemantics, tools,
+            resourceApk, transitiveIdlImportData, false, true);
 
         Artifact classesJar = mergeJarsFromSrcs(ruleContext,
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR));
@@ -105,7 +106,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         Artifact aarOut = ruleContext.getImplicitOutputArtifact(
             AndroidRuleClasses.ANDROID_LIBRARY_AAR);
 
-        new AarGeneratorBuilder(ruleContext)
+        new AarGeneratorBuilder(tools, ruleContext)
                 .withPrimary(resourceApk.getPrimaryResource())
                 .withManifest(resourceApk.getPrimaryResource().getManifest())
                 .withRtxt(resourceApk.getPrimaryResource().getRTxt())
@@ -115,7 +116,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
                 .build(ruleContext);
 
         RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-        androidCommon.addTransitiveInfoProviders(builder);
+        androidCommon.addTransitiveInfoProviders(builder, tools);
         androidSemantics.addTransitiveInfoProviders(
             builder, ruleContext, javaCommon, androidCommon,
             null, resourceApk, null, ImmutableList.<Artifact>of());
@@ -144,13 +145,12 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       JavaCommon javaCommon = new JavaCommon(ruleContext, javaSemantics);
       AndroidCommon androidCommon = new AndroidCommon(ruleContext, javaCommon);
       ResourceApk resourceApk = ResourceApk.fromTransitiveResources(transitiveResources);
-      if (androidCommon.init(javaSemantics, androidSemantics,
-          resourceApk, transitiveIdlImportData, false, true) == null) {
-        return null;
-      }
+      androidCommon.init(javaSemantics, androidSemantics, tools,
+          resourceApk, transitiveIdlImportData, false, true);
+
 
       RuleConfiguredTargetBuilder targetBuilder = androidCommon.addTransitiveInfoProviders(
-          new RuleConfiguredTargetBuilder(ruleContext));
+          new RuleConfiguredTargetBuilder(ruleContext), tools);
 
       androidSemantics.addTransitiveInfoProviders(
           targetBuilder, ruleContext, javaCommon, androidCommon,
@@ -208,7 +208,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             ruleContext.attributes().get("exports_manifest", Type.BOOLEAN),
             ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT), null);
 
-        primaryResources = new AndroidResourcesProcessorBuilder(ruleContext)
+        primaryResources = new AndroidResourcesProcessorBuilder(tools, ruleContext)
                 .setApkOut(apk)
                 .setRTxtOut(primaryResources.getRTxt())
                 .setSourceJarOut(primaryResources.getJavaSourceJar())
@@ -221,7 +221,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
                 .build(ruleContext);
       }
 
-      new AarGeneratorBuilder(ruleContext)
+      new AarGeneratorBuilder(tools, ruleContext)
           .withPrimary(primaryResources)
           .withManifest(primaryResources.getManifest())
           .withRtxt(primaryResources.getRTxt())
