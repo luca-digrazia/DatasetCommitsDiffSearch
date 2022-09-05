@@ -4,8 +4,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.management.*;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
  * A reporter which listens for new metrics and exposes them as namespaced MBeans.
@@ -302,24 +300,17 @@ public class JmxReporter {
     private static class JmxListener implements MetricRegistryListener {
         private final String name;
         private final MBeanServer mBeanServer;
-        private final MetricFilter filter;
-        private final Set<ObjectName> registered;
 
-        public JmxListener(MBeanServer mBeanServer, String name, MetricFilter filter) {
+        public JmxListener(MBeanServer mBeanServer, String name) {
             this.mBeanServer = mBeanServer;
             this.name = name;
-            this.filter = filter;
-            this.registered = new CopyOnWriteArraySet<ObjectName>();
         }
 
         @Override
         public void onGaugeAdded(String name, Gauge<?> gauge) {
             try {
-                if (filter.matches(name, gauge)) {
-                    final ObjectName objectName = createName("gauges", name);
-                    mBeanServer.registerMBean(new JmxGauge(gauge, objectName), objectName);
-                    registered.add(objectName);
-                }
+                final ObjectName objectName = createName("gauges", name);
+                mBeanServer.registerMBean(new JmxGauge(gauge, objectName), objectName);
             } catch (InstanceAlreadyExistsException e) {
                 LOGGER.debug("Unable to register gauge", e);
             } catch (JMException e) {
@@ -330,9 +321,7 @@ public class JmxReporter {
         @Override
         public void onGaugeRemoved(String name) {
             try {
-                final ObjectName objectName = createName("gauges", name);
-                mBeanServer.unregisterMBean(objectName);
-                registered.remove(objectName);
+                mBeanServer.unregisterMBean(createName("gauges", name));
             } catch (InstanceNotFoundException e) {
                 LOGGER.debug("Unable to unregister gauge", e);
             } catch (MBeanRegistrationException e) {
@@ -343,11 +332,8 @@ public class JmxReporter {
         @Override
         public void onCounterAdded(String name, Counter counter) {
             try {
-                if (filter.matches(name, counter)) {
-                    final ObjectName objectName = createName("counters", name);
-                    mBeanServer.registerMBean(new JmxCounter(counter, objectName), objectName);
-                    registered.add(objectName);
-                }
+                final ObjectName objectName = createName("counters", name);
+                mBeanServer.registerMBean(new JmxCounter(counter, objectName), objectName);
             } catch (InstanceAlreadyExistsException e) {
                 LOGGER.debug("Unable to register counter", e);
             } catch (JMException e) {
@@ -358,9 +344,7 @@ public class JmxReporter {
         @Override
         public void onCounterRemoved(String name) {
             try {
-                final ObjectName objectName = createName("counters", name);
-                mBeanServer.unregisterMBean(objectName);
-                registered.remove(objectName);
+                mBeanServer.unregisterMBean(createName("counters", name));
             } catch (InstanceNotFoundException e) {
                 LOGGER.debug("Unable to unregister counter", e);
             } catch (MBeanRegistrationException e) {
@@ -371,11 +355,8 @@ public class JmxReporter {
         @Override
         public void onHistogramAdded(String name, Histogram histogram) {
             try {
-                if (filter.matches(name, histogram)) {
-                    final ObjectName objectName = createName("histograms", name);
-                    mBeanServer.registerMBean(new JmxHistogram(histogram, objectName), objectName);
-                    registered.add(objectName);
-                }
+                final ObjectName objectName = createName("histograms", name);
+                mBeanServer.registerMBean(new JmxHistogram(histogram, objectName), objectName);
             } catch (InstanceAlreadyExistsException e) {
                 LOGGER.debug("Unable to register histogram", e);
             } catch (JMException e) {
@@ -386,9 +367,7 @@ public class JmxReporter {
         @Override
         public void onHistogramRemoved(String name) {
             try {
-                final ObjectName objectName = createName("histograms", name);
-                mBeanServer.unregisterMBean(objectName);
-                registered.remove(objectName);
+                mBeanServer.unregisterMBean(createName("histograms", name));
             } catch (InstanceNotFoundException e) {
                 LOGGER.debug("Unable to unregister histogram", e);
             } catch (MBeanRegistrationException e) {
@@ -399,11 +378,8 @@ public class JmxReporter {
         @Override
         public void onMeterAdded(String name, Meter meter) {
             try {
-                if (filter.matches(name, meter)) {
-                    final ObjectName objectName = createName("meters", name);
-                    mBeanServer.registerMBean(new JmxMeter(meter, objectName), objectName);
-                    registered.add(objectName);
-                }
+                final ObjectName objectName = createName("meters", name);
+                mBeanServer.registerMBean(new JmxMeter(meter, objectName), objectName);
             } catch (InstanceAlreadyExistsException e) {
                 LOGGER.debug("Unable to register meter", e);
             } catch (JMException e) {
@@ -414,9 +390,7 @@ public class JmxReporter {
         @Override
         public void onMeterRemoved(String name) {
             try {
-                final ObjectName objectName = createName("meters", name);
-                mBeanServer.unregisterMBean(objectName);
-                registered.remove(objectName);
+                mBeanServer.unregisterMBean(createName("meters", name));
             } catch (InstanceNotFoundException e) {
                 LOGGER.debug("Unable to unregister meter", e);
             } catch (MBeanRegistrationException e) {
@@ -427,11 +401,8 @@ public class JmxReporter {
         @Override
         public void onTimerAdded(String name, Timer timer) {
             try {
-                if (filter.matches(name, timer)) {
-                    final ObjectName objectName = createName("timers", name);
-                    mBeanServer.registerMBean(new JmxTimer(timer, objectName), objectName);
-                    registered.add(objectName);
-                }
+                final ObjectName objectName = createName("timers", name);
+                mBeanServer.registerMBean(new JmxTimer(timer, objectName), objectName);
             } catch (InstanceAlreadyExistsException e) {
                 LOGGER.debug("Unable to register timer", e);
             } catch (JMException e) {
@@ -442,9 +413,7 @@ public class JmxReporter {
         @Override
         public void onTimerRemoved(String name) {
             try {
-                final ObjectName objectName = createName("timers", name);
-                mBeanServer.unregisterMBean(objectName);
-                registered.add(objectName);
+                mBeanServer.unregisterMBean(createName("timers", name));
             } catch (InstanceNotFoundException e) {
                 LOGGER.debug("Unable to unregister timer", e);
             } catch (MBeanRegistrationException e) {
@@ -464,34 +433,20 @@ public class JmxReporter {
                 }
             }
         }
-
-        void unregisterAll() {
-            for (ObjectName name : registered) {
-                try {
-                    mBeanServer.unregisterMBean(name);
-                } catch (InstanceNotFoundException e) {
-                    LOGGER.debug("Unable to unregister metric", e);
-                } catch (MBeanRegistrationException e) {
-                    LOGGER.warn("Unable to unregister metric", e);
-                }
-            }
-            registered.clear();
-        }
     }
 
     private final MetricRegistry registry;
-    private final JmxListener listener;
+    private final MetricRegistryListener listener;
 
     /**
      * Creates a new {@link JmxReporter}.
      *
-     * @param mBeanServer    the platform's {@link javax.management.MBeanServer}
+     * @param mBeanServer    the platform's {@link MBeanServer}
      * @param registry       the registry containing the metrics to report
-     * @param filter         the metric filter to match
      */
-    public JmxReporter(MBeanServer mBeanServer, MetricRegistry registry, MetricFilter filter) {
+    public JmxReporter(MBeanServer mBeanServer, MetricRegistry registry) {
         this.registry = registry;
-        this.listener = new JmxListener(mBeanServer, registry.getName(), filter);
+        this.listener = new JmxListener(mBeanServer, registry.getName());
     }
 
     /**
@@ -506,6 +461,5 @@ public class JmxReporter {
      */
     public void stop() {
         registry.removeListener(listener);
-        listener.unregisterAll();
     }
 }
