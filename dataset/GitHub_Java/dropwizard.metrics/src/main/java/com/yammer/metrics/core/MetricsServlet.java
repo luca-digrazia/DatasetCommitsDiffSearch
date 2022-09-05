@@ -64,7 +64,7 @@ public class MetricsServlet extends HttpServlet {
 	protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
 		final String uri = req.getPathInfo();
 		if (uri.startsWith(metricsUri)) {
-			handleMetrics(req.getParameter("class"), resp);
+			handleMetrics(resp);
 		} else if (uri.equals(pingUri)) {
 			handlePing(resp);
 		} else if (uri.equals(threadsUri)) {
@@ -144,35 +144,30 @@ public class MetricsServlet extends HttpServlet {
 		writer.close();
 	}
 
-	private void handleMetrics(String classPrefix, HttpServletResponse resp) throws IOException {
+	private void handleStats(HttpServletResponse resp) throws IOException {
 		resp.setStatus(HttpServletResponse.SC_OK);
 		resp.setContentType("text/plain");
 		final OutputStream output = resp.getOutputStream();
 		final JsonGenerator json = factory.createJsonGenerator(output, JsonEncoding.UTF8);
 		json.writeStartObject();
 		{
-			if ("jvm".equals(classPrefix) || classPrefix == null) {
-				writeVmMetrics(json);
-			}
-
-			writeRegularMetrics(json, classPrefix);
+			writeVmMetrics(json);
+			writeRegularMetrics(json);
 		}
 		json.writeEndObject();
 		json.close();
 	}
 
-	private void writeRegularMetrics(JsonGenerator json, String classPrefix) throws IOException {
+	private void writeRegularMetrics(JsonGenerator json) throws IOException {
 		for (Entry<String, Map<String, Metric>> entry : Utils.sortMetrics(Metrics.METRICS).entrySet()) {
-			if (classPrefix == null && entry.getKey().startsWith(classPrefix)) {
-				json.writeFieldName(entry.getKey());
-				json.writeStartObject();
-				{
-					for (Entry<String, Metric> subEntry : entry.getValue().entrySet()) {
-						writeMetric(json, subEntry.getKey(), subEntry.getValue());
-					}
+			json.writeFieldName(entry.getKey());
+			json.writeStartObject();
+			{
+				for (Entry<String, Metric> subEntry : entry.getValue().entrySet()) {
+					writeMetric(json, subEntry.getKey(), subEntry.getValue());
 				}
-				json.writeEndObject();
 			}
+			json.writeEndObject();
 		}
 	}
 
