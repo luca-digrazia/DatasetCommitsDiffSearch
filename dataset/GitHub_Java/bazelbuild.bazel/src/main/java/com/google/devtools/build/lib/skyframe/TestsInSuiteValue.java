@@ -13,16 +13,16 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
@@ -68,30 +68,21 @@ final class TestsInSuiteValue implements SkyValue {
   @ThreadSafe
   public static SkyKey key(Target testSuite, boolean strict) {
     Preconditions.checkState(TargetUtils.isTestSuiteRule(testSuite));
-    return new TestsInSuiteKey((Rule) testSuite, strict);
+    return new SkyKey(SkyFunctions.TESTS_IN_SUITE,
+        new TestsInSuite((Rule) testSuite, strict));
   }
 
   /**
    * A list of targets of which all test suites should be expanded.
    */
   @ThreadSafe
-  static final class TestsInSuiteKey implements SkyKey, Serializable {
+  static final class TestsInSuite implements Serializable {
     private final Rule testSuite;
     private final boolean strict;
 
-    public TestsInSuiteKey(Rule testSuite, boolean strict) {
+    public TestsInSuite(Rule testSuite, boolean strict) {
       this.testSuite = testSuite;
       this.strict = strict;
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.TESTS_IN_SUITE;
-    }
-
-    @Override
-    public Object argument() {
-      return this;
     }
 
     public Rule getTestSuite() {
@@ -117,10 +108,10 @@ final class TestsInSuiteValue implements SkyValue {
       if (this == obj) {
         return true;
       }
-      if (!(obj instanceof TestsInSuiteKey)) {
+      if (!(obj instanceof TestsInSuite)) {
         return false;
       }
-      TestsInSuiteKey other = (TestsInSuiteKey) obj;
+      TestsInSuite other = (TestsInSuite) obj;
       return other.testSuite.equals(testSuite) && other.strict == strict;
     }
   }

@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -28,7 +27,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.Collection;
 
 /**
  * A value referring to a computed set of resolved targets. This is used for the results of target
@@ -69,9 +67,8 @@ public final class TestSuiteExpansionValue implements SkyValue {
    * @param targets the set of targets to be expanded
    */
   @ThreadSafe
-  public static SkyKey key(Collection<Label> targets) {
-    return new SkyKey(SkyFunctions.TEST_SUITE_EXPANSION,
-        new TestSuiteExpansion(ImmutableSortedSet.copyOf(targets)));
+  public static SkyKey key(ImmutableSet<Label> targets) {
+    return new SkyKey(SkyFunctions.TEST_SUITE_EXPANSION, new TestSuiteExpansion(targets));
   }
 
   /**
@@ -79,9 +76,9 @@ public final class TestSuiteExpansionValue implements SkyValue {
    */
   @ThreadSafe
   static final class TestSuiteExpansion implements Serializable {
-    private final ImmutableSortedSet<Label> targets;
+    private final ImmutableSet<Label> targets;
 
-    public TestSuiteExpansion(ImmutableSortedSet<Label> targets) {
+    public TestSuiteExpansion(ImmutableSet<Label> targets) {
       this.targets = targets;
     }
 
