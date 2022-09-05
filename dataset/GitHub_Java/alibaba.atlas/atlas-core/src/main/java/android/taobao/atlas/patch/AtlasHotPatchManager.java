@@ -35,7 +35,7 @@ import dalvik.system.DexFile;
  */
 
 public class AtlasHotPatchManager implements BundleListener{
-    private static final String TAG = "AtlasHotPatchManager";
+    public static final String TAG = "AtlasHotPatchManager";
     private static final AtlasHotPatchManager sPatchManager = new AtlasHotPatchManager();
     private static final String HOTFIX_NAME_POSTFIX = ".dex";
 
@@ -49,7 +49,7 @@ public class AtlasHotPatchManager implements BundleListener{
         return sPatchManager;
     }
 
-    public interface OnPatchActivatedListener{
+    public static interface OnPatchActivatedListener{
         void onPatchActivated(String bundleName,String location);
     }
 
@@ -136,7 +136,7 @@ public class AtlasHotPatchManager implements BundleListener{
         mPatchListener = listener;
     }
 
-    private void patchMainDex(){
+    public void patchMainDex(){
         File maindexPatchFile = patchInfos.get("com.taobao.maindex");
         if(maindexPatchFile.exists()){
             File maindexPatchs[] = maindexPatchFile.listFiles(new FileFilter() {
@@ -173,7 +173,7 @@ public class AtlasHotPatchManager implements BundleListener{
         }
     }
 
-    private void patchBundle(Bundle bundle){
+    public void patchBundle(Bundle bundle){
         String lockKey = bundle.getLocation() + ".patch";
         try {
             BundleLock.WriteLock(lockKey);

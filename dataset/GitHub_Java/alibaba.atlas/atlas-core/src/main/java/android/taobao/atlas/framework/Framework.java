@@ -341,7 +341,6 @@ public final class Framework {
      */
     static void startup(boolean updated) throws BundleException {
         AtlasBundleInfoManager.instance().getBundleInfo();
-        AtlasHotPatchManager.getInstance();
         notifyFrameworkListeners(0 /* STARTING */, null, null);
         notifyFrameworkListeners(FrameworkEvent.STARTED, null, null);
     }
