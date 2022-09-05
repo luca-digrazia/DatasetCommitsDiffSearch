@@ -172,7 +172,6 @@ public class CppCompileAction extends AbstractAction
   private final boolean shouldScanIncludes;
   private final boolean shouldPruneModules;
   private final boolean usePic;
-  private final boolean useHeaderModules;
   private final CppCompilationContext context;
   private final Iterable<IncludeScannable> lipoScannables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
@@ -261,7 +260,6 @@ public class CppCompileAction extends AbstractAction
       boolean shouldScanIncludes,
       boolean shouldPruneModules,
       boolean usePic,
-      boolean useHeaderModules,
       Label sourceLabel,
       NestedSet<Artifact> mandatoryInputs,
       Artifact outputFile,
@@ -291,7 +289,7 @@ public class CppCompileAction extends AbstractAction
             ruleContext,
             mandatoryInputs,
             context.getTransitiveCompilationPrerequisites(),
-            useHeaderModules && !cppConfiguration.getSkipUnusedModules()
+            context.getUseHeaderModules() && !cppConfiguration.getSkipUnusedModules()
                 ? context.getTransitiveModules(usePic)
                 : null,
             optionalSourceFile,
@@ -314,7 +312,6 @@ public class CppCompileAction extends AbstractAction
     this.shouldScanIncludes = shouldScanIncludes;
     this.shouldPruneModules = shouldPruneModules;
     this.usePic = usePic;
-    this.useHeaderModules = useHeaderModules;
     this.inputsKnown = !shouldScanIncludes;
     this.cppCompileCommandLine =
         new CppCompileCommandLine(
@@ -536,7 +533,8 @@ public class CppCompileAction extends AbstractAction
 
   @Override
   public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
-    if (useHeaderModules && cppConfiguration.getSkipUnusedModules()) {
+    if (context.getUseHeaderModules()
+        && cppConfiguration.getSkipUnusedModules()) {
       return context.getTransitiveModules(usePic);
     }
     return null;

@@ -1217,8 +1217,8 @@ public class CppLinkActionBuilder {
       return rpathEntries;
     }
 
-    public ImmutableSet<String> getLibopts() {
-      return libopts;
+    public ImmutableList<String> getLibopts() {
+      return libopts.asList();
     }
 
     public ImmutableList<String> getLinkerInputParams() {
@@ -1300,7 +1300,7 @@ public class CppLinkActionBuilder {
       }
 
       buildVariables.addStringSequenceVariable(
-          LINKSTAMP_PATHS_VARIABLE, linkstampPaths.build());
+          LINKSTAMP_PATHS_VARIABLE, linkstampPaths.build().asList());
 
       // pic
       boolean forcePic = cppConfiguration.forcePic();

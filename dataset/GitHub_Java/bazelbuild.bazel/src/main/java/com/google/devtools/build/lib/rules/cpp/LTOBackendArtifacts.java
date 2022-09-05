@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.rules.cpp;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.actions.LTOBackendAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
@@ -134,11 +135,6 @@ public final class LTOBackendArtifacts {
     // The input to the LTO backend step is the bitcode file.
     buildVariablesBuilder.addStringVariable(
         "thinlto_input_bitcode_file", bitcodeFile.getExecPath().toString());
-    Artifact autoFdoProfile = CppHelper.getFdoSupport(ruleContext).buildProfileForLtoBackend(
-        featureConfiguration, buildVariablesBuilder, ruleContext);
-    if (autoFdoProfile != null) {
-      builder.addInput(autoFdoProfile);
-    }
     Variables buildVariables = buildVariablesBuilder.build();
     List<String> execArgs = new ArrayList<>();
     execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));

@@ -342,19 +342,19 @@ public final class CppModel {
   }
 
   /** Get the safe path strings for a list of paths to use in the build variables. */
-  private ImmutableSet<String> getSafePathStrings(Collection<PathFragment> paths) {
+  private ImmutableList<String> getSafePathStrings(Collection<PathFragment> paths) {
     ImmutableSet.Builder<String> result = ImmutableSet.builder();
     for (PathFragment path : paths) {
       result.add(path.getSafePathString());
     }
-    return result.build();
+    return result.build().asList();
   }
 
   /**
    * Select .pcm inputs to pass on the command line depending on whether we are in pic or non-pic
    * mode.
    */
-  private ImmutableSet<String> getHeaderModulePaths(
+  private ImmutableList<String> getHeaderModulePaths(
       CppCompileActionBuilder builder, boolean usePic) {
     ImmutableSet.Builder<String> result = ImmutableSet.builder();
     Iterable<Artifact> artifacts =
@@ -364,7 +364,7 @@ public final class CppModel {
     for (Artifact artifact : artifacts) {
       result.add(artifact.getExecPathString());
     }
-    return result.build();
+    return result.build().asList();
   }
 
   private void setupCompileBuildVariables(
