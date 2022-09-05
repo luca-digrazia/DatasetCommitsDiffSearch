@@ -176,7 +176,7 @@ public final class SkylarkRuleConfiguredTargetBuilder {
     }
 
     RunfilesProvider runfilesProvider = statelessRunfiles != null
-        ? RunfilesProvider.simple(merge(statelessRunfiles, executable, ruleContext))
+        ? RunfilesProvider.simple(merge(statelessRunfiles, executable))
         : RunfilesProvider.withData(
             // The executable doesn't get into the default runfiles if we have runfiles states.
             // This is to keep skylark genrule consistent with the original genrule.
@@ -220,11 +220,10 @@ public final class SkylarkRuleConfiguredTargetBuilder {
         paramName, EvalUtils.getDataTypeName(value, false), value);
   }
 
-  private static Runfiles merge(Runfiles runfiles, Artifact executable, RuleContext ruleContext) {
+  private static Runfiles merge(Runfiles runfiles, Artifact executable) {
     if (executable == null) {
       return runfiles;
     }
-    return new Runfiles.Builder(ruleContext.getWorkspaceName()).addArtifact(executable)
-        .merge(runfiles).build();
+    return new Runfiles.Builder().addArtifact(executable).merge(runfiles).build();
   }
 }
