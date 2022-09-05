@@ -1,16 +1,25 @@
 package org.elasticsearch.plugin.nlpcn;
 
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.common.Base64;
+import org.elasticsearch.common.io.stream.BytesStreamInput;
 import org.elasticsearch.common.text.StringText;
+import org.elasticsearch.common.text.Text;
+import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.rest.BytesRestResponse;
 import org.elasticsearch.rest.RestChannel;
 import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.rest.action.support.RestStatusToXContentListener;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.internal.InternalSearchHit;
+import org.elasticsearch.search.internal.InternalSearchHitField;
 import org.elasticsearch.search.internal.InternalSearchHits;
 import org.nlpcn.es4sql.domain.Field;
 import org.nlpcn.es4sql.query.HashJoinElasticRequestBuilder;
@@ -75,15 +84,27 @@ public class HashJoinElasticExecutor {
         List<Map.Entry<Field, Field>> t1ToT2FieldsComparison = requestBuilder.getT1ToT2FieldsComparison();
         int ids = 1;
         for(SearchHit hit : firstTableHits){
-            String key = getComparisonKey(t1ToT2FieldsComparison, hit,true);
+            String key = "";
+            Map<String, Object> sourceAsMap = hit.sourceAsMap();
+            for(Map.Entry<Field,Field> t1ToT2 : t1ToT2FieldsComparison){
+                //todo: change to our function find if key contains '.'
+                String data = sourceAsMap.get(t1ToT2.getKey().getName()).toString();
+                if(data == null)
+                    key+="|null|";
+                else
+                    key+="|"+data+"|";
+            }
             List<InternalSearchHit> currentSearchHits = comparisonKeyToSearchHits.get(key);
             if(currentSearchHits == null) {
                 currentSearchHits = new ArrayList<>();
                 comparisonKeyToSearchHits.put(key,currentSearchHits);
             }
             //int docid , id
+            //InternalSearchHit(int docId, String id, Text type, Map<String, SearchHitField > fields)
+
             InternalSearchHit searchHit = new InternalSearchHit(ids, hit.id(), new StringText(hit.getType()), hit.getFields());
             searchHit.sourceRef(hit.getSourceRef());
+
 
             onlyReturnedFields(searchHit.sourceAsMap(), requestBuilder.getFirstTableReturnedField());
             ids++;
@@ -96,7 +117,16 @@ public class HashJoinElasticExecutor {
         SearchHits secondTableHits = requestBuilder.getSecondTableRequest().get().getHits();
         for(SearchHit secondTableHit : secondTableHits){
 
-            String key = getComparisonKey(t1ToT2FieldsComparison,secondTableHit,false);
+            String key = "";
+            Map<String, Object> sourceAsMap = secondTableHit.sourceAsMap();
+            for(Map.Entry<Field,Field> t1ToT2 : t1ToT2FieldsComparison){
+                //todo: change to our function find if key contains '.'
+                String data = sourceAsMap.get(t1ToT2.getValue().getName()).toString();
+                if(data == null)
+                    key+="|null|";
+                else
+                    key+="|"+data+"|";
+            }
 
             List<InternalSearchHit> searchHits = comparisonKeyToSearchHits.get(key);
             //TODO decide what to do according to left join. now assume regular join.
@@ -107,9 +137,8 @@ public class HashJoinElasticExecutor {
                     //todo: decide which id to put or type. or maby its ok this way. just need to doc.
                     InternalSearchHit searchHit = new InternalSearchHit(ids, matchingHit.id() + "|" + secondTableHit.getId(), new StringText(matchingHit.getType() + "|" + secondTableHit.getType()), matchingHit.getFields());
                     searchHit.sourceRef(matchingHit.getSourceRef());
-                    searchHit.sourceAsMap().clear();
-                    searchHit.sourceAsMap().putAll(matchingHit.sourceAsMap());
                     mergeSourceAndAddAliases(secondTableHit, searchHit);
+
 
                     finalResult.add(searchHit);
                     ids++;
@@ -122,64 +151,29 @@ public class HashJoinElasticExecutor {
 
     }
 
-    private String getComparisonKey(List<Map.Entry<Field, Field>> t1ToT2FieldsComparison, SearchHit hit, boolean firstTable) {
-        String key = "";
-        Map<String, Object> sourceAsMap = hit.sourceAsMap();
-        for(Map.Entry<Field,Field> t1ToT2 : t1ToT2FieldsComparison){
-            //todo: change to our function find if key contains '.'
-            String name;
-            if(firstTable) name = t1ToT2.getKey().getName();
-            else name = t1ToT2.getValue().getName();
-
-            Object data = deepSearchInMap(sourceAsMap,name);
-            if(data == null)
-                key+="|null|";
-            else
-                key+="|"+data.toString()+"|";
-        }
-        return key;
-    }
-
     private void mergeSourceAndAddAliases(SearchHit secondTableHit, InternalSearchHit searchHit) {
-        Map<String,Object> results = mapWithAliases(searchHit.getSource(), requestBuilder.getFirstTableAlias());
-        results.putAll(mapWithAliases(secondTableHit.getSource(), requestBuilder.getSecondTableAlias()));
-        searchHit.getSource().clear();
-        searchHit.getSource().putAll(results);
+        //todo: aliases place
+        addAlias(searchHit.getSource(), requestBuilder.getFirstTableAlias());
+        addAlias(secondTableHit.getSource(),requestBuilder.getSecondTableAlias());
+        searchHit.getSource().putAll(secondTableHit.getSource());
     }
 
-    private  Map<String,Object> mapWithAliases(Map<String, Object> source, String alias) {
+    private void addAlias(Map<String, Object> source, String alias) {
         Map<String,Object> mapWithAliases = new HashMap<>();
         for(Map.Entry<String,Object> fieldNameToValue : source.entrySet()) {
             mapWithAliases.put(alias + "." + fieldNameToValue.getKey(), fieldNameToValue.getValue());
         }
-        return mapWithAliases;
+        source.clear();
+        source.putAll(mapWithAliases);
     }
 
     private void  onlyReturnedFields(Map<String, Object> fieldsMap, List<Field> required) {
-        HashMap<String,Object> filteredMap = new HashMap<>();
+       for(String key : fieldsMap.keySet()){
+           //todo: alias? recursiveFind ? give map instead to better performance?
+           if(!required.contains(new Field(key,null))){
+                fieldsMap.remove(key);
+           }
+       }
 
-        for(Field field: required){
-            String name = field.getName();
-            filteredMap.put(name, deepSearchInMap(fieldsMap, name));
-        }
-        fieldsMap.clear();
-        fieldsMap.putAll(filteredMap);
-
-    }
-
-    private Object deepSearchInMap(Map<String, Object> fieldsMap, String name) {
-        if(name.contains(".")){
-            String[] path = name.split("\\.");
-            Map<String,Object> currentObject = fieldsMap;
-            for(int i=0;i<path.length-1 ;i++){
-                Object valueFromCurrentMap = currentObject.get(path[i]);
-                if(valueFromCurrentMap == null) return null;
-                if(!Map.class.isAssignableFrom(valueFromCurrentMap.getClass())) return null;
-                currentObject = (Map<String, Object>) valueFromCurrentMap;
-            }
-            return currentObject.get(path[path.length-1]);
-        }
-
-        return fieldsMap.get(name);
     }
 }

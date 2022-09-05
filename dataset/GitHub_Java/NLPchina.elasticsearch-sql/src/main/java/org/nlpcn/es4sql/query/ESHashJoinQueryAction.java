@@ -20,25 +20,33 @@ public class ESHashJoinQueryAction extends QueryAction  {
 
     @Override
     public SqlElasticRequestBuilder explain() throws SqlParseException {
+        //TODO: on map entry change names to t1ToT2 and make sure of this order here (based on aliases)
         HashJoinElasticRequestBuilder hashRequest = new HashJoinElasticRequestBuilder();
 
-        String t1Alias = joinSelect.getFirstTable().getAlias();
-        String t2Alias = joinSelect.getSecondTable().getAlias();
+        Select t1Select = joinSelect.getT1Select();
+        List<Field> t1ConnectedFields = joinSelect.getT1ConnectedFields();
+        addFieldsToSelectIfMissing(t1Select,t1ConnectedFields);
+        DefaultQueryAction t1QueryAction = new DefaultQueryAction(client,t1Select);
+        t1QueryAction.explain();
+        hashRequest.setFirstTableRequest(t1QueryAction.getRequestBuilder());
 
-        fillRequestBuilder(hashRequest.getFirstTable(), joinSelect.getFirstTable());
-        fillRequestBuilder(hashRequest.getSecondTable(), joinSelect.getSecondTable());
+        Select t2Select = joinSelect.getT2Select();
+        List<Field> t2ConnectedFields = joinSelect.getT2ConnectedFields();
+        addFieldsToSelectIfMissing(t2Select,t2ConnectedFields);
+        DefaultQueryAction t2QueryAction = new DefaultQueryAction(client,t2Select);
+        t2QueryAction.explain();
+        hashRequest.setSecondTableRequest(t2QueryAction.getRequestBuilder());
 
-        List<Map.Entry<Field, Field>> comparisonFields = getComparisonFields(t1Alias, t2Alias,joinSelect.getConnectedConditions());
 
-        hashRequest.setT1ToT2FieldsComparison(comparisonFields);
+        hashRequest.setFirstTableReturnedField(joinSelect.getT1SelectedFields());
+        hashRequest.setSecondTableReturnedField(joinSelect.getT2SelectedFields());
 
-        hashRequest.setJoinType(joinSelect.getJoinType());
-        return hashRequest;
-    }
-
-    private List<Map.Entry<Field, Field>> getComparisonFields(String t1Alias, String t2Alias, List<Condition> connectedConditions) throws SqlParseException {
+        String t1Alias = joinSelect.getT1Alias();
+        String t2Alias = joinSelect.getT2Alias();
+        hashRequest.setFirstTableAlias(t1Alias);
+        hashRequest.setSecondTableAlias(t2Alias);
         List<Map.Entry<Field,Field>> comparisonFields = new ArrayList<>();
-        for(Condition condition : connectedConditions){
+        for(Condition condition : joinSelect.getConnectedConditions()){
 
             if(condition.getOpear() != Condition.OPEAR.EQ){
                 throw new SqlParseException(String.format("HashJoin should only be with EQ conditions, got:%s on condition:%s", condition.getOpear().name(), condition.toString()));
@@ -57,17 +65,10 @@ public class ESHashJoinQueryAction extends QueryAction  {
             }
             comparisonFields.add(new AbstractMap.SimpleEntry<Field, Field>(t1Field, t2Field));
         }
-        return comparisonFields;
-    }
+        hashRequest.setT1ToT2FieldsComparison(comparisonFields);
 
-    private void fillRequestBuilder(TableInJoinRequestBuilder requestBuilder,TableOnJoinSelect tableOnJoinSelect) throws SqlParseException {
-        List<Field> connectedFields = tableOnJoinSelect.getConnectedFields();
-        addFieldsToSelectIfMissing(tableOnJoinSelect,connectedFields);
-        DefaultQueryAction queryAction = new DefaultQueryAction(client,tableOnJoinSelect);
-        queryAction.explain();
-        requestBuilder.setRequestBuilder(queryAction.getRequestBuilder());
-        requestBuilder.setReturnedFields(tableOnJoinSelect.getSelectedFields());
-        requestBuilder.setAlias(tableOnJoinSelect.getAlias());
+        hashRequest.setJoinType(joinSelect.getJoinType());
+        return hashRequest;
     }
 
     private String removeAlias(String field, String alias) {
