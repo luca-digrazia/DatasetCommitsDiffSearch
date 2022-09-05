@@ -5,16 +5,13 @@ import com.alibaba.druid.sql.ast.expr.SQLQueryExpr;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.index.IndexNotFoundException;
+import org.elasticsearch.common.joda.time.DateTime;
+import org.elasticsearch.common.joda.time.format.DateTimeFormat;
+import org.elasticsearch.common.joda.time.format.DateTimeFormatter;
+import org.elasticsearch.indices.IndexMissingException;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
-
-import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
-
-
+import org.elasticsearch.search.highlight.HighlightField;
 import org.junit.Assert;
 import org.junit.Test;
 import org.nlpcn.es4sql.domain.Select;
@@ -241,9 +238,6 @@ public class QueryTest {
 		for (SearchHit hit : response4.getHits()) {
 			Assert.assertEquals("m", hit.getSource().get("gender").toString().toLowerCase());
 		}
-
-		SearchHits response5 = query(String.format("SELECT * FROM %s/account WHERE NOT (gender = 'm' OR gender = 'f')", TEST_INDEX));
-		Assert.assertEquals(0, response5.getTotalHits());
 	}
 
 	@Test
@@ -356,18 +350,8 @@ public class QueryTest {
     }
 
     @Test
-    public void termQueryWithStringIdentifier() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+    public void termQueryWithString() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchHits response = query(String.format("SELECT name FROM %s/gotCharacters WHERE name.firstname = term(brandon) LIMIT 1000", TEST_INDEX));
-        SearchHit[] hits = response.getHits();
-        Assert.assertEquals(1, response.getTotalHits());
-        SearchHit hit = hits[0];
-        String firstname =  ((Map<String,Object>) hit.getSource().get("name")).get("firstname").toString();
-        Assert.assertEquals("Brandon",firstname);
-    }
-
-    @Test
-    public void termQueryWithStringLiteral() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT name FROM %s/gotCharacters WHERE name.firstname = term('brandon') LIMIT 1000", TEST_INDEX));
         SearchHit[] hits = response.getHits();
         Assert.assertEquals(1, response.getTotalHits());
         SearchHit hit = hits[0];
@@ -416,11 +400,11 @@ public class QueryTest {
         DateTimeFormatter formatter = DateTimeFormat.forPattern(TS_DATE_FORMAT);
         DateTime dateToCompare = new DateTime(2015, 3, 15, 0, 0, 0);
 
-        SearchHits response = query(String.format("SELECT odbc_time FROM %s/odbc WHERE odbc_time < {ts '2015-03-15 00:00:00.000'}", TEST_INDEX));
+        SearchHits response = query(String.format("SELECT insert_time FROM %s/odbc WHERE insert_time < {ts '2015-03-15 00:00:00.000'}", TEST_INDEX));
         SearchHit[] hits = response.getHits();
         for(SearchHit hit : hits) {
             Map<String, Object> source = hit.getSource();
-			String insertTimeStr = (String) source.get("odbc_time");
+			String insertTimeStr = (String) source.get("insert_time");
 			insertTimeStr = insertTimeStr.replace("{ts '", "").replace("'}", "");
 
             DateTime insertTime = formatter.parseDateTime(insertTimeStr);
@@ -455,25 +439,25 @@ public class QueryTest {
 
 	@Test
 	public void missFilterSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time2 IS missing", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS missing", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// should be 2 according to the data.
 		Assert.assertEquals(response.getTotalHits(), 2);
 		for(SearchHit hit : hits) {
-			assertThat(hit.getSource(), not(hasKey("insert_time2")));
+			assertThat(hit.getSource(), not(hasKey("insert_time")));
 		}
 	}
 
 	@Test
 	public void notMissFilterSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time2 IS NOT missing", TEST_INDEX));
+		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS NOT missing", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
 		// should be 2 according to the data.
 		Assert.assertEquals(response.getTotalHits(), 2);
 		for(SearchHit hit : hits) {
-			assertThat(hit.getSource(), hasKey("insert_time2"));
+			assertThat(hit.getSource(), hasKey("insert_time"));
 		}
 	}
 
@@ -603,23 +587,21 @@ public class QueryTest {
         Assert.assertEquals("square",result.getSource().get("description"));
     }
 
-    //ES5.0: geo_distance_range] queries are no longer supported for geo_point field types. Use geo_distance sort or aggregations
-//    @Test
-//    public void geoDistanceRange() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-//        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_DISTANCE_RANGE(center,'1m','1km',100.5,0.50001)", TEST_INDEX));
-//        org.junit.Assert.assertEquals(1,results.getTotalHits());
-//        SearchHit result = results.getAt(0);
-//        Assert.assertEquals("square",result.getSource().get("description"));
-//    }
+    @Test
+    public void geoDistanceRange() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
+        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_DISTANCE_RANGE(center,'1m','1km',100.5,0.50001)", TEST_INDEX));
+        org.junit.Assert.assertEquals(1,results.getTotalHits());
+        SearchHit result = results.getAt(0);
+        Assert.assertEquals("square",result.getSource().get("description"));
+    }
 
-    //ES5.0: geo_point field no longer supports geohash_cell queries
-//    @Test
-//    public void geoCell() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
-//        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_CELL(center,100.5,0.50001,7)", TEST_INDEX));
-//        org.junit.Assert.assertEquals(1,results.getTotalHits());
-//        SearchHit result = results.getAt(0);
-//        Assert.assertEquals("square",result.getSource().get("description"));
-//    }
+    @Test
+    public void geoCell() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
+        SearchHits results = query(String.format("SELECT * FROM %s/location WHERE GEO_CELL(center,100.5,0.50001,7)", TEST_INDEX));
+        org.junit.Assert.assertEquals(1,results.getTotalHits());
+        SearchHit result = results.getAt(0);
+        Assert.assertEquals("square",result.getSource().get("description"));
+    }
 
     @Test
     public void geoPolygon() throws SQLFeatureNotSupportedException, SqlParseException, InterruptedException {
@@ -720,7 +702,7 @@ public class QueryTest {
         SearchHit[] hits = query(query).getHits();
         Assert.assertEquals(1,hits.length);
         Map<String, Object> hitAsMap = hits[0].sourceAsMap();
-        Assert.assertEquals("snoopy",hitAsMap.get("dog_name"));
+        Assert.assertEquals("snoopy",hitAsMap.get("name"));
         Assert.assertEquals("Hattie",hitAsMap.get("holdersName"));
         Assert.assertEquals(4,hitAsMap.get("age"));
 
@@ -732,7 +714,7 @@ public class QueryTest {
         SearchHit[] hits = query(query).getHits();
         Assert.assertEquals(1,hits.length);
         Map<String, Object> hitAsMap = hits[0].sourceAsMap();
-        Assert.assertEquals("snoopy",hitAsMap.get("dog_name"));
+        Assert.assertEquals("snoopy",hitAsMap.get("name"));
         Assert.assertEquals("Hattie",hitAsMap.get("holdersName"));
         Assert.assertEquals(4,hitAsMap.get("age"));
 
@@ -744,7 +726,7 @@ public class QueryTest {
         SearchHit[] hits = query(query).getHits();
         Assert.assertEquals(1,hits.length);
         Map<String, Object> hitAsMap = hits[0].sourceAsMap();
-        Assert.assertEquals("snoopy",hitAsMap.get("dog_name"));
+        Assert.assertEquals("snoopy",hitAsMap.get("name"));
         Assert.assertEquals("Hattie",hitAsMap.get("holdersName"));
         Assert.assertEquals(4, hitAsMap.get("age"));
 
@@ -756,7 +738,7 @@ public class QueryTest {
         SearchHit[] hits = query(query).getHits();
         Assert.assertEquals(1,hits.length);
         Map<String, Object> hitAsMap = hits[0].sourceAsMap();
-        Assert.assertEquals("rex",hitAsMap.get("dog_name"));
+        Assert.assertEquals("rex",hitAsMap.get("name"));
         Assert.assertEquals("Daenerys",hitAsMap.get("holdersName"));
         Assert.assertEquals(2, hitAsMap.get("age"));
 
@@ -768,7 +750,7 @@ public class QueryTest {
         SearchHit[] hits = query(query).getHits();
         Assert.assertEquals(1,hits.length);
         Map<String, Object> hitAsMap = hits[0].sourceAsMap();
-        Assert.assertEquals("rex",hitAsMap.get("dog_name"));
+        Assert.assertEquals("rex",hitAsMap.get("name"));
         Assert.assertEquals("Daenerys",hitAsMap.get("holdersName"));
         Assert.assertEquals(2, hitAsMap.get("age"));
 
@@ -780,7 +762,7 @@ public class QueryTest {
         SearchHit[] hits = query(query).getHits();
         Assert.assertEquals(1,hits.length);
         Map<String, Object> hitAsMap = hits[0].sourceAsMap();
-        Assert.assertEquals("rex",hitAsMap.get("dog_name"));
+        Assert.assertEquals("rex",hitAsMap.get("name"));
         Assert.assertEquals("Daenerys",hitAsMap.get("holdersName"));
         Assert.assertEquals(2, hitAsMap.get("age"));
 
@@ -798,18 +780,17 @@ public class QueryTest {
         Assert.assertEquals(2, response.getTotalHits());
     }
 
-//    @Test
-//    public void nestedOnInQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-//        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info) in ('a','b')", TEST_INDEX));
-//        Assert.assertEquals(3, response.getTotalHits());
-//    }
+    @Test
+    public void nestedOnInQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+        SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested(message.info) in ('a','b')", TEST_INDEX));
+        Assert.assertEquals(3, response.getTotalHits());
+    }
 
     @Test
     public void complexNestedQueryBothOnSameObject() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested('message',message.info = 'a' and message.author ='i' ) ", TEST_INDEX));
         Assert.assertEquals(1, response.getTotalHits());
     }
-
     @Test
     public void complexNestedQueryNotBothOnSameObject() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchHits response = query(String.format("SELECT * FROM %s/nestedType where nested('message',message.info = 'a' and message.author ='h' ) ", TEST_INDEX));
@@ -823,42 +804,12 @@ public class QueryTest {
     }
 
     @Test
-    public void childrenEqualsTestFieldNormalField() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/parentType where children(childrenType, info)='b'", TEST_INDEX));
-        Assert.assertEquals(1, response.getTotalHits());
-    }
-
-    @Test
-    public void childrenOnInQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-    	SearchHits response = query(String.format("SELECT * FROM %s/parentType where children(childrenType, info) in ('a','b')", TEST_INDEX));
-    	Assert.assertEquals(2, response.getTotalHits());
-    }
-
-    @Test
-    public void complexChildrenQueryBothOnSameObject() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/parentType where children(childrenType, info = 'a' and author ='e' ) ", TEST_INDEX));
-        Assert.assertEquals(1, response.getTotalHits());
-    }
-
-    @Test
-    public void complexChildrenQueryNotBothOnSameObject() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/parentType where children(childrenType, info = 'a' and author ='j' ) ", TEST_INDEX));
-        Assert.assertEquals(0, response.getTotalHits());
-    }
-
-    @Test
-    public void childrenOnInTermsQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-        SearchHits response = query(String.format("SELECT * FROM %s/parentType where children(childrenType, info) = IN_TERMS(a,b)", TEST_INDEX));
-        Assert.assertEquals(2, response.getTotalHits());
-    }
-
-    @Test
     public void multipleIndicesOneNotExistWithHint() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchHits response = query(String.format("SELECT /*! IGNORE_UNAVAILABLE */ * FROM %s,%s ", TEST_INDEX,"badindex"));
         Assert.assertTrue(response.getTotalHits() > 0);
     }
 
-    @Test(expected=IndexNotFoundException.class)
+    @Test(expected=IndexMissingException.class)
     public void multipleIndicesOneNotExistWithoutHint() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchHits response = query(String.format("SELECT  * FROM %s,%s ", TEST_INDEX,"badindex"));
         Assert.assertTrue(response.getTotalHits() > 0);

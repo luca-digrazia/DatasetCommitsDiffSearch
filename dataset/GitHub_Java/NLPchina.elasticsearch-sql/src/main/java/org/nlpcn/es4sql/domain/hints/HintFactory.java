@@ -58,11 +58,8 @@ public class HintFactory {
         if(hintAsString.startsWith("! DOCS_WITH_AGGREGATION")) {
             String[] number = getParamsFromHint(hintAsString,"! DOCS_WITH_AGGREGATION");
             //todo: check if numbers etc..
-            Integer[] params = new Integer[number.length];
-            for (int i = 0; i < params.length; i++) {
-                params[i] = Integer.parseInt(number[i]);
-            }
-            return new Hint(HintType.DOCS_WITH_AGGREGATION, params);
+            int docsWithAggregation = Integer.parseInt(number[0]);
+            return new Hint(HintType.DOCS_WITH_AGGREGATION,new Object[]{docsWithAggregation});
         }
         if(hintAsString.startsWith("! ROUTINGS")) {
             String[] routings = getParamsFromHint(hintAsString,"! ROUTINGS");

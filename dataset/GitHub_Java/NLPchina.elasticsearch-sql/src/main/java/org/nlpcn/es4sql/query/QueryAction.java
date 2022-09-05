@@ -20,7 +20,9 @@ import java.util.Map;
 public abstract class QueryAction {
 
 	protected org.nlpcn.es4sql.domain.Query query;
+
 	protected Client client;
+
 
 	public QueryAction(Client client, Query query) {
 		this.client = client;
@@ -43,6 +45,7 @@ public abstract class QueryAction {
             }
         }
     }
+
 
     protected void updateRequestWithHighlight(Select select, SearchRequestBuilder request) {
 
@@ -137,4 +140,5 @@ public abstract class QueryAction {
 	 * @throws SqlParseException
 	 */
 	public abstract SqlElasticRequestBuilder explain() throws SqlParseException;
+
 }
