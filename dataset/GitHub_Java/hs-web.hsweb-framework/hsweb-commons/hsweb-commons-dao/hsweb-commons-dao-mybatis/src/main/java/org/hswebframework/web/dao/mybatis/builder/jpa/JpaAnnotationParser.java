@@ -1,7 +1,6 @@
 package org.hswebframework.web.dao.mybatis.builder.jpa;
 
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.beanutils.BeanUtilsBean;
 import org.hswebframework.ezorm.core.ValueConverter;
 import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
@@ -12,7 +11,6 @@ import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.web.dao.mybatis.builder.TypeUtils;
 import org.hswebframework.web.dict.EnumDict;
 import org.springframework.core.annotation.AnnotationUtils;
-import org.springframework.util.StringUtils;
 
 import javax.persistence.Column;
 import javax.persistence.Enumerated;
@@ -36,7 +34,6 @@ import java.util.function.Function;
  * @author zhouhao
  * @since 3.0
  */
-@Slf4j
 public class JpaAnnotationParser {
 
     private static final Map<Class, JDBCType> jdbcTypeMapping = new HashMap<>();
@@ -130,15 +127,6 @@ public class JpaAnnotationParser {
             columnMetaData.setLength(column.length());
             columnMetaData.setPrecision(column.precision());
             columnMetaData.setJavaType(descriptor.getPropertyType());
-            if (!column.updatable()) {
-                columnMetaData.setProperty("read-only", true);
-            }
-            if (!column.nullable()) {
-                columnMetaData.setNotNull(true);
-            }
-            if (StringUtils.hasText(column.columnDefinition())) {
-                columnMetaData.setColumnDefinition(column.columnDefinition());
-            }
 
             Class propertyType = descriptor.getPropertyType();
 
