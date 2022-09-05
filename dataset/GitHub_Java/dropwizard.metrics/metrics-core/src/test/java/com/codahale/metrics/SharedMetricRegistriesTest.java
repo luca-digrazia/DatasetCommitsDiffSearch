@@ -5,12 +5,19 @@ import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.concurrent.atomic.AtomicReference;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 
 public class SharedMetricRegistriesTest {
     @Before
     public void setUp() throws Exception {
-        SharedMetricRegistries.setDefaultRegistryName(new AtomicReference<String>());
+        // Unset the defaultRegistryName field between tests for better isolation.
+        final Field field = SharedMetricRegistries.class.getDeclaredField("defaultRegistryName");
+        field.setAccessible(true);
+        final Field modfiers = Field.class.getDeclaredField("modifiers");
+        modfiers.setAccessible(true);
+        modfiers.setInt(field, field.getModifiers() & ~Modifier.FINAL);
+        field.set(null, null);
         SharedMetricRegistries.clear();
     }
 

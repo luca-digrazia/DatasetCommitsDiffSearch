@@ -7,7 +7,6 @@ import org.junit.rules.TemporaryFolder;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Locale;
 import java.util.SortedMap;
@@ -197,7 +196,7 @@ public class CsvReporterTest {
     }
 
     private String fileContents(String filename) throws IOException {
-        return new String(Files.readAllBytes(new File(dataDirectory, filename).toPath()), StandardCharsets.UTF_8);
+        return new String(Files.readAllBytes(new File(dataDirectory, filename).toPath()));
     }
 
     private <T> SortedMap<String, T> map() {

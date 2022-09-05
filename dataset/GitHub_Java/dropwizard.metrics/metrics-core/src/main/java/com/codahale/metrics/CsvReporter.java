@@ -185,7 +185,6 @@ public class CsvReporter extends ScheduledReporter {
     }
 
     @Override
-    @SuppressWarnings("rawtypes")
     public void report(SortedMap<String, Gauge> gauges,
                        SortedMap<String, Counter> counters,
                        SortedMap<String, Histogram> histograms,
@@ -277,7 +276,7 @@ public class CsvReporter extends ScheduledReporter {
         report(timestamp, name, "count", "%d", counter.getCount());
     }
 
-    private void reportGauge(long timestamp, String name, Gauge<?> gauge) {
+    private void reportGauge(long timestamp, String name, Gauge gauge) {
         report(timestamp, name, "value", "%s", gauge.getValue());
     }
 

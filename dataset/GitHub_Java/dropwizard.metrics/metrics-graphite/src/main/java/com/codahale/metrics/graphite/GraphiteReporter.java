@@ -228,7 +228,6 @@ public class GraphiteReporter extends ScheduledReporter {
     }
 
     @Override
-    @SuppressWarnings("rawtypes")
     public void report(SortedMap<String, Gauge> gauges,
                        SortedMap<String, Counter> counters,
                        SortedMap<String, Histogram> histograms,
@@ -337,7 +336,7 @@ public class GraphiteReporter extends ScheduledReporter {
     }
 
     private void reportCounter(String name, Counter counter, long timestamp) throws IOException {
-        graphite.send(prefix(name, COUNT.getCode()), format(counter.getCount()), timestamp);
+        sendIfEnabled(COUNT, name, counter.getCount(), timestamp);
     }
 
     private void reportGauge(String name, Gauge gauge, long timestamp) throws IOException {

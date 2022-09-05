@@ -8,9 +8,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class Slf4jReporterTest {
     private final Logger logger = mock(Logger.class);
@@ -36,34 +34,34 @@ public class Slf4jReporterTest {
             .build();
 
     @Test
-    public void reportsGaugeValuesAtError() {
+    public void reportsGaugeValuesAtError() throws Exception {
         when(logger.isErrorEnabled(marker)).thenReturn(true);
-        errorReporter.report(map("gauge", () -> "value"),
-                map(),
-                map(),
-                map(),
-                map());
+        errorReporter.report(map("gauge", gauge("value")),
+                this.<Counter>map(),
+                this.<Histogram>map(),
+                this.<Meter>map(),
+                this.<Timer>map());
 
-        verify(logger).error(marker, "type={}, name={}, value={}", "GAUGE", "gauge", "value");
+        verify(logger).error(marker, "type={}, name={}, value={}", new Object[]{"GAUGE", "gauge", "value"});
     }
 
     @Test
-    public void reportsCounterValuesAtError() {
+    public void reportsCounterValuesAtError() throws Exception {
         final Counter counter = mock(Counter.class);
         when(counter.getCount()).thenReturn(100L);
         when(logger.isErrorEnabled(marker)).thenReturn(true);
 
-        errorReporter.report(map(),
+        errorReporter.report(this.<Gauge>map(),
                 map("test.counter", counter),
-                map(),
-                map(),
-                map());
+                this.<Histogram>map(),
+                this.<Meter>map(),
+                this.<Timer>map());
 
-        verify(logger).error(marker, "type={}, name={}, count={}", "COUNTER", "test.counter", 100L);
+        verify(logger).error(marker, "type={}, name={}, count={}", new Object[]{"COUNTER", "test.counter", 100L});
     }
 
     @Test
-    public void reportsHistogramValuesAtError() {
+    public void reportsHistogramValuesAtError() throws Exception {
         final Histogram histogram = mock(Histogram.class);
         when(histogram.getCount()).thenReturn(1L);
 
@@ -82,11 +80,11 @@ public class Slf4jReporterTest {
         when(histogram.getSnapshot()).thenReturn(snapshot);
         when(logger.isErrorEnabled(marker)).thenReturn(true);
 
-        errorReporter.report(map(),
-                map(),
+        errorReporter.report(this.<Gauge>map(),
+                this.<Counter>map(),
                 map("test.histogram", histogram),
-                map(),
-                map());
+                this.<Meter>map(),
+                this.<Timer>map());
 
         verify(logger).error(marker,
                 "type={}, name={}, count={}, min={}, max={}, mean={}, stddev={}, median={}, p75={}, p95={}, p98={}, p99={}, p999={}",
@@ -106,7 +104,7 @@ public class Slf4jReporterTest {
     }
 
     @Test
-    public void reportsMeterValuesAtError() {
+    public void reportsMeterValuesAtError() throws Exception {
         final Meter meter = mock(Meter.class);
         when(meter.getCount()).thenReturn(1L);
         when(meter.getMeanRate()).thenReturn(2.0);
@@ -115,11 +113,11 @@ public class Slf4jReporterTest {
         when(meter.getFifteenMinuteRate()).thenReturn(5.0);
         when(logger.isErrorEnabled(marker)).thenReturn(true);
 
-        errorReporter.report(map(),
-                map(),
-                map(),
+        errorReporter.report(this.<Gauge>map(),
+                this.<Counter>map(),
+                this.<Histogram>map(),
                 map("test.meter", meter),
-                map());
+                this.<Timer>map());
 
         verify(logger).error(marker,
                 "type={}, name={}, count={}, mean_rate={}, m1={}, m5={}, m15={}, rate_unit={}",
@@ -134,7 +132,7 @@ public class Slf4jReporterTest {
     }
 
     @Test
-    public void reportsTimerValuesAtError() {
+    public void reportsTimerValuesAtError() throws Exception {
         final Timer timer = mock(Timer.class);
         when(timer.getCount()).thenReturn(1L);
 
@@ -160,10 +158,10 @@ public class Slf4jReporterTest {
 
         when(logger.isErrorEnabled(marker)).thenReturn(true);
 
-        errorReporter.report(map(),
-                map(),
-                map(),
-                map(),
+        errorReporter.report(this.<Gauge>map(),
+                this.<Counter>map(),
+                this.<Histogram>map(),
+                this.<Meter>map(),
                 map("test.another.timer", timer));
 
         verify(logger).error(marker,
@@ -190,34 +188,34 @@ public class Slf4jReporterTest {
     }
 
     @Test
-    public void reportsGaugeValues() {
+    public void reportsGaugeValues() throws Exception {
         when(logger.isInfoEnabled(marker)).thenReturn(true);
-        infoReporter.report(map("gauge", () -> "value"),
-                map(),
-                map(),
-                map(),
-                map());
+        infoReporter.report(map("gauge", gauge("value")),
+                this.<Counter>map(),
+                this.<Histogram>map(),
+                this.<Meter>map(),
+                this.<Timer>map());
 
-        verify(logger).info(marker, "type={}, name={}, value={}", "GAUGE", "prefix.gauge", "value");
+        verify(logger).info(marker, "type={}, name={}, value={}", new Object[]{"GAUGE", "prefix.gauge", "value"});
     }
 
     @Test
-    public void reportsCounterValues() {
+    public void reportsCounterValues() throws Exception {
         final Counter counter = mock(Counter.class);
         when(counter.getCount()).thenReturn(100L);
         when(logger.isInfoEnabled(marker)).thenReturn(true);
 
-        infoReporter.report(map(),
+        infoReporter.report(this.<Gauge>map(),
                 map("test.counter", counter),
-                map(),
-                map(),
-                map());
+                this.<Histogram>map(),
+                this.<Meter>map(),
+                this.<Timer>map());
 
-        verify(logger).info(marker, "type={}, name={}, count={}", "COUNTER", "prefix.test.counter", 100L);
+        verify(logger).info(marker, "type={}, name={}, count={}", new Object[]{"COUNTER", "prefix.test.counter", 100L});
     }
 
     @Test
-    public void reportsHistogramValues() {
+    public void reportsHistogramValues() throws Exception {
         final Histogram histogram = mock(Histogram.class);
         when(histogram.getCount()).thenReturn(1L);
 
@@ -236,11 +234,11 @@ public class Slf4jReporterTest {
         when(histogram.getSnapshot()).thenReturn(snapshot);
         when(logger.isInfoEnabled(marker)).thenReturn(true);
 
-        infoReporter.report(map(),
-                map(),
+        infoReporter.report(this.<Gauge>map(),
+                this.<Counter>map(),
                 map("test.histogram", histogram),
-                map(),
-                map());
+                this.<Meter>map(),
+                this.<Timer>map());
 
         verify(logger).info(marker,
                 "type={}, name={}, count={}, min={}, max={}, mean={}, stddev={}, median={}, p75={}, p95={}, p98={}, p99={}, p999={}",
@@ -260,7 +258,7 @@ public class Slf4jReporterTest {
     }
 
     @Test
-    public void reportsMeterValues() {
+    public void reportsMeterValues() throws Exception {
         final Meter meter = mock(Meter.class);
         when(meter.getCount()).thenReturn(1L);
         when(meter.getMeanRate()).thenReturn(2.0);
@@ -269,11 +267,11 @@ public class Slf4jReporterTest {
         when(meter.getFifteenMinuteRate()).thenReturn(5.0);
         when(logger.isInfoEnabled(marker)).thenReturn(true);
 
-        infoReporter.report(map(),
-                map(),
-                map(),
+        infoReporter.report(this.<Gauge>map(),
+                this.<Counter>map(),
+                this.<Histogram>map(),
                 map("test.meter", meter),
-                map());
+                this.<Timer>map());
 
         verify(logger).info(marker,
                 "type={}, name={}, count={}, mean_rate={}, m1={}, m5={}, m15={}, rate_unit={}",
@@ -288,7 +286,7 @@ public class Slf4jReporterTest {
     }
 
     @Test
-    public void reportsTimerValues() {
+    public void reportsTimerValues() throws Exception {
         final Timer timer = mock(Timer.class);
         when(timer.getCount()).thenReturn(1L);
 
@@ -313,10 +311,10 @@ public class Slf4jReporterTest {
         when(timer.getSnapshot()).thenReturn(snapshot);
         when(logger.isInfoEnabled(marker)).thenReturn(true);
 
-        infoReporter.report(map(),
-                map(),
-                map(),
-                map(),
+        infoReporter.report(this.<Gauge>map(),
+                this.<Counter>map(),
+                this.<Histogram>map(),
+                this.<Meter>map(),
                 map("test.another.timer", timer));
 
         verify(logger).info(marker,
@@ -343,13 +341,19 @@ public class Slf4jReporterTest {
     }
 
     private <T> SortedMap<String, T> map() {
-        return new TreeMap<>();
+        return new TreeMap<String, T>();
     }
 
     private <T> SortedMap<String, T> map(String name, T metric) {
-        final TreeMap<String, T> map = new TreeMap<>();
+        final TreeMap<String, T> map = new TreeMap<String, T>();
         map.put(name, metric);
         return map;
+    }
+
+    private <T> Gauge gauge(T value) {
+        final Gauge gauge = mock(Gauge.class);
+        when(gauge.getValue()).thenReturn(value);
+        return gauge;
     }
 
 }

@@ -22,30 +22,30 @@ public class ThreadDumpTest {
     private final ThreadInfo runnable = mock(ThreadInfo.class);
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         final StackTraceElement rLine1 = new StackTraceElement("Blah", "blee", "Blah.java", 100);
 
         when(runnable.getThreadName()).thenReturn("runnable");
         when(runnable.getThreadId()).thenReturn(100L);
         when(runnable.getThreadState()).thenReturn(Thread.State.RUNNABLE);
-        when(runnable.getStackTrace()).thenReturn(new StackTraceElement[]{rLine1});
-        when(runnable.getLockedMonitors()).thenReturn(new MonitorInfo[]{});
-        when(runnable.getLockedSynchronizers()).thenReturn(new LockInfo[]{});
+        when(runnable.getStackTrace()).thenReturn(new StackTraceElement[]{ rLine1 });
+        when(runnable.getLockedMonitors()).thenReturn(new MonitorInfo[]{ });
+        when(runnable.getLockedSynchronizers()).thenReturn(new LockInfo[]{ });
 
         when(threadMXBean.dumpAllThreads(true, true)).thenReturn(new ThreadInfo[]{
-            runnable
+                runnable
         });
     }
 
     @Test
-    public void dumpsAllThreads() {
+    public void dumpsAllThreads() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         threadDump.dump(output);
 
         assertThat(output.toString())
-            .isEqualTo(String.format("\"runnable\" id=100 state=RUNNABLE%n" +
-                "    at Blah.blee(Blah.java:100)%n" +
-                "%n" +
-                "%n"));
+                .isEqualTo(String.format("\"runnable\" id=100 state=RUNNABLE%n" +
+                                                 "    at Blah.blee(Blah.java:100)%n" +
+                                                 "%n" +
+                                                 "%n"));
     }
 }

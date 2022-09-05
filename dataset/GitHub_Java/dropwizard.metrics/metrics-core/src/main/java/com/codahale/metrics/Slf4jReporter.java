@@ -210,7 +210,6 @@ public class Slf4jReporter extends ScheduledReporter {
     }
 
     @Override
-    @SuppressWarnings("rawtypes")
     public void report(SortedMap<String, Gauge> gauges,
                        SortedMap<String, Counter> counters,
                        SortedMap<String, Histogram> histograms,
@@ -303,7 +302,7 @@ public class Slf4jReporter extends ScheduledReporter {
         loggerProxy.log(marker, "type={}, name={}, count={}", "COUNTER", prefix(name), counter.getCount());
     }
 
-    private void logGauge(String name, Gauge<?> gauge) {
+    private void logGauge(String name, Gauge gauge) {
         loggerProxy.log(marker, "type={}, name={}, value={}", "GAUGE", prefix(name), gauge.getValue());
     }
 
