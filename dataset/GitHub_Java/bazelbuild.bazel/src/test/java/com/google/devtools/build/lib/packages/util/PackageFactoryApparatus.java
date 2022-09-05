@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2007-2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.GlobCache;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.io.IOException;
 
@@ -51,13 +51,8 @@ public class PackageFactoryApparatus {
       EventHandler eventHandler, PackageFactory.EnvironmentExtension... environmentExtensions) {
     this.eventHandler = eventHandler;
     RuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
-    factory =
-        new PackageFactory(
-            ruleClassProvider,
-            null,
-            AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
-            ImmutableList.copyOf(environmentExtensions),
-            "test");
+    factory = new PackageFactory(ruleClassProvider, null,
+        ImmutableList.copyOf(environmentExtensions));
   }
 
   /**
@@ -76,21 +71,21 @@ public class PackageFactoryApparatus {
   /**
    * Parses and evaluates {@code buildFile} and returns the resulting {@link Package} instance.
    */
-  public Package createPackage(String packageName, Path buildFile) throws Exception {
-    return createPackage(PackageIdentifier.createInMainRepo(packageName), buildFile,
-        eventHandler);
+  public Package createPackage(String packageName, Path buildFile)
+      throws Exception {
+    return createPackage(packageName, buildFile, eventHandler);
   }
 
   /**
-   * Parses and evaluates {@code buildFile} with custom {@code eventHandler} and returns the
-   * resulting {@link Package} instance.
+   * Parses and evaluates {@code buildFile} with custom {@code eventHandler} and returns the resulting
+   * {@link Package} instance.
    */
-  public Package createPackage(PackageIdentifier packageIdentifier, Path buildFile,
-      EventHandler reporter) throws Exception {
+  public Package createPackage(String packageName, Path buildFile, EventHandler reporter)
+      throws Exception {
     try {
       Package pkg =
           factory.createPackageForTesting(
-              packageIdentifier,
+              PackageIdentifier.createInDefaultRepo(packageName),
               buildFile,
               getPackageLocator(),
               reporter);
@@ -113,7 +108,7 @@ public class PackageFactoryApparatus {
    */
   public Pair<Package, GlobCache> evalAndReturnGlobCache(String packageName, Path buildFile,
       BuildFileAST buildFileAST) throws InterruptedException {
-    PackageIdentifier packageId = PackageIdentifier.createInMainRepo(packageName);
+    PackageIdentifier packageId = PackageIdentifier.createInDefaultRepo(packageName);
     GlobCache globCache =
         new GlobCache(
             buildFile.getParentDirectory(),
@@ -137,7 +132,7 @@ public class PackageFactoryApparatus {
             ConstantRuleVisibility.PUBLIC,
             false,
             new MakeEnvironment.Builder(),
-            ImmutableMap.<String, Extension>of(),
+            ImmutableMap.<PathFragment, Extension>of(),
             ImmutableList.<Label>of());
     Package result = resultBuilder.build();
     Event.replayEventsOn(eventHandler, result.getEvents());
