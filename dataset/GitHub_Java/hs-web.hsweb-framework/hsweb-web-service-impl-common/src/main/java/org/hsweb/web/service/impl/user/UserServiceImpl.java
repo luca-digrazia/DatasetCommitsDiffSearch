@@ -6,14 +6,13 @@ import org.hsweb.web.bean.common.UpdateParam;
 import org.hsweb.web.bean.po.module.Module;
 import org.hsweb.web.bean.po.role.UserRole;
 import org.hsweb.web.bean.po.user.User;
-import org.hsweb.web.core.exception.NotFoundException;
 import org.hsweb.web.dao.role.UserRoleMapper;
 import org.hsweb.web.dao.user.UserMapper;
-import org.hsweb.web.core.exception.BusinessException;
+import org.hsweb.web.exception.BusinessException;
 import org.hsweb.web.service.impl.AbstractServiceImpl;
 import org.hsweb.web.service.module.ModuleService;
 import org.hsweb.web.service.user.UserService;
-import org.hsweb.web.core.utils.RandomUtil;
+import org.hsweb.web.utils.RandomUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 import org.webbuilder.utils.common.MD5;
@@ -51,11 +50,11 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     public String insert(User data) throws Exception {
         tryValidPo(data);
         Assert.isNull(selectByUserName(data.getUsername()), "用户已存在!");
+
         data.setU_id(RandomUtil.randomChar(6));
         data.setCreate_date(new Date());
         data.setUpdate_date(new Date());
         data.setPassword(MD5.encode(data.getPassword()));
-        data.setStatus(1);
         userMapper.insert(new InsertParam<>(data));
         String id = data.getU_id();
         //添加角色关联
@@ -81,7 +80,7 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
             data.setPassword(MD5.encode(data.getPassword()));
             userMapper.updatePassword(data);
         }
-        int i = userMapper.update(new UpdateParam<>(data).excludes("status","password","create_date"));
+        int i = userMapper.update(new UpdateParam<>(data));
         if (data.getUserRoles().size() != 0) {
             //删除所有
             userRoleMapper.deleteByUserId(data.getU_id());
@@ -111,26 +110,5 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
         List<UserRole> userRoles = userRoleMapper.select(new QueryParam().where("role_id", "guest"));
         user.setUserRoles(userRoles);
         user.initRoleInfo();
-    }
-
-    @Override
-    public void enableUser(String id) throws Exception {
-        User user = selectByPk(id);
-        if (user == null) throw new NotFoundException("用户不存在!");
-        user.setStatus(1);
-        getMapper().update(new UpdateParam<>(user).includes("status").where("u_id", id));
-    }
-
-    @Override
-    public void disableUser(String id) throws Exception {
-        User user = selectByPk(id);
-        if (user == null) throw new NotFoundException("用户不存在!");
-        user.setStatus(-1);
-        getMapper().update(new UpdateParam<>(user).includes("status").where("u_id", id));
-    }
-
-    @Override
-    public int delete(String s) throws Exception {
-        throw new BusinessException("服务不支持", 500);
     }
 }

@@ -7,14 +7,10 @@ import org.hsweb.web.dao.GenericMapper;
 import org.hsweb.web.service.GenericService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.validation.ConstraintViolation;
 import javax.validation.ValidationException;
-import javax.validation.Validator;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Created by 浩 on 2016-01-22 0022.
@@ -22,9 +18,6 @@ import java.util.Set;
 @Transactional(rollbackFor = Throwable.class)
 public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, PK> {
     protected Logger logger = LoggerFactory.getLogger(this.getClass());
-
-    @Autowired
-    protected Validator validator;
 
     protected abstract GenericMapper<Po, PK> getMapper();
 
@@ -43,7 +36,6 @@ public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, 
 
     @Override
     public PK insert(Po data) throws Exception {
-        tryValidPo(data);
         getMapper().insert(new InsertParam<>(data));
         if (data instanceof GenericPo) {
             return (PK) ((GenericPo) data).getU_id();
@@ -94,12 +86,11 @@ public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, 
     }
 
     protected void tryValidPo(Po data) {
-        Set<ConstraintViolation<Object>> set = validator.validate(data);
-        ValidResults results = new ValidResults();
-        if (set.size() != 0) {
-            for (ConstraintViolation<Object> violation : set) {
-                results.addResult(violation.getPropertyPath().toString(), violation.getMessage());
-            }
+        ValidResults results;
+        if (data instanceof GenericPo) {
+            results = ((GenericPo) data).valid();
+        } else {
+            results = GenericPo.valid(data);
         }
         if (!results.isSuccess())
             throw new ValidationException(results.toString());

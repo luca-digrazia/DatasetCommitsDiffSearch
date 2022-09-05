@@ -4,13 +4,8 @@ import org.hsweb.web.bean.common.PagerResult;
 import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.po.form.Form;
 import org.hsweb.web.service.form.DynamicFormService;
-import org.hsweb.web.service.form.FormService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.webbuilder.sql.DataBase;
-import org.webbuilder.sql.TableMetaData;
 
-import javax.annotation.Resource;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
@@ -22,30 +17,16 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 @Service("dynamicFormService")
 public class DynamicFormServiceImpl implements DynamicFormService {
-    protected ReadWriteLock lock = new ReentrantReadWriteLock();
-
-    @Autowired(required = false)
-    protected FormParser formParser = new CommonFormParser();
-
-    @Autowired
-    protected DataBase dataBase;
-
-    @Resource
-    protected FormService formService;
+    private ReadWriteLock lock = new ReentrantReadWriteLock();
 
     @Override
     public void deploy(Form form) throws Exception {
         Lock writeLock = lock.writeLock();
         try {
             writeLock.lock();
-            TableMetaData metaData = formParser.parse(form);
-            List<Form> oldList = formService.select(new QueryParam().where("name", form.getName()).where("version", form.getVersion() - 1));
-            Form old = null;
-            if (oldList.size() > 0) old = oldList.get(0);
-            if (old != null)
-                dataBase.updateTable(metaData);
-            else
-                dataBase.createTable(metaData);
+            System.out.println("初始化");
+            Thread.sleep(3000);
+            System.out.println("初始化完成");
         } finally {
             writeLock.unlock();
         }
@@ -56,6 +37,9 @@ public class DynamicFormServiceImpl implements DynamicFormService {
         Lock writeLock = lock.writeLock();
         try {
             writeLock.lock();
+            System.out.println("初始化");
+            Thread.sleep(3000);
+            System.out.println("初始化完成");
         } finally {
             writeLock.unlock();
         }

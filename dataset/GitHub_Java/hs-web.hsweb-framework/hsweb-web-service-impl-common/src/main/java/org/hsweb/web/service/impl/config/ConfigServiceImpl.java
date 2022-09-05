@@ -1,8 +1,6 @@
 package org.hsweb.web.service.impl.config;
 
-import org.hsweb.web.bean.common.UpdateParam;
 import org.hsweb.web.bean.po.config.Config;
-import org.hsweb.web.core.authorize.ExpressionScopeBean;
 import org.hsweb.web.dao.config.ConfigMapper;
 import org.hsweb.web.service.config.ConfigService;
 import org.hsweb.web.service.impl.AbstractServiceImpl;
@@ -13,9 +11,6 @@ import org.springframework.util.Assert;
 import org.webbuilder.utils.common.StringUtils;
 
 import javax.annotation.Resource;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -23,7 +18,7 @@ import java.util.Properties;
  * Created by generator
  */
 @Service("configService")
-public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> implements ConfigService,ExpressionScopeBean {
+public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> implements ConfigService {
 
     public static final String CACHE_KEY = "config";
 
@@ -39,13 +34,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
     @Override
     @CacheEvict(value = CACHE_KEY, allEntries = true)
     public int update(Config data) throws Exception {
-        return configMapper.update(new UpdateParam<>(data).excludes("createDate").where("id",data.getId()));
-    }
-
-    @Override
-    @CacheEvict(value = CACHE_KEY, allEntries = true)
-    public int delete(String s) throws Exception {
-        return super.delete(s);
+        return super.update(data);
     }
 
     /**
@@ -56,7 +45,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      * @throws Exception 异常信息
      */
     @Override
-    @Cacheable(value = CACHE_KEY, key = "'info.content.'+#name")
+    @Cacheable(value = CACHE_KEY, key = "'info.content_'+#name")
     public String getContent(String name) throws Exception {
         Config config = getMapper().selectByPk(name);
         if (config == null) return null;
@@ -72,9 +61,9 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
      */
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name")
-    public Map<Object, Object> get(String name) throws Exception {
+    public Properties get(String name) throws Exception {
         Config config = getMapper().selectByPk(name);
-        if (config == null) return new HashMap<>();
+        if (config == null) return new Properties();
         return config.toMap();
     }
 
@@ -89,9 +78,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
     @Override
     @Cacheable(value = CACHE_KEY, key = "'info.'+#name+'.key.'+#key")
     public String get(String name, String key) throws Exception {
-        Object val = get(name).get(key);
-        if (val == null) return null;
-        return String.valueOf(val);
+        return get(name).getProperty(key);
     }
 
     /**
@@ -107,7 +94,7 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
     public String get(String name, String key, String defaultValue) {
         String val;
         try {
-            val = this.get(name, key);
+            val = this.get(name).getProperty(key);
             if (val == null) {
                 logger.error("获取配置:{}.{}失败,defaultValue:{}", name, key, defaultValue);
                 return defaultValue;
@@ -178,9 +165,8 @@ public class ConfigServiceImpl extends AbstractServiceImpl<Config, String> imple
 
     @Override
     public String insert(Config data) throws Exception {
-        Config old = this.selectByPk(data.getId());
+        Config old = this.selectByPk(data.getU_id());
         Assert.isNull(old, "配置已存在，请勿重复添加!");
-        data.setCreateDate(new Date());
         return super.insert(data);
     }
 }

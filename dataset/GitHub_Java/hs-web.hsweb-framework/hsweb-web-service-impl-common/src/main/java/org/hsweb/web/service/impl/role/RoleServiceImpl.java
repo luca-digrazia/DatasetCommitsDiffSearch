@@ -8,7 +8,7 @@ import org.hsweb.web.dao.role.RoleModuleMapper;
 import org.hsweb.web.service.impl.AbstractServiceImpl;
 import org.hsweb.web.service.module.ModuleService;
 import org.hsweb.web.service.role.RoleService;
-import org.hsweb.web.core.utils.RandomUtil;
+import org.hsweb.web.utils.RandomUtil;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
@@ -37,14 +37,14 @@ public class RoleServiceImpl extends AbstractServiceImpl<Role, String> implement
     }
 
     @Override
-    public String insert(Role data) {
+    public String insert(Role data) throws Exception {
         String id = super.insert(data);
         List<RoleModule> roleModule = data.getModules();
         if (roleModule != null && roleModule.size() > 0) {
             //保存角色模块关联
             for (RoleModule module : roleModule) {
-                module.setId(RandomUtil.randomChar(6));
-                module.setRoleId(data.getId());
+                module.setU_id(RandomUtil.randomChar(6));
+                module.setRole_id(data.getU_id());
                 roleModuleMapper.insert(new InsertParam<>(module));
             }
         }
@@ -52,16 +52,16 @@ public class RoleServiceImpl extends AbstractServiceImpl<Role, String> implement
     }
 
     @Override
-    public int update(Role data){
+    public int update(Role data) throws Exception {
         int l = super.update(data);
         List<RoleModule> roleModule = data.getModules();
         if (roleModule != null && roleModule.size() > 0) {
             //先删除所有roleModule
-            roleModuleMapper.deleteByRoleId(data.getId());
+            roleModuleMapper.deleteByRoleId(data.getU_id());
             //保存角色模块关联
             for (RoleModule module : roleModule) {
-                module.setId(RandomUtil.randomChar(6));
-                module.setRoleId(data.getId());
+                module.setU_id(RandomUtil.randomChar(6));
+                module.setRole_id(data.getU_id());
                 roleModuleMapper.insert(new InsertParam<>(module));
             }
         }
