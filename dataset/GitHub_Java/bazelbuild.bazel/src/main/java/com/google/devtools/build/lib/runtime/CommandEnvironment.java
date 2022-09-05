@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,11 +18,9 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
-import com.google.devtools.build.lib.analysis.SkyframePackageRootResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
@@ -61,7 +59,6 @@ public final class CommandEnvironment {
   private final EventBus eventBus;
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
   private final Map<String, String> clientEnv = new HashMap<>();
-  private final BuildView view;
 
   private String outputFileSystem;
 
@@ -90,8 +87,6 @@ public final class CommandEnvironment {
     this.reporter = reporter;
     this.eventBus = eventBus;
     this.blazeModuleEnvironment = new BlazeModuleEnvironment();
-    this.view = new BuildView(runtime.getDirectories(), runtime.getRuleClassProvider(),
-        runtime.getSkyframeExecutor(), runtime.getCoverageReportActionFactory());
   }
 
   public BlazeRuntime getRuntime() {
@@ -141,11 +136,7 @@ public final class CommandEnvironment {
   }
 
   public BuildView getView() {
-    return view;
-  }
-
-  public PackageRootResolver getPackageRootResolver() {
-    return new SkyframePackageRootResolver(getSkyframeExecutor(), reporter);
+    return runtime.getView();
   }
 
   /**
@@ -185,7 +176,7 @@ public final class CommandEnvironment {
     if (!loadingSuccessful) {
       throw new InvalidConfigurationException("Configuration creation failed");
     }
-    return getSkyframeExecutor().createConfigurations(reporter, runtime.getConfigurationFactory(),
+    return getSkyframeExecutor().createConfigurations(runtime.getConfigurationFactory(),
         buildOptions, runtime.getDirectories(), ImmutableSet.<String>of(), keepGoing);
   }
 

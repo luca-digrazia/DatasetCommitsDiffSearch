@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -485,7 +485,7 @@ public class LoadingPhaseRunner {
       targetsToAnalyze = targetsToLoad;
     } else if (keepGoing) {
       // Keep going: filter out the error-free targets and only continue with those.
-      targetsToAnalyze = filterErrorFreeTargets(eventHandler, eventBus, targetsToLoad,
+      targetsToAnalyze = filterErrorFreeTargets(eventBus, targetsToLoad,
           labelsToLoadUnconditionally);
       reportAboutPartiallySuccesfulLoading(targetsToLoad, targetsToAnalyze, eventHandler);
     } else {
@@ -537,20 +537,21 @@ public class LoadingPhaseRunner {
     }
   }
 
-  private Set<Target> getTargetsForLabels(
-      LoadedPackageProvider loadedPackageProvider, Collection<Label> labels) {
+  private Collection<Target> getTargetsForLabels(Collection<Label> labels) {
     Set<Target> result = new HashSet<>();
+
     for (Label label : labels) {
       try {
-        result.add(loadedPackageProvider.getLoadedTarget(label));
+        result.add(packageManager.getLoadedTarget(label));
       } catch (NoSuchThingException e) {
         throw new IllegalStateException(e);  // The target should have been loaded
       }
     }
+
     return result;
   }
 
-  private ImmutableSet<Target> filterErrorFreeTargets(EventHandler eventHandler,
+  private ImmutableSet<Target> filterErrorFreeTargets(
       EventBus eventBus, Collection<Target> targetsToLoad,
       ListMultimap<String, Label> labelsToLoadUnconditionally) throws LoadingFailedException {
     // Error out if any of the labels needed for the configuration could not be loaded.
@@ -571,10 +572,8 @@ public class LoadingPhaseRunner {
       eventBus.post(new LoadingFailureEvent(entry.getKey(), entry.getValue()));
     }
 
-    LoadedPackageProvider.Bridge bridge =
-        new LoadedPackageProvider.Bridge(packageManager, eventHandler);
     return ImmutableSet.copyOf(Sets.difference(ImmutableSet.copyOf(targetsToLoad),
-        getTargetsForLabels(bridge, rootCauses.keySet())));
+        ImmutableSet.copyOf(getTargetsForLabels(rootCauses.keySet()))));
   }
 
   /**
