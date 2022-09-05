@@ -9,10 +9,9 @@ import javax.servlet.*;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  * codes being returned.
  */
 public abstract class WebappMetricsFilter implements Filter {
-    private final ConcurrentMap<Integer, MeterMetric> metersByStatusCode;
+    private final Map<Integer, MeterMetric> metersByStatusCode;
     private final MeterMetric otherMeterMetric;
     private final CounterMetric activeRequests;
     private final TimerMetric requestTimer;
@@ -34,7 +33,7 @@ public abstract class WebappMetricsFilter implements Filter {
      */
     public WebappMetricsFilter(Map<Integer, String> meterNamesByStatusCode,
                                String otherMetricName) {
-        this.metersByStatusCode = new ConcurrentHashMap<Integer, MeterMetric>(meterNamesByStatusCode.size());
+        this.metersByStatusCode = new HashMap<Integer, MeterMetric>(meterNamesByStatusCode.size());
         for (Entry<Integer, String> entry : meterNamesByStatusCode.entrySet()) {
             metersByStatusCode.put(entry.getKey(),
                                    Metrics.newMeter(WebappMetricsFilter.class,
@@ -89,6 +88,7 @@ public abstract class WebappMetricsFilter implements Filter {
     }
 
     private static class StatusExposingServletResponse extends HttpServletResponseWrapper {
+
         private int httpStatus;
 
         public StatusExposingServletResponse(HttpServletResponse response) {

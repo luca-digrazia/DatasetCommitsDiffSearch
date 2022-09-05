@@ -5,7 +5,8 @@ import java.util.Map;
 
 /**
  * Implementation of the {@link WebappMetricsFilter} which provides a default set of response codes
- * to capture information about. <p>Use it in your web.xml like this:</p>
+ * to capture information about.
+ * <p>Use it in your web.xml like this:</p>
  * <pre>{@code
  * <filter>
  *     <filter-name>webappMetricsFilter</filter-name>
