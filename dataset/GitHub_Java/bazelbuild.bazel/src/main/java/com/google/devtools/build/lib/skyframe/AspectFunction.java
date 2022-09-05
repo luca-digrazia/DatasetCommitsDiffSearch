@@ -25,7 +25,7 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspectClass;
+import com.google.devtools.build.lib.skyframe.ASTFileLookupValue.ASTLookupInputException;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.DependencyEvaluationException;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.BuildViewProvider;
@@ -70,10 +71,10 @@ public final class AspectFunction implements SkyFunction {
    */
   @Nullable
   public static SkylarkAspect loadSkylarkAspect(
-      Environment env, Label extensionLabel, String skylarkValueName)
-      throws ConversionException {
-    
-    SkyKey importFileKey = SkylarkImportLookupValue.key(extensionLabel);
+      Environment env, PackageIdentifier extensionFile, String skylarkValueName)
+      throws ASTLookupInputException, ConversionException {
+    SkyKey importFileKey;
+    importFileKey = SkylarkImportLookupValue.key(extensionFile);
     SkylarkImportLookupValue skylarkImportLookupValue =
         (SkylarkImportLookupValue) env.getValue(importFileKey);
     if (skylarkImportLookupValue == null) {
@@ -83,7 +84,7 @@ public final class AspectFunction implements SkyFunction {
     Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension().get(skylarkValueName);
     if (!(skylarkValue instanceof SkylarkAspect)) {
       throw new ConversionException(
-          skylarkValueName + " from " + extensionLabel.toString() + " is not an aspect");
+          skylarkValueName + " from " + extensionFile.toString() + " is not an aspect");
     }
     return (SkylarkAspect) skylarkValue;
   }
@@ -105,8 +106,8 @@ public final class AspectFunction implements SkyFunction {
       try {
         skylarkAspect =
             loadSkylarkAspect(
-                env, skylarkAspectClass.getExtensionLabel(), skylarkAspectClass.getExportedName());
-      } catch (ConversionException e) {
+                env, skylarkAspectClass.getExtensionFile(), skylarkAspectClass.getExportedName());
+      } catch (ASTLookupInputException | ConversionException e) {
         throw new AspectFunctionException(skyKey, e);
       }
       if (skylarkAspect == null) {
