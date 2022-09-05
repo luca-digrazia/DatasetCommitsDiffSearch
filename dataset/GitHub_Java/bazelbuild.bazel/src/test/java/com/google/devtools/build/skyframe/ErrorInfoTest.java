@@ -20,10 +20,12 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
-import java.io.IOException;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
 
 /** Tests for the non-trivial creation logic of {@link ErrorInfo}. */
 @RunWith(JUnit4.class)
@@ -47,7 +49,7 @@ public class ErrorInfoTest {
 
   private void runTestFromException(boolean isDirectlyTransient, boolean isTransitivelyTransient) {
     Exception exception = new IOException("ehhhhh");
-    SkyKey causeOfException = LegacySkyKey.create(SkyFunctionName.create("CAUSE"), 1234);
+    SkyKey causeOfException = new SkyKey(SkyFunctionName.create("CAUSE"), 1234);
     DummySkyFunctionException dummyException =
         new DummySkyFunctionException(exception, isDirectlyTransient, /*isCatastrophic=*/ false);
 
@@ -59,9 +61,7 @@ public class ErrorInfoTest {
     assertThat(errorInfo.getException()).isSameAs(exception);
     assertThat(errorInfo.getRootCauseOfException()).isSameAs(causeOfException);
     assertThat(errorInfo.getCycleInfo()).isEmpty();
-    assertThat(errorInfo.isDirectlyTransient()).isEqualTo(isDirectlyTransient);
-    assertThat(errorInfo.isTransitivelyTransient()).isEqualTo(
-        isDirectlyTransient || isTransitivelyTransient);
+    assertThat(errorInfo.isTransient()).isEqualTo(isDirectlyTransient || isTransitivelyTransient);
     assertThat(errorInfo.isCatastrophic()).isFalse();
   }
 
@@ -87,30 +87,28 @@ public class ErrorInfoTest {
 
   @Test
   public void testFromCycle() {
-    CycleInfo cycle =
-        new CycleInfo(
-            ImmutableList.of(LegacySkyKey.create(SkyFunctionName.create("PATH"), 1234)),
-            ImmutableList.of(LegacySkyKey.create(SkyFunctionName.create("CYCLE"), 4321)));
+    CycleInfo cycle = new CycleInfo(
+        ImmutableList.of(new SkyKey(SkyFunctionName.create("PATH"), 1234)),
+        ImmutableList.of(new SkyKey(SkyFunctionName.create("CYCLE"), 4321)));
 
     ErrorInfo errorInfo = ErrorInfo.fromCycle(cycle);
 
     assertThat(errorInfo.getRootCauses()).isEmpty();
     assertThat(errorInfo.getException()).isNull();
     assertThat(errorInfo.getRootCauseOfException()).isNull();
-    assertThat(errorInfo.isTransitivelyTransient()).isFalse();
+    assertThat(errorInfo.isTransient()).isFalse();
     assertThat(errorInfo.isCatastrophic()).isFalse();
   }
 
   @Test
   public void testFromChildErrors() {
-    CycleInfo cycle =
-        new CycleInfo(
-            ImmutableList.of(LegacySkyKey.create(SkyFunctionName.create("PATH"), 1234)),
-            ImmutableList.of(LegacySkyKey.create(SkyFunctionName.create("CYCLE"), 4321)));
+    CycleInfo cycle = new CycleInfo(
+        ImmutableList.of(new SkyKey(SkyFunctionName.create("PATH"), 1234)),
+        ImmutableList.of(new SkyKey(SkyFunctionName.create("CYCLE"), 4321)));
     ErrorInfo cycleErrorInfo = ErrorInfo.fromCycle(cycle);
 
     Exception exception1 = new IOException("ehhhhh");
-    SkyKey causeOfException1 = LegacySkyKey.create(SkyFunctionName.create("CAUSE1"), 1234);
+    SkyKey causeOfException1 = new SkyKey(SkyFunctionName.create("CAUSE1"), 1234);
     DummySkyFunctionException dummyException1 =
         new DummySkyFunctionException(exception1, /*isTransient=*/ true, /*isCatastrophic=*/ false);
     ErrorInfo exceptionErrorInfo1 = ErrorInfo.fromException(
@@ -119,14 +117,14 @@ public class ErrorInfoTest {
 
     // N.B this ErrorInfo will be catastrophic.
     Exception exception2 = new IOException("blahhhhh");
-    SkyKey causeOfException2 = LegacySkyKey.create(SkyFunctionName.create("CAUSE2"), 5678);
+    SkyKey causeOfException2 = new SkyKey(SkyFunctionName.create("CAUSE2"), 5678);
     DummySkyFunctionException dummyException2 =
         new DummySkyFunctionException(exception2, /*isTransient=*/ false, /*isCatastrophic=*/ true);
     ErrorInfo exceptionErrorInfo2 = ErrorInfo.fromException(
         new ReifiedSkyFunctionException(dummyException2, causeOfException2),
         /*isTransitivelyTransient=*/ false);
 
-    SkyKey currentKey = LegacySkyKey.create(SkyFunctionName.create("CURRENT"), 9876);
+    SkyKey currentKey = new SkyKey(SkyFunctionName.create("CURRENT"), 9876);
 
     ErrorInfo errorInfo = ErrorInfo.fromChildErrors(
         currentKey, ImmutableList.of(cycleErrorInfo, exceptionErrorInfo1, exceptionErrorInfo2));
@@ -143,7 +141,7 @@ public class ErrorInfoTest {
         new CycleInfo(
             ImmutableList.of(currentKey, Iterables.getOnlyElement(cycle.getPathToCycle())),
             cycle.getCycle()));
-    assertThat(errorInfo.isTransitivelyTransient()).isTrue();
+    assertThat(errorInfo.isTransient()).isTrue();
     assertThat(errorInfo.isCatastrophic()).isTrue();
   }
 
@@ -155,7 +153,6 @@ public class ErrorInfoTest {
           /*exception=*/ null,
           /*rootCauseOfException=*/ null,
           ImmutableList.<CycleInfo>of(),
-          false,
           false,
           false);
     } catch (IllegalStateException e) {
@@ -174,12 +171,10 @@ public class ErrorInfoTest {
           /*rootCauseOfException=*/ null,
           ImmutableList.<CycleInfo>of(),
           false,
-          false,
           false);
     } catch (IllegalStateException e) {
       // Brittle, but confirms we failed for the right reason.
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .startsWith("exception and rootCauseOfException must both be null or non-null");
     }
   }

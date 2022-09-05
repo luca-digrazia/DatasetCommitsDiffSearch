@@ -16,6 +16,7 @@ package com.google.devtools.build.skyframe;
 import static com.google.devtools.build.skyframe.SkyKeyInterner.SKY_KEY_INTERNER;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -40,7 +41,6 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.EvaluationProgressReceiver.EvaluationState;
 import com.google.devtools.build.skyframe.MemoizingEvaluator.EmittedEventState;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
@@ -997,9 +997,8 @@ public final class ParallelEvaluator implements Evaluator {
       GroupedListHelper<SkyKey> newDirectDeps = env.newlyRequestedDeps;
 
       if (value != null) {
-        Preconditions.checkState(!env.valuesMissing(), "Evaluation of %s returned non-null value "
-            + "but requested dependencies that weren't computed yet (one of %s), ValueEntry: %s",
-            skyKey, newDirectDeps, state);
+        Preconditions.checkState(!env.valuesMissing(),
+            "%s -> %s, ValueEntry: %s", skyKey, newDirectDeps, state);
         env.setValue(value);
         registerNewlyDiscoveredDepsForDoneEntry(skyKey, state,
             graph.getBatch(env.newlyRequestedDeps), env);

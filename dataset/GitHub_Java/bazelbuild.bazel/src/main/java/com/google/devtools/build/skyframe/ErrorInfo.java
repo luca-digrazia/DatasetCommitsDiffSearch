@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
 
 import java.util.Collection;
@@ -42,7 +42,6 @@ public class ErrorInfo {
         Preconditions.checkNotNull(rootCauseException, "Cause null %s", rootCauseException),
         rootCauseSkyKey,
         /*cycles=*/ ImmutableList.<CycleInfo>of(),
-        skyFunctionException.isTransient(),
         isTransitivelyTransient || skyFunctionException.isTransient(),
         skyFunctionException.isCatastrophic());
   }
@@ -54,8 +53,7 @@ public class ErrorInfo {
         /*exception=*/ null,
         /*rootCauseOfException=*/ null,
         ImmutableList.of(cycleInfo),
-        /*isDirectlyTransient=*/ false,
-        /*isTransitivelyTransient=*/ false,
+        /*isTransient=*/ false,
         /*isCatastrophic=*/ false);
   }
 
@@ -68,7 +66,7 @@ public class ErrorInfo {
     ImmutableList.Builder<CycleInfo> cycleBuilder = ImmutableList.builder();
     Exception firstException = null;
     SkyKey firstChildKey = null;
-    boolean isTransitivelyTransient = false;
+    boolean isTransient = false;
     boolean isCatastrophic = false;
     for (ErrorInfo child : childErrors) {
       if (firstException == null) {
@@ -78,7 +76,7 @@ public class ErrorInfo {
       }
       rootCausesBuilder.addTransitive(child.rootCauses);
       cycleBuilder.addAll(CycleInfo.prepareCycles(currentValue, child.cycles));
-      isTransitivelyTransient |= child.isTransitivelyTransient();
+      isTransient |= child.isTransient();
       isCatastrophic |= child.isCatastrophic();
     }
 
@@ -87,8 +85,7 @@ public class ErrorInfo {
         firstException,
         firstChildKey,
         cycleBuilder.build(),
-        /*isDirectlyTransient=*/ false,
-        isTransitivelyTransient,
+        isTransient,
         isCatastrophic);
   }
 
@@ -99,17 +96,11 @@ public class ErrorInfo {
 
   private final ImmutableList<CycleInfo> cycles;
 
-  private final boolean isDirectlyTransient;
-  private final boolean isTransitivelyTransient;
+  private final boolean isTransient;
   private final boolean isCatastrophic;
 
-  public ErrorInfo(
-      NestedSet<SkyKey> rootCauses,
-      @Nullable Exception exception,
-      SkyKey rootCauseOfException,
-      ImmutableList<CycleInfo> cycles,
-      boolean isDirectlyTransient,
-      boolean isTransitivelyTransient,
+  public ErrorInfo(NestedSet<SkyKey> rootCauses, @Nullable Exception exception,
+      SkyKey rootCauseOfException, ImmutableList<CycleInfo> cycles, boolean isTransient,
       boolean isCatostrophic) {
     Preconditions.checkState(exception != null || !Iterables.isEmpty(cycles),
         "At least one of exception and cycles must be non-null/empty, respectively");
@@ -121,8 +112,7 @@ public class ErrorInfo {
     this.exception = exception;
     this.rootCauseOfException = rootCauseOfException;
     this.cycles = cycles;
-    this.isDirectlyTransient = isDirectlyTransient;
-    this.isTransitivelyTransient = isTransitivelyTransient;
+    this.isTransient = isTransient;
     this.isCatastrophic = isCatostrophic;
   }
 
@@ -172,19 +162,11 @@ public class ErrorInfo {
   }
 
   /**
-   * Returns true iff the error is directly transient, i.e. if there was a transient error
-   * encountered during the computation itself.
-   */
-  public boolean isDirectlyTransient() {
-    return isDirectlyTransient;
-  }
-
-  /**
    * Returns true iff the error is transitively transient, i.e. if retrying the same computation
    * could lead to a different result.
    */
-  public boolean isTransitivelyTransient() {
-    return isTransitivelyTransient;
+  public boolean isTransient() {
+    return isTransient;
   }
 
   /**
