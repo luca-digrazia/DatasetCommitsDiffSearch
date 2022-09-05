@@ -35,8 +35,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.util.LazyString;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -347,7 +345,7 @@ public class ProtoCompileActionBuilder {
    */
   public static void registerActions(
       RuleContext ruleContext,
-      List<ToolchainInvocation> toolchainInvocations,
+      ImmutableMap<String, ToolchainInvocation> toolchainInvocations,
       SupportData supportData,
       Iterable<Artifact> outputs,
       String flavorName,
@@ -359,7 +357,7 @@ public class ProtoCompileActionBuilder {
     SpawnAction.Builder result =
         new SpawnAction.Builder().addTransitiveInputs(supportData.getTransitiveImports());
 
-    for (ToolchainInvocation invocation : toolchainInvocations) {
+    for (ToolchainInvocation invocation : toolchainInvocations.values()) {
       ProtoLangToolchainProvider toolchain = invocation.toolchain;
       if (toolchain.pluginExecutable() != null) {
         result.addTool(toolchain.pluginExecutable());
@@ -407,50 +405,15 @@ public class ProtoCompileActionBuilder {
    *       --plugin=protoc-gen-PLUGIN_<key>=<location of plugin>.
    * </ul>
    *
-   * Note {@code toolchainInvocations} is ordered, and affects the order in which plugins are
-   * called. As some plugins rely on output from other plugins, their order matters.
-   *
    * @return a command-line to pass to proto-compiler.
    */
   @VisibleForTesting
   static CustomCommandLine createCommandLineFromToolchains(
-      List<ToolchainInvocation> toolchainInvocations,
+      ImmutableMap<String, ToolchainInvocation> toolchainInvocations,
       SupportData supportData,
       boolean allowServices,
       ImmutableList<String> protocOpts) {
     CustomCommandLine.Builder cmdLine = CustomCommandLine.builder();
-
-    // A set to check if there are multiple invocations with the same name.
-    HashSet<String> invocationNames = new HashSet<>();
-
-    for (ToolchainInvocation invocation : toolchainInvocations) {
-      if (!invocationNames.add(invocation.name)) {
-        throw new IllegalStateException(
-            "Invocation name "
-                + invocation.name
-                + " appears more than once. "
-                + "This could lead to incorrect proto-compiler behavior");
-      }
-
-      ProtoLangToolchainProvider toolchain = invocation.toolchain;
-
-      cmdLine.add(
-          new LazyCommandLineExpansion(
-              toolchain.commandLine(),
-              ImmutableMap.of(
-                  "OUT",
-                  invocation.outReplacement,
-                  "PLUGIN_OUT",
-                  String.format("PLUGIN_%s_out", invocation.name))));
-
-      if (toolchain.pluginExecutable() != null) {
-        cmdLine.add(
-            String.format(
-                "--plugin=protoc-gen-%s=%s",
-                String.format("PLUGIN_%s", invocation.name),
-                toolchain.pluginExecutable().getExecutable().getExecPathString()));
-      }
-    }
 
     cmdLine.add(protocOpts);
 
@@ -465,6 +428,28 @@ public class ProtoCompileActionBuilder {
       cmdLine.add("--disallow_services");
     }
 
+    for (Map.Entry<String, ToolchainInvocation> entry : toolchainInvocations.entrySet()) {
+      String pluginSuffix = entry.getKey();
+      ToolchainInvocation invocation = entry.getValue();
+      ProtoLangToolchainProvider toolchain = invocation.toolchain;
+
+      cmdLine.add(
+          new LazyCommandLineExpansion(
+              toolchain.commandLine(),
+              ImmutableMap.of(
+                  "OUT",
+                  invocation.outReplacement,
+                  "PLUGIN_OUT",
+                  String.format("PLUGIN_%s_out", pluginSuffix))));
+
+      if (toolchain.pluginExecutable() != null) {
+        cmdLine.add(
+            String.format(
+                "--plugin=protoc-gen-%s=%s",
+                String.format("PLUGIN_%s", pluginSuffix),
+                toolchain.pluginExecutable().getExecutable().getExecPathString()));
+      }
+    }
     return cmdLine.build();
   }
 
@@ -473,14 +458,10 @@ public class ProtoCompileActionBuilder {
    * commandLine() (e.g., "bazel-out/foo.srcjar").
    */
   public static class ToolchainInvocation {
-    final String name;
     public final ProtoLangToolchainProvider toolchain;
     final CharSequence outReplacement;
 
-    public ToolchainInvocation(
-        String name, ProtoLangToolchainProvider toolchain, CharSequence outReplacement) {
-      checkState(!name.contains(" "), "Name %s should not contain spaces", name);
-      this.name = name;
+    public ToolchainInvocation(ProtoLangToolchainProvider toolchain, CharSequence outReplacement) {
       this.toolchain = toolchain;
       this.outReplacement = outReplacement;
     }
