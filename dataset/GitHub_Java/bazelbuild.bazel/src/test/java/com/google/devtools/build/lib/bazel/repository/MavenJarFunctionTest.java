@@ -16,22 +16,18 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.Rule;
+
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
-import java.io.IOException;
 import org.apache.maven.settings.Server;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
+import java.io.IOException;
 
 /**
  * Tests for {@link MavenJarFunction}.
@@ -41,9 +37,6 @@ import org.mockito.Mockito;
 public class MavenJarFunctionTest extends BuildViewTestCase {
   private static final MavenServerValue TEST_SERVER = new MavenServerValue(
       "server", "http://example.com", new Server(), new byte[]{});
-  private final EventHandler eventHandler = mock(EventHandler.class);
-  private final ExtendedEventHandler extendedEventHandler =
-      new Reporter(new EventBus(), eventHandler);
 
   @Test
   public void testInvalidSha1() throws Exception {
@@ -56,11 +49,7 @@ public class MavenJarFunctionTest extends BuildViewTestCase {
     MavenDownloader downloader = new MavenDownloader(Mockito.mock(RepositoryCache.class));
     try {
       downloader.download(
-          "foo",
-          WorkspaceAttributeMapper.of(rule),
-          scratch.dir("/whatever"),
-          TEST_SERVER,
-          extendedEventHandler);
+          "foo", WorkspaceAttributeMapper.of(rule), scratch.dir("/whatever"), TEST_SERVER);
       fail("Invalid sha1 should have thrown.");
     } catch (IOException expected) {
       assertThat(expected.getMessage()).contains("Invalid SHA-1 for maven_jar foo");
@@ -79,11 +68,7 @@ public class MavenJarFunctionTest extends BuildViewTestCase {
     MavenDownloader downloader = new MavenDownloader(Mockito.mock(RepositoryCache.class));
     try {
       downloader.download(
-          "foo",
-          WorkspaceAttributeMapper.of(rule),
-          scratch.dir("/whatever"),
-          TEST_SERVER,
-          extendedEventHandler);
+          "foo", WorkspaceAttributeMapper.of(rule), scratch.dir("/whatever"), TEST_SERVER);
       fail("Expected failure to fetch artifact because of nonexistent server and not due to "
           + "the existence of a valid SHA");
     } catch (IOException expected) {
@@ -101,11 +86,7 @@ public class MavenJarFunctionTest extends BuildViewTestCase {
     MavenDownloader downloader = new MavenDownloader(Mockito.mock(RepositoryCache.class));
     try {
       downloader.download(
-          "foo",
-          WorkspaceAttributeMapper.of(rule),
-          scratch.dir("/whatever"),
-          TEST_SERVER,
-          extendedEventHandler);
+          "foo", WorkspaceAttributeMapper.of(rule), scratch.dir("/whatever"), TEST_SERVER);
       fail("Expected failure to fetch artifact because of nonexistent server and not due to "
           + "lack of SHA.");
     } catch (IOException expected) {
@@ -125,11 +106,7 @@ public class MavenJarFunctionTest extends BuildViewTestCase {
     MavenDownloader downloader = new MavenDownloader(cache);
     try {
       downloader.download(
-          "foo",
-          WorkspaceAttributeMapper.of(rule),
-          scratch.dir("/whatever"),
-          TEST_SERVER,
-          extendedEventHandler);
+          "foo", WorkspaceAttributeMapper.of(rule), scratch.dir("/whatever"), TEST_SERVER);
       fail("Expected failure to fetch artifact because of nonexistent server.");
     } catch (IOException expected) {
       assertThat(expected.getMessage()).contains("Failed to fetch Maven dependency:");
