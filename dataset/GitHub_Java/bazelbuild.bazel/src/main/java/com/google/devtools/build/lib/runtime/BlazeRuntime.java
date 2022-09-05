@@ -58,7 +58,6 @@ import com.google.devtools.build.lib.shell.SubprocessBuilder;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.Clock;
-import com.google.devtools.build.lib.util.CustomExitCodePublisher;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.OS;
@@ -120,7 +119,6 @@ public final class BlazeRuntime {
   private final Iterable<BlazeModule> blazeModules;
   private final Map<String, BlazeCommand> commandMap = new LinkedHashMap<>();
   private final Clock clock;
-  private final Runnable abruptShutdownHandler;
 
   private final PackageFactory packageFactory;
   private final ConfigurationFactory configurationFactory;
@@ -156,7 +154,6 @@ public final class BlazeRuntime {
       ConfigurationFactory configurationFactory,
       ImmutableMap<String, InfoItem> infoItems,
       Clock clock,
-      Runnable abruptShutdownHandler,
       OptionsProvider startupOptionsProvider,
       Iterable<BlazeModule> blazeModules,
       SubscriberExceptionHandler eventBusExceptionHandler,
@@ -176,7 +173,6 @@ public final class BlazeRuntime {
     this.configurationFactory = configurationFactory;
     this.infoItems = infoItems;
     this.clock = clock;
-    this.abruptShutdownHandler = abruptShutdownHandler;
     this.startupOptionsProvider = startupOptionsProvider;
     this.queryEnvironmentFactory = queryEnvironmentFactory;
     this.queryFunctions = queryFunctions;
@@ -484,12 +480,6 @@ public final class BlazeRuntime {
     }
   }
 
-  public void prepareForAbruptShutdown() {
-    if (abruptShutdownHandler != null) {
-      abruptShutdownHandler.run();
-    }
-  }
-
   /** Invokes {@link BlazeModule#blazeShutdownOnCrash()} on all registered modules. */
   public void shutdownOnCrash() {
     for (BlazeModule module : blazeModules) {
@@ -707,7 +697,7 @@ public final class BlazeRuntime {
 
     new InterruptSignalHandler() {
       @Override
-      public void run() {
+      protected void onSignal() {
         LOG.info("User interrupt");
         OutErr.SYSTEM_OUT_ERR.printErrLn("Blaze received an interrupt");
         mainThread.interrupt();
@@ -737,7 +727,7 @@ public final class BlazeRuntime {
 
     BlazeRuntime runtime;
     try {
-      runtime = newRuntime(modules, commandLineOptions.getStartupArgs(), null);
+      runtime = newRuntime(modules, commandLineOptions.getStartupArgs());
     } catch (OptionsParsingException e) {
       OutErr.SYSTEM_OUT_ERR.printErr(e.getMessage());
       return ExitCode.COMMAND_LINE_ERROR.getNumericExitCode();
@@ -773,14 +763,13 @@ public final class BlazeRuntime {
       final RPCServer blazeServer = createBlazeRPCServer(modules, Arrays.asList(args));
 
       // Register the signal handler.
-      sigintHandler =
-          new InterruptSignalHandler() {
-            @Override
-            public void run() {
-              LOG.severe("User interrupt");
-              blazeServer.interrupt();
-            }
-          };
+       sigintHandler = new InterruptSignalHandler() {
+        @Override
+        protected void onSignal() {
+          LOG.severe("User interrupt");
+          blazeServer.interrupt();
+        }
+      };
 
       blazeServer.serve();
       return ExitCode.SUCCESS.getNumericExitCode();
@@ -823,15 +812,7 @@ public final class BlazeRuntime {
   private static RPCServer createBlazeRPCServer(
       Iterable<BlazeModule> modules, List<String> args)
       throws IOException, OptionsParsingException, AbruptExitException {
-    final RPCServer[] rpcServer = new RPCServer[1];
-    Runnable prepareForAbruptShutdown = new Runnable() {
-      @Override
-      public void run() {
-        rpcServer[0].prepareForAbruptShutdown();
-      }
-    };
-
-    BlazeRuntime runtime = newRuntime(modules, args, prepareForAbruptShutdown);
+    BlazeRuntime runtime = newRuntime(modules, args);
     BlazeCommandDispatcher dispatcher = new BlazeCommandDispatcher(runtime);
     CommandExecutor commandExecutor = new CommandExecutor(runtime, dispatcher);
 
@@ -842,15 +823,13 @@ public final class BlazeRuntime {
       // gRPC server is not compiled in so that we don't need gRPC for bootstrapping.
       Class<?> factoryClass = Class.forName(
           "com.google.devtools.build.lib.server.GrpcServerImpl$Factory");
-      RPCServer.Factory factory = (RPCServer.Factory) factoryClass.getConstructor().newInstance();
-      rpcServer[0] = factory.create(commandExecutor, runtime.getClock(),
-          startupOptions.commandPort, runtime.getServerDirectory(),
-          startupOptions.maxIdleSeconds);
-      return rpcServer[0];
+    RPCServer.Factory factory = (RPCServer.Factory) factoryClass.getConstructor().newInstance();
+    return factory.create(commandExecutor, runtime.getClock(),
+        startupOptions.commandPort, runtime.getServerDirectory(),
+        startupOptions.maxIdleSeconds);
     } catch (ReflectiveOperationException | IllegalArgumentException e) {
       throw new AbruptExitException("gRPC server not compiled in", ExitCode.BLAZE_INTERNAL_ERROR);
     }
-
   }
 
   private static Function<String, String> sourceFunctionForMap(final Map<String, String> map) {
@@ -909,8 +888,7 @@ public final class BlazeRuntime {
    *         an error string that, if not null, describes a fatal initialization failure that makes
    *         this runtime unsuitable for real commands
    */
-  private static BlazeRuntime newRuntime(Iterable<BlazeModule> blazeModules, List<String> args,
-      Runnable abruptShutdownHandler)
+  private static BlazeRuntime newRuntime(Iterable<BlazeModule> blazeModules, List<String> args)
       throws AbruptExitException, OptionsParsingException {
     OptionsProvider options = parseOptions(blazeModules, args);
     for (BlazeModule module : blazeModules) {
@@ -922,6 +900,9 @@ public final class BlazeRuntime {
 
     if (startupOptions.oomMoreEagerlyThreshold != 100) {
       new RetainedHeapLimiter(startupOptions.oomMoreEagerlyThreshold).install();
+    }
+    if (startupOptions.oomMoreEagerly) {
+      new OomSignalHandler();
     }
     PathFragment workspaceDirectory = startupOptions.workspaceDirectory;
     PathFragment installBase = startupOptions.installBase;
@@ -971,7 +952,6 @@ public final class BlazeRuntime {
         .setServerDirectories(serverDirectories)
         .setStartupOptionsProvider(options)
         .setClock(clock)
-        .setAbruptShutdownHandler(abruptShutdownHandler)
         // TODO(bazel-team): Make BugReportingExceptionHandler the default.
         // See bug "Make exceptions in EventBus subscribers fatal"
         .setEventBusExceptionHandler(
@@ -1003,9 +983,7 @@ public final class BlazeRuntime {
           ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
     }
     runtime.initWorkspace(directories, binTools);
-    if (startupOptions.useCustomExitCodeOnAbruptExit) {
-      CustomExitCodePublisher.setAbruptExitStatusFileDir(serverDirectories.getOutputBase());
-    }
+
     AutoProfiler.setClock(runtime.getClock());
     BugReport.setRuntime(runtime);
     return runtime;
@@ -1079,7 +1057,6 @@ public final class BlazeRuntime {
   public static class Builder {
     private ServerDirectories serverDirectories;
     private Clock clock;
-    private Runnable abruptShutdownHandler;
     private OptionsProvider startupOptionsProvider;
     private final List<BlazeModule> blazeModules = new ArrayList<>();
     private SubscriberExceptionHandler eventBusExceptionHandler = new RemoteExceptionHandler();
@@ -1160,7 +1137,6 @@ public final class BlazeRuntime {
           configurationFactory,
           serverBuilder.getInfoItems(),
           clock,
-          abruptShutdownHandler,
           startupOptionsProvider,
           ImmutableList.copyOf(blazeModules),
           eventBusExceptionHandler,
@@ -1182,11 +1158,6 @@ public final class BlazeRuntime {
 
     public Builder setClock(Clock clock) {
       this.clock = clock;
-      return this;
-    }
-
-    public Builder setAbruptShutdownHandler(Runnable handler) {
-      this.abruptShutdownHandler = handler;
       return this;
     }
 
