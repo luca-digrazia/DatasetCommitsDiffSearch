@@ -13,19 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
-import com.google.devtools.build.lib.rules.SkylarkApiProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -33,23 +29,11 @@ import java.util.Set;
  */
 @Immutable
 public final class SkylarkProviders implements TransitiveInfoProvider {
-  private final ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject>
-      declaredProviders;
   private final ImmutableMap<String, Object> skylarkProviders;
 
-  SkylarkProviders(
-      ImmutableMap<String, Object> skylarkProviders,
-      ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject> declaredProviders) {
-    this.declaredProviders = Preconditions.checkNotNull(declaredProviders);
-    this.skylarkProviders = Preconditions.checkNotNull(skylarkProviders);
-  }
-
-  public void init(ConfiguredTarget target) {
-    for (Object o : skylarkProviders.values()) {
-      if (o instanceof SkylarkApiProvider) {
-        ((SkylarkApiProvider) o).init(target);
-      }
-    }
+  SkylarkProviders(ImmutableMap<String, Object> skylarkProviders) {
+    Preconditions.checkNotNull(skylarkProviders);
+    this.skylarkProviders = skylarkProviders;
   }
 
   /**
@@ -78,35 +62,12 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
     return type.cast(obj);
   }
 
-  public SkylarkClassObject getDeclaredProvider(SkylarkClassObjectConstructor.Key key) {
-    return declaredProviders.get(key);
-  }
-
-
-  private static final Function<SkylarkProviders, Map<String, Object>>
-      SKYLARK_PROVIDERS_MAP_FUNCTION = new Function<SkylarkProviders, Map<String, Object>>() {
-        @Override
-        public Map<String, Object> apply(SkylarkProviders skylarkProviders) {
-          return skylarkProviders.skylarkProviders;
-        }
-      };
-
-  public static final Function<SkylarkProviders,
-                               Map<SkylarkClassObjectConstructor.Key, SkylarkClassObject>>
-      DECLARED_PROVIDERS_MAP_FUNCTION =
-      new Function<SkylarkProviders, Map<SkylarkClassObjectConstructor.Key, SkylarkClassObject>>() {
-        @Override
-        public Map<SkylarkClassObjectConstructor.Key, SkylarkClassObject> apply(
-            SkylarkProviders skylarkProviders) {
-          return skylarkProviders.declaredProviders;
-        }
-      };
-
   /**
    * Merges skylark providers. The set of providers must be disjoint.
    *
    * @param providers providers to merge {@code this} with.
    */
+
   public static SkylarkProviders merge(List<SkylarkProviders> providers) {
     if (providers.size() == 0) {
       return null;
@@ -115,29 +76,18 @@ public final class SkylarkProviders implements TransitiveInfoProvider {
       return providers.get(0);
     }
 
-    ImmutableMap<String, Object> skylarkProviders = mergeMaps(providers,
-        SKYLARK_PROVIDERS_MAP_FUNCTION);
-    ImmutableMap<SkylarkClassObjectConstructor.Key, SkylarkClassObject> declaredProviders =
-        mergeMaps(providers, DECLARED_PROVIDERS_MAP_FUNCTION);
-
-    return new SkylarkProviders(skylarkProviders, declaredProviders);
-  }
-
-  private static <K, V> ImmutableMap<K, V> mergeMaps(List<SkylarkProviders> providers,
-      Function<SkylarkProviders, Map<K, V>> mapGetter) {
-    ImmutableMap.Builder<K, V> resultBuilder = new ImmutableMap.Builder<>();
-    Set<K> seenKeys = new HashSet<>();
+    ImmutableMap.Builder<String, Object> resultBuilder = new ImmutableMap.Builder<>();
+    Set<String> seenKeys = new HashSet<>();
     for (SkylarkProviders provider : providers) {
-      Map<K, V> map = mapGetter.apply(provider);
-      for (K key : map.keySet()) {
+      for (String key : provider.skylarkProviders.keySet()) {
         if (!seenKeys.add(key)) {
           // TODO(dslomov): add better diagnostics.
           throw new IllegalStateException("Skylark provider " + key + " provided twice");
         }
 
-        resultBuilder.put(key, map.get(key));
+        resultBuilder.put(key, provider.getValue(key));
       }
     }
-    return resultBuilder.build();
+    return new SkylarkProviders(resultBuilder.build());
   }
 }

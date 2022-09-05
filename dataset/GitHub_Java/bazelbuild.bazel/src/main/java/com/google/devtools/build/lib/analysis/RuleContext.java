@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
@@ -89,11 +88,6 @@ import javax.annotation.Nullable;
  * A helper class for rule implementations building and initialization. Objects of this
  * class are intended to be passed to the builder for the configured target, which then creates the
  * configured target.
- *
- * <p>These objects should not outlast the analysis phase. Do not pass them to {@link Action}
- * objects or other persistent objects. There are internal tests to ensure that RuleContext objects
- * are not persisted that check the name of this class, so update those tests if you change this
- * class's name.
  */
 public final class RuleContext extends TargetContext
     implements ActionConstructionContext, ActionRegistry, RuleErrorConsumer {
@@ -136,7 +130,7 @@ public final class RuleContext extends TargetContext
     }
   }
 
-  private static final String HOST_CONFIGURATION_PROGRESS_TAG = "for host";
+  static final String HOST_CONFIGURATION_PROGRESS_TAG = "for host";
 
   private final Rule rule;
   private final ListMultimap<String, ConfiguredTarget> targetMap;
@@ -292,7 +286,7 @@ public final class RuleContext extends TargetContext
   @Override
   public ActionOwner getActionOwner() {
     if (actionOwner == null) {
-      actionOwner = createActionOwner(rule, getConfiguration());
+      actionOwner = new RuleActionOwner(rule, getConfiguration());
     }
     return actionOwner;
   }
@@ -367,15 +361,55 @@ public final class RuleContext extends TargetContext
     return getAnalysisEnvironment().getBuildInfo(this, key);
   }
 
-  @VisibleForTesting
-  public static ActionOwner createActionOwner(Rule rule, BuildConfiguration configuration) {
-    return new ActionOwner(
-        rule.getLabel(),
-        rule.getLocation(),
-        configuration.getMnemonic(),
-        rule.getTargetKind(),
-        configuration.checksum(),
-        configuration.isHostConfiguration() ? HOST_CONFIGURATION_PROGRESS_TAG : null);
+  // TODO(bazel-team): This class could be simpler if Rule and BuildConfiguration classes
+  // were immutable. Then we would need to store only references those two.
+  @Immutable
+  private static final class RuleActionOwner implements ActionOwner {
+    private final Label label;
+    private final Location location;
+    private final String mnemonic;
+    private final String targetKind;
+    private final String configurationChecksum;
+    private final boolean hostConfiguration;
+
+    private RuleActionOwner(Rule rule, BuildConfiguration configuration) {
+      this.label = rule.getLabel();
+      this.location = rule.getLocation();
+      this.targetKind = rule.getTargetKind();
+      this.mnemonic = configuration.getMnemonic();
+      this.configurationChecksum = configuration.checksum();
+      this.hostConfiguration = configuration.isHostConfiguration();
+    }
+
+    @Override
+    public Location getLocation() {
+      return location;
+    }
+
+    @Override
+    public Label getLabel() {
+      return label;
+    }
+
+    @Override
+    public String getConfigurationMnemonic() {
+      return mnemonic;
+    }
+
+    @Override
+    public String getConfigurationChecksum() {
+      return configurationChecksum;
+    }
+
+    @Override
+    public String getTargetKind() {
+      return targetKind;
+    }
+
+    @Override
+    public String getAdditionalProgressInfo() {
+      return hostConfiguration ? HOST_CONFIGURATION_PROGRESS_TAG : null;
+    }
   }
 
   @Override
@@ -1675,11 +1709,11 @@ public final class RuleContext extends TargetContext
       }
 
       if (attribute.getAllowedRuleClassesWarningPredicate()
-          != Predicates.<RuleClass>alwaysTrue()) {
+              != Predicates.<RuleClass>alwaysTrue()) {
         allowedWithWarning = attribute.getAllowedRuleClassesWarningPredicate().apply(ruleClass);
         if (allowedWithWarning) {
           reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisiteLabel,
-              "expected " + attribute.getAllowedRuleClassesPredicate(), true);
+                  "expected " + attribute.getAllowedRuleClassesPredicate(), true);
           return;
         }
       }
@@ -1688,13 +1722,13 @@ public final class RuleContext extends TargetContext
         String missingMandatoryProviders = getMissingMandatoryProviders(prerequisite, attribute);
         if (missingMandatoryProviders != null) {
           attributeError(
-              attribute.getName(),
-              "'" + prerequisite.getLabel() + "' does not have mandatory provider "
-                  + missingMandatoryProviders);
+                  attribute.getName(),
+                  "'" + prerequisite.getLabel() + "' does not have mandatory provider "
+                          + missingMandatoryProviders);
         }
       } else if (Boolean.FALSE.equals(allowed)) {
         reportBadPrerequisite(attribute, prerequisiteTarget.getTargetKind(), prerequisiteLabel,
-            "expected " + attribute.getAllowedRuleClassesPredicate(), false);
+                "expected " + attribute.getAllowedRuleClassesPredicate(), false);
       }
     }
 
