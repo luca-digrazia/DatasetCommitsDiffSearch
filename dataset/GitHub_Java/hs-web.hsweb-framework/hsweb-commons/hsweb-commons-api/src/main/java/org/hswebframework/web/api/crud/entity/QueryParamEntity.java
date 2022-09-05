@@ -1,6 +1,12 @@
 package org.hswebframework.web.api.crud.entity;
 
+import io.swagger.v3.oas.annotations.Hidden;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections.CollectionUtils;
 import org.hswebframework.ezorm.core.NestConditional;
 import org.hswebframework.ezorm.core.dsl.Query;
@@ -12,6 +18,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 
 /**
@@ -26,12 +33,59 @@ import java.util.function.Consumer;
  * @see QueryParam
  * @since 3.0
  */
+@Slf4j
 public class QueryParamEntity extends QueryParam {
 
     private static final long serialVersionUID = 8097500947924037523L;
 
     @Getter
-    private String termExpression;
+    @Schema(description = "where条件表达式,与terms参数不能共存.语法: name = 张三 and age > 16")
+    private String where;
+
+    @Getter
+    @Schema(description = "orderBy条件表达式,与sorts参数不能共存.语法: age asc,createTime desc")
+    private String orderBy;
+
+    //总数,设置了此值时,在分页查询的时候将不执行count.
+    @Getter
+    @Setter
+    @Schema(description = "设置了此值后将不重复执行count查询总数")
+    private Integer total;
+
+    @Getter
+    @Setter
+    @Schema(description = "是否进行并行分页")
+    private boolean parallelPager = false;
+
+    @Override
+    @Hidden
+    public boolean isForUpdate() {
+        return super.isForUpdate();
+    }
+
+    @Override
+    @Hidden
+    public int getThinkPageIndex() {
+        return super.getThinkPageIndex();
+    }
+
+    @Override
+    @Hidden
+    public int getPageIndexTmp() {
+        return super.getPageIndexTmp();
+    }
+
+    @Override
+    @Schema(description = "指定要查询的列")
+    public Set<String> getIncludes() {
+        return super.getIncludes();
+    }
+
+    @Override
+    @Schema(description = "指定不查询的列")
+    public Set<String> getExcludes() {
+        return super.getExcludes();
+    }
 
     /**
      * 创建一个空的查询参数实体,该实体无任何参数.
@@ -44,7 +98,7 @@ public class QueryParamEntity extends QueryParam {
 
 
     /**
-     * @see this#of(String, Object)
+     * @see QueryParamEntity#of(String, Object)
      */
     public static QueryParamEntity of(String field, Object value) {
         return of().and(field, TermType.eq, value);
@@ -74,7 +128,7 @@ public class QueryParamEntity extends QueryParam {
      * <p>
      * 执行后条件: (name=? or type=?) and userId=?
      *
-     * @see this#toNestQuery(Consumer)
+     * @see QueryParamEntity#toNestQuery(Consumer)
      * @since 3.0.4
      */
     public <T> Query<T, QueryParamEntity> toNestQuery() {
@@ -101,7 +155,7 @@ public class QueryParamEntity extends QueryParam {
         if (null != before) {
             before.accept(query);
         }
-        if(terms.isEmpty()){
+        if (terms.isEmpty()) {
             return query;
         }
         return query
@@ -110,28 +164,40 @@ public class QueryParamEntity extends QueryParam {
                 .end();
     }
 
+
     /**
-     * 设置条件表达式,可以通过表达式的方式快速构建查询条件. 表达式是类似sql条件的语法,如:
-     * <pre>
-     *     name is 测试 and age gte 10
-     * </pre>
-     * <pre>
-     *     name is 测试 and (age gt 10 or age lte 90 )
-     * </pre>
+     * 表达式方式排序
      *
-     * @param termExpression 表达式
-     * @see 3.0.5
+     * @param orderBy 表达式
+     * @since 4.0.1
      */
-    public void setTermExpression(String termExpression) {
-        this.termExpression = termExpression;
-        setTerms(TermExpressionParser.parse(termExpression));
+    public void setOrderBy(String orderBy) {
+        this.orderBy = orderBy;
+        if (StringUtils.isEmpty(orderBy)) {
+            return;
+        }
+        setSorts(TermExpressionParser.parseOrder(orderBy));
+    }
+
+    /**
+     * 表达式查询条件,没有SQL注入问题,放心使用
+     *
+     * @param where 表达式
+     * @since 4.0.1
+     */
+    public void setWhere(String where) {
+        this.where = where;
+        if (StringUtils.isEmpty(where)) {
+            return;
+        }
+        setTerms(TermExpressionParser.parse(where));
     }
 
     @Override
     public List<Term> getTerms() {
         List<Term> terms = super.getTerms();
-        if (CollectionUtils.isEmpty(terms) && StringUtils.hasText(termExpression)) {
-            setTerms(terms = TermExpressionParser.parse(termExpression));
+        if (CollectionUtils.isEmpty(terms) && StringUtils.hasText(where)) {
+            setTerms(terms = TermExpressionParser.parse(where));
         }
         return terms;
     }
@@ -141,4 +207,13 @@ public class QueryParamEntity extends QueryParam {
         return this;
     }
 
+    public QueryParamEntity doNotSort(){
+        this.setSorts(new ArrayList<>());
+        return this;
+    }
+
+    @Override
+    public QueryParamEntity clone() {
+        return (QueryParamEntity) super.clone();
+    }
 }
