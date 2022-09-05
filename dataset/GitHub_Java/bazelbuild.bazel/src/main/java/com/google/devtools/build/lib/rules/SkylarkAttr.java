@@ -55,7 +55,7 @@ import java.util.Map;
   onlyLoadingPhase = true,
   doc =
       "Module for creating new attributes. "
-          + "They are only for use with the <a href=\"#modules._top_level.rule\">rule</a> function."
+          + "They are only for use with the <code>rule</code> function."
 )
 public final class SkylarkAttr {
 
@@ -75,11 +75,11 @@ public final class SkylarkAttr {
       "configuration of the attribute. " + "For example, use DATA_CFG or HOST_CFG.";
 
   private static final String DEFAULT_ARG = "default";
-  private static final String DEFAULT_DOC = "the default value of the attribute.";
+  private static final String DEFAULT_DOC = "sets the default value of the attribute.";
 
   private static final String EXECUTABLE_ARG = "executable";
   private static final String EXECUTABLE_DOC =
-      "True if the labels have to be executable. This means the label must refer to an "
+      "set to True if the labels have to be executable. This means the label must refer to an "
           + "executable file, or to a rule that outputs an executable file. Access the labels "
           + "with <code>ctx.executable.&lt;attribute_name&gt;</code>.";
 
@@ -87,10 +87,11 @@ public final class SkylarkAttr {
   private static final String FLAGS_DOC = "deprecated, will be removed";
 
   private static final String MANDATORY_ARG = "mandatory";
-  private static final String MANDATORY_DOC = "True if the value must be explicitly specified";
+  private static final String MANDATORY_DOC =
+      "set to True if users have to explicitely specify the value";
 
   private static final String NON_EMPTY_ARG = "non_empty";
-  private static final String NON_EMPTY_DOC = "True if the attribute must not be empty";
+  private static final String NON_EMPTY_DOC = "set to True if the attribute must not be empty";
 
   private static final String PROVIDERS_ARG = "providers";
 
@@ -98,7 +99,7 @@ public final class SkylarkAttr {
 
   private static final String VALUES_ARG = "values";
   private static final String VALUES_DOC =
-      "the list of allowed values for the attribute. An error is raised if any other "
+      "specify the list of allowed values for the attribute. An error is raised if any other "
           + "value is given.";
 
   private static boolean containsNonNoneKey(Map<String, Object> arguments, String key) {
