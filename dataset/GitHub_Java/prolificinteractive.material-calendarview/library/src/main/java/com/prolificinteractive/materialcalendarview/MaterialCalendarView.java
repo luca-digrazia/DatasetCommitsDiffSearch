@@ -31,15 +31,17 @@ import java.util.Locale;
  */
 public class MaterialCalendarView extends LinearLayout {
 
+    private static final DateFormat TITLE_FORMAT = new SimpleDateFormat(
+            "MMMM yyyy",
+            Locale.getDefault()
+    );
+
     private final TextView title;
     private final DirectionButton buttonPast;
     private final DirectionButton buttonFuture;
     private final ViewPager pager;
     private final MonthPagerAdapter adapter;
     private CalendarDay currentMonth;
-    private DateFormat titleFormat = new SimpleDateFormat(
-        "MMMM yyyy", Locale.getDefault()
-    );
 
     private final MonthView.Callbacks monthViewCallbacks = new MonthView.Callbacks() {
         @Override
@@ -178,7 +180,7 @@ public class MaterialCalendarView extends LinearLayout {
     }
 
     private void updateUi(CalendarDay day) {
-        title.setText(titleFormat.format(day.getDate()));
+        title.setText(TITLE_FORMAT.format(day.getDate()));
         buttonPast.setEnabled(canGoBack());
         buttonFuture.setEnabled(canGoForward());
     }
