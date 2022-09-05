@@ -537,23 +537,14 @@ public class CppLinkActionBuilder {
     CppLinkVariablesExtension variablesExtension =
         isLTOIndexing
             ? new CppLinkVariablesExtension(
-                configuration,
-                linkstampMap,
-                needWholeArchive,
-                linkerInputs,
-                runtimeLinkerInputs,
-                null,
-                linkerParamsFile,
-                ltoOutputRootPrefix)
+                linkstampMap, needWholeArchive, linkerInputs, runtimeLinkerInputs, null, null)
             : new CppLinkVariablesExtension(
-                configuration,
                 linkstampMap,
                 needWholeArchive,
                 linkerInputs,
                 runtimeLinkerInputs,
                 output,
-                linkerParamsFile,
-                PathFragment.EMPTY_FRAGMENT);
+                linkerParamsFile);
     variablesExtension.addVariables(buildVariablesBuilder);
     for (VariablesExtension extraVariablesExtension : variablesExtensions) {
       extraVariablesExtension.addVariables(buildVariablesBuilder);
@@ -621,8 +612,26 @@ public class CppLinkActionBuilder {
           .setLinkopts(ImmutableList.copyOf(linkopts))
           .addLinkstampCompileOptions(linkstampOptions);
     } else {
+      // TODO(bazel-team): once the LLVM compiler patches have been finalized, this should
+      // be converted to a crosstool feature configuration instead.
       List<String> opts = new ArrayList<>(linkopts);
-      opts.addAll(featureConfiguration.getCommandLine("lto-indexing", buildVariables));
+      opts.add("-flto=thin");
+      if (linkerParamsFile != null) {
+        opts.add("-Wl,-plugin-opt,thinlto-index-only=" + linkerParamsFile.getExecPathString());
+      } else {
+        opts.add("-Wl,-plugin-opt,thinlto-index-only");
+      }
+      opts.add("-Wl,-plugin-opt,thinlto-emit-imports-files");
+      opts.add(
+          "-Wl,-plugin-opt,thinlto-prefix-replace="
+              + configuration.getBinDirectory(ruleContext.getRule().getRepository())
+                  .getExecPathString()
+              + ";"
+              + configuration
+                  .getBinDirectory(ruleContext.getRule().getRepository())
+                  .getExecPath()
+                  .getRelative(ltoOutputRootPrefix)
+                  .toString());
       linkCommandLineBuilder.setLinkopts(ImmutableList.copyOf(opts));
     }
 
@@ -1174,34 +1183,28 @@ public class CppLinkActionBuilder {
 
   private class CppLinkVariablesExtension implements VariablesExtension {
 
-    private final BuildConfiguration configuration;
     private final ImmutableMap<Artifact, Artifact> linkstampMap;
     private final boolean needWholeArchive;
     private final Iterable<LinkerInput> linkerInputs;
     private final ImmutableList<LinkerInput> runtimeLinkerInputs;
     private final Artifact outputArtifact;
     private final Artifact linkerParamsFile;
-    private final PathFragment ltoOutputRootPrefix;
 
     private final LinkArgCollector linkArgCollector = new LinkArgCollector();
 
     public CppLinkVariablesExtension(
-        BuildConfiguration configuration,
         ImmutableMap<Artifact, Artifact> linkstampMap,
         boolean needWholeArchive,
         Iterable<LinkerInput> linkerInputs,
         ImmutableList<LinkerInput> runtimeLinkerInputs,
         Artifact output,
-        Artifact linkerParamsFile,
-        PathFragment ltoOutputRootPrefix) {
-      this.configuration = configuration;
+        Artifact linkerParamsFile) {
       this.linkstampMap = linkstampMap;
       this.needWholeArchive = needWholeArchive;
       this.linkerInputs = linkerInputs;
       this.runtimeLinkerInputs = runtimeLinkerInputs;
       this.outputArtifact = output;
       this.linkerParamsFile = linkerParamsFile;
-      this.ltoOutputRootPrefix = ltoOutputRootPrefix;
 
       addInputFileLinkOptions(linkArgCollector);
     }
@@ -1269,20 +1272,6 @@ public class CppLinkActionBuilder {
       if (this.outputArtifact != null) {
         buildVariables.addVariable(
             OUTPUT_EXECPATH_VARIABLE, this.outputArtifact.getExecPathString());
-      }
-
-      if (!ltoOutputRootPrefix.equals(PathFragment.EMPTY_FRAGMENT)) {
-        if (linkerParamsFile != null) {
-          buildVariables.addVariable(
-              "thinlto_optional_params_file", "=" + linkerParamsFile.getExecPathString());
-        } else {
-          buildVariables.addVariable("thinlto_optional_params_file", "");
-        }
-        buildVariables.addVariable(
-            "thinlto_prefix_replace",
-            configuration.getBinDirectory().getExecPathString()
-                + ";"
-                + configuration.getBinDirectory().getExecPath().getRelative(ltoOutputRootPrefix));
       }
 
       // Variables arising from the toolchain
@@ -1461,7 +1450,7 @@ public class CppLinkActionBuilder {
               ltoMap);
         }
       }
-      if (linkerParamsFile != null && ltoOutputRootPrefix.equals(PathFragment.EMPTY_FRAGMENT)) {
+      if (linkerParamsFile != null) {
         standardArchiveInputParams.add("-Wl,@" + linkerParamsFile.getExecPathString());
       }
 
