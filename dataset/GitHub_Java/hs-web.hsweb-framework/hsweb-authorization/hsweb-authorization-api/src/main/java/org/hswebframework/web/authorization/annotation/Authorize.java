@@ -63,8 +63,8 @@ public @interface Authorize {
     /**
      * 验证是否为指定user
      *
-     * @return username array
-     * @see User#getUsername()
+     * @return user id array
+     * @see User#getId()
      */
     String[] user() default {};
 

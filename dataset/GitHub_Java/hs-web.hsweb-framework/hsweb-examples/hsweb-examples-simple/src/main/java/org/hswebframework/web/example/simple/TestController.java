@@ -5,6 +5,7 @@ import org.apache.shiro.authz.annotation.RequiresUser;
 import org.hswebframework.web.authorization.Authorization;
 import org.hswebframework.web.authorization.AuthorizationHolder;
 import org.hswebframework.web.authorization.Permission;
+import org.hswebframework.web.authorization.annotation.AuthInfo;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
 import org.hswebframework.web.authorization.annotation.RequiresFieldAccess;
@@ -12,12 +13,12 @@ import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.QueryController;
-import org.hswebframework.web.controller.authorization.UserController;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframework.web.entity.authorization.SimpleUserEntity;
 import org.hswebframework.web.entity.authorization.UserEntity;
 import org.hswebframework.web.service.QueryByEntityService;
 import org.hswebframework.web.service.QueryService;
+import org.hswebframwork.utils.ClassUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,18 +30,17 @@ import java.util.List;
  */
 @RestController
 @Authorize(permission = "test")
-@RequestMapping("/test")
 public class TestController implements QueryController<UserEntity, String, QueryParamEntity> {
 
     @GetMapping("/test1")
     @Authorize(action = "query", message = "${'表达式方式'}")
-    public ResponseMessage testSimple(Authorization authorization) {
+    public ResponseMessage testSimple(@AuthInfo Authorization authorization) {
         return ResponseMessage.ok(authorization);
     }
 
     @GetMapping("/test")
     @RequiresPermissions("test:*")
-    public ResponseMessage testShiro(Authorization authorization) {
+    public ResponseMessage testShiro(@AuthInfo Authorization authorization) {
         return ResponseMessage.ok(authorization);
     }
 
@@ -60,6 +60,7 @@ public class TestController implements QueryController<UserEntity, String, Query
     public ResponseMessage testUpdate(@PathVariable String id, @RequestBody UserEntity entity) {
         return ResponseMessage.ok(entity);
     }
+
 
     @Override
     public TestService getService() {

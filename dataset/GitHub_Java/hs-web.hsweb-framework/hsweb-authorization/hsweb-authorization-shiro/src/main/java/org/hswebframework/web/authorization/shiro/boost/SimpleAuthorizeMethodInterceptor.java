@@ -65,7 +65,6 @@ public class SimpleAuthorizeMethodInterceptor extends AuthorizingAnnotationMetho
             if (!(a instanceof Authorize)) return;
             MethodInterceptorHolder holder = MethodInterceptorHolder.current();
             if (null == holder) {
-                logger.warn("MethodInterceptorHolder is null,maybe config is error!");
                 return;
             }
             AuthorizeConfig authorizeConfig = new AuthorizeConfig(holder.getArgs());
