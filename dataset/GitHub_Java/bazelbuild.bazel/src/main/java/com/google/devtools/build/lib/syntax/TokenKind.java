@@ -67,7 +67,6 @@ public enum TokenKind {
   OUTDENT("outdent"),
   PASS("pass"),
   PERCENT("%"),
-  PIPE("|"),
   PLUS("+"),
   PLUS_EQUALS("+="),
   RAISE("raise"),

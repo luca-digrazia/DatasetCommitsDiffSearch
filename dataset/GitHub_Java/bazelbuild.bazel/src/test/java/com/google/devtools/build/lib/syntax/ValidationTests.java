@@ -107,14 +107,14 @@ public class ValidationTests extends EvaluationTestCase {
 
   @Test
   public void testFunctionDefRecursion() throws Exception {
-    parse(
+    checkError("function 'func' does not exist",
         "def func():",
         "  func()\n");
   }
 
   @Test
   public void testMutualRecursion() throws Exception {
-    parse(
+    checkError("function 'bar' does not exist",
         "def foo(i):",
         "  bar(i)",
         "def bar(i):",
@@ -123,16 +123,10 @@ public class ValidationTests extends EvaluationTestCase {
   }
 
   @Test
-  public void testFunctionDefinedBelow() {
-    parse(
+  public void testFunctionDoesNotExistInFunctionDef() {
+    checkError("function 'foo' does not exist",
         "def bar(): a = foo() + 'a'",
         "def foo(): return 1\n");
-  }
-
-  @Test
-  public void testFunctionDoesNotExist() {
-    checkError("function 'foo' does not exist",
-        "def bar(): a = foo() + 'a'");
   }
 
   @Test
