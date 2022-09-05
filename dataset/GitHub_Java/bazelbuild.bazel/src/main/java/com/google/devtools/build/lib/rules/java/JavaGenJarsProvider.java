@@ -39,7 +39,7 @@ public final class JavaGenJarsProvider implements TransitiveInfoProvider {
   @Nullable
   private final Artifact genSourceJar;
 
-  private final NestedSet<Artifact> processorClasspath;
+  private final ImmutableList<Artifact> processorClasspath;
   private final ImmutableList<String> processorClassNames;
 
   private final NestedSet<Artifact> transitiveGenClassJars;
@@ -49,8 +49,7 @@ public final class JavaGenJarsProvider implements TransitiveInfoProvider {
       boolean usesAnnotationProcessing,
       @Nullable Artifact genClassJar,
       @Nullable Artifact genSourceJar,
-      NestedSet<Artifact> processorClasspath,
-      ImmutableList<String> processorClassNames,
+      ImmutableList<Artifact> processorClasspath, ImmutableList<String> processorClassNames,
       NestedSet<Artifact> transitiveGenClassJars,
       NestedSet<Artifact> transitiveGenSourceJars) {
     this.usesAnnotationProcessing = usesAnnotationProcessing;
@@ -118,9 +117,10 @@ public final class JavaGenJarsProvider implements TransitiveInfoProvider {
   @SkylarkCallable(
     name = "processor_classpath",
     structField = true,
-    doc = "Returns a classpath of annotation processors applied to this rule."
+    doc =
+        "Returns a classpath of annotation processors applied to this rule."
   )
-  public NestedSet<Artifact> getProcessorClasspath() {
+  public ImmutableList<Artifact> getProcessorClasspath() {
     return processorClasspath;
   }
 

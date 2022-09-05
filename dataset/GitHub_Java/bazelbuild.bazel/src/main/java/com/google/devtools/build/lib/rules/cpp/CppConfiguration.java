@@ -1598,8 +1598,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return dynamicMode;
   }
 
-  public boolean getLinkCompileOutputSeparately() {
-    return cppOptions.linkCompileOutputSeparately;
+  public boolean getLinkDynamicBinariesSeparately() {
+    return cppOptions.linkDynamicBinariesSeparately;
   }
 
   /*

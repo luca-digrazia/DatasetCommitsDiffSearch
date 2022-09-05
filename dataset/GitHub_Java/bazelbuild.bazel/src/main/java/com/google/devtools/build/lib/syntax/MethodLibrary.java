@@ -1024,14 +1024,21 @@ public class MethodLibrary {
    */
   private static Object findExtreme(SkylarkList<?> args, Ordering<Object> maxOrdering, Location loc)
       throws EvalException {
-    // Args can either be a list of items to compare, or a singleton list whose element is an
-    // iterable of items to compare. In either case, there must be at least one item to compare.
+    // Args can either be a list of elements or a list whose first element is a non-empty iterable
+    // of elements.
     try {
-      Iterable<?> items = (args.size() == 1) ? EvalUtils.toIterable(args.get(0), loc) : args;
-      return maxOrdering.max(items);
+      return maxOrdering.max(getIterable(args, loc));
     } catch (NoSuchElementException ex) {
-      throw new EvalException(loc, "expected at least one item");
+      throw new EvalException(loc, "expected at least one argument");
     }
+  }
+
+  /**
+   * This method returns the first element of the list, if that particular element is an
+   * Iterable<?>. Otherwise, it will return the entire list.
+   */
+  private static Iterable<?> getIterable(SkylarkList<?> list, Location loc) throws EvalException {
+    return (list.size() == 1) ? EvalUtils.toIterable(list.get(0), loc) : list;
   }
 
   @SkylarkSignature(

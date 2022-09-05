@@ -19,11 +19,13 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.compiler.ByteCodeUtils;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import net.bytebuddy.implementation.bytecode.StackManipulation;
 
 /**
  * Global constants and support for global namespaces of runtime functions.
@@ -91,28 +93,27 @@ public final class Runtime {
       doc = "Marker for unbound values in cases where neither Skylark None nor Java null can do.")
   public static final UnboundMarker UNBOUND = new UnboundMarker();
 
+  /**
+   * Load {@link #NONE} on the stack.
+   * <p>Kept close to the definition to avoid reflection errors when changing it.
+   */
+  public static final StackManipulation GET_NONE = ByteCodeUtils.getField(Runtime.class, "NONE");
+
   @SkylarkSignature(name = "None", returnType = NoneType.class,
       doc = "Literal for the None value.")
   public static final NoneType NONE = new NoneType();
 
   @SkylarkSignature(name = "PACKAGE_NAME", returnType = String.class,
-      doc = "The name of the package being evaluated. "
+      doc = "The name of the package the rule or build extension is called from. "
           + "For example, in the BUILD file <code>some/package/BUILD</code>, its value "
           + "will be <code>some/package</code>. "
-          + "If the BUILD file calls a function defined in a .bzl file, PACKAGE_NAME will "
-          + "match the caller BUILD file package. "
-          + "In .bzl files, do not access PACKAGE_NAME at the file-level (outside of functions), "
-          + "either directly or by calling a function at the file-level that accesses "
-          + "PACKAGE_NAME (PACKAGE_NAME is only defined during BUILD file evaluation)."
-          + "Here is an example of a .bzl file:<br>"
-          + "<pre class=language-python>"
-          + "# a = PACKAGE_NAME  # not allowed outside functions\n"
-          + "def extension():\n"
+          + "This variable is special, because its value comes from outside of the extension "
+          + "module (it comes from the BUILD file), so it can only be accessed in functions "
+          + "(transitively) called from BUILD files. For example:<br>"
+          + "<pre class=language-python>def extension():\n"
           + "  return PACKAGE_NAME</pre>"
-          + "In this case, <code>extension()</code> can be called from a BUILD file (even "
-          + "indirectly), but not in a file-level expression in the .bzl file. "
-          + "When implementing a rule, use <a href=\"ctx.html#label>ctx.label</a> to know where "
-          + "the rule comes from. ")
+          + "In this case calling <code>extension()</code> works from the BUILD file (if the "
+          + "function is loaded), but not as a top level function call in the extension module.")
   public static final String PKG_NAME = "PACKAGE_NAME";
 
   @SkylarkSignature(name = "REPOSITORY_NAME", returnType = String.class,
@@ -120,8 +121,7 @@ public final class Runtime {
           + "For example, in packages that are called into existence by the WORKSPACE stanza "
           + "<code>local_repository(name='local', path=...)</code> it will be set to "
           + "<code>@local</code>. In packages in the main repository, it will be empty. "
-          + "It can only be accessed in functions (transitively) called from BUILD files, i.e. "
-          + "it follows the same restrictions as <a href=\"#PACKAGE_NAME\">PACKAGE_NAME</a>")
+          + "It can only be accessed in functions (transitively) called from BUILD files.")
   public static final String REPOSITORY_NAME = "REPOSITORY_NAME";
 
   /**

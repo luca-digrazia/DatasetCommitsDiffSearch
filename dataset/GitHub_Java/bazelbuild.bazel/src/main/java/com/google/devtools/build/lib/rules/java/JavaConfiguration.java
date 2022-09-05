@@ -127,11 +127,10 @@ public final class JavaConfiguration extends Fragment {
   private final Label javaLauncherLabel;
   private final boolean useIjars;
   private final boolean useHeaderCompilation;
-  private final boolean headerCompilationDirectClasspath;
-  private final boolean headerCompilationDirectClasspathFallbackError;
   private final boolean generateJavaDeps;
   private final boolean strictDepsJavaProtos;
   private final JavaClasspathMode javaClasspath;
+  private final ImmutableList<String> javaWarns;
   private final ImmutableList<String> defaultJvmFlags;
   private final ImmutableList<String> checkedConstraints;
   private final StrictDepsMode strictJavaDeps;
@@ -157,11 +156,9 @@ public final class JavaConfiguration extends Fragment {
     this.javaLauncherLabel = javaOptions.javaLauncher;
     this.useIjars = javaOptions.useIjars;
     this.useHeaderCompilation = javaOptions.headerCompilation;
-    this.headerCompilationDirectClasspath = javaOptions.headerCompilationDirectClasspath;
-    this.headerCompilationDirectClasspathFallbackError =
-        javaOptions.headerCompilationDirectClasspathFallbackError;
     this.generateJavaDeps = generateJavaDeps;
     this.javaClasspath = javaOptions.javaClasspath;
+    this.javaWarns = ImmutableList.copyOf(javaOptions.javaWarns);
     this.defaultJvmFlags = ImmutableList.copyOf(defaultJvmFlags);
     this.checkedConstraints = ImmutableList.copyOf(javaOptions.checkedConstraints);
     this.strictJavaDeps = javaOptions.strictJavaDeps;
@@ -220,19 +217,6 @@ public final class JavaConfiguration extends Fragment {
     return useHeaderCompilation;
   }
 
-  /** Returns true if header compilations should use direct dependencies only. */
-  public boolean headerCompilationDirectClasspath() {
-    return headerCompilationDirectClasspath;
-  }
-
-  /**
-   * Returns true if transitive classpath fallback should be an error when {@link
-   * #headerCompilationDirectClasspath} is enabled.
-   */
-  public boolean headerCompilationDirectClasspathFallbackError() {
-    return headerCompilationDirectClasspathFallbackError;
-  }
-
   /**
    * Returns true iff dependency information is generated after compilation.
    */
@@ -242,6 +226,13 @@ public final class JavaConfiguration extends Fragment {
 
   public JavaClasspathMode getReduceJavaClasspath() {
     return javaClasspath;
+  }
+
+  /**
+   * Returns the extra warnings enabled for Java compilation.
+   */
+  public ImmutableList<String> getJavaWarns() {
+    return javaWarns;
   }
 
   public ImmutableList<String> getDefaultJvmFlags() {

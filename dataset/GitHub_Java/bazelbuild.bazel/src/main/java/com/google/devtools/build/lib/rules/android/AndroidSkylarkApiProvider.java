@@ -21,7 +21,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
-import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -79,16 +80,6 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
   )
   public Artifact getManifest() {
     return getIdeInfoProvider().getManifest();
-  }
-
-  @SkylarkCallable(
-    name = "merged_manifest",
-    structField = true,
-    allowReturnNones = true,
-    doc = "Returns a manifest file for this target after all processing, e.g.: merging, etc."
-  )
-  public Artifact getMergedManifest() {
-    return getIdeInfoProvider().getGeneratedManifest();
   }
 
   @SkylarkCallable(
