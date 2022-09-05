@@ -17,10 +17,10 @@ public class AdminServlet extends HttpServlet {
                                            "        \"http://www.w3.org/TR/html4/loose.dtd\">\n" +
                                            "<html>\n" +
                                            "<head>\n" +
-                                           "  <title>Metrics</title>\n" +
+                                           "  <title>Metrics{8}</title>\n" +
                                            "</head>\n" +
                                            "<body>\n" +
-                                           "  <h1>Operational Menu</h1>\n" +
+                                           "  <h1>Operational Menu{8}</h1>\n" +
                                            "  <ul>\n" +
                                            "    <li><a href=\"{0}{1}?pretty=true\">Metrics</a></li>\n" +
                                            "    <li><a href=\"{2}{3}\">Ping</a></li>\n" +
@@ -41,7 +41,11 @@ public class AdminServlet extends HttpServlet {
     private final PingServlet pingServlet;
     private final ThreadDumpServlet threadDumpServlet;
 
-    private String metricsUri, pingUri, threadsUri, healthcheckUri, contextPath;
+    private String metricsUri;
+    private String pingUri;
+    private String threadsUri;
+    private String healthcheckUri;
+    private String serviceName;
 
     public AdminServlet() {
         this(new HealthCheckServlet(), new MetricsServlet(), new PingServlet(),
@@ -76,26 +80,31 @@ public class AdminServlet extends HttpServlet {
         pingServlet.init(config);
         threadDumpServlet.init(config);
 
-        final ServletContext context = config.getServletContext();
-        this.contextPath = context.getContextPath();
+        //final ServletContext context = config.getServletContext();
         this.metricsUri = getParam(config.getInitParameter("metrics-uri"), this.metricsUri);
         this.pingUri = getParam(config.getInitParameter("ping-uri"), this.pingUri);
         this.threadsUri = getParam(config.getInitParameter("threads-uri"), this.threadsUri);
         this.healthcheckUri = getParam(config.getInitParameter("healthcheck-uri"), this.healthcheckUri);
+        this.serviceName = getParam(config.getInitParameter("service-name"), this.serviceName);
+    }
+    
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
     }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.setHeader("Cache-Control", "must-revalidate,no-cache,no-store");
         final String uri = req.getPathInfo();
-        final String path = this.contextPath + req.getServletPath();
+        final String path = req.getContextPath() + req.getServletPath();
         if (uri == null || uri.equals("/")) {
             resp.setStatus(HttpServletResponse.SC_OK);
             resp.setContentType(CONTENT_TYPE);
             final PrintWriter writer = resp.getWriter();
             try {
                 writer.println(MessageFormat.format(TEMPLATE, path, metricsUri, path, pingUri, path,
-                                                    threadsUri, path, healthcheckUri));
+                                                    threadsUri, path, healthcheckUri,
+                                                    serviceName == null ? "" : " (" + serviceName + ")"));
             } finally {
                 writer.close();
             }
