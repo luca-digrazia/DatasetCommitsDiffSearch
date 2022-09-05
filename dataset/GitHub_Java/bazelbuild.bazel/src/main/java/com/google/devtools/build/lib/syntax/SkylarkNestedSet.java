@@ -13,35 +13,25 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import javax.annotation.Nullable;
 
-/**
- * A generic, type-safe {@link NestedSet} wrapper for Skylark.
- *
- * <p>The content type of a {@code SkylarkNestedSet} is the intersection of the {@link SkylarkType}
- * of each of its elements. It is an error if this intersection is {@link SkylarkType#BOTTOM}. An
- * empty set has a content type of {@link SkylarkType#TOP}.
- *
- * <p>It is also an error if this type has a non-bottom intersection with {@link SkylarkType#DICT}
- * or {@link SkylarkType#LIST}, unless the set is empty.
- * TODO(bazel-team): Decide whether this restriction is still useful.
- */
+/** A generic type safe NestedSet wrapper for Skylark. */
 @SkylarkModule(
     name = "depset",
     category = SkylarkModuleCategory.BUILTIN,
@@ -127,13 +117,13 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
     if (item instanceof SkylarkNestedSet) {
       SkylarkNestedSet nestedSet = (SkylarkNestedSet) item;
       if (!nestedSet.isEmpty()) {
-        contentType = getTypeAfterInsert(contentType, nestedSet.contentType, loc);
+        contentType = checkType(contentType, nestedSet.contentType, loc);
         transitiveItems.add(nestedSet.set);
       }
     } else if (item instanceof SkylarkList) {
       // TODO(bazel-team): we should check ImmutableList here but it screws up genrule at line 43
       for (Object object : (SkylarkList) item) {
-        contentType = getTypeAfterInsert(contentType, SkylarkType.of(object.getClass()), loc);
+        contentType = checkType(contentType, SkylarkType.of(object.getClass()), loc);
         checkImmutable(object, loc);
         items.add(object);
       }
@@ -194,48 +184,24 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
     this(SkylarkType.of(contentType), set);
   }
 
-  private static final SkylarkType DICT_LIST_UNION =
-      SkylarkType.Union.of(SkylarkType.DICT, SkylarkType.LIST);
-
-  /**
-   * Throws EvalException if a type overlaps with DICT or LIST.
-   */
-  private static void checkTypeNotDictOrList(SkylarkType type, Location loc)
+  private static SkylarkType checkType(SkylarkType builderType, SkylarkType itemType, Location loc)
       throws EvalException {
-    if (SkylarkType.intersection(DICT_LIST_UNION, type) != SkylarkType.BOTTOM) {
+    if (SkylarkType.intersection(
+        SkylarkType.Union.of(SkylarkType.DICT, SkylarkType.LIST),
+        itemType) != SkylarkType.BOTTOM) {
       throw new EvalException(
-          loc, String.format("depsets cannot contain items of type '%s'", type));
+          loc, String.format("depsets cannot contain items of type '%s'", itemType));
     }
-  }
-
-  /**
-   * Returns the intersection of two types, and throws EvalException if the intersection is bottom.
-   */
-  private static SkylarkType commonNonemptyType(
-      SkylarkType depsetType, SkylarkType itemType, Location loc) throws EvalException {
-    SkylarkType resultType = SkylarkType.intersection(depsetType, itemType);
-    if (resultType == SkylarkType.BOTTOM) {
+    SkylarkType newType = SkylarkType.intersection(builderType, itemType);
+    if (newType == SkylarkType.BOTTOM) {
       throw new EvalException(
           loc,
           String.format(
-              "cannot add an item of type '%s' to a depset of '%s'", itemType, depsetType));
+              "cannot add an item of type '%s' to a depset of '%s'", itemType, builderType));
     }
-    return resultType;
+    return newType;
   }
 
-  /**
-   * Checks that an item type is allowed in a given set type, and returns the type of a new depset
-   * with that item inserted.
-   */
-  private static SkylarkType getTypeAfterInsert(
-      SkylarkType depsetType, SkylarkType itemType, Location loc) throws EvalException {
-    checkTypeNotDictOrList(itemType, loc);
-    return commonNonemptyType(depsetType, itemType, loc);
-  }
-
-  /**
-   * Throws EvalException if a given value is mutable.
-   */
   private static void checkImmutable(Object o, Location loc) throws EvalException {
     if (!EvalUtils.isImmutable(o)) {
       throw new EvalException(loc, "depsets cannot contain mutable items");
@@ -243,14 +209,9 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
   }
 
   /**
-   * Returns the embedded {@link NestedSet}, while asserting that its elements all have the given
-   * type.
-   *
-   * @param type a {@link Class} representing the expected type of the contents
-   * @return the {@code NestedSet}, with the appropriate generic type
-   * @throws IllegalArgumentException if the type does not accurately describe all elements
+   * Returns the NestedSet embedded in this SkylarkNestedSet if it is of the parameter type.
    */
-  // The precondition ensures generic type safety.
+  // The precondition ensures generic type safety
   @SuppressWarnings("unchecked")
   public <T> NestedSet<T> getSet(Class<T> type) {
     // Empty sets don't need have to have a type since they don't have items
@@ -259,17 +220,14 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
     }
     Preconditions.checkArgument(
         contentType.canBeCastTo(type),
-        "Expected a depset of '%s' but got a depset of '%s'",
-        EvalUtils.getDataTypeNameFromClass(type), contentType);
+        String.format(
+            "Expected a depset of '%s' but got a depset of '%s'",
+            EvalUtils.getDataTypeNameFromClass(type), contentType));
     return (NestedSet<T>) set;
   }
 
-  @SkylarkCallable(
-      name = "to_list",
-      doc = "Returns a frozen list of the elements, without duplicates, in the depset's traversal "
-          + "order.")
-  public MutableList<Object> skylarkToList() {
-    return new MutableList<Object>(set, null);
+  public Set<?> expandedSet() {
+    return set.toSet();
   }
 
   // For some reason this cast is unsafe in Java
@@ -288,6 +246,7 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
     return set.isEmpty();
   }
 
+  @VisibleForTesting
   public SkylarkType getContentType() {
     return contentType;
   }
@@ -319,6 +278,6 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue, S
 
   @Override
   public final boolean containsKey(Object key, Location loc) throws EvalException {
-    return (set.toSet().contains(key));
+    return (this.expandedSet().contains(key));
   }
 }
