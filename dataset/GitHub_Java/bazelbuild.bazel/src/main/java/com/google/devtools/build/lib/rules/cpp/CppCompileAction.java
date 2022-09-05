@@ -225,8 +225,10 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
       UUID actionClassId,
       boolean usePic,
       RuleContext ruleContext) {
+    // getInputs() method is overridden in this class so we pass a dummy empty
+    // list to the AbstractAction constructor in place of a real input collection.
     super(owner,
-          createInputs(mandatoryInputs, context.getCompilationPrerequisites(), optionalSourceFile),
+          Artifact.NO_ARTIFACTS,
           CollectionUtils.asListWithoutNulls(outputFile, dotdFile.artifact(),
               gcnoFile, dwoFile));
     this.configuration = configuration;
@@ -252,6 +254,8 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     // We do not need to include the middleman artifact since it is a generated
     // artifact and will definitely exist prior to this action execution.
     this.mandatoryInputs = mandatoryInputs;
+    setInputs(createInputs(mandatoryInputs, context.getCompilationPrerequisites(),
+        optionalSourceFile));
     verifyIncludePaths(ruleContext);
   }
 
