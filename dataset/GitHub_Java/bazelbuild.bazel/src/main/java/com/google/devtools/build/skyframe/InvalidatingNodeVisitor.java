@@ -15,6 +15,7 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.ImmutableSet;
@@ -27,7 +28,6 @@ import com.google.devtools.build.lib.concurrent.ForkJoinQuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.Pair;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.ThinNodeEntry.MarkedDirtyResult;
 
 import java.util.ArrayList;
@@ -139,17 +139,11 @@ public abstract class InvalidatingNodeVisitor<TGraph extends ThinNodeQueryableGr
     // Make a copy to avoid concurrent modification confusing us as to which nodes were passed by
     // the caller, and which are added by other threads during the run. Since no tasks have been
     // started yet (the queueDirtying calls start them), this is thread-safe.
-    for (final Pair<SkyKey, InvalidationType> visitData :
-        ImmutableList.copyOf(pendingVisitations)) {
+    for (Pair<SkyKey, InvalidationType> visitData : ImmutableList.copyOf(pendingVisitations)) {
       // The caller may have specified non-existent SkyKeys, or there may be stale SkyKeys in
       // pendingVisitations that have already been deleted. In both these cases, the nodes will not
       // exist in the graph, so we must be tolerant of that case.
-      executor.execute(new Runnable() {
-        @Override
-        public void run() {
-          visit(ImmutableList.of(visitData.first), visitData.second, !MUST_EXIST);
-        }
-      });
+      visit(ImmutableList.of(visitData.first), visitData.second, !MUST_EXIST);
     }
     executor.awaitQuiescence(/*interruptWorkers=*/ true);
 
