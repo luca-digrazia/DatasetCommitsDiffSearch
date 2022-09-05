@@ -43,15 +43,8 @@ public class ESHashJoinQueryAction extends QueryAction  {
 
         String t1Alias = joinSelect.getT1Alias();
         String t2Alias = joinSelect.getT2Alias();
-        hashRequest.setFirstTableAlias(t1Alias);
-        hashRequest.setSecondTableAlias(t2Alias);
         List<Map.Entry<Field,Field>> comparisonFields = new ArrayList<>();
         for(Condition condition : joinSelect.getConnectedConditions()){
-
-            if(condition.getOpear() != Condition.OPEAR.EQ){
-                throw new SqlParseException(String.format("HashJoin should only be with EQ conditions, got:%s on condition:%s", condition.getOpear().name(), condition.toString()));
-            }
-
             String firstField = condition.getName();
             String secondField = condition.getValue().toString();
             Field t1Field,t2Field;
@@ -67,7 +60,6 @@ public class ESHashJoinQueryAction extends QueryAction  {
         }
         hashRequest.setT1ToT2FieldsComparison(comparisonFields);
 
-        hashRequest.setJoinType(joinSelect.getJoinType());
         return hashRequest;
     }
 

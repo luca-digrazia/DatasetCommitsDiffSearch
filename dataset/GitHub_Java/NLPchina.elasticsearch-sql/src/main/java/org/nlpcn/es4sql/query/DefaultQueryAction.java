@@ -5,14 +5,14 @@ import java.util.ArrayList;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.BoolFilterBuilder;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.sort.SortOrder;
-import org.nlpcn.es4sql.domain.*;
-import org.nlpcn.es4sql.domain.hints.Hint;
-import org.nlpcn.es4sql.domain.hints.HintType;
+import org.nlpcn.es4sql.domain.Field;
+import org.nlpcn.es4sql.domain.Order;
+import org.nlpcn.es4sql.domain.Select;
+import org.nlpcn.es4sql.domain.Where;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.maker.FilterMaker;
 import org.nlpcn.es4sql.query.maker.QueryMaker;
@@ -20,8 +20,7 @@ import org.nlpcn.es4sql.query.maker.QueryMaker;
 /**
  * Transform SQL query to standard Elasticsearch search query
  */
-public class
-        DefaultQueryAction extends QueryAction {
+public class DefaultQueryAction extends QueryAction {
 
 	private final Select select;
 	private SearchRequestBuilder request;
@@ -38,40 +37,17 @@ public class
 		setIndicesAndTypes();
 
 		setFields(select.getFields());
-
 		setWhere(select.getWhere());
 		setSorts(select.getOrderBys());
 		setLimit(select.getOffset(), select.getRowCount());
 
-        boolean usedScroll = useScrollIfNeeded(select.isOrderdSelect());
-        if(!usedScroll){
-            request.setSearchType(SearchType.DFS_QUERY_THEN_FETCH);
-        }
-        updateWithIndicesOptionsIfNeeded(select,request);
-
+		// set SearchType.
+		request.setSearchType(SearchType.DFS_QUERY_THEN_FETCH);
         SqlElasticSearchRequestBuilder sqlElasticRequestBuilder = new SqlElasticSearchRequestBuilder(request);
 		return sqlElasticRequestBuilder;
 	}
 
-    private boolean useScrollIfNeeded(boolean existsOrderBy) {
-        Hint scrollHint = null;
-        for(Hint hint: select.getHints()){
-            if(hint.getType() == HintType.USE_SCROLL){
-                scrollHint = hint;
-                break;
-            }
-        }
-        if(scrollHint!=null) {
-            int scrollSize = (Integer) scrollHint.getParams()[0];
-            int timeoutInMilli = (Integer) scrollHint.getParams()[1];
-            if(!existsOrderBy) request.setSearchType(SearchType.SCAN);
-            request.setScroll(new TimeValue(timeoutInMilli))
-                    .setSize(scrollSize);
-        }
-        return scrollHint !=null ;
-    }
-
-    /**
+	/**
 	 * Set indices and types to the search request.
 	 */
 	private void setIndicesAndTypes() {
@@ -88,15 +64,12 @@ public class
 	 * Set source filtering on a search request.
 	 * @param fields list of fields to source filter.
 	 */
-	private void setFields(List<Field> fields) throws SqlParseException {
+	private void setFields(List<Field> fields) {
 		if (select.getFields().size() > 0) {
 			ArrayList<String> includeFields = new ArrayList<String>();
 
 			for (Field field : fields) {
-                if(field instanceof MethodField){
-                    handleMethodField((MethodField) field);
-                }
-				else if (field instanceof Field) {
+				if (field instanceof Field) {
 					includeFields.add(field.getName());
 				}
 			}
@@ -105,28 +78,8 @@ public class
 		}
 	}
 
-    private void handleMethodField(MethodField field) throws SqlParseException {
-        MethodField method = (MethodField) field;
-        if(method.getName().toLowerCase().equals("script")){
-            handleScriptField(method);
-        }
-    }
 
-    private void handleScriptField(MethodField method) throws SqlParseException {
-        List<KVValue> params = method.getParams();
-        if(params.size() == 2){
-            request.addScriptField(params.get(0).value.toString(),params.get(1).value.toString());
-        }
-        else if(params.size() == 3){
-            request.addScriptField(params.get(0).value.toString(),params.get(1).value.toString(),params.get(2).value.toString(),null);
-        }
-        else {
-            throw new SqlParseException("scripted_field only allows script(name,script) or script(name,lang,script)");
-        }
-    }
-
-
-    /**
+	/**
 	 * Create filters or queries based on
 	 * the Where clause.
 	 * @param where the 'WHERE' part of the SQL query.

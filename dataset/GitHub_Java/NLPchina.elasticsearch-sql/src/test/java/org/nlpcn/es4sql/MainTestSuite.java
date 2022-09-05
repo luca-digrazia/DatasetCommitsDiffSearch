@@ -21,15 +21,15 @@ import static org.nlpcn.es4sql.TestsConstants.*;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-//		QueryTest.class,
-//		MethodQueryTest.class,
-//		AggregationTest.class,
-//		BugTest.class,
-//		DeleteTest.class,
-//		ExplainTest.class,
-//        WktToGeoJsonConverterTests.class,
-//        SqlParserTests.class,
-        JoinTests.class
+		QueryTest.class,
+		MethodQueryTest.class,
+		AggregationTest.class,
+		BugTest.class,
+		DeleteTest.class,
+		ExplainTest.class,
+        WktToGeoJsonConverterTests.class,
+        SqlParserTests.class,
+        //JoinTests.class
 })
 public class MainTestSuite {
 
@@ -51,7 +51,6 @@ public class MainTestSuite {
 		loadBulk("src/test/resources/online.json");
         loadBulk("src/test/resources/phrases.json");
         loadBulk("src/test/resources/dogs.json");
-        loadBulk("src/test/resources/peoples.json");
 
         prepareOdbcIndex();
         loadBulk("src/test/resources/odbc-date-formats.json");

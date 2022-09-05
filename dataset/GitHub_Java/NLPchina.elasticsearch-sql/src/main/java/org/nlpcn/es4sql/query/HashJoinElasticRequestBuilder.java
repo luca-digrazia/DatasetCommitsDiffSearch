@@ -24,8 +24,6 @@ public class HashJoinElasticRequestBuilder  implements SqlElasticRequestBuilder{
     private SearchRequestBuilder firstTableRequest;
     private SearchRequestBuilder secondTableRequest;
     private MultiSearchRequest multi;
-    private String firstTableAlias;
-    private String secondTableAlias;
     private List<Field> firstTableReturnedField;
     private List<Field> secondTableReturnedField;
     private List<Map.Entry<Field,Field>> t1ToT2FieldsComparison;
@@ -37,6 +35,7 @@ public class HashJoinElasticRequestBuilder  implements SqlElasticRequestBuilder{
 
     @Override
     public ActionRequest request() {
+        //todo: it should recieve client
         if(multi == null)
             buildMulti();
         return multi;
@@ -123,22 +122,6 @@ public class HashJoinElasticRequestBuilder  implements SqlElasticRequestBuilder{
 
     public SQLJoinTableSource.JoinType getJoinType() {
         return joinType;
-    }
-
-    public String getFirstTableAlias() {
-        return firstTableAlias;
-    }
-
-    public void setFirstTableAlias(String firstTableAlias) {
-        this.firstTableAlias = firstTableAlias;
-    }
-
-    public String getSecondTableAlias() {
-        return secondTableAlias;
-    }
-
-    public void setSecondTableAlias(String secondTableAlias) {
-        this.secondTableAlias = secondTableAlias;
     }
 
     public void setJoinType(SQLJoinTableSource.JoinType joinType) {
