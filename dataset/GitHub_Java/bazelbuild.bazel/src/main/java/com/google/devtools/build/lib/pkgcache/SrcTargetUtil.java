@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,16 +17,17 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -58,8 +59,7 @@ public final class SrcTargetUtil {
   public static List<FileTarget> getSrcTargets(EventHandler eventHandler, Rule rule,
                                                TargetProvider provider)
       throws NoSuchTargetException, NoSuchPackageException, InterruptedException  {
-    return getTargets(eventHandler, rule, SOURCE_ATTRIBUTES, Sets.newHashSet(rule.getLabel()),
-        provider);
+    return getTargets(eventHandler, rule, SOURCE_ATTRIBUTES, Sets.newHashSet(rule), provider);
   }
 
   // Attributes referring to "sources".
@@ -89,8 +89,7 @@ public final class SrcTargetUtil {
         .add(HEADER_ATTRIBUTE)
         .add(TEXTUAL_HEADER_ATTRIBUTE)
         .build();
-    return getTargets(eventHandler, rule, srcAndHdrAttributes, Sets.newHashSet(rule.getLabel()),
-        provider);
+    return getTargets(eventHandler, rule, srcAndHdrAttributes, Sets.newHashSet(rule), provider);
   }
 
   @ThreadSafety.ThreadSafe
@@ -98,8 +97,7 @@ public final class SrcTargetUtil {
                                                      TargetProvider provider)
       throws NoSuchTargetException, NoSuchPackageException, InterruptedException  {
     return getTargets(
-        eventHandler, rule, ImmutableSet.of(HEADER_ATTRIBUTE), Sets.newHashSet(rule.getLabel()),
-        provider);
+        eventHandler, rule, ImmutableSet.of(HEADER_ATTRIBUTE), Sets.newHashSet(rule), provider);
   }
 
   @ThreadSafety.ThreadSafe
@@ -107,7 +105,7 @@ public final class SrcTargetUtil {
       EventHandler eventHandler, Rule rule, TargetProvider provider)
       throws NoSuchTargetException, NoSuchPackageException, InterruptedException {
     return getTargets(eventHandler, rule, ImmutableSet.of(TEXTUAL_HEADER_ATTRIBUTE),
-        Sets.newHashSet(rule.getLabel()), provider);
+        Sets.newHashSet(rule), provider);
   }
 
   /**
@@ -116,20 +114,19 @@ public final class SrcTargetUtil {
   private static List<FileTarget> getTargets(EventHandler eventHandler,
       Rule rule,
       ImmutableSet<String> attributes,
-      Set<Label> visitedRuleLabels,
+      Set<Rule> visitedRules,
       TargetProvider targetProvider)
       throws NoSuchTargetException, NoSuchPackageException, InterruptedException {
     List<Label> srcLabels = Lists.newArrayList();
-    RawAttributeMapper attributeMapper = RawAttributeMapper.of(rule);
+    AttributeMap attributeMap = RawAttributeMapper.of(rule);
     for (String attrName : attributes) {
-      if (rule.isAttrDefined(attrName, BuildType.LABEL_LIST)) {
-        // Note that we simply flatten configurable attributes here, which is not the correct
-        // behavior. However, it seems to be a good approximation of what is needed in most use
-        // cases.
-        srcLabels.addAll(attributeMapper.getMergedValues(attrName, BuildType.LABEL_LIST));
-      } else if (rule.isAttrDefined(attrName, BuildType.LABEL)
-          && !rule.isConfigurableAttribute(attrName)) {
-        Label srcLabel = attributeMapper.get(attrName, BuildType.LABEL);
+      if (rule.isConfigurableAttribute(attrName)) {
+        // We don't know which path to follow for configurable attributes. So skip them.
+        continue;
+      } else if (rule.isAttrDefined(attrName, Type.LABEL_LIST)) {
+        srcLabels.addAll(attributeMap.get(attrName, Type.LABEL_LIST));
+      } else if (rule.isAttrDefined(attrName, Type.LABEL)) {
+        Label srcLabel = attributeMap.get(attrName, Type.LABEL);
         if (srcLabel != null) {
           srcLabels.add(srcLabel);
         }
@@ -145,11 +142,11 @@ public final class SrcTargetUtil {
         srcTargets.add((FileTarget) target);
       } else {
         Rule srcRule = target.getAssociatedRule();
-        if (srcRule != null && !visitedRuleLabels.contains(srcRule.getLabel())) {
-          visitedRuleLabels.add(srcRule.getLabel());
+        if (srcRule != null && !visitedRules.contains(srcRule)) {
+          visitedRules.add(srcRule);
           if ("filegroup".equals(srcRule.getRuleClass())) {
-            srcTargets.addAll(getTargets(eventHandler, srcRule, FILEGROUP_ATTRIBUTES,
-                visitedRuleLabels, targetProvider));
+            srcTargets.addAll(getTargets(eventHandler, srcRule, FILEGROUP_ATTRIBUTES, visitedRules,
+                targetProvider));
           } else {
             srcTargets.addAll(srcRule.getOutputFiles());
           }
