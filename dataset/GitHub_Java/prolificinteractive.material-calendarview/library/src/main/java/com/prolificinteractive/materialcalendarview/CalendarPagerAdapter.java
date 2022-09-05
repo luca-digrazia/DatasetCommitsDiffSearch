@@ -83,14 +83,12 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
         newAdapter.color = color;
         newAdapter.dateTextAppearance = dateTextAppearance;
         newAdapter.weekDayTextAppearance = weekDayTextAppearance;
+        newAdapter.dayFormatter = dayFormatter;
+        newAdapter.decorators = decorators;
         newAdapter.showOtherDates = showOtherDates;
         newAdapter.minDate = minDate;
         newAdapter.maxDate = maxDate;
         newAdapter.selectedDates = selectedDates;
-        newAdapter.weekDayFormatter = weekDayFormatter;
-        newAdapter.dayFormatter = dayFormatter;
-        newAdapter.decorators = decorators;
-        newAdapter.decoratorResults = decoratorResults;
         newAdapter.selectionEnabled = selectionEnabled;
         return newAdapter;
     }
@@ -136,7 +134,6 @@ abstract class CalendarPagerAdapter<V extends CalendarPagerView> extends PagerAd
     @Override
     public Object instantiateItem(ViewGroup container, int position) {
         V pagerView = createView(position);
-        pagerView.setContentDescription(mcv.getCalendarContentDescription());
         pagerView.setAlpha(0);
         pagerView.setSelectionEnabled(selectionEnabled);
 

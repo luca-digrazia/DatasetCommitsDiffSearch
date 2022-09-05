@@ -1,6 +1,5 @@
 package com.prolificinteractive.materialcalendarview;
 
-import android.os.Build;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.view.View;
@@ -20,6 +19,7 @@ import java.util.List;
 import static com.prolificinteractive.materialcalendarview.MaterialCalendarView.SHOW_DEFAULTS;
 import static com.prolificinteractive.materialcalendarview.MaterialCalendarView.showOtherMonths;
 import static java.util.Calendar.DATE;
+import static java.util.Calendar.DAY_OF_WEEK;
 
 abstract class CalendarPagerView extends ViewGroup implements View.OnClickListener {
 
@@ -36,35 +36,27 @@ abstract class CalendarPagerView extends ViewGroup implements View.OnClickListen
     private CalendarDay minDate = null;
     private CalendarDay maxDate = null;
     private int firstDayOfWeek;
-    protected boolean showWeekDays;
 
     private final Collection<DayView> dayViews = new ArrayList<>();
 
     public CalendarPagerView(@NonNull MaterialCalendarView view,
                              CalendarDay firstViewDay,
-                             int firstDayOfWeek,
-                             boolean showWeekDays) {
+                             int firstDayOfWeek) {
         super(view.getContext());
         this.mcv = view;
         this.firstViewDay = firstViewDay;
         this.firstDayOfWeek = firstDayOfWeek;
-        this.showWeekDays = showWeekDays;
 
         setClipChildren(false);
         setClipToPadding(false);
 
-        if (showWeekDays) {
-            buildWeekDays(resetAndGetWorkingCalendar());
-        }
+        buildWeekDays(resetAndGetWorkingCalendar());
         buildDayViews(dayViews, resetAndGetWorkingCalendar());
     }
 
     private void buildWeekDays(Calendar calendar) {
         for (int i = 0; i < DEFAULT_DAYS_IN_WEEK; i++) {
             WeekDayView weekDayView = new WeekDayView(getContext(), CalendarUtils.getDayOfWeek(calendar));
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-                weekDayView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-            }
             weekDayViews.add(weekDayView);
             addView(weekDayView);
             calendar.add(DATE, 1);
