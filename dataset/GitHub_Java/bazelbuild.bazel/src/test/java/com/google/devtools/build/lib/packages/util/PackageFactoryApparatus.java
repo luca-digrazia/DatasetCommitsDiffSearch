@@ -18,7 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.GlobCache;
@@ -44,13 +44,20 @@ import java.io.IOException;
  */
 public class PackageFactoryApparatus {
 
-  private final EventHandler eventHandler;
+  private final Reporter reporter;
+  private final CachingPackageLocator locator;
+
   private final PackageFactory factory;
 
   public PackageFactoryApparatus(
-      EventHandler eventHandler, PackageFactory.EnvironmentExtension... environmentExtensions) {
-    this.eventHandler = eventHandler;
+      Reporter reporter, PackageFactory.EnvironmentExtension... environmentExtensions) {
+    this.reporter = reporter;
     RuleClassProvider ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
+
+    // This is used only in globbing and will cause us to always traverse
+    // subdirectories.
+    this.locator = createEmptyLocator();
+
     factory = new PackageFactory(ruleClassProvider, null,
         ImmutableList.copyOf(environmentExtensions));
   }
@@ -62,10 +69,8 @@ public class PackageFactoryApparatus {
     return factory;
   }
 
-  private CachingPackageLocator getPackageLocator() {
-    // This is used only in globbing and will cause us to always traverse
-    // subdirectories.
-    return createEmptyLocator();
+  public CachingPackageLocator getPackageLocator() {
+    return locator;
   }
 
   /**
@@ -73,22 +78,19 @@ public class PackageFactoryApparatus {
    */
   public Package createPackage(String packageName, Path buildFile)
       throws Exception {
-    return createPackage(packageName, buildFile, eventHandler);
+    return createPackage(packageName, buildFile, reporter);
   }
 
   /**
-   * Parses and evaluates {@code buildFile} with custom {@code eventHandler} and returns the resulting
+   * Parses and evaluates {@code buildFile} with custom {@code reporter} and returns the resulting
    * {@link Package} instance.
    */
-  public Package createPackage(String packageName, Path buildFile, EventHandler reporter)
+  public Package createPackage(String packageName, Path buildFile,
+      Reporter reporter)
       throws Exception {
     try {
-      Package pkg =
-          factory.createPackageForTesting(
-              PackageIdentifier.createInDefaultRepo(packageName),
-              buildFile,
-              getPackageLocator(),
-              reporter);
+      Package pkg = factory.createPackageForTesting(
+          PackageIdentifier.createInDefaultRepo(packageName), buildFile, locator, reporter);
       return pkg;
     } catch (InterruptedException e) {
       throw new IllegalStateException(e);
@@ -100,7 +102,7 @@ public class PackageFactoryApparatus {
    */
   public BuildFileAST ast(Path buildFile) throws IOException {
     ParserInputSource inputSource = ParserInputSource.create(buildFile);
-    return BuildFileAST.parseBuildFile(inputSource, eventHandler, /*parsePython=*/ false);
+    return BuildFileAST.parseBuildFile(inputSource, reporter, /*parsePython=*/ false);
   }
 
   /**
@@ -109,13 +111,8 @@ public class PackageFactoryApparatus {
   public Pair<Package, GlobCache> evalAndReturnGlobCache(String packageName, Path buildFile,
       BuildFileAST buildFileAST) throws InterruptedException {
     PackageIdentifier packageId = PackageIdentifier.createInDefaultRepo(packageName);
-    GlobCache globCache =
-        new GlobCache(
-            buildFile.getParentDirectory(),
-            packageId,
-            getPackageLocator(),
-            null,
-            TestUtils.getPool());
+    GlobCache globCache = new GlobCache(
+        buildFile.getParentDirectory(), packageId, locator, null, TestUtils.getPool());
     LegacyGlobber globber = new LegacyGlobber(globCache);
     Package externalPkg =
         Package.newExternalPackageBuilder(
@@ -135,7 +132,7 @@ public class PackageFactoryApparatus {
             ImmutableMap.<PathFragment, Extension>of(),
             ImmutableList.<Label>of());
     Package result = resultBuilder.build();
-    Event.replayEventsOn(eventHandler, result.getEvents());
+    Event.replayEventsOn(reporter, result.getEvents());
     return Pair.of(result, globCache);
   }
 
