@@ -109,8 +109,7 @@ public class MaterialCalendarView extends FrameLayout {
 
     private int accentColor = 0;
     private int arrowColor = Color.BLACK;
-
-    private LinearLayout root;
+    private CalendarDay currentDate;
 
     public MaterialCalendarView(Context context) {
         this(context, null);
@@ -149,12 +148,6 @@ public class MaterialCalendarView extends FrameLayout {
         TypedArray a = context.getTheme()
                 .obtainStyledAttributes(attrs, R.styleable.MaterialCalendarView, 0, 0);
         try {
-
-            int tileSize = a.getDimensionPixelSize(R.styleable.MaterialCalendarView_mcv_tileSize, -1);
-            if(tileSize > 0) {
-                setTileSize(tileSize);
-            }
-
             setArrowColor(a.getColor(
                 R.styleable.MaterialCalendarView_mcv_arrowColor,
                 Color.BLACK
@@ -205,14 +198,14 @@ public class MaterialCalendarView extends FrameLayout {
     }
 
     private void setupChildren() {
-        int tileSize = getResources().getDimensionPixelSize(R.dimen.mcv_default_tile_size);
+        int buttonSize = getResources().getDimensionPixelSize(R.dimen.mcv_default_day_size);
 
-        root = new LinearLayout(getContext());
+        LinearLayout root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
         root.setWeightSum(8);
         root.setClipChildren(false);
         root.setClipToPadding(false);
-        LayoutParams p = new LayoutParams(tileSize * 7, tileSize * 8);
+        LayoutParams p = new LayoutParams(buttonSize * 7, buttonSize * 8);
         p.gravity = Gravity.CENTER;
         addView(root, p);
 
@@ -254,29 +247,6 @@ public class MaterialCalendarView extends FrameLayout {
         }
         buttonPast.setEnabled(canGoBack());
         buttonFuture.setEnabled(canGoForward());
-    }
-
-    /**
-     * Set the size of each tile that makes up the calendar.
-     * Each day is 1 tile, so the widget is 7 tiles wide and 8 tiles tall.
-     *
-     * @param size the new size for each tile in pixels
-     */
-    public void setTileSize(int size) {
-        LayoutParams p = new LayoutParams(size * 7, size * 8);
-        p.gravity = Gravity.CENTER;
-        root.setLayoutParams(p);
-    }
-
-    /**
-     * @see #setTileSize(int)
-     *
-     * @param tileSizeDp the new size for each tile in dips
-     */
-    public void setTileSizeDp(int tileSizeDp) {
-        setTileSize((int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, tileSizeDp, getResources().getDisplayMetrics()
-        ));
     }
 
     /**
