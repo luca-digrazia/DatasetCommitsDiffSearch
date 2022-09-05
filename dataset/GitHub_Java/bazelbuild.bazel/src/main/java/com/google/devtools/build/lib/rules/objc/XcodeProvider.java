@@ -331,14 +331,11 @@ public final class XcodeProvider implements TransitiveInfoProvider {
    */
   public static final class Project {
     private final NestedSet<Artifact> inputsToXcodegen;
-    private final NestedSet<Artifact> additionalSources;
     private final ImmutableList<XcodeProvider> topLevelTargets;
 
     private Project(
-        NestedSet<Artifact> inputsToXcodegen, NestedSet<Artifact> additionalSources,
-        ImmutableList<XcodeProvider> topLevelTargets) {
+        NestedSet<Artifact> inputsToXcodegen, ImmutableList<XcodeProvider> topLevelTargets) {
       this.inputsToXcodegen = inputsToXcodegen;
-      this.additionalSources = additionalSources;
       this.topLevelTargets = topLevelTargets;
     }
 
@@ -348,13 +345,10 @@ public final class XcodeProvider implements TransitiveInfoProvider {
 
     public static Project fromTopLevelTargets(Iterable<XcodeProvider> topLevelTargets) {
       NestedSetBuilder<Artifact> inputsToXcodegen = NestedSetBuilder.stableOrder();
-      NestedSetBuilder<Artifact> additionalSources = NestedSetBuilder.stableOrder();
       for (XcodeProvider target : topLevelTargets) {
         inputsToXcodegen.addTransitive(target.inputsToXcodegen);
-        additionalSources.addTransitive(target.additionalSources);
       }
-      return new Project(inputsToXcodegen.build(), additionalSources.build(),
-          ImmutableList.copyOf(topLevelTargets));
+      return new Project(inputsToXcodegen.build(), ImmutableList.copyOf(topLevelTargets));
     }
 
     /**
@@ -363,13 +357,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
      */
     public NestedSet<Artifact> getInputsToXcodegen() {
       return inputsToXcodegen;
-    }
-    
-    /**
-     * Returns artifacts that are additional sources for the Xcodegen action.
-     */
-    public NestedSet<Artifact> getAdditionalSources() {
-      return additionalSources;
     }
 
     /**
@@ -539,7 +526,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
             .setName(label.getName())
             .setLabel(xcodeTargetName(label))
             .setProductType(productType.getIdentifier())
-            .addSupportFile(buildFilePath)
             .addAllImportedLibrary(Artifact.toExecPaths(objcProvider.get(IMPORTED_LIBRARY)))
             .addAllUserHeaderSearchPath(userHeaderSearchPaths)
             .addAllHeaderSearchPath(headerSearchPaths)
@@ -566,7 +552,8 @@ public final class XcodeProvider implements TransitiveInfoProvider {
             .addAllGeneralResourceFile(
                 Artifact.toExecPaths(objcProvider.get(GENERAL_RESOURCE_FILE)))
             .addAllGeneralResourceFile(
-                PathFragment.safePathStrings(objcProvider.get(GENERAL_RESOURCE_DIR)));
+                PathFragment.safePathStrings(objcProvider.get(GENERAL_RESOURCE_DIR)))
+            .addSupportFile(buildFilePath);
 
     if (CAN_LINK_PRODUCT_TYPES.contains(productType)) {
       // For builds with --ios_multi_cpus set, we may have several copies of some XCodeProviders
@@ -618,8 +605,6 @@ public final class XcodeProvider implements TransitiveInfoProvider {
     for (CompilationArtifacts artifacts : compilationArtifacts.asSet()) {
       targetControl
           .addAllSourceFile(Artifact.toExecPaths(artifacts.getSrcs()))
-          .addAllSupportFile(Artifact.toExecPaths(artifacts.getAdditionalHdrs()))
-          .addAllSupportFile(Artifact.toExecPaths(artifacts.getPrivateHdrs()))
           .addAllNonArcSourceFile(Artifact.toExecPaths(artifacts.getNonArcSrcs()));
 
       for (Artifact pchFile : artifacts.getPchFile().asSet()) {
