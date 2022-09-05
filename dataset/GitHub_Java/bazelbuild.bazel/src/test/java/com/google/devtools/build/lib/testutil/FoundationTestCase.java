@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,7 +42,9 @@ public abstract class FoundationTestCase extends TestCase {
   // May be overridden by subclasses:
   protected Reporter reporter;
   protected EventCollector eventCollector;
+
   protected Scratch scratch;
+
 
   // Individual tests can opt-out of this handler if they expect an error, by
   // calling reporter.removeHandler(failFastHandler).
