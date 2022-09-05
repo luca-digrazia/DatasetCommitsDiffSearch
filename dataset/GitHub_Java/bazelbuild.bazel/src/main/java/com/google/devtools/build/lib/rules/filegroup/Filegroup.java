@@ -14,34 +14,31 @@
 
 package com.google.devtools.build.lib.rules.filegroup;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.devtools.build.lib.analysis.OutputGroupInfo.INTERNAL_SUFFIX;
+import static com.google.devtools.build.lib.analysis.OutputGroupProvider.INTERNAL_SUFFIX;
 
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.CompilationHelper;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.MiddlemanProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -54,10 +51,9 @@ public class Filegroup implements RuleConfiguredTargetFactory {
       "Output group %s is not permitted for " + "reference in filegroups.";
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws RuleErrorException {
     String outputGroupName = ruleContext.attributes().get("output_group", Type.STRING);
-    BuildConfiguration configuration = checkNotNull(ruleContext.getConfiguration());
+
     if (outputGroupName.endsWith(INTERNAL_SUFFIX)) {
       ruleContext.throwWithAttributeError(
           "output_group", String.format(ILLEGAL_OUTPUT_GROUP_ERROR, outputGroupName));
@@ -65,57 +61,56 @@ public class Filegroup implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> filesToBuild =
         outputGroupName.isEmpty()
-            ? PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", TransitionMode.TARGET)
+            ? PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", Mode.TARGET)
             : getArtifactsForOutputGroup(
-                outputGroupName, ruleContext.getPrerequisites("srcs", TransitionMode.TARGET));
+                outputGroupName, ruleContext.getPrerequisites("srcs", Mode.TARGET));
 
-    InstrumentedFilesInfo instrumentedFilesProvider =
-        InstrumentedFilesCollector.collectTransitive(
-            ruleContext,
-            new InstrumentationSpec(FileTypeSet.ANY_FILE)
-                .withDeprecatedSourceOrDependencyAttributes("srcs", "deps", "data")
-                .withSourceAttributes("srcs")
-                .withDependencyAttributes("data"),
-            /* reportedToActualSources= */ NestedSetBuilder.create(Order.STABLE_ORDER));
+    NestedSet<Artifact> middleman =
+        CompilationHelper.getAggregatingMiddleman(
+            ruleContext, Actions.escapeLabel(ruleContext.getLabel()), filesToBuild);
 
-    RunfilesProvider runfilesProvider =
-        RunfilesProvider.withData(
-            new Runfiles.Builder(
-                    ruleContext.getWorkspaceName(), configuration.legacyExternalRunfiles())
-                .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES)
-                .build(),
-            // If you're visiting a filegroup as data, then we also visit its data as data.
-            new Runfiles.Builder(
-                    ruleContext.getWorkspaceName(), configuration.legacyExternalRunfiles())
-                .addTransitiveArtifacts(filesToBuild)
-                .addDataDeps(ruleContext)
-                .build());
+    InstrumentedFilesProvider instrumentedFilesProvider =
+        InstrumentedFilesCollector.collect(ruleContext,
+            // what do *we* know about whether this is a source file or not
+            new InstrumentationSpec(FileTypeSet.ANY_FILE, "srcs", "deps", "data"),
+            InstrumentedFilesCollector.NO_METADATA_COLLECTOR, filesToBuild);
 
-    RuleConfiguredTargetBuilder builder =
-        new RuleConfiguredTargetBuilder(ruleContext)
-            .addProvider(RunfilesProvider.class, runfilesProvider)
-            .setFilesToBuild(filesToBuild)
-            .setRunfilesSupport(null, getExecutable(filesToBuild))
-            .addNativeDeclaredProvider(instrumentedFilesProvider)
-            .addProvider(
-                FilegroupPathProvider.class,
-                new FilegroupPathProvider(getFilegroupPath(ruleContext)));
+    RunfilesProvider runfilesProvider = RunfilesProvider.withData(
+        new Runfiles.Builder(
+            ruleContext.getWorkspaceName(),
+            ruleContext.getConfiguration().legacyExternalRunfiles())
+            .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES)
+            .build(),
+        // If you're visiting a filegroup as data, then we also visit its data as data.
+        new Runfiles.Builder(
+            ruleContext.getWorkspaceName(),
+            ruleContext.getConfiguration().legacyExternalRunfiles())
+            .addTransitiveArtifacts(filesToBuild)
+            .addDataDeps(ruleContext).build());
 
-    if (configuration.enableAggregatingMiddleman()) {
-      builder.addProvider(
-          MiddlemanProvider.class,
-          new MiddlemanProvider(
-              CompilationHelper.getAggregatingMiddleman(
-                  ruleContext, Actions.escapeLabel(ruleContext.getLabel()), filesToBuild)));
-    }
-    return builder.build();
+    return new RuleConfiguredTargetBuilder(ruleContext)
+        .add(RunfilesProvider.class, runfilesProvider)
+        .setFilesToBuild(filesToBuild)
+        .setRunfilesSupport(null, getExecutable(filesToBuild))
+        .add(InstrumentedFilesProvider.class, instrumentedFilesProvider)
+        .add(MiddlemanProvider.class, new MiddlemanProvider(middleman))
+        .add(FilegroupPathProvider.class,
+            new FilegroupPathProvider(getFilegroupPath(ruleContext)))
+        .build();
   }
 
   /**
    * Returns the single Artifact from filesToBuild or {@code null} if there are multiple elements.
    */
   private Artifact getExecutable(NestedSet<Artifact> filesToBuild) {
-    return filesToBuild.isSingleton() ? filesToBuild.getSingleton() : null;
+    Iterator<Artifact> it = filesToBuild.iterator();
+    if (it.hasNext()) {
+      Artifact out = it.next();
+      if (!it.hasNext()) {
+        return out;
+      }
+    }
+    return null;
   }
 
   private PathFragment getFilegroupPath(RuleContext ruleContext) {
@@ -133,9 +128,9 @@ public class Filegroup implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
 
     for (TransitiveInfoCollection dep : deps) {
-      OutputGroupInfo outputGroupInfo = OutputGroupInfo.get(dep);
-      if (outputGroupInfo != null) {
-        result.addTransitive(outputGroupInfo.getOutputGroup(outputGroupName));
+      OutputGroupProvider outputGroupProvider = dep.getProvider(OutputGroupProvider.class);
+      if (outputGroupProvider != null) {
+        result.addTransitive(outputGroupProvider.getOutputGroup(outputGroupName));
       }
     }
 
