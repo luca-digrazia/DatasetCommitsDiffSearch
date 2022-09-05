@@ -15,9 +15,7 @@ package com.google.devtools.build.android;
 
 import static com.android.resources.ResourceType.DECLARE_STYLEABLE;
 import static com.android.resources.ResourceType.ID;
-import static com.android.resources.ResourceType.PUBLIC;
 
-import com.android.SdkConstants;
 import com.android.resources.ResourceType;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
@@ -31,7 +29,6 @@ import com.google.devtools.build.android.xml.AttrXmlResourceValue;
 import com.google.devtools.build.android.xml.IdXmlResourceValue;
 import com.google.devtools.build.android.xml.Namespaces;
 import com.google.devtools.build.android.xml.PluralXmlResourceValue;
-import com.google.devtools.build.android.xml.PublicXmlResourceValue;
 import com.google.devtools.build.android.xml.SimpleXmlResourceValue;
 import com.google.devtools.build.android.xml.StyleXmlResourceValue;
 import com.google.devtools.build.android.xml.StyleableXmlResourceValue;
@@ -40,6 +37,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -105,11 +103,9 @@ public class DataResourceXml implements DataResource {
             XmlResourceValues.parseDeclareStyleable(
                 fqnFactory, path, overwritingConsumer, combiningConsumer, eventReader, start);
           } else {
-            // Of simple resources, only IDs and Public are combining.
+            // Of simple resources, only IDs are combining.
             KeyValueConsumer<DataKey, DataResource> consumer =
-                (resourceType == ID || resourceType == PUBLIC)
-                    ? combiningConsumer
-                    : overwritingConsumer;
+                resourceType == ID ? combiningConsumer : overwritingConsumer;
             String elementName = XmlResourceValues.getElementName(start);
             if (elementName == null) {
               throw new XMLStreamException(
@@ -134,11 +130,11 @@ public class DataResourceXml implements DataResource {
   }
 
   @SuppressWarnings("deprecation")
-  public static DataValue from(SerializeFormat.DataValue protoValue, Path source)
+  public static DataValue from(SerializeFormat.DataValue protoValue, FileSystem currentFileSystem)
       throws InvalidProtocolBufferException {
     DataValueXml xmlValue = protoValue.getXmlValue();
     return createWithNamespaces(
-        source,
+        currentFileSystem.getPath(protoValue.getSource().getFilename()),
         valueFromProto(xmlValue),
         Namespaces.from(xmlValue.getNamespace()));
   }
@@ -157,8 +153,6 @@ public class DataResourceXml implements DataResource {
         return IdXmlResourceValue.of();
       case PLURAL:
         return PluralXmlResourceValue.from(proto);
-      case PUBLIC:
-        return PublicXmlResourceValue.from(proto);
       case STYLE:
         return StyleXmlResourceValue.from(proto);
       case STYLEABLE:
@@ -191,8 +185,6 @@ public class DataResourceXml implements DataResource {
         return XmlResourceValues.parsePlurals(eventReader, start, namespacesCollector);
       case ATTR:
         return XmlResourceValues.parseAttr(eventReader, start);
-      case PUBLIC:
-        return XmlResourceValues.parsePublic(eventReader, start, namespacesCollector);
       case LAYOUT:
       case DIMEN:
       case STRING:
@@ -207,6 +199,7 @@ public class DataResourceXml implements DataResource {
       case INTERPOLATOR:
       case MENU:
       case MIPMAP:
+      case PUBLIC:
       case RAW:
       case STYLEABLE:
       case TRANSITION:
@@ -293,9 +286,8 @@ public class DataResourceXml implements DataResource {
   }
 
   @Override
-  public int serializeTo(DataKey key, DataSourceTable sourceTable, OutputStream outStream)
-      throws IOException {
-    return xml.serializeTo(sourceTable.getSourceId(source), namespaces, outStream);
+  public int serializeTo(DataKey key, OutputStream outStream) throws IOException {
+    return xml.serializeTo(source, namespaces, outStream);
   }
 
   // TODO(corysmith): Clean up all the casting. The type structure is unclean.
@@ -305,29 +297,9 @@ public class DataResourceXml implements DataResource {
       throw new IllegalArgumentException(resource + " is not a combinable with " + this);
     }
     DataResourceXml xmlResource = (DataResourceXml) resource;
-    return createWithNamespaces(
-        combineSources(xmlResource.source),
-        xml.combineWith(xmlResource.xml),
-        namespaces.union(xmlResource.namespaces));
-  }
-
-  private Path combineSources(Path otherSource) {
     // TODO(corysmith): Combine the sources so that we know both of the originating files.
-    // For now, prefer sources that have explicit definitions (values/ and not layout/), since the
-    // values are ultimately written out to a merged values.xml. Sources from layout/menu, etc.
-    // can come from "@+id" definitions.
-    boolean thisInValuesFolder = isInValuesFolder(source);
-    boolean otherInValuesFolder = isInValuesFolder(otherSource);
-    if (thisInValuesFolder && !otherInValuesFolder) {
-      return source;
-    }
-    if (!thisInValuesFolder && otherInValuesFolder) {
-      return otherSource;
-    }
-    return source;
-  }
-
-  public static boolean isInValuesFolder(Path source) {
-    return source.getParent().getFileName().toString().startsWith(SdkConstants.FD_RES_VALUES);
+    // For right now, use the current source.
+    return createWithNamespaces(
+        source, xml.combineWith(xmlResource.xml), namespaces.union(xmlResource.namespaces));
   }
 }
