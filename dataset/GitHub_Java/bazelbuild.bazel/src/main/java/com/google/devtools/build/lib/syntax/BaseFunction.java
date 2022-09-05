@@ -21,7 +21,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.events.Location.LineAndColumn;
 import com.google.devtools.build.lib.packages.Type.ConversionException;
+import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -197,7 +199,7 @@ public abstract class BaseFunction {
   /**
    * Process the caller-provided arguments into an array suitable for the callee (this function).
    */
-  public Object[] processArguments(List<Object> args,
+  public Object[] processArguments(@Nullable List<Object> args,
       @Nullable Map<String, Object> kwargs,
       @Nullable Location loc)
       throws EvalException {
@@ -411,31 +413,26 @@ public abstract class BaseFunction {
    * @return the value resulting from evaluating the function with the given arguments
    * @throws construction of EvalException-s containing source information.
    */
-  public Object call(List<Object> args,
+  public Object call(@Nullable List<Object> args,
       @Nullable Map<String, Object> kwargs,
       @Nullable FuncallExpression ast,
       @Nullable Environment parentEnv)
       throws EvalException, InterruptedException {
     Environment env = getOrCreateChildEnvironment(parentEnv);
-    env.addToStackTrace(new StackTraceElement(this, kwargs));
+    Preconditions.checkState(isConfigured(), "Function %s was not configured", getName());
+
+    // ast is null when called from Java (as there's no Skylark call site).
+    Location loc = ast == null ? location : ast.getLocation();
+
+    Object[] arguments = processArguments(args, kwargs, loc);
+    canonicalizeArguments(arguments, loc);
+
     try {
-      Preconditions.checkState(isConfigured(), "Function %s was not configured", getName());
-
-      // ast is null when called from Java (as there's no Skylark call site).
-      Location loc = ast == null ? location : ast.getLocation();
-
-      Object[] arguments = processArguments(args, kwargs, loc);
-      canonicalizeArguments(arguments, loc);
-
-      try {
-        return call(arguments, ast, env);
-      } catch (EvalExceptionWithStackTrace ex) {
-        throw updateStackTrace(ex, loc);
-      } catch (EvalException | RuntimeException | InterruptedException ex) {
-        throw updateStackTrace(new EvalExceptionWithStackTrace(ex, loc), loc);
-      }
-    } finally {
-      env.removeStackTraceElement();
+      return call(arguments, ast, env);
+    } catch (EvalExceptionWithStackTrace ex) {
+      throw updateStackTrace(ex, loc);
+    } catch (EvalException | RuntimeException | InterruptedException ex) {
+      throw updateStackTrace(new EvalExceptionWithStackTrace(ex, loc), loc);
     }
   }
 
@@ -577,8 +574,26 @@ public abstract class BaseFunction {
     return Objects.hash(name, location);
   }
 
-  @Nullable
-  public Location getLocation() {
-    return location;
+  /**
+   * Returns the location (filename:line) of the BaseFunction's definition.
+   *
+   * <p>If such a location is not defined, this method returns an empty string.
+   */
+  public String getLocationPathAndLine() {
+    if (location == null) {
+      return "";
+    }
+
+    StringBuilder builder = new StringBuilder();
+    PathFragment path = location.getPath();
+    if (path != null) {
+      builder.append(path.getPathString());
+    }
+
+    LineAndColumn position = location.getStartLineAndColumn();
+    if (position != null) {
+      builder.append(":").append(position.getLine());
+    }
+    return builder.toString();
   }
 }
