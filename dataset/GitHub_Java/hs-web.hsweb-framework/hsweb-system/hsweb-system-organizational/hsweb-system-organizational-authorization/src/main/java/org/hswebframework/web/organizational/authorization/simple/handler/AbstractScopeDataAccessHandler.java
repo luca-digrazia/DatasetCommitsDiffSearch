@@ -11,7 +11,7 @@ import org.hswebframework.web.authorization.exception.AccessDenyException;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.QueryController;
-import org.hswebframework.web.organizational.authorization.PersonnelAuthentication;
+import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
 import org.hswebframework.web.organizational.authorization.access.DataAccessType;
 import org.hswebframework.web.service.QueryService;
 import org.slf4j.Logger;
@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
+ *
  * @author zhouhao
  */
 public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHandler {
@@ -40,7 +41,7 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
 
     protected abstract Term createQueryTerm(Set<String> scope, AuthorizingContext context);
 
-    protected abstract Set<String> getTryOperationScope(String scopeType, PersonnelAuthentication authorization);
+    protected abstract Set<String> getTryOperationScope(String scopeType, PersonnelAuthorization authorization);
 
     @Override
     public boolean isSupport(DataAccessConfig access) {
@@ -50,7 +51,7 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
     @Override
     public boolean handle(DataAccessConfig access, AuthorizingContext context) {
         ScopeDataAccessConfig accessConfig = ((ScopeDataAccessConfig) access);
-        if (!PersonnelAuthentication.current().isPresent()) {
+        if (!PersonnelAuthorization.current().isPresent()) {
             return false;
         }
         switch (accessConfig.getAction()) {
@@ -67,27 +68,32 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
         }
     }
 
-    protected PersonnelAuthentication getPersonnelAuthorization() {
-        return PersonnelAuthentication.current()
+    protected PersonnelAuthorization getPersonnelAuthorization() {
+        return PersonnelAuthorization.current()
                 .orElseThrow(AccessDenyException::new);
     }
 
     protected boolean handleAdd(ScopeDataAccessConfig access, AuthorizingContext context) {
-        Set<String> scopes = getTryOperationScope(access);
-        String scope;
+        PersonnelAuthorization authorization = getPersonnelAuthorization();
+        Set<String> scopes = authorization.getRootOrgId();
+        String scope = null;
         if (scopes.isEmpty()) {
             return true;
         } else if (scopes.size() == 1) {
             scope = scopes.iterator().next();
         } else {
+            logger.warn("existing many scope :{} , try use config.", scopes);
+        }
+        scopes = getTryOperationScope(access).stream().map(String::valueOf).collect(Collectors.toSet());
+        if (scope == null && scopes.size() == 1) {
             scope = scopes.iterator().next();
-            logger.warn("existing many scope :{} , try use config.", scope);
         }
         if (scope != null) {
+            String finalScopeId = scope;
             context.getParamContext().getParams().values().stream()
                     .filter(getEntityClass()::isInstance)
                     .map(getEntityClass()::cast)
-                    .forEach(entity -> applyScopeProperty(entity, scope));
+                    .forEach(entity -> applyScopeProperty(entity, finalScopeId));
         } else {
             logger.warn("scope is null!");
         }
@@ -152,24 +158,18 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
             if (logger.isDebugEnabled()) {
                 logger.debug("try rebuild query param ...");
             }
-
+            QueryParamEntity queryParamEntity = ((QueryParamEntity) entity);
             //重构查询条件
             //如: 旧的条件为 where name =? or name = ?
             //重构后为: where org_id in(?,?) and (name = ? or name = ?)
-            QueryParamEntity queryParamEntity = ((QueryParamEntity) entity);
-            queryParamEntity.toNestQuery(query-> query.accept(createQueryTerm(scope, context)));
-
-//            //重构查询条件
-//            //如: 旧的条件为 where name =? or name = ?
-//            //重构后为: where org_id in(?,?) and (name = ? or name = ?)
-//            List<Term> oldParam = queryParamEntity.getTerms();
-//            //清空旧的查询条件
-//            queryParamEntity.setTerms(new ArrayList<>());
-//            //添加一个查询条件
-//            queryParamEntity
-//                    .addTerm(createQueryTerm(scope, context))
-//                    //客户端提交的参数 作为嵌套参数
-//                    .nest().setTerms(oldParam);
+            List<Term> oldParam = queryParamEntity.getTerms();
+            //清空旧的查询条件
+            queryParamEntity.setTerms(new ArrayList<>());
+            //添加一个查询条件
+            queryParamEntity
+                    .addTerm(createQueryTerm(scope, context))
+                    //客户端提交的参数 作为嵌套参数
+                    .nest().setTerms(oldParam);
         } else {
             logger.warn("try validate query access,but entity not support, QueryParamEntity support now!");
         }
