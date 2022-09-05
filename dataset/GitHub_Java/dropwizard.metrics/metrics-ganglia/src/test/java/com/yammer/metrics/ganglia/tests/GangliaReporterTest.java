@@ -21,8 +21,7 @@ public class GangliaReporterTest {
                                                                  60,
                                                                  0,
                                                                  TimeUnit.SECONDS,
-                                                                 TimeUnit.MILLISECONDS,
-                                                                 MetricFilter.ALL);
+                                                                 TimeUnit.MILLISECONDS);
 
     @Test
     public void reportsStringGaugeValues() throws Exception {
