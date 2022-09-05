@@ -26,13 +26,12 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentCollection.EnvironmentWithGroup;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Type;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
@@ -256,7 +255,7 @@ public class ConstraintSemantics {
      */
     private EnvironmentCollection collectEnvironments(String attrName,
         EnvironmentCollection.Builder supportedEnvironments) {
-      if (!ruleContext.getRule().isAttrDefined(attrName,  BuildType.LABEL_LIST)) {
+      if (!ruleContext.getRule().isAttrDefined(attrName,  Type.LABEL_LIST)) {
         return EnvironmentCollection.EMPTY;
       }
       EnvironmentCollection.Builder environments = new EnvironmentCollection.Builder();
@@ -377,8 +376,8 @@ public class ConstraintSemantics {
     String restrictionAttr = RuleClass.DEFAULT_RESTRICTED_ENVIRONMENT_ATTR;
     String compatibilityAttr = RuleClass.DEFAULT_COMPATIBLE_ENVIRONMENT_ATTR;
 
-    if (rule.isAttrDefined(restrictionAttr, BuildType.LABEL_LIST)
-      || rule.isAttrDefined(compatibilityAttr, BuildType.LABEL_LIST)) {
+    if (rule.isAttrDefined(restrictionAttr, Type.LABEL_LIST)
+      || rule.isAttrDefined(compatibilityAttr, Type.LABEL_LIST)) {
       return new EnvironmentCollector(ruleContext, restrictionAttr, compatibilityAttr,
           new GroupDefaultsProvider());
     } else {
@@ -523,12 +522,11 @@ public class ConstraintSemantics {
       Type<?> attrType = attributes.getAttributeType(attr);
 
       // TODO(bazel-team): support a user-definable API for choosing which attributes are checked
-      if ((attrType != BuildType.LABEL && attrType != BuildType.LABEL_LIST)
+      if ((attrType != Type.LABEL && attrType != Type.LABEL_LIST)
           || RuleClass.isConstraintAttribute(attr)
           || attr.equals("visibility")
-          // Use the same implicit deps check that query uses. This facilitates running queries to
-          // determine exactly which rules need to be constraint-annotated for depot migrations.
-          || !Rule.NO_IMPLICIT_DEPS.apply(ruleContext.getRule(), attrDef)
+          || attrDef.isImplicit()
+          || attrDef.isLateBound()
           // We can't identify host deps by calling BuildConfiguration.isHostConfiguration()
           // because --nodistinct_host_configuration subverts that call.
           || attrDef.getConfigurationTransition() == Attribute.ConfigurationTransition.HOST) {
