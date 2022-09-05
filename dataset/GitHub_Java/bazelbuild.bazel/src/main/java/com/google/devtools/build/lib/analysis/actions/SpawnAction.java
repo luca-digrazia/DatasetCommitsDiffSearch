@@ -84,13 +84,13 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   private static final String GUID = "ebd6fce3-093e-45ee-adb6-bf513b602f0d";
 
-  protected final CommandLine argv;
+  private final CommandLine argv;
 
   private final boolean executeUnconditionally;
   private final String progressMessage;
   private final String mnemonic;
   // entries are (directory for remote execution, Artifact)
-  protected final ImmutableMap<PathFragment, Artifact> inputManifests;
+  private final ImmutableMap<PathFragment, Artifact> inputManifests;
 
   private final ResourceSet resourceSet;
   private final ImmutableMap<String, String> environment;
@@ -431,7 +431,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   public static class Builder {
 
     private final NestedSetBuilder<Artifact> toolsBuilder = NestedSetBuilder.stableOrder();
-    private final NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
+    private final NestedSetBuilder<Artifact> inputsBuilder =
+        NestedSetBuilder.stableOrder();
     private final List<Artifact> outputs = new ArrayList<>();
     private final Map<PathFragment, Artifact> toolManifests = new LinkedHashMap<>();
     private final Map<PathFragment, Artifact> inputManifests = new LinkedHashMap<>();
@@ -592,41 +593,17 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         env = this.environment;
       }
 
-      return createSpawnAction(
-          owner,
-          tools,
-          inputsAndTools,
-          ImmutableList.copyOf(outputs),
-          actualCommandLine,
-          ImmutableMap.copyOf(env),
-          ImmutableMap.copyOf(executionInfo),
-          progressMessage,
-          ImmutableMap.copyOf(inputAndToolManifests),
-          mnemonic);
-    }
-
-    SpawnAction createSpawnAction(
-        ActionOwner owner,
-        NestedSet<Artifact> tools,
-        NestedSet<Artifact> inputsAndTools,
-        ImmutableList<Artifact> outputs,
-        CommandLine actualCommandLine,
-        ImmutableMap<String, String> env,
-        ImmutableMap<String, String> executionInfo,
-        String progressMessage,
-        ImmutableMap<PathFragment, Artifact> inputAndToolManifests,
-        String mnemonic) {
       return new SpawnAction(
           owner,
           tools,
           inputsAndTools,
-          outputs,
+          ImmutableList.copyOf(outputs),
           resourceSet,
           actualCommandLine,
-          env,
+          ImmutableMap.copyOf(env),
           executionInfo,
           progressMessage,
-          inputAndToolManifests,
+          ImmutableMap.copyOf(inputAndToolManifests),
           mnemonic,
           executeUnconditionally,
           extraActionInfoSupplier);

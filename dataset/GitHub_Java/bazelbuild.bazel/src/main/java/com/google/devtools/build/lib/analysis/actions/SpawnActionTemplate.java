@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.Map;
 
 /**
@@ -261,13 +262,6 @@ public final class SpawnActionTemplate implements ActionAnalysisMetadata {
   @Override
   public Artifact getPrimaryOutput() {
     return outputTreeArtifact;
-  }
-
-  @Override
-  public Iterable<String> getClientEnvironmentVariables() {
-    return spawnActionBuilder
-        .buildSpawnAction(getOwner(), null, null, null)
-        .getClientEnvironmentVariables();
   }
 
   @Override

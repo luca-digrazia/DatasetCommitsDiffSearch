@@ -413,8 +413,8 @@ public class SpawnActionTemplateTest {
   private CustomCommandLine createSimpleCommandLineTemplate(
       Artifact inputTreeArtifact, Artifact outputTreeArtifact) {
     return CustomCommandLine.builder()
-        .addPlaceholderTreeArtifactExecPath(inputTreeArtifact)
-        .addPlaceholderTreeArtifactExecPath(outputTreeArtifact)
+        .addTreeFileArtifactExecPath(inputTreeArtifact)
+        .addTreeFileArtifactExecPath(outputTreeArtifact)
         .build();
   }
 
