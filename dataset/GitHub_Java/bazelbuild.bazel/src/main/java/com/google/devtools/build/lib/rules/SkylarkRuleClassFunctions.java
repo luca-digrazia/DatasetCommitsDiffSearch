@@ -27,6 +27,7 @@ import static com.google.devtools.build.lib.syntax.SkylarkType.castList;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
@@ -233,7 +234,7 @@ public class SkylarkRuleClassFunctions {
           SkylarkList fragments, FuncallExpression ast, Environment funcallEnv)
           throws EvalException, ConversionException {
 
-        funcallEnv.checkLoadingPhase("rule", ast.getLocation());
+        Preconditions.checkState(funcallEnv instanceof SkylarkEnvironment);
         RuleClassType type = test ? RuleClassType.TEST : RuleClassType.NORMAL;
 
         // We'll set the name later, pass the empty string for now.
@@ -309,7 +310,6 @@ public class SkylarkRuleClassFunctions {
     // to be a PackageContext
     public Object call(Object[] args, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException, ConversionException {
-      env.checkLoadingPhase(getName(), ast.getLocation());
       try {
         if (ruleClassName == null || skylarkFile == null) {
           throw new EvalException(ast.getLocation(),

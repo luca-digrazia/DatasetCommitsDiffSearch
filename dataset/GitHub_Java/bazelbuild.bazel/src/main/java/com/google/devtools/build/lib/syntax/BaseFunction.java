@@ -429,7 +429,7 @@ public abstract class BaseFunction {
     } catch (EvalExceptionWithStackTrace ex) {
       throw updateStackTrace(ex, loc);
     } catch (EvalException | RuntimeException | InterruptedException ex) {
-      throw updateStackTrace(new EvalExceptionWithStackTrace(ex, loc), loc);
+      throw updateStackTrace(new EvalExceptionWithStackTrace(ex, Location.BUILTIN), loc);
     }
   }
 
@@ -438,7 +438,8 @@ public abstract class BaseFunction {
    */
   private EvalExceptionWithStackTrace updateStackTrace(
       EvalExceptionWithStackTrace ex, Location location) {
-    ex.registerFunction(this, location);
+    ex.registerFunction(this);
+    ex.setLocation(location);
     return ex;
   }
 
