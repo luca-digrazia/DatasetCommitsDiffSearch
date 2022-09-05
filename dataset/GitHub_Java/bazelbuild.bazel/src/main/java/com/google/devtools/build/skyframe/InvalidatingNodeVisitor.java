@@ -121,10 +121,10 @@ public abstract class InvalidatingNodeVisitor extends AbstractQueueVisitor {
 
   protected abstract long count();
 
-  protected void informInvalidationReceiver(SkyKey key,
+  protected void informInvalidationReceiver(SkyValue value,
       EvaluationProgressReceiver.InvalidationState state) {
-    if (invalidationReceiver != null) {
-      invalidationReceiver.invalidated(key, state);
+    if (invalidationReceiver != null && value != null) {
+      invalidationReceiver.invalidated(value, state);
     }
   }
 
@@ -255,8 +255,9 @@ public abstract class InvalidatingNodeVisitor extends AbstractQueueVisitor {
                 }
               }
             }
-            // Allow custom key-specific logic to update dirtiness status.
-            informInvalidationReceiver(key, EvaluationProgressReceiver.InvalidationState.DELETED);
+            // Allow custom Value-specific logic to update dirtiness status.
+            informInvalidationReceiver(entry.getValue(),
+                EvaluationProgressReceiver.InvalidationState.DELETED);
           }
           if (traverseGraph) {
             // Force reverseDeps consolidation (validates that attempts to remove reverse deps were
@@ -379,7 +380,8 @@ public abstract class InvalidatingNodeVisitor extends AbstractQueueVisitor {
             child.removeReverseDep(key);
           }
 
-          informInvalidationReceiver(key, EvaluationProgressReceiver.InvalidationState.DIRTY);
+          SkyValue value = ValueWithMetadata.justValue(depsAndValue.second);
+          informInvalidationReceiver(value, EvaluationProgressReceiver.InvalidationState.DIRTY);
           dirtyKeyTracker.dirty(key);
           // Remove the node from the set as the last operation.
           pendingVisitations.remove(invalidationPair);
