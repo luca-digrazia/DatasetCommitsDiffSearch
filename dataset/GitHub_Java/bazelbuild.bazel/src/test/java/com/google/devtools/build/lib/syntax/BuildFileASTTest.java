@@ -48,15 +48,17 @@ public class BuildFileASTTest extends EvaluationTestCase {
    */
   private BuildFileAST parseBuildFile(String... lines) throws IOException {
     Path file = scratch.file("/a/build/file/BUILD", lines);
-    return BuildFileAST.parseBuildFile(file, file.getFileSize(), getEventHandler());
+    return BuildFileAST.parseBuildFile(file, getEventHandler());
   }
 
   @Test
   public void testParseBuildFileOK() throws Exception {
-    BuildFileAST buildfile = parseBuildFile(
+    Path buildFile = scratch.file("/BUILD",
         "# a file in the build language",
         "",
         "x = [1,2,'foo',4] + [1,2, \"%s%d\" % ('foo', 1)]");
+
+    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, getEventHandler());
 
     assertTrue(buildfile.exec(env, getEventHandler()));
 
@@ -70,12 +72,14 @@ public class BuildFileASTTest extends EvaluationTestCase {
 
   @Test
   public void testEvalException() throws Exception {
-    setFailFast(false);
-    BuildFileAST buildfile = parseBuildFile(
+    Path buildFile = scratch.file("/input1.BUILD",
         "x = 1",
         "y = [2,3]",
         "",
         "z = x + y");
+
+    setFailFast(false);
+    BuildFileAST buildfile = BuildFileAST.parseBuildFile(buildFile, getEventHandler());
 
     assertFalse(buildfile.exec(env, getEventHandler()));
     Event e = assertContainsError("unsupported operand type(s) for +: 'int' and 'list'");
@@ -84,11 +88,10 @@ public class BuildFileASTTest extends EvaluationTestCase {
 
   @Test
   public void testParsesFineWithNewlines() throws Exception {
-    BuildFileAST buildFileAST = parseBuildFile(
-        "foo()",
-        "bar(),",
-        "something = baz()",
-        "bar()");
+    BuildFileAST buildFileAST = parseBuildFile("foo()\n"
+                                               + "bar()\n"
+                                               + "something = baz()\n"
+                                               + "bar()");
     assertThat(buildFileAST.getStatements()).hasSize(4);
   }
 
