@@ -29,6 +29,7 @@ import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MutableClassToInstanceMap;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
@@ -846,6 +847,16 @@ public final class BuildConfiguration {
     )
     public List<Label> targetEnvironments;
 
+    /** Converter for labels in the @bazel_tools repository. The @Options' defaultValues can't
+     * prepend TOOLS_REPOSITORY, unfortunately, because then the compiler thinks they're not
+     * constant. */
+    public static class ToolsLabelConverter extends LabelConverter {
+      @Override
+      public Label convert(String input) throws OptionsParsingException {
+        return convertLabel(Constants.TOOLS_REPOSITORY + input);
+      }
+    }
+
     @Option(name = "experimental_dynamic_configs",
         defaultValue = "false",
         category = "undocumented",
@@ -1186,7 +1197,7 @@ public final class BuildConfiguration {
     this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
 
     this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
-
+    
     this.buildOptions = buildOptions;
     this.options = buildOptions.get(Options.class);
 
@@ -2135,7 +2146,7 @@ public final class BuildConfiguration {
   public String getMakeVariableDefault(String var) {
     return globalMakeEnv.get(var);
   }
-
+  
   /**
    * Returns a configuration fragment instances of the given class.
    */

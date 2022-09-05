@@ -21,6 +21,9 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.PackageRootResolutionException;
+import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -201,7 +204,7 @@ public class FdoSupport {
    *
    * <p>Set only in {@link #prepareToBuild}.
    */
-  private ImmutableMultimap<PathFragment, PathFragment> imports;
+  private ImmutableMultimap<PathFragment, Artifact> imports;
 
   /**
    * Creates an FDO support object.
@@ -263,10 +266,12 @@ public class FdoSupport {
    * FDO gcda zip file into a clean working directory under execRoot.
    *
    * @throws FdoException if the FDO ZIP contains a file of unknown type
+   * @throws PackageRootResolutionException
    */
   @ThreadHostile // must be called before starting the build
-  public void prepareToBuild(Path execRoot)
-      throws IOException, FdoException {
+  public void prepareToBuild(Path execRoot, ArtifactFactory artifactDeserializer,
+      PackageRootResolver resolver)
+          throws IOException, FdoException, PackageRootResolutionException {
     // The execRoot != null case is only there for testing. We cannot provide a real ZIP file in
     // tests because ZipFileSystem does not work with a ZIP on an in-memory file system.
     // IMPORTANT: Keep in sync with #declareSkyframeDependencies to avoid incrementality issues.
@@ -280,7 +285,7 @@ public class FdoSupport {
         Path fdoImports = fdoProfile.getParentDirectory().getRelative(
             fdoProfile.getBaseName() + ".imports");
         if (isLipoEnabled()) {
-          imports = readAutoFdoImports(fdoImports);
+          imports = readAutoFdoImports(artifactDeserializer, fdoImports, resolver);
         }
         FileSystemUtils.ensureSymbolicLink(
             execRoot.getRelative(getAutoProfilePath()), fdoProfile);
@@ -294,9 +299,10 @@ public class FdoSupport {
                                  "for the compiler to find the profile");
         }
         ImmutableSet.Builder<PathFragment> gcdaFilesBuilder = ImmutableSet.builder();
-        ImmutableMultimap.Builder<PathFragment, PathFragment> importsBuilder =
+        ImmutableMultimap.Builder<PathFragment, Artifact> importsBuilder =
             ImmutableMultimap.builder();
-        extractFdoZip(zipFilePath, fdoDirPath, gcdaFilesBuilder, importsBuilder);
+        extractFdoZip(artifactDeserializer, zipFilePath, fdoDirPath,
+            gcdaFilesBuilder, importsBuilder, resolver);
         gcdaFiles = gcdaFilesBuilder.build();
         imports = importsBuilder.build();
       }
@@ -319,25 +325,29 @@ public class FdoSupport {
    *
    * @throws IOException if any of the I/O operations failed
    * @throws FdoException if the FDO ZIP contains a file of unknown type
+   * @throws PackageRootResolutionException on exception resolving package roots for imports
    */
-  private void extractFdoZip(Path sourceDir, Path targetDir,
-      ImmutableSet.Builder<PathFragment> gcdaFilesBuilder,
-      ImmutableMultimap.Builder<PathFragment, PathFragment> importsBuilder)
-          throws IOException, FdoException {
+  private void extractFdoZip(ArtifactFactory artifactFactory, Path sourceDir,
+      Path targetDir, ImmutableSet.Builder<PathFragment> gcdaFilesBuilder,
+      ImmutableMultimap.Builder<PathFragment, Artifact> importsBuilder,
+      PackageRootResolver resolver)
+          throws IOException, FdoException, PackageRootResolutionException {
     for (Path sourceFile : sourceDir.getDirectoryEntries()) {
       Path targetFile = targetDir.getRelative(sourceFile.getBaseName());
       if (sourceFile.isDirectory()) {
         targetFile.createDirectory();
-        extractFdoZip(sourceFile, targetFile, gcdaFilesBuilder, importsBuilder);
+        extractFdoZip(artifactFactory, sourceFile, targetFile, gcdaFilesBuilder, importsBuilder,
+            resolver);
       } else {
         if (CppFileTypes.COVERAGE_DATA.matches(sourceFile)) {
           FileSystemUtils.copyFile(sourceFile, targetFile);
           gcdaFilesBuilder.add(
               sourceFile.relativeTo(sourceFile.getFileSystem().getRootDirectory()));
         } else if (CppFileTypes.COVERAGE_DATA_IMPORTS.matches(sourceFile)) {
-          readCoverageImports(sourceFile, importsBuilder);
+          readCoverageImports(artifactFactory, sourceFile, importsBuilder, resolver);
         } else {
-            throw new FdoException("FDO ZIP file contained a file of unknown type: " + sourceFile);
+            throw new FdoException("FDO ZIP file contained a file of unknown type: "
+                + sourceFile);
         }
       }
     }
@@ -347,10 +357,12 @@ public class FdoSupport {
    * Reads a .gcda.imports file and stores the imports information.
    *
    * @throws FdoException if an auxiliary LIPO input was not found
+   * @throws PackageRootResolutionException on exception resolving package roots for imports
    */
-  private void readCoverageImports(Path importsFile,
-      ImmutableMultimap.Builder<PathFragment, PathFragment> importsBuilder)
-          throws IOException, FdoException {
+  private void readCoverageImports(ArtifactFactory artifactFactory, Path importsFile,
+      ImmutableMultimap.Builder<PathFragment, Artifact> importsBuilder,
+      PackageRootResolver resolver)
+          throws IOException, FdoException, PackageRootResolutionException {
     PathFragment key = importsFile.asFragment().relativeTo(ZIP_ROOT);
     String baseName = key.getBaseName();
     String ext = Iterables.getOnlyElement(CppFileTypes.COVERAGE_DATA_IMPORTS.getExtensions());
@@ -365,18 +377,24 @@ public class FdoSupport {
           throw new FdoException("Absolute paths not allowed in gcda imports file " + importsFile
               + ": " + execPath);
         }
-        importsBuilder.put(key, new PathFragment(line));
+        Artifact artifact = artifactFactory.deserializeArtifact(new PathFragment(line), resolver);
+        if (artifact == null) {
+          throw new FdoException("Auxiliary LIPO input not found: " + line);
+        }
+
+        importsBuilder.put(key, artifact);
       }
     }
   }
 
   /**
    * Reads a .afdo.imports file and stores the imports information.
+   * @throws PackageRootResolutionException
    */
-  private ImmutableMultimap<PathFragment, PathFragment> readAutoFdoImports(Path importsFile)
-          throws IOException, FdoException {
-    ImmutableMultimap.Builder<PathFragment, PathFragment> importBuilder =
-        ImmutableMultimap.builder();
+  private ImmutableMultimap<PathFragment, Artifact> readAutoFdoImports(
+      ArtifactFactory artifactFactory, Path importsFile, PackageRootResolver resolver)
+          throws IOException, FdoException, PackageRootResolutionException {
+    ImmutableMultimap.Builder<PathFragment, Artifact> importBuilder = ImmutableMultimap.builder();
     for (String line : FileSystemUtils.iterateLinesAsLatin1(importsFile)) {
       if (!line.isEmpty()) {
         PathFragment key = new PathFragment(line.substring(0, line.indexOf(':')));
@@ -388,8 +406,12 @@ public class FdoSupport {
           if (auxFile.length() == 0) {
             continue;
           }
-
-          importBuilder.put(key, new PathFragment(auxFile));
+          Artifact artifact = artifactFactory.deserializeArtifact(new PathFragment(auxFile),
+              resolver);
+          if (artifact == null) {
+            throw new FdoException("Auxiliary LIPO input not found: " + auxFile);
+          }
+          importBuilder.put(key, artifact);
         }
       }
     }
@@ -401,23 +423,12 @@ public class FdoSupport {
    *
    * @param sourceExecPath the source file
    */
-  private Collection<Artifact> getAutoFdoImports(RuleContext ruleContext,
-      PathFragment sourceExecPath, LipoContextProvider lipoContextProvider) {
+  private Collection<Artifact> getAutoFdoImports(PathFragment sourceExecPath) {
     Preconditions.checkState(isLipoEnabled());
-    ImmutableCollection<PathFragment> afdoImports = imports.get(sourceExecPath);
+    ImmutableCollection<Artifact> afdoImports = imports.get(sourceExecPath);
     Preconditions.checkState(afdoImports != null,
         "AutoFDO import data missing for %s", sourceExecPath);
-    ImmutableList.Builder<Artifact> result = ImmutableList.builder();
-    for (PathFragment afdoImport : afdoImports) {
-      Artifact afdoArtifact = lipoContextProvider.getSourceArtifactMap().get(afdoImport);
-      if (afdoArtifact != null) {
-        result.add(afdoArtifact);
-      } else {
-        ruleContext.ruleError(String.format(
-            "cannot find source file '%s' referenced from '%s'", afdoImport, sourceExecPath));
-      }
-    }
-    return result.build();
+    return afdoImports;
   }
 
   /**
@@ -426,12 +437,12 @@ public class FdoSupport {
    * @param objDirectory the object directory of the object file's target
    * @param objectName the object file
    */
-  private Iterable<PathFragment> getImports(PathFragment objDirectory, PathFragment objectName) {
+  private Iterable<Artifact> getImports(PathFragment objDirectory, PathFragment objectName) {
     Preconditions.checkState(isLipoEnabled());
     Preconditions.checkState(imports != null,
         "Tried to look up imports of uninitialized FDOSupport");
     PathFragment key = objDirectory.getRelative(FileSystemUtils.removeExtension(objectName));
-    ImmutableCollection<PathFragment> importsForObject = imports.get(key);
+    ImmutableCollection<Artifact> importsForObject = imports.get(key);
     Preconditions.checkState(importsForObject != null, "Import data missing for %s", key);
     return importsForObject;
   }
@@ -509,7 +520,7 @@ public class FdoSupport {
       env.registerAction(new FdoStubAction(ruleContext.getActionOwner(), artifact));
       auxiliaryInputs.add(artifact);
       if (lipoContextProvider != null) {
-        auxiliaryInputs.addAll(getAutoFdoImports(ruleContext, sourceExecPath, lipoContextProvider));
+        auxiliaryInputs.addAll(getAutoFdoImports(sourceExecPath));
       }
       return auxiliaryInputs.build();
     } else {
@@ -523,26 +534,20 @@ public class FdoSupport {
           getGcdaArtifactsForObjectFileName(ruleContext, env, objectName, lipoLabel));
 
       if (lipoContextProvider != null) {
-        for (PathFragment importedFile : getImports(
+        for (Artifact importedFile : getImports(
             getNonLipoObjDir(ruleContext, lipoLabel), objectName)) {
-          if (CppFileTypes.COVERAGE_DATA.matches(importedFile.getBaseName())) {
-            Artifact gcdaArtifact = getGcdaArtifactsForGcdaPath(ruleContext, env, importedFile);
+          if (CppFileTypes.COVERAGE_DATA.matches(importedFile.getFilename())) {
+            Artifact gcdaArtifact = getGcdaArtifactsForGcdaPath(
+                ruleContext, env, importedFile.getExecPath());
             if (gcdaArtifact == null) {
               ruleContext.ruleError(String.format(
                   ".gcda file %s is not in the FDO zip (referenced by source file %s)",
-                  importedFile, sourceName));
+                  importedFile.getExecPath(), sourceName));
             } else {
               auxiliaryInputs.add(gcdaArtifact);
             }
           } else {
-            Artifact importedArtifact = lipoContextProvider.getSourceArtifactMap()
-                .get(importedFile);
-            if (importedArtifact != null) {
-              auxiliaryInputs.add(importedArtifact);
-            } else {
-              ruleContext.ruleError(String.format(
-                  "cannot find source file '%s' referenced from '%s'", importedFile, objectName));
-            }
+            auxiliaryInputs.add(importedFile);
           }
         }
       }

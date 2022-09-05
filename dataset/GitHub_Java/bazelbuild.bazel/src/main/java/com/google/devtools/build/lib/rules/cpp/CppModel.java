@@ -310,10 +310,10 @@ public final class CppModel {
   private Collection<String> getHeaderModulePaths(CppCompileActionBuilder builder,
       boolean usePic) {
     Collection<String> result = new LinkedHashSet<>();
-    NestedSet<Artifact> artifacts =
-        featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_INCLUDES_DEPENDENCIES)
-            ? builder.getContext().getTopLevelHeaderModules(usePic)
-            : builder.getContext().getAdditionalInputs(usePic);
+    NestedSet<Artifact> artifacts = featureConfiguration.isEnabled(
+        CppRuleClasses.HEADER_MODULE_INCLUDES_DEPENDENCIES)
+        ? builder.getContext().getTopLevelHeaderModules()
+        : builder.getContext().getAdditionalInputs();
     for (Artifact artifact : artifacts) {
       String filename = artifact.getFilename();
       if (!filename.endsWith(".pcm")) {
@@ -374,8 +374,6 @@ public final class CppModel {
       buildVariables.addVariable("gcov_gcno_file", gcnoFile.getExecPathString());
     }
 
-    buildVariables.addAllVariables(CppHelper.getToolchain(ruleContext).getBuildVariables());
-    
     CcToolchainFeatures.Variables variables = buildVariables.build();
     builder.setVariables(variables);
   }
