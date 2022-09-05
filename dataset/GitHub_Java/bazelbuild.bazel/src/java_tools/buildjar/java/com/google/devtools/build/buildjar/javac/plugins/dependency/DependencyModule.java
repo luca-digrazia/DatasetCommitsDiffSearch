@@ -57,7 +57,7 @@ public final class DependencyModule {
     /** Fail the build when transitive dependencies are used directly. */
     ERROR(true);
 
-    private final boolean enabled;
+    private boolean enabled;
 
     StrictJavaDeps(boolean enabled) {
       this.enabled = enabled;
@@ -69,10 +69,10 @@ public final class DependencyModule {
     }
   }
 
-  private final StrictJavaDeps strictJavaDeps;
+  private StrictJavaDeps strictJavaDeps = StrictJavaDeps.OFF;
   private final Map<String, String> directJarsToTargets;
   private final Map<String, String> indirectJarsToTargets;
-  private final boolean strictClasspathMode;
+  private boolean strictClasspathMode;
   private final Set<String> depsArtifacts;
   private final String ruleKind;
   private final String targetLabel;
