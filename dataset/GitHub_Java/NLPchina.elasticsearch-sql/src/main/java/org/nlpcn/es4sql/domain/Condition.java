@@ -1,11 +1,7 @@
 package org.nlpcn.es4sql.domain;
 
 import java.util.Arrays;
-import java.util.Map;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
-import org.elasticsearch.common.collect.ImmutableMap;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 /**
@@ -15,33 +11,9 @@ import org.nlpcn.es4sql.exception.SqlParseException;
  */
 public class Condition extends Where {
 
-	public enum OPEAR {
-		EQ, GT, LT, GTE, LTE, N, LIKE, NLIKE, IS, ISN, IN, NIN , BETWEEN ,NBETWEEN , GEO_INTERSECTS , GEO_BOUNDING_BOX , GEO_DISTANCE , GEO_DISTANCE_RANGE, GEO_POLYGON , GEO_CELL,IN_TERMS;
-
-        public static Map<String,OPEAR> methodNameToOpear = ImmutableMap.of("in_terms",IN_TERMS,"terms",IN_TERMS);
-        private static BiMap<OPEAR, OPEAR> negatives;
-
-
-		static {
-			negatives = HashBiMap.create(7);
-			negatives.put(EQ, N);
-			negatives.put(GT, LTE);
-			negatives.put(LT, GTE);
-			negatives.put(LIKE, NLIKE);
-			negatives.put(IS, ISN);
-			negatives.put(IN, NIN);
-			negatives.put(BETWEEN, NBETWEEN);
-		}
-
-		public OPEAR negative() throws SqlParseException {
-			OPEAR negative = negatives.get(this);
-			negative = negative != null ? negative : negatives.inverse().get(this);
-			if (negative == null) {
-				throw new SqlParseException("OPEAR negative not supported: " + this);
-			}
-			return negative;
-		}
-	}
+	public static enum OPEAR {
+		EQ, GT, LT, GTE, LTE, N, LIKE, NLIKE, IS, ISN, IN, NIN , BETWEEN ,NBETWEEN , GEO_INTERSECTS , GEO_BOUNDING_BOX , GEO_DISTANCE , GEO_DISTANCE_RANGE, GEO_POLYGON , GEO_CELL
+	};
 
 	private String name;
 
