@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
-import com.google.devtools.build.lib.testutil.MoreAsserts;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -216,7 +215,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
                 ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
     assertArtifactFilenames(action.getInputs(), "a.txt", "b.img");
     assertArtifactFilenames(action.getOutputs(), "a.txt", "b.img");
-    MoreAsserts.assertContainsSublist(action.getArguments(), "-c", "dummy_command", "", "--a", "--b");
+    assertContainsSublist(action.getArguments(), "-c", "dummy_command", "", "--a", "--b");
     assertEquals("DummyMnemonic", action.getMnemonic());
     assertEquals("dummy_message", action.getProgressMessage());
     assertEquals(targetConfig.getDefaultShellEnvironment(), action.getEnvironment());
@@ -237,7 +236,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
                 ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
     assertArtifactFilenames(action.getInputs(), "a.txt", "b.img", "t.exe");
     assertArtifactFilenames(action.getOutputs(), "a.txt", "b.img");
-    MoreAsserts.assertContainsSublist(action.getArguments(), "foo/t.exe", "--a", "--b");
+    assertContainsSublist(action.getArguments(), "foo/t.exe", "--a", "--b");
   }
 
   public void testCreateSpawnActionArgumentsBadExecutable() throws Exception {
