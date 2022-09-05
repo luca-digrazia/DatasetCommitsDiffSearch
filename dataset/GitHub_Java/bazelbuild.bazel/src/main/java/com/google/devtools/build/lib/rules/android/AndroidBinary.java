@@ -827,10 +827,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .build();
     ProguardOutput result = ProguardHelper.createProguardAction(ruleContext, sdk.getProguard(),
         deployJarArtifact, proguardSpecs, proguardMapping, libraryJars, proguardOutputJar,
-        ruleContext.attributes().get("proguard_generate_mapping", Type.BOOLEAN),
-        ruleContext.attributes().has("proguard_optimization_passes", Type.INTEGER)
-          ? ruleContext.attributes().get("proguard_optimization_passes", Type.INTEGER)
-          : null);
+        ruleContext.attributes().get("proguard_generate_mapping", Type.BOOLEAN));
     // Since Proguard is being run, add its output artifacts to the given filesBuilder
     result.addAllToSet(filesBuilder);
     return result;
@@ -897,6 +894,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
       builder.addArgument("-ignorewarnings")
           .addArgument("-dontnote")
+          .addArgument("-forceprocessing")
           .addArgument("-dontoptimize")
           .addArgument("-dontobfuscate")
           .addArgument("-dontpreverify")
@@ -1204,6 +1202,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .addArgument(strippedJar.getExecPathString())
         .addArgument("-dontwarn")
         .addArgument("-dontnote")
+        .addArgument("-forceprocessing")
         .addArgument("-dontoptimize")
         .addArgument("-dontobfuscate")
         .addArgument("-dontpreverify");
