@@ -182,9 +182,16 @@ public class ShiroAutoconfiguration {
     @Aspect
     @Order(Ordered.HIGHEST_PRECEDENCE)
     static class MethodInterceptorHolderAdvisor {
-        @Around(value = "@annotation(org.hswebframework.web.authorization.annotation.RequiresExpression)" +
-                "||@annotation(org.hswebframework.web.authorization.annotation.RequiresDataAccess)" +
-                "||@annotation(org.hswebframework.web.authorization.annotation.Authorize)")
+        @Around(value = "@annotation(org.hswebframework.web.authorization.annotation.RequiresExpression)"
+                + "||@annotation(org.hswebframework.web.authorization.annotation.RequiresDataAccess)"
+                + "||@annotation(org.hswebframework.web.authorization.annotation.Authorize)"
+                + "||("
+                + "within(@org.hswebframework.web.authorization.annotation.Authorize *) "
+                + "&& ("
+                + "@annotation(org.springframework.web.bind.annotation.RequestMapping)||"
+                + "execution(org.hswebframework.web.controller.message.ResponseMessage *(..)"
+                + ")))"
+        )
         public Object around(ProceedingJoinPoint pjp) throws Throwable {
             MethodSignature signature = (MethodSignature) pjp.getSignature();
             String methodName = AopUtils.getMethodBody(pjp);
@@ -202,14 +209,14 @@ public class ShiroAutoconfiguration {
         @ResponseStatus(HttpStatus.FORBIDDEN)
         @ResponseBody
         ResponseMessage handleException(AuthorizationException exception) {
-            return ResponseMessage.error(exception.getMessage(), 403);
+            return ResponseMessage.error(403, exception.getMessage());
         }
 
         @ExceptionHandler(UnauthenticatedException.class)
         @ResponseStatus(HttpStatus.UNAUTHORIZED)
         @ResponseBody
         ResponseMessage handleException(UnauthenticatedException exception) {
-            return ResponseMessage.error("{access_denied}", 401);
+            return ResponseMessage.error(401, exception.getMessage() == null ? "{access_denied}" : exception.getMessage());
         }
     }
 
