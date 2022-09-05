@@ -37,7 +37,7 @@ public class InstrumentedClientConnManager extends PoolingClientConnectionManage
                                  "available-connections",
                                  new Gauge<Integer>() {
                                      @Override
-                                     public Integer value() {
+                                     public Integer getValue() {
                                          // this acquires a lock on the connection pool; remove if contention sucks
                                          return getTotalStats().getAvailable();
                                      }
@@ -46,7 +46,7 @@ public class InstrumentedClientConnManager extends PoolingClientConnectionManage
                                  "leased-connections",
                                  new Gauge<Integer>() {
                                      @Override
-                                     public Integer value() {
+                                     public Integer getValue() {
                                          // this acquires a lock on the connection pool; remove if contention sucks
                                          return getTotalStats().getLeased();
                                      }
@@ -55,7 +55,7 @@ public class InstrumentedClientConnManager extends PoolingClientConnectionManage
                                  "max-connections",
                                  new Gauge<Integer>() {
                                      @Override
-                                     public Integer value() {
+                                     public Integer getValue() {
                                          // this acquires a lock on the connection pool; remove if contention sucks
                                          return getTotalStats().getMax();
                                      }
@@ -64,7 +64,7 @@ public class InstrumentedClientConnManager extends PoolingClientConnectionManage
                                  "pending-connections",
                                  new Gauge<Integer>() {
                                      @Override
-                                     public Integer value() {
+                                     public Integer getValue() {
                                          // this acquires a lock on the connection pool; remove if contention sucks
                                          return getTotalStats().getPending();
                                      }

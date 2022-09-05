@@ -42,10 +42,9 @@ public class AdminServletTest {
 
     @Before
     public void setUp() throws Exception {
-        when(context.getContextPath()).thenReturn("/context");
-
         when(config.getServletContext()).thenReturn(context);
 
+        when(request.getContextPath()).thenReturn("/context");
         when(request.getMethod()).thenReturn("GET");
         when(request.getServletPath()).thenReturn("/admin");
         when(response.getWriter()).thenReturn(new PrintWriter(new OutputStreamWriter(output)));
@@ -70,7 +69,7 @@ public class AdminServletTest {
         verify(response).setStatus(200);
         verify(response).setContentType("text/html");
 
-        assertThat(output.toString(),
+        assertThat(output.toString().replaceAll("\r\n", "\n"),
                    is("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\n        " +
                               "\"http://www.w3.org/TR/html4/loose.dtd\">\n<html>\n<head>\n  " +
                               "<title>Metrics</title>\n</head>\n<body>\n  " +
@@ -91,11 +90,34 @@ public class AdminServletTest {
         verify(response).setStatus(200);
         verify(response).setContentType("text/html");
 
-        assertThat(output.toString(),
+        assertThat(output.toString().replaceAll("\r\n", "\n"),
                    is("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\n        " +
                               "\"http://www.w3.org/TR/html4/loose.dtd\">\n<html>\n<head>\n  " +
                               "<title>Metrics</title>\n</head>\n<body>\n  " +
                               "<h1>Operational Menu</h1>\n  <ul>\n    " +
+                              "<li><a href=\"/context/admin/metrics?pretty=true\">Metrics</a></li>\n    " +
+                              "<li><a href=\"/context/admin/ping\">Ping</a></li>\n    " +
+                              "<li><a href=\"/context/admin/threads\">Threads</a></li>\n    " +
+                              "<li><a href=\"/context/admin/healthcheck\">Healthcheck</a></li>\n  " +
+                              "</ul>\n</body>\n</html>\n"));
+    }
+
+    @Test
+    public void displaysServiceNameIfSet() throws Exception {
+        when(request.getPathInfo()).thenReturn("/");
+
+        servlet.setServiceName("my service");
+        
+        servlet.service(request, response);
+
+        verify(response).setStatus(200);
+        verify(response).setContentType("text/html");
+
+        assertThat(output.toString().replaceAll("\r\n", "\n"),
+                   is("<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\n        " +
+                              "\"http://www.w3.org/TR/html4/loose.dtd\">\n<html>\n<head>\n  " +
+                              "<title>Metrics (my service)</title>\n</head>\n<body>\n  " +
+                              "<h1>Operational Menu (my service)</h1>\n  <ul>\n    " +
                               "<li><a href=\"/context/admin/metrics?pretty=true\">Metrics</a></li>\n    " +
                               "<li><a href=\"/context/admin/ping\">Ping</a></li>\n    " +
                               "<li><a href=\"/context/admin/threads\">Threads</a></li>\n    " +
