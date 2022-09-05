@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClass
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -107,9 +106,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private ImmutableList.Builder<Class<?>> skylarkModules =
         ImmutableList.<Class<?>>builder().addAll(SkylarkModules.MODULES);
     private final List<Class<? extends FragmentOptions>> buildOptions = Lists.newArrayList();
-    private ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>>
-        registeredSkylarkProviders = ImmutableBiMap.of();
- 
 
     public void addWorkspaceFilePrefix(String contents) {
       defaultWorkspaceFilePrefix.append(contents);
@@ -202,16 +198,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    /**
-     * Registers a map that indicates which keys in structs returned by skylark rules should be
-     * interpreted as native TransitiveInfoProvider instances of type (map value).
-     */
-    public Builder setSkylarkProviderRegistry(
-        ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>> providers) {
-      this.registeredSkylarkProviders = providers;
-      return this;
-    }
-
     private RuleConfiguredTargetFactory createFactory(
         Class<? extends RuleConfiguredTargetFactory> factoryClass) {
       try {
@@ -288,8 +274,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           prerequisiteValidator,
           skylarkAccessibleTopLevels,
           skylarkModules.build(),
-          buildOptions,
-          registeredSkylarkProviders);
+          buildOptions);
     }
 
     @Override
@@ -388,9 +373,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
   private final Environment.Frame globals;
 
   private final List<Class<? extends FragmentOptions>> buildOptions;
-  
-  private final ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>>
-      registeredSkylarkProviders;
 
   private ConfiguredRuleClassProvider(
       Label preludeLabel,
@@ -409,8 +391,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
       ImmutableList<Class<?>> skylarkModules,
-      List<Class<? extends FragmentOptions>> buildOptions,
-      ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>> registeredSkylarkProviders) {
+      List<Class<? extends FragmentOptions>> buildOptions) {
     this.preludeLabel = preludeLabel;
     this.runfilesPrefix = runfilesPrefix;
     this.toolsRepository = toolsRepository;
@@ -427,7 +408,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses, skylarkModules);
     this.buildOptions = buildOptions;
-    this.registeredSkylarkProviders = registeredSkylarkProviders;
   }
 
   public PrerequisiteValidator getPrerequisiteValidator() {
@@ -526,19 +506,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     return ImmutableList.copyOf(buildOptions);
   }
 
-  /**
-   * Returns a map that indicates which keys in structs returned by skylark rules should be
-   * interpreted as native TransitiveInfoProvider instances of type (map value).
-   *
-   * <p>That is, if this map contains "dummy" -> DummyProvider.class, a "dummy" entry in a skylark
-   * rule implementations returned struct will be exported from that ConfiguredTarget as a
-   * DummyProvider.
-   */
-  public ImmutableBiMap<String, Class<? extends TransitiveInfoProvider>>
-      getRegisteredSkylarkProviders() {
-    return this.registeredSkylarkProviders;
-  }
-  
   /**
    * Creates a BuildOptions class for the given options taken from an optionsProvider.
    */

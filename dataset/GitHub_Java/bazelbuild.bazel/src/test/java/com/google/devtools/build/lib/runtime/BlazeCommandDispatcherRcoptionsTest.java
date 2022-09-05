@@ -131,8 +131,7 @@ public class BlazeCommandDispatcherRcoptionsTest {
   public final void initializeRuntime() throws Exception {
     BlazeDirectories directories =
         new BlazeDirectories(
-            scratch.dir("install_base"), scratch.dir("output_base"), scratch.dir("pkg"),
-            TestConstants.PRODUCT_NAME);
+            scratch.dir("install_base"), scratch.dir("output_base"), scratch.dir("pkg"));
     this.runtime =
         new BlazeRuntime.Builder()
             .setDirectories(directories)

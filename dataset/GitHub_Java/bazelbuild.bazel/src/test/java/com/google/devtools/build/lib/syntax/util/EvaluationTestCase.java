@@ -34,9 +34,11 @@ import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestMode;
+
+import org.junit.Before;
+
 import java.util.LinkedList;
 import java.util.List;
-import org.junit.Before;
 
 /**
  * Base class for test cases that use parsing and evaluation services.
@@ -67,7 +69,7 @@ public class EvaluationTestCase {
    */
   public Environment newBuildEnvironment() {
     return Environment.builder(mutability)
-        .setGlobals(Environment.DEFAULT_GLOBALS)
+        .setGlobals(Environment.BUILD)
         .setEventHandler(getEventHandler())
         .setToolsRepository(TestConstants.TOOLS_REPOSITORY)
         .setPhase(Phase.LOADING)
@@ -81,7 +83,7 @@ public class EvaluationTestCase {
   public Environment newSkylarkEnvironment() {
     return Environment.builder(mutability)
         .setSkylark()
-        .setGlobals(Environment.DEFAULT_GLOBALS)
+        .setGlobals(Environment.SKYLARK)
         .setEventHandler(getEventHandler())
         .build();
   }
