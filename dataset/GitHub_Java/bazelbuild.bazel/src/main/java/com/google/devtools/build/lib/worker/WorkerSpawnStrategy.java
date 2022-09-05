@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.worker;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -26,7 +27,6 @@ import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
-import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ChangedFilesMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
@@ -41,19 +41,16 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
 import com.google.devtools.build.lib.util.CommandFailureUtils;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.devtools.common.options.OptionsClassProvider;
-import com.google.protobuf.ByteString;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -69,7 +66,6 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
   public static final String REASON_NO_TOOLS =
       "Not using worker strategy, because the action has no tools";
 
-  private final Path execRoot;
   private final WorkerPool workers;
   private final IncrementalHeuristic incrementalHeuristic;
   private final StandaloneSpawnStrategy standaloneStrategy;
@@ -90,7 +86,6 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
     eventBus.register(incrementalHeuristic);
     this.workers = Preconditions.checkNotNull(workers);
     this.standaloneStrategy = new StandaloneSpawnStrategy(blazeDirs.getExecRoot(), verboseFailures);
-    this.execRoot = blazeDirs.getExecRoot();
     this.verboseFailures = verboseFailures;
     this.maxRetries = maxRetries;
   }
@@ -145,34 +140,19 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
         .add("--persistent_worker")
         .build();
     ImmutableMap<String, String> env = spawn.getEnvironment();
+    Path workDir = actionExecutionContext.getExecutor().getExecRoot();
 
     try {
-      ActionInputFileCache inputFileCache = actionExecutionContext.getActionInputFileCache();
-
-      HashCode workerFilesHash = combineActionInputHashes(spawn.getToolFiles(), inputFileCache);
-      WorkerKey key = new WorkerKey(args, env, execRoot, spawn.getMnemonic(), workerFilesHash);
+      HashCode workerFilesHash =
+          combineActionInputHashes(
+              spawn.getToolFiles(), actionExecutionContext.getActionInputFileCache());
+      WorkerKey key = new WorkerKey(args, env, workDir, spawn.getMnemonic(), workerFilesHash);
 
       WorkRequest.Builder requestBuilder = WorkRequest.newBuilder();
       expandArgument(requestBuilder, Iterables.getLast(spawn.getArguments()));
 
-      List<ActionInput> inputs =
-          ActionInputHelper.expandMiddlemen(
-              spawn.getInputFiles(), actionExecutionContext.getMiddlemanExpander());
-
-      for (ActionInput input : inputs) {
-        ByteString digest = inputFileCache.getDigest(input);
-        if (digest == null) {
-          digest = ByteString.EMPTY;
-        }
-
-        requestBuilder
-            .addInputsBuilder()
-            .setPath(input.getExecPathString())
-            .setDigest(digest)
-            .build();
-      }
-
-      WorkResponse response = execInWorker(eventHandler, key, requestBuilder.build(), maxRetries);
+      WorkResponse response =
+          execInWorker(executor.getEventHandler(), key, requestBuilder.build(), maxRetries);
 
       outErr.getErrorStream().write(response.getOutputBytes().toByteArray());
 
@@ -184,7 +164,7 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
     } catch (Exception e) {
       String message =
           CommandFailureUtils.describeCommandFailure(
-              verboseFailures, spawn.getArguments(), env, execRoot.getPathString());
+              verboseFailures, spawn.getArguments(), env, workDir.getPathString());
       throw new UserExecException(message, e);
     }
   }
@@ -199,8 +179,7 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
    */
   private void expandArgument(WorkRequest.Builder requestBuilder, String arg) throws IOException {
     if (arg.startsWith("@") && !arg.startsWith("@@")) {
-      for (String line : Files.readAllLines(
-          Paths.get(execRoot.getRelative(arg.substring(1)).getPathString()), UTF_8)) {
+      for (String line : Files.readAllLines(Paths.get(arg.substring(1)), UTF_8)) {
         if (line.length() > 0) {
           expandArgument(requestBuilder, line);
         }
