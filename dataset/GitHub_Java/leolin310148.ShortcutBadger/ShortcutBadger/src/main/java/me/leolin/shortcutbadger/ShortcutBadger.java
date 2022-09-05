@@ -64,7 +64,9 @@ public final class ShortcutBadger {
             applyCountOrThrow(context, badgeCount);
             return true;
         } catch (ShortcutBadgeException e) {
-            Log.e(LOG_TAG, "Unable to execute badge", e);
+            if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
+                Log.d(LOG_TAG, "Unable to execute badge", e);
+            }
             return false;
         }
     }
@@ -112,13 +114,8 @@ public final class ShortcutBadger {
     // Initialize Badger if a launcher is availalble (eg. set as default on the device)
     // Returns true if a launcher is available, in this case, the Badger will be set and sShortcutBadger will be non null.
     private static boolean initBadger(Context context) {
-        Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
-        if (launchIntent == null) {
-            Log.e(LOG_TAG, "Unable to find launch intent for package", context.getPackageName());
-            return false;
-        }
 
-        sComponentName = launchIntent.getComponent();
+        sComponentName = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName()).getComponent();
 
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_HOME);
