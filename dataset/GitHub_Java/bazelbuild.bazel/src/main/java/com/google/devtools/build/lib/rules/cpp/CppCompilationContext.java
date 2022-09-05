@@ -36,7 +36,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Immutable store of information needed for C++ compilation that is aggregated
@@ -64,10 +63,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   private final ModuleInfo picModuleInfo;
 
   private final CppModuleMap cppModuleMap;
-  private final CppModuleMap verificationModuleMap;
-
-  private final boolean propagateModuleMapAsActionInput;
-
+  
   // Derived from depsContexts.
   private final ImmutableSet<Artifact> compilationPrerequisites;
 
@@ -81,9 +77,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       ModuleInfo moduleInfo,
       ModuleInfo picModuleInfo,
       NestedSet<Artifact> directModuleMaps,
-      CppModuleMap cppModuleMap,
-      @Nullable CppModuleMap verificationModuleMap,
-      boolean propagateModuleMapAsActionInput) {
+      CppModuleMap cppModuleMap) {
     Preconditions.checkNotNull(commandLineContext);
     this.commandLineContext = commandLineContext;
     this.declaredIncludeDirs = declaredIncludeDirs;
@@ -94,9 +88,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     this.moduleInfo = moduleInfo;
     this.picModuleInfo = picModuleInfo;
     this.cppModuleMap = cppModuleMap;
-    this.verificationModuleMap = verificationModuleMap;
     this.compilationPrerequisites = compilationPrerequisites;
-    this.propagateModuleMapAsActionInput = propagateModuleMapAsActionInput;
   }
 
   /**
@@ -222,7 +214,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   public NestedSet<Artifact> getAdditionalInputs() {
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     builder.addTransitive(directModuleMaps);
-    if (cppModuleMap != null && propagateModuleMapAsActionInput) {
+    if (cppModuleMap != null) {
       builder.add(cppModuleMap.getArtifact());
     }
     return builder.build();
@@ -270,9 +262,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         context.moduleInfo,
         context.picModuleInfo,
         context.directModuleMaps,
-        context.cppModuleMap,
-        context.verificationModuleMap,
-        context.propagateModuleMapAsActionInput);
+        context.cppModuleMap);
   }
 
   /**
@@ -321,11 +311,9 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         moduleInfo.build(),
         picModuleInfo.build(),
         mergeSets(ownerContext.directModuleMaps, libContext.directModuleMaps),
-        libContext.cppModuleMap,
-        libContext.verificationModuleMap,
-        libContext.propagateModuleMapAsActionInput);
+        libContext.cppModuleMap);
   }
-
+  
   /**
    * Return a nested set containing all elements from {@code s1} and {@code s2}.
    */
@@ -339,11 +327,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   /** @return the C++ module map of the owner. */
   public CppModuleMap getCppModuleMap() {
     return cppModuleMap;
-  }
-
-  /** @return the C++ module map of the owner. */
-  public CppModuleMap getVerificationModuleMap() {
-    return verificationModuleMap;
   }
 
   /**
@@ -390,8 +373,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     private final NestedSetBuilder<Artifact> directModuleMaps = NestedSetBuilder.stableOrder();
     private final Set<String> defines = new LinkedHashSet<>();
     private CppModuleMap cppModuleMap;
-    private CppModuleMap verificationModuleMap;
-    private boolean propagateModuleMapAsActionInput = true;
 
     /** The rule that owns the context */
     private final RuleContext ruleContext;
@@ -604,29 +585,16 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       return this;
     }
 
-    /** Sets the C++ module map. */
+    /**
+     * Sets the C++ module map.
+     */
     public Builder setCppModuleMap(CppModuleMap cppModuleMap) {
       this.cppModuleMap = cppModuleMap;
       return this;
     }
 
-    /** Sets the C++ module map used to verify that headers are modules compatible. */
-    public Builder setVerificationModuleMap(CppModuleMap verificationModuleMap) {
-      this.verificationModuleMap = verificationModuleMap;
-      return this;
-    }
-
-    /**
-     * Causes the module map to be passed as an action input to dependant compilations.
-     */
-    public Builder setPropagateCppModuleMapAsActionInput(boolean propagateModuleMap) {
-      this.propagateModuleMapAsActionInput = propagateModuleMap;
-      return this;
-    }
-
     /**
      * Sets the C++ header module in non-pic mode.
-     *
      * @param headerModule The .pcm file generated for this library.
      */
     public Builder setHeaderModule(Artifact headerModule) {
@@ -677,9 +645,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
           moduleInfo.build(),
           picModuleInfo.build(),
           directModuleMaps.build(),
-          cppModuleMap,
-          verificationModuleMap,
-          propagateModuleMapAsActionInput);
+          cppModuleMap);
     }
 
     /**

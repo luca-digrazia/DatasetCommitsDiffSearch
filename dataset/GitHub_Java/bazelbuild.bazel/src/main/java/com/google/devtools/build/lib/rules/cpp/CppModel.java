@@ -508,9 +508,6 @@ public final class CppModel {
       } else if (CppFileTypes.CLIF_INPUT_PROTO.matches(source.getSource().getExecPath())) {
         createClifMatchAction(outputName, result, env, builder);
       } else {
-        boolean bitcodeOutput =
-            featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
-                && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
         createSourceAction(
             outputName,
             result,
@@ -520,10 +517,7 @@ public final class CppModel {
             ArtifactCategory.OBJECT_FILE,
             /*addObject=*/ true,
             isCodeCoverageEnabled(),
-            // The source action does not generate dwo when it has bitcode
-            // output (since it isn't generating a native object with debug
-            // info). In that case the LTOBackendAction will generate the dwo.
-            /*generateDwo=*/ cppConfiguration.useFission() && !bitcodeOutput,
+            /*generateDwo=*/ cppConfiguration.useFission(),
             CppFileTypes.mustProduceDotdFile(sourceArtifact.getFilename()),
             source.getBuildVariables());
       }
@@ -972,15 +966,7 @@ public final class CppModel {
 
       for (LTOBackendArtifacts ltoArtifacts : indexAction.getAllLTOBackendArtifacts()) {
         ltoArtifacts.scheduleLTOBackendAction(
-            ruleContext,
-            featureConfiguration,
-            usePicForSharedLibs,
-            // If support is ever added for generating a dwp file for shared
-            // library targets (e.g. when linkstatic=0), then this should change
-            // to generate dwo files when cppConfiguration.useFission(),
-            // and the dwp generating action for the shared library should
-            // include all of the resulting dwo files.
-            /*generateDwo=*/ false);
+            ruleContext, featureConfiguration, usePicForSharedLibs);
       }
 
       linkActionBuilder.setLTOIndexing(false);
