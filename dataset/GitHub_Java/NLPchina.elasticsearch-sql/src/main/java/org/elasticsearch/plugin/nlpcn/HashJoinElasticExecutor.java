@@ -157,7 +157,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
 
                             Map<String,Object> copiedSource = new HashMap<String,Object>();
                             copyMaps(copiedSource,secondTableHit.sourceAsMap());
-                            onlyReturnedFields(copiedSource, secondTableRequest.getReturnedFields(),secondTableRequest.getOriginalSelect().isSelectAll());
+                            onlyReturnedFields(copiedSource, secondTableRequest.getReturnedFields());
 
 
 
@@ -211,7 +211,7 @@ public class HashJoinElasticExecutor extends ElasticJoinExecutor {
                 InternalSearchHit searchHit = new InternalSearchHit(resultIds, hit.id(), new StringText(hit.getType()), hit.getFields());
                 searchHit.sourceRef(hit.getSourceRef());
 
-                onlyReturnedFields(searchHit.sourceAsMap(), firstTableRequest.getReturnedFields(),firstTableRequest.getOriginalSelect().isSelectAll());
+                onlyReturnedFields(searchHit.sourceAsMap(), firstTableRequest.getReturnedFields());
                 resultIds++;
                 this.hashJoinComparisonStructure.insertIntoComparisonHash(comparisonID, key, searchHit);
             }
