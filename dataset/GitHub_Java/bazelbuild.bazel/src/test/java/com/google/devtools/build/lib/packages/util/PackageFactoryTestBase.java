@@ -42,6 +42,9 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+
+import org.junit.Before;
+
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.Collection;
@@ -50,7 +53,6 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
-import org.junit.Before;
 
 /**
  * Base class for PackageFactory tests.
@@ -111,9 +113,8 @@ public abstract class PackageFactoryTestBase {
             pkg.getPackageIdentifier(),
             PackageFactoryApparatus.createEmptyLocator(),
             null,
-            TestUtils.getPool(),
-            -1);
-    assertThat(globCache.globUnsorted(include, exclude, false)).containsExactlyElementsIn(expected);
+            TestUtils.getPool());
+    assertThat(globCache.glob(include, exclude, false)).containsExactlyElementsIn(expected);
   }
 
   @Before
