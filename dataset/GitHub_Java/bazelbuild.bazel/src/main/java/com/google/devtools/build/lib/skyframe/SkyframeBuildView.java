@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -47,7 +48,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -90,6 +91,7 @@ public final class SkyframeBuildView {
   private final ConfiguredTargetFactory factory;
   private final ArtifactFactory artifactFactory;
   private final SkyframeExecutor skyframeExecutor;
+  private final BinTools binTools;
   private boolean enableAnalysis = false;
 
   // This hack allows us to see when a configured target has been invalidated, and thus when the set
@@ -124,11 +126,13 @@ public final class SkyframeBuildView {
   private boolean skyframeAnalysisWasDiscarded;
 
   public SkyframeBuildView(BlazeDirectories directories,
-      SkyframeExecutor skyframeExecutor, ConfiguredRuleClassProvider ruleClassProvider) {
+      SkyframeExecutor skyframeExecutor, BinTools binTools,
+      ConfiguredRuleClassProvider ruleClassProvider) {
     this.factory = new ConfiguredTargetFactory(ruleClassProvider);
     this.artifactFactory = new ArtifactFactory(
         directories.getExecRoot().getParentDirectory(), directories.getRelativeOutputPath());
     this.skyframeExecutor = skyframeExecutor;
+    this.binTools = binTools;
     this.ruleClassProvider = ruleClassProvider;
   }
 
@@ -195,7 +199,7 @@ public final class SkyframeBuildView {
    * @return the configured targets that should be built along with a WalkableGraph of the analysis.
    */
   public SkyframeAnalysisResult configureTargets(
-      ExtendedEventHandler eventHandler,
+      EventHandler eventHandler,
       List<ConfiguredTargetKey> values,
       List<AspectValueKey> aspectKeys,
       EventBus eventBus,
@@ -453,7 +457,7 @@ public final class SkyframeBuildView {
   CachingAnalysisEnvironment createAnalysisEnvironment(
       ArtifactOwner owner,
       boolean isSystemEnv,
-      ExtendedEventHandler eventHandler,
+      EventHandler eventHandler,
       Environment env,
       BuildConfiguration config)
       throws InterruptedException {
@@ -464,7 +468,7 @@ public final class SkyframeBuildView {
     boolean allowRegisteringActions = config == null || config.isActionsEnabled();
     return new CachingAnalysisEnvironment(
         artifactFactory, owner, isSystemEnv, extendedSanityChecks, eventHandler, env,
-        allowRegisteringActions);
+        allowRegisteringActions, binTools);
   }
 
   /**
