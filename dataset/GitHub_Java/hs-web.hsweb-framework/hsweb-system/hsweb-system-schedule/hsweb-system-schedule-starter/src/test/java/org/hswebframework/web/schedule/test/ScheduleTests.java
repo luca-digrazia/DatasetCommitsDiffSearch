@@ -7,6 +7,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -20,16 +22,17 @@ public class ScheduleTests extends SimpleWebApplicationTests {
 
     AtomicInteger counter = new AtomicInteger();
 
+    CountDownLatch countDownLatch = new CountDownLatch(1);
+
     @Scheduled(cron = "0/1 * * * * ?")
     public void quartzTest() {
-        System.out.println(1234);
         counter.incrementAndGet();
+        countDownLatch.countDown();
     }
 
     @Test
     public void test() throws InterruptedException {
-        Thread.sleep(10000);
+        countDownLatch.await(100, TimeUnit.SECONDS);
         Assert.assertTrue(counter.get() > 0);
-        System.out.println(counter.get());
     }
 }
