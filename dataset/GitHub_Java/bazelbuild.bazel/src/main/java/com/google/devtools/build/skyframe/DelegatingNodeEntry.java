@@ -15,8 +15,10 @@ package com.google.devtools.build.skyframe;
 
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
+
 import java.util.Collection;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /** Convenience class for {@link NodeEntry} implementations that delegate many operations. */
@@ -33,23 +35,23 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   }
 
   @Override
-  public SkyValue getValue() throws InterruptedException {
+  public SkyValue getValue() {
     return getDelegate().getValue();
   }
 
   @Override
-  public SkyValue getValueMaybeWithMetadata() throws InterruptedException {
+  public SkyValue getValueMaybeWithMetadata() {
     return getDelegate().getValueMaybeWithMetadata();
   }
 
   @Override
-  public SkyValue toValue() throws InterruptedException {
+  public SkyValue toValue() {
     return getDelegate().toValue();
   }
 
   @Nullable
   @Override
-  public ErrorInfo getErrorInfo() throws InterruptedException {
+  public ErrorInfo getErrorInfo() {
     return getDelegate().getErrorInfo();
   }
 
@@ -59,19 +61,17 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   }
 
   @Override
-  public Set<SkyKey> setValue(SkyValue value, Version version) throws InterruptedException {
+  public Set<SkyKey> setValue(SkyValue value, Version version) {
     return getDelegate().setValue(value, version);
   }
 
   @Override
-  public DependencyState addReverseDepAndCheckIfDone(@Nullable SkyKey reverseDep)
-      throws InterruptedException {
+  public DependencyState addReverseDepAndCheckIfDone(@Nullable SkyKey reverseDep) {
     return getDelegate().addReverseDepAndCheckIfDone(reverseDep);
   }
 
   @Override
-  public DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep)
-      throws InterruptedException {
+  public DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) {
     return getDelegate().checkIfDoneForDirtyReverseDep(reverseDep);
   }
 
@@ -86,7 +86,7 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   }
 
   @Override
-  public Set<SkyKey> markClean() throws InterruptedException {
+  public Set<SkyKey> markClean() {
     return getDelegate().markClean();
   }
 
@@ -156,23 +156,23 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
   }
 
   @Override
-  public Iterable<SkyKey> getDirectDeps() throws InterruptedException {
-    return getDelegate().getDirectDeps();
+  public Iterable<SkyKey> getDirectDeps() {
+    return getThinDelegate().getDirectDeps();
   }
 
   @Override
-  public void removeReverseDep(SkyKey reverseDep) throws InterruptedException {
-    getDelegate().removeReverseDep(reverseDep);
+  public void removeReverseDep(SkyKey reverseDep) {
+    getThinDelegate().removeReverseDep(reverseDep);
   }
 
   @Override
   public void removeInProgressReverseDep(SkyKey reverseDep) {
-    getDelegate().removeInProgressReverseDep(reverseDep);
+    getThinDelegate().removeInProgressReverseDep(reverseDep);
   }
 
   @Override
-  public Iterable<SkyKey> getReverseDeps() throws InterruptedException {
-    return getDelegate().getReverseDeps();
+  public Iterable<SkyKey> getReverseDeps() {
+    return getThinDelegate().getReverseDeps();
   }
 
   @Override
@@ -187,7 +187,7 @@ public abstract class DelegatingNodeEntry implements NodeEntry {
 
   @Override
   @Nullable
-  public MarkedDirtyResult markDirty(boolean isChanged) throws InterruptedException {
+  public MarkedDirtyResult markDirty(boolean isChanged) {
     return getThinDelegate().markDirty(isChanged);
   }
 

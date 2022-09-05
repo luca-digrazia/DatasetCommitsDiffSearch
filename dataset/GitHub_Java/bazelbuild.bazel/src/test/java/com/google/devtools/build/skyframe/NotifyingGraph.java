@@ -15,7 +15,6 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Maps.EntryTransformer;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
@@ -279,11 +278,6 @@ public class NotifyingGraph<TGraph extends ThinNodeQueryableGraph> implements Pr
       graphListener.accept(
           myKey, EventType.GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE, Order.BEFORE, this);
       return super.getAllDirectDepsForIncompleteNode();
-    }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this).add("delegate", getThinDelegate()).toString();
     }
   }
 }
