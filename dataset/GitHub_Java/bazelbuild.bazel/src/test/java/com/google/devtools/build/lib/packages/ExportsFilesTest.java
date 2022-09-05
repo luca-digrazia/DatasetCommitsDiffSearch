@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
@@ -21,41 +23,37 @@ import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import org.junit.Before;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** A test for the {@code exports_files} function defined in {@link PackageFactory}. */
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * A test for the {@code exports_files} function defined in
+ * {@link PackageFactory}.
+ */
 @RunWith(JUnit4.class)
 public class ExportsFilesTest {
 
   private Scratch scratch = new Scratch("/workspace");
   private EventCollectionApparatus events = new EventCollectionApparatus();
   private PackageFactoryApparatus packages = new PackageFactoryApparatus(events.reporter());
-  private Root root;
-
-  @Before
-  public void setUp() throws Exception {
-    root = Root.fromPath(scratch.dir(""));
-  }
 
   private Package pkg() throws Exception {
     Path buildFile = scratch.file("pkg/BUILD",
                                   "exports_files(['foo.txt', 'bar.txt'])");
-    return packages.createPackage("pkg", RootedPath.toRootedPath(root, buildFile));
+    return packages.createPackage("pkg", buildFile);
   }
 
   @Test
   public void testExportsFilesRegistersFilesWithPackage() throws Exception {
     List<String> names = getFileNamesOf(pkg());
     String expected = "//pkg:BUILD //pkg:bar.txt //pkg:foo.txt";
-    assertThat(Joiner.on(' ').join(names)).isEqualTo(expected);
+    assertEquals(expected, Joiner.on(' ').join(names));
   }
 
   /**
@@ -85,8 +83,8 @@ public class ExportsFilesTest {
   @Test
   public void testRegisteredFilesAreRetrievable() throws Exception {
     Package pkg = pkg();
-    assertThat(pkg.getTarget("foo.txt").getName()).isEqualTo("foo.txt");
-    assertThat(pkg.getTarget("bar.txt").getName()).isEqualTo("bar.txt");
+    assertEquals("foo.txt", pkg.getTarget("foo.txt").getName());
+    assertEquals("bar.txt", pkg.getTarget("bar.txt").getName());
   }
 
   @Test
@@ -97,10 +95,10 @@ public class ExportsFilesTest {
         "exports_files(['foo'])",
         "genrule(name = 'foo', srcs = ['bar'], outs = [],",
         "        cmd = '/bin/true')");
-    Package pkg = packages.createPackage("pkg2", RootedPath.toRootedPath(root, buildFile));
+    Package pkg = packages.createPackage("pkg2", buildFile);
     events.assertContainsError("rule 'foo' in package 'pkg2' conflicts with "
                                + "existing source file");
-    assertThat(pkg.getTarget("foo") instanceof InputFile).isTrue();
+    assertTrue(pkg.getTarget("foo") instanceof InputFile);
   }
 
 }

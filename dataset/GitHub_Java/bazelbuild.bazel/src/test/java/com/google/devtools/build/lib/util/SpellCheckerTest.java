@@ -84,9 +84,8 @@ public class SpellCheckerTest {
   @Test
   public void suggest() throws Exception {
     List<String> dict = Lists.newArrayList(
-        "isalnum", "isalpha", "isdigit", "islower", "isupper", "find", "join", "range",
-        "rsplit", "rstrip", "split", "splitlines", "startswith", "strip", "title", "upper",
-        "x", "xyz");
+        "isalnum", "isalpha", "isdigit", "islower", "isupper", "find", "join",
+        "rsplit", "rstrip", "split", "splitlines", "startswith", "strip", "title", "upper");
 
     assertThat(SpellChecker.suggest("isdfit", dict)).isEqualTo("isdigit");
     assertThat(SpellChecker.suggest("rspit", dict)).isEqualTo("rsplit");
@@ -96,17 +95,12 @@ public class SpellCheckerTest {
     assertThat(SpellChecker.suggest("fird", dict)).isEqualTo("find");
     assertThat(SpellChecker.suggest("stip", dict)).isEqualTo("strip");
     assertThat(SpellChecker.suggest("isAln", dict)).isEqualTo("isalnum");
-    assertThat(SpellChecker.suggest("targe", dict)).isEqualTo("range");
-    assertThat(SpellChecker.suggest("rarget", dict)).isEqualTo("range");
-    assertThat(SpellChecker.suggest("xyw", dict)).isEqualTo("xyz");
 
-    assertThat(SpellChecker.suggest("target", dict)).isNull();
-    assertThat(SpellChecker.suggest("isAl", dict)).isNull();
-    assertThat(SpellChecker.suggest("", dict)).isNull();
-    assertThat(SpellChecker.suggest("f", dict)).isNull();
-    assertThat(SpellChecker.suggest("fir", dict)).isNull();
-    assertThat(SpellChecker.suggest("wqevxc", dict)).isNull();
-    assertThat(SpellChecker.suggest("ialsnuaip", dict)).isNull();
-    assertThat(SpellChecker.suggest("xy", dict)).isNull();
+    assertThat(SpellChecker.suggest("isAl", dict)).isEqualTo(null);
+    assertThat(SpellChecker.suggest("", dict)).isEqualTo(null);
+    assertThat(SpellChecker.suggest("f", dict)).isEqualTo(null);
+    assertThat(SpellChecker.suggest("fir", dict)).isEqualTo(null);
+    assertThat(SpellChecker.suggest("wqevxc", dict)).isEqualTo(null);
+    assertThat(SpellChecker.suggest("ialsnuaip", dict)).isEqualTo(null);
   }
 }

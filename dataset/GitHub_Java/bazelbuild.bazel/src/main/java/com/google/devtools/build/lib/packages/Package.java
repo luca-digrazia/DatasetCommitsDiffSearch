@@ -691,23 +691,14 @@ public class Package {
     return b;
   }
 
-  /**
-   * A builder for {@link Package} objects. Only intended to be used by {@link PackageFactory} and
-   * {@link com.google.devtools.build.lib.skyframe.PackageFunction}.
-   */
+  /** A builder for {@link Package} objects. Only intended to be used by {@link PackageFactory}. */
   public static class Builder {
     public static interface Helper {
       /**
        * Returns a fresh {@link Package} instance that a {@link Builder} will internally mutate
-       * during package loading. Called by {@link PackageFactory}.
+       * during package loading.
        */
       Package createFreshPackage(PackageIdentifier packageId, String runfilesPrefix);
-
-      /**
-       * Called after {@link com.google.devtools.build.lib.skyframe.PackageFunction} is completely
-       * done loading the given {@link Package}.
-       */
-      void onLoadingComplete(Package pkg);
     }
 
     /** {@link Helper} that simply calls the {@link Package} constructor. */
@@ -720,10 +711,6 @@ public class Package {
       @Override
       public Package createFreshPackage(PackageIdentifier packageId, String runfilesPrefix) {
         return new Package(packageId, runfilesPrefix);
-      }
-
-      @Override
-      public void onLoadingComplete(Package pkg) {
       }
     }
 
