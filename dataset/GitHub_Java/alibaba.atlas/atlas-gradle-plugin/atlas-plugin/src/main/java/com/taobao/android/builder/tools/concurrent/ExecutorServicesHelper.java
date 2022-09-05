@@ -221,7 +221,7 @@ import org.slf4j.Logger;
 
 public class ExecutorServicesHelper {
 
-    // Number of threads started
+    // 启动的线程数
     private ExecutorService executorService = null;
 
     private Logger logger;
