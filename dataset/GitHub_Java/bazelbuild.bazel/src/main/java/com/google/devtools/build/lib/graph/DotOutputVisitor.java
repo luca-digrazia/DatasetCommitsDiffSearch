@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,11 +58,11 @@ public class DotOutputVisitor<T> implements GraphVisitor<T> {
   public void visitEdge(Node<T> lhs, Node<T> rhs) {
     String s_lhs = disp.serialize(lhs);
     String s_rhs = disp.serialize(rhs);
-    out.println("  \"" + s_lhs + "\" -> \"" + s_rhs + "\"");
+    out.println("\"" + s_lhs + "\" -> \"" + s_rhs + "\"");
   }
 
   @Override
   public void visitNode(Node<T> node) {
-    out.println("  \"" + disp.serialize(node) + "\"");
+    out.println("\"" + disp.serialize(node) + "\"");
   }
 }
