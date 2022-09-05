@@ -14,10 +14,10 @@
 
 package com.google.devtools.build.lib.buildtool.buildevent;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.rules.test.TestProvider;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 
@@ -42,8 +42,13 @@ public class TestFilteringCompleteEvent {
   public TestFilteringCompleteEvent(
       Collection<? extends ConfiguredTarget> targets,
       Collection<? extends ConfiguredTarget> testTargets) {
-    this.targets = ImmutableList.copyOf(targets);
-    this.testTargets = testTargets == null ? null : ImmutableList.copyOf(testTargets);
+    // Do not remove <ConfiguredTarget>: workaround for Java 7 type inference.
+    this.targets = ImmutableList.<ConfiguredTarget>copyOf(targets);
+    this.testTargets =
+        testTargets == null
+            ? null
+            // Do not remove <ConfiguredTarget>: workaround for Java 7 type inference.
+            : ImmutableList.<ConfiguredTarget>copyOf(testTargets);
     if (testTargets == null) {
       return;
     }

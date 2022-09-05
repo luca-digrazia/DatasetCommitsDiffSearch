@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
@@ -24,7 +25,6 @@ import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.Attribute.Transition;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.io.PrintStream;
 import java.io.Serializable;
@@ -107,13 +107,6 @@ public final class BuildConfigurationCollection {
       result.addAll(config.getAllReachableConfigurations());
     }
     return result;
-  }
-
-  /**
-   * Returns whether this build uses dynamic configurations.
-   */
-  public boolean useDynamicConfigurations() {
-    return getTargetConfigurations().get(0).useDynamicConfigurations();
   }
 
   @Override

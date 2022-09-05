@@ -28,9 +28,7 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
 import java.util.Comparator;
 import java.util.List;
@@ -39,8 +37,7 @@ import java.util.Set;
 /**
  * Test for {@link Digraph}.
  */
-@RunWith(JUnit4.class)
-public class DigraphTest {
+public class DigraphTest extends TestCase {
 
   class FakeTarget implements Target {
 
@@ -101,7 +98,6 @@ public class DigraphTest {
     }
   }
 
-  @Test
   public void testStableOrdering() throws Exception {
     Digraph<Target> digraph = new Digraph<>();
     FakeTarget a = new FakeTarget(Label.create("pkg", "a"));
