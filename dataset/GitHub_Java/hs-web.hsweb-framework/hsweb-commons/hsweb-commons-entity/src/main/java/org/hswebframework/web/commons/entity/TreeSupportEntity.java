@@ -21,6 +21,7 @@ package org.hswebframework.web.commons.entity;
 
 import org.hswebframework.web.id.IDGenerator;
 import org.hswebframwork.utils.RandomUtil;
+import org.hswebframwork.utils.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -51,6 +52,11 @@ public interface TreeSupportEntity<PK> extends GenericEntity<PK> {
 
     void setLevel(Integer level);
 
+    default void setLevelFromPath() {
+        if (getPath() != null)
+            setLevel(getPath().split("-").length);
+    }
+
     <T extends TreeSupportEntity<PK>> List<T> getChildren();
 
     /**
@@ -79,8 +85,7 @@ public interface TreeSupportEntity<PK> extends GenericEntity<PK> {
         List<T> children = parent.getChildren();
         if (parent.getPath() == null) {
             parent.setPath(RandomUtil.randomChar(4));
-            if (parent.getPath() != null)
-                parent.setLevel(parent.getPath().split("-").length);
+            parent.setLevelFromPath();
         }
         if (children != null) {
             PK pid = parent.getId();
@@ -99,7 +104,7 @@ public interface TreeSupportEntity<PK> extends GenericEntity<PK> {
                 }
                 child.setParentId(pid);
                 child.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
-                child.setLevel(child.getPath().split("-").length);
+                child.setLevelFromPath();
                 target.add(child);
                 expandTree2List(child, target, idGenerator);
             }
