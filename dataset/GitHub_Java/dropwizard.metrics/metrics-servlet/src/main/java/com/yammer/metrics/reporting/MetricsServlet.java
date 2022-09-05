@@ -4,7 +4,8 @@ import com.yammer.metrics.HealthChecks;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.core.*;
 import com.yammer.metrics.core.HealthCheck.Result;
-import com.yammer.metrics.core.VirtualMachineMetrics.GarbageCollector;
+import com.yammer.metrics.core.VirtualMachineMetrics.*;
+import com.yammer.metrics.util.Utils;
 import org.codehaus.jackson.JsonEncoding;
 import org.codehaus.jackson.JsonFactory;
 import org.codehaus.jackson.JsonGenerator;
@@ -25,14 +26,14 @@ import java.lang.Thread.State;
 import java.text.MessageFormat;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
-public class MetricsServlet extends HttpServlet implements MetricProcessor<MetricsServlet.Context> {
+import static com.yammer.metrics.core.VirtualMachineMetrics.*;
+
+public class MetricsServlet extends HttpServlet implements MetricsProcessor<MetricsServlet.Context> {
     private static final Logger LOGGER = LoggerFactory.getLogger(MetricsServlet.class);
     public static final String ATTR_NAME_METRICS_REGISTRY = MetricsServlet.class.getSimpleName() + ":" + MetricsRegistry.class.getSimpleName();
     public static final String ATTR_NAME_HEALTHCHECK_REGISTRY = MetricsServlet.class.getSimpleName() + ":" + HealthCheckRegistry.class.getSimpleName();
-    public static final String ATTR_NAME_VM_REGISTRY = MetricsServlet.class.getSimpleName() + ":" + VirtualMachineMetrics.class.getSimpleName();
 
     private static final String TEMPLATE = "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\"\n" +
                                            "        \"http://www.w3.org/TR/html4/loose.dtd\">\n" +
@@ -56,7 +57,6 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     public static final String THREADS_URI = "/threads";
     private MetricsRegistry metricsRegistry;
     private HealthCheckRegistry healthCheckRegistry;
-    private VirtualMachineMetrics vm;
     private JsonFactory factory;
     private String metricsUri, pingUri, threadsUri, healthcheckUri, contextPath;
     private boolean showJvmMetrics;
@@ -94,18 +94,13 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     public MetricsServlet(MetricsRegistry metricsRegistry, HealthCheckRegistry healthCheckRegistry, JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
-        this(metricsRegistry, healthCheckRegistry, VirtualMachineMetrics.INSTANCE, factory, metricsUri, pingUri, threadsUri, healthcheckUri, showJvmMetrics);
-    }
-
-    public MetricsServlet(MetricsRegistry metricsRegistry, HealthCheckRegistry healthCheckRegistry, VirtualMachineMetrics vm, JsonFactory factory, String healthcheckUri, String metricsUri, String pingUri, String threadsUri, boolean showJvmMetrics) {
         this.metricsRegistry = metricsRegistry;
         this.healthCheckRegistry = healthCheckRegistry;
-        this.vm = vm;
         this.factory = factory;
+        this.healthcheckUri = healthcheckUri;
         this.metricsUri = metricsUri;
         this.pingUri = pingUri;
         this.threadsUri = threadsUri;
-        this.healthcheckUri = healthcheckUri;
         this.showJvmMetrics = showJvmMetrics;
     }
 
@@ -118,7 +113,6 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         this.contextPath = context.getContextPath();
         this.metricsRegistry = putAttrIfAbsent(context, ATTR_NAME_METRICS_REGISTRY, this.metricsRegistry);
         this.healthCheckRegistry = putAttrIfAbsent(context, ATTR_NAME_HEALTHCHECK_REGISTRY, this.healthCheckRegistry);
-        this.vm = putAttrIfAbsent(context, ATTR_NAME_VM_REGISTRY, this.vm);
         this.metricsUri = getParam(config.getInitParameter("metrics-uri"), this.metricsUri);
         this.pingUri = getParam(config.getInitParameter("ping-uri"), this.pingUri);
         this.threadsUri = getParam(config.getInitParameter("threads-uri"), this.threadsUri);
@@ -223,11 +217,11 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         writer.close();
     }
 
-    private void handleThreadDump(HttpServletResponse resp) throws IOException {
+    private static void handleThreadDump(HttpServletResponse resp) throws IOException {
         resp.setStatus(HttpServletResponse.SC_OK);
         resp.setContentType("text/plain");
         final OutputStream output = resp.getOutputStream();
-        vm.threadDump(output);
+        threadDump(output);
         output.close();
     }
 
@@ -271,7 +265,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     public void writeRegularMetrics(JsonGenerator json, String classPrefix, boolean showFullSamples) throws IOException {
-        for (Entry<String,SortedMap<MetricName,Metric>> entry : metricsRegistry.groupedMetrics().entrySet()) {
+        for (Entry<String, Map<MetricName, Metric>> entry : Utils.sortMetrics(metricsRegistry.allMetrics()).entrySet()) {
             if (classPrefix == null || entry.getKey().startsWith(classPrefix)) {
                 json.writeFieldName(entry.getKey());
                 json.writeStartObject();
@@ -281,7 +275,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
                         try {
                             subEntry.getValue().processWith(this, subEntry.getKey(), new Context(json, showFullSamples));
                         }
-                        catch(Exception ignored) {
+                        catch(Exception e) {
                         }
                     }
                 }
@@ -291,14 +285,14 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     @Override
-    public void processHistogram(MetricName name, Histogram histogram, Context context) throws Exception {
-        final JsonGenerator json = context.json;
+    public void processHistogram(MetricName name, HistogramMetric histogram, Context context) throws Exception {
+        JsonGenerator json = context.json;
         json.writeStartObject();
         {
             json.writeStringField("type", "histogram");
             json.writeNumberField("count", histogram.count());
             writeSummarized(histogram, json);
-            writeQuantized(histogram, json);
+            writePercentiles(histogram, json);
 
             if (context.showFullSamples) {
                 json.writeObjectField("values", histogram.values());
@@ -308,8 +302,8 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     @Override
-    public void processCounter(MetricName name, Counter counter, Context context) throws Exception {
-        final JsonGenerator json = context.json;
+    public void processCounter(MetricName name, CounterMetric counter, Context context) throws Exception {
+        JsonGenerator json = context.json;
         json.writeStartObject();
         {
             json.writeStringField("type", "counter");
@@ -319,8 +313,8 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     @Override
-    public void processGauge(MetricName name, Gauge<?> gauge, Context context) throws Exception {
-        final JsonGenerator json = context.json;
+    public void processGauge(MetricName name, GaugeMetric<?> gauge, Context context) throws Exception {
+        JsonGenerator json = context.json;
         json.writeStartObject();
         {
             json.writeStringField("type", "gauge");
@@ -329,7 +323,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         json.writeEndObject();
     }
 
-    private static Object evaluateGauge(Gauge<?> gauge) {
+    private static Object evaluateGauge(GaugeMetric<?> gauge) {
         try {
             return gauge.value();
         } catch (RuntimeException e) {
@@ -338,7 +332,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         }
     }
 
-    private void writeVmMetrics(JsonGenerator json) throws IOException {
+    private static void writeVmMetrics(JsonGenerator json) throws IOException {
         json.writeFieldName("jvm");
         json.writeStartObject();
         {
@@ -346,29 +340,29 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             json.writeFieldName("vm");
             json.writeStartObject();
             {
-                json.writeStringField("name", vm.name());
-                json.writeStringField("version", vm.version());
+                json.writeStringField("name", vmName());
+                json.writeStringField("version", vmVersion());
             }
             json.writeEndObject();
             json.writeFieldName("memory");
             json.writeStartObject();
             {
-                json.writeNumberField("totalInit", vm.totalInit());
-                json.writeNumberField("totalUsed", vm.totalUsed());
-                json.writeNumberField("totalMax", vm.totalMax());
-                json.writeNumberField("totalCommitted", vm.totalCommitted());
+                json.writeNumberField("totalInit", totalInit());
+                json.writeNumberField("totalUsed", totalUsed());
+                json.writeNumberField("totalMax", totalMax());
+                json.writeNumberField("totalCommited", totalCommited());
 
-                json.writeNumberField("heapInit", vm.heapInit());
-                json.writeNumberField("heapUsed", vm.heapUsed());
-                json.writeNumberField("heapMax", vm.heapMax());
-                json.writeNumberField("heapCommitted", vm.heapCommitted());
+                json.writeNumberField("heapInit", heapInit());
+                json.writeNumberField("heapUsed", heapUsed());
+                json.writeNumberField("heapMax", heapMax());
+                json.writeNumberField("heapCommited", heapCommited());
 
-                json.writeNumberField("heap_usage", vm.heapUsage());
-                json.writeNumberField("non_heap_usage", vm.nonHeapUsage());
+                json.writeNumberField("heap_usage", heapUsage());
+                json.writeNumberField("non_heap_usage", nonHeapUsage());
                 json.writeFieldName("memory_pool_usages");
                 json.writeStartObject();
                 {
-                    for (Entry<String, Double> pool : vm.memoryPoolUsage().entrySet()) {
+                    for (Entry<String, Double> pool : memoryPoolUsage().entrySet()) {
                         json.writeNumberField(pool.getKey(), pool.getValue());
                     }
                 }
@@ -376,16 +370,16 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             }
             json.writeEndObject();
 
-            json.writeNumberField("daemon_thread_count", vm.daemonThreadCount());
-            json.writeNumberField("thread_count", vm.threadCount());
+            json.writeNumberField("daemon_thread_count", daemonThreadCount());
+            json.writeNumberField("thread_count", threadCount());
             json.writeNumberField("current_time", System.currentTimeMillis());
-            json.writeNumberField("uptime", vm.uptime());
-            json.writeNumberField("fd_usage", vm.fileDescriptorUsage());
+            json.writeNumberField("uptime", uptime());
+            json.writeNumberField("fd_usage", fileDescriptorUsage());
 
             json.writeFieldName("thread-states");
             json.writeStartObject();
             {
-                for (Entry<State, Double> entry : vm.threadStatePercentages().entrySet()) {
+                for (Entry<State, Double> entry : threadStatePercentages().entrySet()) {
                     json.writeNumberField(entry.getKey().toString().toLowerCase(), entry.getValue());
                 }
             }
@@ -394,7 +388,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             json.writeFieldName("garbage-collectors");
             json.writeStartObject();
             {
-                for (Entry<String, GarbageCollector> entry : vm.garbageCollectors().entrySet()) {
+                for (Entry<String, GarbageCollector> entry : garbageCollectors().entrySet()) {
                     json.writeFieldName(entry.getKey());
                     json.writeStartObject();
                     {
@@ -412,7 +406,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
 
     @Override
     public void processMeter(MetricName name, Metered meter, Context context) throws Exception {
-        final JsonGenerator json = context.json;
+        JsonGenerator json = context.json;
         json.writeStartObject();
         {
             json.writeStringField("type", "meter");
@@ -423,8 +417,8 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
     }
 
     @Override
-    public void processTimer(MetricName name, Timer timer, Context context) throws Exception {
-        final JsonGenerator json = context.json;
+    public void processTimer(MetricName name, TimerMetric timer, Context context) throws Exception {
+        JsonGenerator json = context.json;
         json.writeStartObject();
         {
             json.writeStringField("type", "timer");
@@ -433,7 +427,7 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
             {
                 json.writeStringField("unit", timer.durationUnit().toString().toLowerCase());
                 writeSummarized(timer,json);
-                writeQuantized(timer, json);
+                writePercentiles(timer, json);
                 if (context.showFullSamples) {
                     json.writeObjectField("values", timer.values());
                 }
@@ -457,14 +451,14 @@ public class MetricsServlet extends HttpServlet implements MetricProcessor<Metri
         json.writeNumberField("std_dev", metric.stdDev());
     }
     
-    private static void writeQuantized(Quantized metric, JsonGenerator json) throws IOException {
-        final Double[] quantiles = metric.quantiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
-        json.writeNumberField("median", quantiles[0]);
-        json.writeNumberField("p75", quantiles[1]);
-        json.writeNumberField("p95", quantiles[2]);
-        json.writeNumberField("p98", quantiles[3]);
-        json.writeNumberField("p99", quantiles[4]);
-        json.writeNumberField("p999", quantiles[5]);
+    private static void writePercentiles(Percentiled metric, JsonGenerator json) throws IOException {
+        final Double[] percentiles = metric.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
+        json.writeNumberField("median", percentiles[0]);
+        json.writeNumberField("p75", percentiles[1]);
+        json.writeNumberField("p95", percentiles[2]);
+        json.writeNumberField("p98", percentiles[3]);
+        json.writeNumberField("p99", percentiles[4]);
+        json.writeNumberField("p999", percentiles[5]);
     }
     
     private static void writeMeteredFields(Metered metered, JsonGenerator json) throws IOException {
