@@ -24,13 +24,13 @@ import java.util.function.Consumer;
 public class Proxy<I> {
     private static final AtomicLong counter = new AtomicLong(1);
 
-    private final CtClass ctClass;
+    private CtClass  ctClass;
     @Getter
-    private final Class<I> superClass;
+    private Class<I> superClass;
     @Getter
-    private final String className;
+    private String   className;
     @Getter
-    private final String classFullName;
+    private String   classFullName;
 
     private Class<I> targetClass;
 
@@ -49,8 +49,6 @@ public class Proxy<I> {
 
         ClassPath classPath = new ClassClassPath(this.getClass());
         classPool.insertClassPath(classPath);
-        classPool.insertClassPath(new LoaderClassPath(ClassUtils.getDefaultClassLoader()));
-
         if (classPathString != null) {
             for (String path : classPathString) {
                 classPool.insertClassPath(path);
