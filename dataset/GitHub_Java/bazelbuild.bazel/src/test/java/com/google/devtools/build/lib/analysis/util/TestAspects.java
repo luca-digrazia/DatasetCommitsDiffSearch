@@ -170,7 +170,7 @@ public class TestAspects {
       String information = parameters.isEmpty()
           ? ""
           : " data " + Iterables.getFirst(parameters.getAttribute("baz"), null);
-      return new ConfiguredAspect.Builder(this, parameters, ruleContext)
+      return new ConfiguredAspect.Builder(getClass().getName(), ruleContext)
           .addProvider(
               new AspectInfo(
                   collectAspectData("aspect " + ruleContext.getLabel() + information, ruleContext)))
@@ -180,7 +180,7 @@ public class TestAspects {
 
   public static final SimpleAspect SIMPLE_ASPECT = new SimpleAspect();
   private static final AspectDefinition SIMPLE_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(SIMPLE_ASPECT).build();
+      new AspectDefinition.Builder("simple").build();
 
   /**
    * A very simple aspect.
@@ -194,14 +194,14 @@ public class TestAspects {
 
   public static final ExtraAttributeAspect EXTRA_ATTRIBUTE_ASPECT = new ExtraAttributeAspect();
   private static final AspectDefinition EXTRA_ATTRIBUTE_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(EXTRA_ATTRIBUTE_ASPECT)
+      new AspectDefinition.Builder("extra_attribute")
           .add(attr("$dep", LABEL).value(Label.parseAbsoluteUnchecked("//extra:extra")))
           .build();
 
   private static final ExtraAttributeAspectRequiringProvider
     EXTRA_ATTRIBUTE_ASPECT_REQUIRING_PROVIDER = new ExtraAttributeAspectRequiringProvider();
   private static final AspectDefinition EXTRA_ATTRIBUTE_ASPECT_REQUIRING_PROVIDER_DEFINITION =
-      new AspectDefinition.Builder(EXTRA_ATTRIBUTE_ASPECT_REQUIRING_PROVIDER)
+      new AspectDefinition.Builder("extra_attribute_with_provider")
           .add(attr("$dep", LABEL).value(Label.parseAbsoluteUnchecked("//extra:extra")))
           .requireProvider(RequiredProvider.class)
           .build();
@@ -218,7 +218,7 @@ public class TestAspects {
 
   public static final AttributeAspect ATTRIBUTE_ASPECT = new AttributeAspect();
   private static final AspectDefinition ATTRIBUTE_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(ATTRIBUTE_ASPECT)
+      new AspectDefinition.Builder("attribute")
       .attributeAspect("foo", ATTRIBUTE_ASPECT)
       .build();
 
@@ -234,7 +234,7 @@ public class TestAspects {
   }
   public static final NativeAspectClass ALL_ATTRIBUTES_ASPECT = new AllAttributesAspect();
   private static final AspectDefinition ALL_ATTRIBUTES_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(ALL_ATTRIBUTES_ASPECT)
+      new AspectDefinition.Builder("all_attributes_aspect")
           .allAttributesAspect(ALL_ATTRIBUTES_ASPECT)
           .build();
 
@@ -250,7 +250,7 @@ public class TestAspects {
   public static final NativeAspectClass ALL_ATTRIBUTES_WITH_TOOL_ASPECT =
       new AllAttributesWithToolAspect();
   private static final AspectDefinition ALL_ATTRIBUTES_WITH_TOOL_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(ALL_ATTRIBUTES_WITH_TOOL_ASPECT)
+      new AspectDefinition.Builder("all_attributes_with_tool_aspect")
           .allAttributesAspect(ALL_ATTRIBUTES_WITH_TOOL_ASPECT)
           .add(
               attr("$tool", BuildType.LABEL)
@@ -294,7 +294,7 @@ public class TestAspects {
     @Override
     public AspectDefinition getDefinition(AspectParameters aspectParameters) {
       AspectDefinition.Builder builder =
-          new AspectDefinition.Builder(PARAMETRIZED_DEFINITION_ASPECT)
+          new AspectDefinition.Builder("parametrized_definition_aspect")
               .attributeAspect("foo", this);
       ImmutableCollection<String> baz = aspectParameters.getAttribute("baz");
       if (baz != null) {
@@ -323,7 +323,7 @@ public class TestAspects {
         information.append(dep.getLabel());
       }
       information.append("]");
-      return new ConfiguredAspect.Builder(this, parameters, ruleContext)
+      return new ConfiguredAspect.Builder(getClass().getName(), ruleContext)
           .addProvider(new AspectInfo(collectAspectData(information.toString(), ruleContext)))
           .build();
     }
@@ -335,7 +335,7 @@ public class TestAspects {
   private static final AspectRequiringProvider ASPECT_REQUIRING_PROVIDER =
       new AspectRequiringProvider();
   private static final AspectDefinition ASPECT_REQUIRING_PROVIDER_DEFINITION =
-      new AspectDefinition.Builder(ASPECT_REQUIRING_PROVIDER)
+      new AspectDefinition.Builder("requiring_provider")
           .requireProvider(RequiredProvider.class)
           .build();
 
@@ -349,7 +349,7 @@ public class TestAspects {
     public ConfiguredAspect create(
         ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters) {
       ruleContext.ruleWarning("Aspect warning on " + base.getTarget().getLabel());
-      return new ConfiguredAspect.Builder(this, parameters, ruleContext).build();
+      return new ConfiguredAspect.Builder("warning", ruleContext).build();
     }
 
     @Override
@@ -360,7 +360,7 @@ public class TestAspects {
 
   public static final WarningAspect WARNING_ASPECT = new WarningAspect();
   private static final AspectDefinition WARNING_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(WARNING_ASPECT)
+      new AspectDefinition.Builder("warning")
       .attributeAspect("bar", WARNING_ASPECT)
       .build();
 
@@ -385,7 +385,7 @@ public class TestAspects {
 
   public static final ErrorAspect ERROR_ASPECT = new ErrorAspect();
   private static final AspectDefinition ERROR_ASPECT_DEFINITION =
-      new AspectDefinition.Builder(ERROR_ASPECT)
+      new AspectDefinition.Builder("error")
       .attributeAspect("bar", ERROR_ASPECT)
       .build();
 
