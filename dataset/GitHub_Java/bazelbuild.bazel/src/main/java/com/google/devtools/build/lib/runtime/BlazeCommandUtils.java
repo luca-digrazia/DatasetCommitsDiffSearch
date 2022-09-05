@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,19 +131,15 @@ public class BlazeCommandUtils {
       throw new IllegalStateException("Help template for '" + topic + "' omits %{options}!");
     }
 
-    String optionStr =
-        parser
-            .describeOptions(categoryDescriptions, helpVerbosity)
-            .replace("%{product}", Constants.PRODUCT_NAME);
-    return template
-            .replace("%{product}", Constants.PRODUCT_NAME)
-            .replace("%{command}", topic)
-            .replace("%{options}", optionStr)
-            .trim()
+    return template.
+        replace("%{product}", Constants.PRODUCT_NAME).
+        replace("%{command}", topic).
+        replace("%{options}", parser.describeOptions(categoryDescriptions, helpVerbosity)).
+        trim()
         + "\n\n"
         + (helpVerbosity == OptionsParser.HelpVerbosity.MEDIUM
-            ? "(Use 'help --long' for full details or --short to just enumerate options.)\n"
-            : "");
+           ? "(Use 'help --long' for full details or --short to just enumerate options.)\n"
+           : "");
   }
 
   /**
