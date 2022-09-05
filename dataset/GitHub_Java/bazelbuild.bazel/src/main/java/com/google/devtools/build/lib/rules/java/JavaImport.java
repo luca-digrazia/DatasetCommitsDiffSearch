@@ -55,11 +55,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    ImmutableList<TransitiveInfoCollection> targets =
-        ImmutableList.<TransitiveInfoCollection>builder()
-            .addAll(ruleContext.getPrerequisites("deps", Mode.TARGET))
-            .addAll(ruleContext.getPrerequisites("exports", Mode.TARGET))
-            .build();
+    ImmutableList<TransitiveInfoCollection> targets = ImmutableList.copyOf(
+        ruleContext.getPrerequisites("exports", Mode.TARGET));
     final JavaCommon common = new JavaCommon(
         ruleContext, semantics, targets, targets, targets);
     semantics.checkRule(ruleContext, common);

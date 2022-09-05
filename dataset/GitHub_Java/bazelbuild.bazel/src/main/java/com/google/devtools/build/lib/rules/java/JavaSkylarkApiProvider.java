@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.SkylarkApiProvider;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.SkylarkCallable;
+import com.google.devtools.build.lib.syntax.SkylarkModule;
 
 /**
  * A class that exposes the Java providers to Skylark. It is intended to provide a
@@ -69,34 +69,4 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
     JavaSourceJarsProvider sourceJars = getInfo().getProvider(JavaSourceJarsProvider.class);
     return sourceJars.getTransitiveSourceJars();
   }
-
-  @SkylarkCallable(
-    name = "outputs",
-    doc = "Returns information about outputs of this Java target",
-    structField = true
-  )
-  public JavaRuleOutputJarsProvider getOutputJars() {
-    return getInfo().getProvider(JavaRuleOutputJarsProvider.class);
-  }
-
-  @SkylarkCallable(
-    name = "annotation_processing",
-    structField = true,
-    allowReturnNones = true,
-    doc = "Returns information about annotation processing for this Java target"
-  )
-  public JavaGenJarsProvider getGenJarsProvider() {
-    return getInfo().getProvider(JavaGenJarsProvider.class);
-  }
-
-  @SkylarkCallable(
-    name = "compilation_info",
-    structField = true,
-    allowReturnNones = true,
-    doc = "Returns compilation information for this Java target"
-  )
-  public JavaCompilationInfoProvider getCompilationInfoProvider() {
-    return getInfo().getProvider(JavaCompilationInfoProvider.class);
-  }
-
 }
