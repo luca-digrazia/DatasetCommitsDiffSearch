@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.select;
 
-import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertSameContents;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.testutil.TestConstants;
 
 /**
@@ -45,8 +44,9 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
     Rule rule = createRule("a", "myrule",
         "sh_binary(name = 'myrule',",
         "          srcs = ['a.sh'])");
-    assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactlyElementsIn(ImmutableList.of(ImmutableList.of(Label.create("a", "a.sh"))));
+    assertSameContents(
+        ImmutableList.of(ImmutableList.of(Label.create("a", "a.sh"))),
+        AggregatingAttributeMapper.of(rule).visitAttribute("srcs", Type.LABEL_LIST));
   }
 
   /**
@@ -59,14 +59,14 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "          srcs = select({",
         "              '//conditions:a': ['a.sh'],",
         "              '//conditions:b': ['b.sh'],",
-        "              '" + BuildType.Selector.DEFAULT_CONDITION_KEY + "': ['default.sh'],",
+        "              '" + Type.Selector.DEFAULT_CONDITION_KEY + "': ['default.sh'],",
         "          }))");
-    assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactlyElementsIn(
-            ImmutableList.of(
-                ImmutableList.of(Label.create("a", "a.sh")),
-                ImmutableList.of(Label.create("a", "b.sh")),
-                ImmutableList.of(Label.create("a", "default.sh"))));
+    assertSameContents(
+        ImmutableList.of(
+            ImmutableList.of(Label.create("a", "a.sh")),
+            ImmutableList.of(Label.create("a", "b.sh")),
+            ImmutableList.of(Label.create("a", "default.sh"))),
+        AggregatingAttributeMapper.of(rule).visitAttribute("srcs", Type.LABEL_LIST));
   }
 
   public void testGetPossibleValuesWithConcatenatedSelects() throws Exception {
@@ -79,13 +79,13 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "                  '//conditions:a2': ['a2.sh'],",
         "                  '//conditions:b2': ['b2.sh']})",
         "          )");
-    assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("srcs", BuildType.LABEL_LIST))
-        .containsExactlyElementsIn(
-            ImmutableList.of(
-                ImmutableList.of(Label.create("a", "a1.sh"), Label.create("a", "a2.sh")),
-                ImmutableList.of(Label.create("a", "a1.sh"), Label.create("a", "b2.sh")),
-                ImmutableList.of(Label.create("a", "b1.sh"), Label.create("a", "a2.sh")),
-                ImmutableList.of(Label.create("a", "b1.sh"), Label.create("a", "b2.sh"))));
+    assertSameContents(
+        ImmutableList.of(
+            ImmutableList.of(Label.create("a", "a1.sh"), Label.create("a", "a2.sh")),
+            ImmutableList.of(Label.create("a", "a1.sh"), Label.create("a", "b2.sh")),
+            ImmutableList.of(Label.create("a", "b1.sh"), Label.create("a", "a2.sh")),
+            ImmutableList.of(Label.create("a", "b1.sh"), Label.create("a", "b2.sh"))),
+        AggregatingAttributeMapper.of(rule).visitAttribute("srcs", Type.LABEL_LIST));
   }
 
   /**
@@ -101,9 +101,10 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
     }
     ruleDef.append(")");
     Rule rule = createRule("a", "gen", ruleDef.toString());
-    // Naive evaluation would visit 2^26 cases and either overflow memory or timeout the test.
-    assertThat(AggregatingAttributeMapper.of(rule).visitAttribute("cmd", Type.STRING))
-        .containsExactly("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+    assertSameContents(
+        ImmutableList.of("abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        // Naive evaluation would visit 2^26 cases and either overflow memory or timeout the test.
+        AggregatingAttributeMapper.of(rule).visitAttribute("cmd", Type.STRING));
   }
 
   /**
@@ -116,15 +117,15 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "          srcs = select({",
         "              '//conditions:a': ['a.sh'],",
         "              '//conditions:b': ['b.sh'],",
-        "              '" + BuildType.Selector.DEFAULT_CONDITION_KEY + "': ['default.sh'],",
+        "              '" + Type.Selector.DEFAULT_CONDITION_KEY + "': ['default.sh'],",
         "          }))");
 
     VisitationRecorder recorder = new VisitationRecorder();
     AggregatingAttributeMapper.of(rule).visitLabels(recorder);
-    assertThat(recorder.labelsVisited)
-        .containsExactlyElementsIn(
-            ImmutableList.of(
-                "//a:a.sh", "//a:b.sh", "//a:default.sh", "//conditions:a", "//conditions:b"));
+    assertSameContents(
+        ImmutableList.of(
+            "//a:a.sh", "//a:b.sh", "//a:default.sh", "//conditions:a", "//conditions:b"),
+        recorder.labelsVisited);
   }
 
   public void testGetReachableLabels() throws Exception {
@@ -140,7 +141,7 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         "         select({",
         "        '//conditions:c': ['c.cc'],",
         "        '//conditions:d': ['d.cc'],",
-        "        '" + BuildType.Selector.DEFAULT_CONDITION_KEY + "': ['default.cc'],",
+        "        '" + Type.Selector.DEFAULT_CONDITION_KEY + "': ['default.cc'],",
         "    }))");
 
     ImmutableList<Label> valueLabels = ImmutableList.of(
@@ -151,9 +152,10 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
         Label.create("conditions", "c"), Label.create("conditions", "d"));
 
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
-    assertThat(mapper.getReachableLabels("srcs", true))
-        .containsExactlyElementsIn(Iterables.concat(valueLabels, keyLabels));
-    assertThat(mapper.getReachableLabels("srcs", false)).containsExactlyElementsIn(valueLabels);
+    assertSameContents(
+        Iterables.concat(valueLabels, keyLabels),
+        mapper.getReachableLabels("srcs", true));
+    assertSameContents(valueLabels, mapper.getReachableLabels("srcs", false));
   }
 
   public void testDuplicateCheckOnNullValues() throws Exception {
@@ -167,7 +169,6 @@ public class AggregatingAttributeMapperTest extends AbstractAttributeMapperTest 
     AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     Attribute launcherAttribute = mapper.getAttributeDefinition("launcher");
     assertNull(mapper.get(launcherAttribute.getName(), launcherAttribute.getType()));
-    assertThat(mapper.checkForDuplicateLabels(launcherAttribute))
-        .containsExactlyElementsIn(ImmutableList.of());
+    assertSameContents(ImmutableList.of(), mapper.checkForDuplicateLabels(launcherAttribute));
   }
 }
