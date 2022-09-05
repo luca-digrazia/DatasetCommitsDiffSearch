@@ -54,8 +54,8 @@ public class SkylarkSignatureProcessor {
         ? null : new HashMap<String, SkylarkType>();
 
     HashMap<String, String> doc = new HashMap<>();
-    boolean documented = annotation.documented();
-    if (annotation.doc().isEmpty() && documented) {
+    boolean undocumented = annotation.undocumented();
+    if (annotation.doc().isEmpty() && !undocumented) {
       throw new RuntimeException(String.format("function %s is undocumented", name));
     }
 
@@ -63,11 +63,11 @@ public class SkylarkSignatureProcessor {
         ? null : defaultValues.iterator();
     try {
       for (Param param : annotation.mandatoryPositionals()) {
-        paramList.add(getParameter(name, param, enforcedTypes, doc, documented,
+        paramList.add(getParameter(name, param, enforcedTypes, doc, undocumented,
                 /*mandatory=*/true, /*star=*/false, /*starStar=*/false, /*defaultValue=*/null));
       }
       for (Param param : annotation.optionalPositionals()) {
-        paramList.add(getParameter(name, param, enforcedTypes, doc, documented,
+        paramList.add(getParameter(name, param, enforcedTypes, doc, undocumented,
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/false,
                 /*defaultValue=*/getDefaultValue(param, defaultValuesIterator)));
       }
@@ -79,22 +79,22 @@ public class SkylarkSignatureProcessor {
           Preconditions.checkArgument(annotation.extraPositionals().length == 1);
           starParam = annotation.extraPositionals()[0];
         }
-        paramList.add(getParameter(name, starParam, enforcedTypes, doc, documented,
+        paramList.add(getParameter(name, starParam, enforcedTypes, doc, undocumented,
                 /*mandatory=*/false, /*star=*/true, /*starStar=*/false, /*defaultValue=*/null));
       }
-      for (Param param : annotation.mandatoryNamedOnly()) {
-        paramList.add(getParameter(name, param, enforcedTypes, doc, documented,
-                /*mandatory=*/true, /*star=*/false, /*starStar=*/false, /*defaultValue=*/null));
-      }
       for (Param param : annotation.optionalNamedOnly()) {
-        paramList.add(getParameter(name, param, enforcedTypes, doc, documented,
+        paramList.add(getParameter(name, param, enforcedTypes, doc, undocumented,
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/false,
                 /*defaultValue=*/getDefaultValue(param, defaultValuesIterator)));
+      }
+      for (Param param : annotation.mandatoryNamedOnly()) {
+        paramList.add(getParameter(name, param, enforcedTypes, doc, undocumented,
+                /*mandatory=*/true, /*star=*/false, /*starStar=*/false, /*defaultValue=*/null));
       }
       if (annotation.extraKeywords().length > 0) {
         Preconditions.checkArgument(annotation.extraKeywords().length == 1);
         paramList.add(
-            getParameter(name, annotation.extraKeywords()[0], enforcedTypes, doc, documented,
+            getParameter(name, annotation.extraKeywords()[0], enforcedTypes, doc, undocumented,
                 /*mandatory=*/false, /*star=*/false, /*starStar=*/true, /*defaultValue=*/null));
       }
       FunctionSignature.WithValues<Object, SkylarkType> signature =
@@ -115,18 +115,6 @@ public class SkylarkSignatureProcessor {
   }
 
   /**
-   * Fake class to use in SkylarkSignature annotations to indicate that either List or SkylarkList
-   * may be used, depending on whether the Build language or Skylark is being evaluated.
-   */
-  // TODO(bazel-team): either make SkylarkList a subclass of List (mutable or immutable throwing
-  // runtime exceptions), or have the Build language use immutable SkylarkList, but either way,
-  // do away with this hack.
-  public static class HackHackEitherList {
-    private HackHackEitherList() { }
-  }
-
-
-  /**
    * Configures the parameter of this Skylark function using the annotation.
    */
   // TODO(bazel-team): Maybe have the annotation be a string representing the
@@ -136,7 +124,7 @@ public class SkylarkSignatureProcessor {
   // Then the only per-parameter information needed is a documentation string.
   private static Parameter<Object, SkylarkType> getParameter(
       String name, Param param, Map<String, SkylarkType> enforcedTypes,
-      Map<String, String> paramDoc, boolean documented,
+      Map<String, String> paramDoc, boolean undocumented,
       boolean mandatory, boolean star, boolean starStar, @Nullable Object defaultValue)
       throws FunctionSignature.SignatureException {
 
@@ -146,7 +134,7 @@ public class SkylarkSignatureProcessor {
       return new Parameter.Star<>(null);
     }
     if (param.type() != Object.class) {
-      if (param.type() == HackHackEitherList.class) {
+      if (param.type() == List.class) {
         // NB: a List in the annotation actually indicates either a List or a SkylarkList
         // and we trust the BuiltinFunction to do the enforcement.
         // For automatic document generation purpose, we lie and just say it's a list;
@@ -178,7 +166,7 @@ public class SkylarkSignatureProcessor {
     if (enforcedTypes != null) {
       enforcedTypes.put(param.name(), enforcedType);
     }
-    if (param.doc().isEmpty() && documented) {
+    if (param.doc().isEmpty() && !undocumented) {
       throw new RuntimeException(String.format("parameter %s is undocumented", name));
     }
     if (paramDoc != null) {
@@ -190,12 +178,9 @@ public class SkylarkSignatureProcessor {
       return new Parameter.Star<>(param.name(), officialType);
     } else if (mandatory) {
       return new Parameter.Mandatory<>(param.name(), officialType);
-    } else if (defaultValue != null && enforcedType != null) {
-      Preconditions.checkArgument(enforcedType.contains(defaultValue),
-          "In function '%s', parameter '%s' has default value %s that isn't of enforced type %s",
-          name, param.name(), EvalUtils.prettyPrintValue(defaultValue), enforcedType);
+    } else {
+      return new Parameter.Optional<>(param.name(), officialType, defaultValue);
     }
-    return new Parameter.Optional<>(param.name(), officialType, defaultValue);
   }
 
   private static Object getDefaultValue(Param param, Iterator<Object> iterator) {
@@ -205,11 +190,13 @@ public class SkylarkSignatureProcessor {
       return Environment.NONE;
     } else {
       try {
-        return EvaluationContext.SKYLARK_INITIALIZATION.evalExpression(param.defaultValue());
+        // TODO(bazel-team): when we have Evaluation, remove the throw and uncomment the return.
+        throw new RuntimeException("Not Implemented Yet!");
+        // return new Evaluation ().eval(param.defaultValue());
       } catch (Exception e) {
         throw new RuntimeException(String.format(
-            "Exception while processing @SkylarkSignature.Param %s, default value %s",
-            param.name(), param.defaultValue()), e);
+            "Exception while processing @SkylarkSignature.Param %s, default value %s: %s",
+            param.name(), param.defaultValue(), e.getMessage()), e);
       }
     }
   }

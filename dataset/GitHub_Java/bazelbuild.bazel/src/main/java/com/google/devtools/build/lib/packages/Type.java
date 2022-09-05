@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -23,7 +22,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.License.LicenseParsingException;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.FilesetEntry;
 import com.google.devtools.build.lib.syntax.GlobList;
@@ -34,7 +32,6 @@ import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -134,13 +131,10 @@ public abstract class Type<T> {
    */
   public Object selectableConvert(Object x, String what, @Nullable Label currentRule)
       throws ConversionException {
-    if (x instanceof com.google.devtools.build.lib.syntax.SelectorList) {
-      return new SelectorList<T>(
-          ((com.google.devtools.build.lib.syntax.SelectorList) x).getElements(),
-          what, currentRule, this);
-    } else {
-      return convert(x, what, currentRule);
+    if (x instanceof SelectorValue) {
+      return new Selector<T>(((SelectorValue) x).getDictionary(), what, currentRule, this);
     }
+    return convert(x, what, currentRule);
   }
 
   public abstract T cast(Object value);
@@ -165,20 +159,12 @@ public abstract class Type<T> {
    * be careful about defining default instances in base types that get auto-inherited
    * by their children. Keep all definitions as explicit as possible.
    */
-  public abstract Collection<Label> getLabels(Object value);
+  public abstract Iterable<Label> getLabels(Object value);
 
   /**
    * {@link #getLabels} return value for types that don't contain labels.
    */
-  private static final Collection<Label> NO_LABELS_HERE = ImmutableList.of();
-
-  /**
-   * Implementation of concatenation for this type (e.g. "val1 + val2"). Returns null to
-   * designate concatenation isn't supported.
-   */
-  public T concat(Iterable<T> elements) {
-    return null;
-  }
+  private static final Iterable<Label> NO_LABELS_HERE = ImmutableList.of();
 
   /**
    * Converts an initialized Type object into a tag set representation.
@@ -256,7 +242,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -337,11 +323,6 @@ public abstract class Type<T> {
       DictType.create(STRING, LABEL_LIST);
 
   /**
-   * The type of a dictionary of {@linkplain #LABEL labels}.
-   */
-  public static final DictType<String, Label> LABEL_DICT_UNARY = DictType.create(STRING, LABEL);
-
-  /**
    * The type of a list of {@linkplain #FILESET_ENTRY FilesetEntries}.
    */
   public static final ListType<FilesetEntry> FILESET_ENTRY_LIST = ListType.create(FILESET_ENTRY);
@@ -360,7 +341,7 @@ public abstract class Type<T> {
    *  ConversionException is thrown when a type-conversion fails; it contains
    *  an explanatory error message.
    */
-  public static class ConversionException extends EvalException {
+  public static class ConversionException extends Exception {
     private static String message(Type<?> type, Object value, String what) {
       StringBuilder builder = new StringBuilder();
       builder.append("expected value of type '").append(type).append("'");
@@ -374,11 +355,11 @@ public abstract class Type<T> {
     }
 
     private ConversionException(Type<?> type, Object value, String what) {
-      super(null, message(type, value, what));
+      super(message(type, value, what));
     }
 
     private ConversionException(String message) {
-      super(null, message);
+      super(message);
     }
   }
 
@@ -401,7 +382,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -428,7 +409,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -445,15 +426,6 @@ public abstract class Type<T> {
       }
       return (Integer) x;
     }
-
-    @Override
-    public Integer concat(Iterable<Integer> elements) {
-      int ans = 0;
-      for (Integer elem : elements) {
-        ans += elem;
-      }
-      return Integer.valueOf(ans);
-    }
   }
 
   private static class BooleanType extends Type<Boolean> {
@@ -468,7 +440,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -527,7 +499,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -570,7 +542,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -586,11 +558,6 @@ public abstract class Type<T> {
         throw new ConversionException(this, x, what);
       }
       return StringCanonicalizer.intern((String) x);
-    }
-
-    @Override
-    public String concat(Iterable<String> elements) {
-      return Joiner.on("").join(elements);
     }
 
     /**
@@ -632,7 +599,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return cast(value).getLabels();
     }
   }
@@ -649,7 +616,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return ImmutableList.of(cast(value));
     }
 
@@ -701,7 +668,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return NO_LABELS_HERE;
     }
 
@@ -740,7 +707,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object what) {
+    public Iterable<Label> getLabels(Object what) {
       return NO_LABELS_HERE;
     }
 
@@ -767,7 +734,7 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       return ImmutableList.of(cast(value));
     }
 
@@ -804,35 +771,35 @@ public abstract class Type<T> {
   /**
    * A type to support dictionary attributes.
    */
-  public static class DictType<KeyT, ValueT> extends Type<Map<KeyT, ValueT>> {
+  public static class DictType<KEY, VALUE> extends Type<Map<KEY, VALUE>> {
 
-    private final Type<KeyT> keyType;
-    private final Type<ValueT> valueType;
+    private final Type<KEY> keyType;
+    private final Type<VALUE> valueType;
 
-    private final Map<KeyT, ValueT> empty = ImmutableMap.of();
+    private final Map<KEY, VALUE> empty = ImmutableMap.of();
 
     private static <KEY, VALUE> DictType<KEY, VALUE> create(
         Type<KEY> keyType, Type<VALUE> valueType) {
       return new DictType<>(keyType, valueType);
     }
 
-    private DictType(Type<KeyT> keyType, Type<ValueT> valueType) {
+    private DictType(Type<KEY> keyType, Type<VALUE> valueType) {
       this.keyType = keyType;
       this.valueType = valueType;
     }
 
-    public Type<KeyT> getKeyType() {
+    public Type<KEY> getKeyType() {
       return keyType;
     }
 
-    public Type<ValueT> getValueType() {
+    public Type<VALUE> getValueType() {
       return valueType;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public Map<KeyT, ValueT> cast(Object value) {
-      return (Map<KeyT, ValueT>) value;
+    public Map<KEY, VALUE> cast(Object value) {
+      return (Map<KEY, VALUE>) value;
     }
 
     @Override
@@ -841,13 +808,13 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Map<KeyT, ValueT> convert(Object x, String what, Label currentRule)
+    public Map<KEY, VALUE> convert(Object x, String what, Label currentRule)
         throws ConversionException {
       if (!(x instanceof Map<?, ?>)) {
         throw new ConversionException(String.format(
             "Expected a map for dictionary but got a %s", x.getClass().getName())); 
       }
-      ImmutableMap.Builder<KeyT, ValueT> result = ImmutableMap.builder();
+      ImmutableMap.Builder<KEY, VALUE> result = ImmutableMap.builder();
       Map<?, ?> o = (Map<?, ?>) x;
       for (Entry<?, ?> elem : o.entrySet()) {
         result.put(
@@ -858,14 +825,14 @@ public abstract class Type<T> {
     }
 
     @Override
-    public Map<KeyT, ValueT> getDefaultValue() {
+    public Map<KEY, VALUE> getDefaultValue() {
       return empty;
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       ImmutableList.Builder<Label> labels = ImmutableList.builder();
-      for (Map.Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
+      for (Map.Entry<KEY, VALUE> entry : cast(value).entrySet()) {
         labels.addAll(keyType.getLabels(entry.getKey()));
         labels.addAll(valueType.getLabels(entry.getValue()));
       }
@@ -874,40 +841,40 @@ public abstract class Type<T> {
   }
 
   /** A type for lists of a given element type */
-  public static class ListType<ElemT> extends Type<List<ElemT>> {
+  public static class ListType<ELEM> extends Type<List<ELEM>> {
 
-    private final Type<ElemT> elemType;
+    private final Type<ELEM> elemType;
 
-    private final List<ElemT> empty = ImmutableList.of();
+    private final List<ELEM> empty = ImmutableList.of();
 
     private static <ELEM> ListType<ELEM> create(Type<ELEM> elemType) {
       return new ListType<>(elemType);
     }
 
-    private ListType(Type<ElemT> elemType) {
+    private ListType(Type<ELEM> elemType) {
       this.elemType = elemType;
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public List<ElemT> cast(Object value) {
-      return (List<ElemT>) value;
+    public List<ELEM> cast(Object value) {
+      return (List<ELEM>) value;
     }
 
     @Override
-    public Type<ElemT> getListElementType() {
+    public Type<ELEM> getListElementType() {
       return elemType;
     }
 
     @Override
-    public List<ElemT> getDefaultValue() {
+    public List<ELEM> getDefaultValue() {
       return empty;
     }
 
     @Override
-    public Collection<Label> getLabels(Object value) {
+    public Iterable<Label> getLabels(Object value) {
       ImmutableList.Builder<Label> labels = ImmutableList.builder();
-      for (ElemT entry : cast(value)) {
+      for (ELEM entry : cast(value)) {
         labels.addAll(elemType.getLabels(entry));
       }
       return labels.build();
@@ -919,15 +886,15 @@ public abstract class Type<T> {
     }
 
     @Override
-    public List<ElemT> convert(Object x, String what, Label currentRule)
+    public List<ELEM> convert(Object x, String what, Label currentRule)
         throws ConversionException {
       if (!(x instanceof Iterable<?>)) {
         throw new ConversionException(this, x, what);
       }
-      List<ElemT> result = new ArrayList<>();
+      List<ELEM> result = new ArrayList<>();
       int index = 0;
       for (Object elem : (Iterable<?>) x) {
-        ElemT converted = elemType.convert(elem, "element " + index + " of " + what, currentRule);
+        ELEM converted = elemType.convert(elem, "element " + index + " of " + what, currentRule);
         if (converted != null) {
           result.add(converted);
         } else {
@@ -946,15 +913,6 @@ public abstract class Type<T> {
       }
     }
 
-    @Override
-    public List<ElemT> concat(Iterable<List<ElemT>> elements) {
-      ImmutableList.Builder<ElemT> builder = ImmutableList.builder();
-      for (List<ElemT> list : elements) {
-        builder.addAll(list);
-      }
-      return builder.build();
-    }
-
     /**
      * A list is representable as a tag set as the contents of itself expressed
      * as Strings. So a {@code List<String>} is effectively converted to a {@code Set<String>}.
@@ -967,8 +925,8 @@ public abstract class Type<T> {
       }
       Set<String> tags = new LinkedHashSet<>();
       @SuppressWarnings("unchecked")
-      List<ElemT> itemsAsListofElem = (List<ElemT>) items;
-      for (ElemT element : itemsAsListofElem) {
+      List<ELEM> itemsAsListofElem = (List<ELEM>) items;
+      for (ELEM element : itemsAsListofElem) {
         tags.add(element.toString());
       }
       return tags;
@@ -1009,7 +967,7 @@ public abstract class Type<T> {
    * Returns whether the specified type is a label type or not.
    */
   public static boolean isLabelType(Type<?> type) {
-    return type == LABEL || type == LABEL_LIST || type == LABEL_DICT_UNARY
+    return type == LABEL || type == LABEL_LIST
         || type == NODEP_LABEL || type == NODEP_LABEL_LIST
         || type == LABEL_LIST_DICT || type == FILESET_ENTRY_LIST;
   }
@@ -1020,6 +978,7 @@ public abstract class Type<T> {
    * objects of the attribute's native Type.
    */
   public static final class Selector<T> {
+
     private final Type<T> originalType;
     private final Map<Label, T> map;
     private final Label defaultConditionLabel;
@@ -1041,6 +1000,7 @@ public abstract class Type<T> {
       } catch (Label.SyntaxException e) {
         throw new IllegalStateException(DEFAULT_CONDITION_KEY + " is not a valid label");
       }
+
 
       this.originalType = originalType;
       Map<Label, T> result = Maps.newLinkedHashMap();
@@ -1091,69 +1051,6 @@ public abstract class Type<T> {
      */
     public static boolean isReservedLabel(Label label) {
       return label.toString().equals(DEFAULT_CONDITION_KEY);
-    }
-  }
-
-  /**
-   * Holds an ordered collection of {@link Selector}s. This is used to support
-   * {@code attr = rawValue + select(...) + select(...) + ..."} syntax. For consistency's
-   * sake, raw values are stored as selects with only a default condition.
-   */
-  public static final class SelectorList<T> {
-    private final Type<T> originalType;
-    private final List<Selector<T>> elements;
-
-    @VisibleForTesting
-    SelectorList(List<Object> x, String what, @Nullable Label currentRule,
-        Type<T> originalType) throws ConversionException {
-      if (x.size() > 1 && originalType.concat(ImmutableList.<T>of()) == null) {
-        throw new ConversionException(
-            String.format("type '%s' doesn't support select concatenation", originalType));
-      }
-
-      ImmutableList.Builder<Selector<T>> builder = ImmutableList.builder();
-      for (Object elem : x) {
-        if (elem instanceof SelectorValue) {
-          builder.add(new Selector<T>(((SelectorValue) elem).getDictionary(), what,
-              currentRule, originalType));
-        } else {
-          T directValue = originalType.convert(elem, what, currentRule);
-          builder.add(new Selector<T>(ImmutableMap.of(Selector.DEFAULT_CONDITION_KEY, directValue),
-              what, currentRule, originalType));
-        }
-      }
-      this.originalType = originalType;
-      this.elements = builder.build();
-    }
-
-    /**
-     * Returns a syntactically order-preserved list of all values and selectors for this attribute.
-     */
-    public List<Selector<T>> getSelectors() {
-      return elements;
-    }
-
-    /**
-     * Returns the native Type for this attribute (i.e. what this would be if it wasn't a
-     * selector list).
-     */
-    public Type<T> getOriginalType() {
-      return originalType;
-    }
-
-    /**
-     * Returns the labels of all configurability keys across all selects in this expression.
-     */
-    public Set<Label> getKeyLabels() {
-      ImmutableSet.Builder<Label> keys = ImmutableSet.builder();
-      for (Selector<T> selector : getSelectors()) {
-         for (Label label : selector.getEntries().keySet()) {
-           if (!Selector.isReservedLabel(label)) {
-             keys.add(label);
-           }
-         }
-      }
-      return keys.build();
     }
   }
 }
