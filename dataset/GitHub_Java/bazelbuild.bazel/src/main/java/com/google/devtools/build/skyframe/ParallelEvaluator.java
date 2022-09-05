@@ -306,7 +306,6 @@ public final class ParallelEvaluator implements Evaluator {
       Map<SkyKey, ValueWithMetadata> values = getValuesMaybeFromError(depKeys, bubbleErrorInfo);
       ImmutableMap.Builder<SkyKey, ValueOrUntypedException> builder = ImmutableMap.builder();
       for (SkyKey depKey : depKeys) {
-        Preconditions.checkState(!depKey.equals(ErrorTransienceValue.key()));
         ValueWithMetadata value = values.get(depKey);
         if (value == null) {
           // If this entry is not yet done then (optionally) record the missing dependency and
@@ -585,6 +584,8 @@ public final class ParallelEvaluator implements Evaluator {
 
     private void enqueueChild(SkyKey skyKey, NodeEntry entry, SkyKey child) {
       Preconditions.checkState(!entry.isDone(), "%s %s", skyKey, entry);
+      Preconditions.checkState(!ErrorTransienceValue.key().equals(child),
+          "%s cannot request ErrorTransienceValue as a dep: %s", skyKey, entry);
 
       NodeEntry depEntry = graph.createIfAbsent(child);
       switch (depEntry.addReverseDepAndCheckIfDone(skyKey)) {
@@ -670,13 +671,10 @@ public final class ParallelEvaluator implements Evaluator {
                 }
               }
             }
-            // It is safe to add these deps back to the node -- even if one of them has changed, the
-            // contract of pruning is that the node will request these deps again when it rebuilds.
-            // We must add these deps before enqueuing them, so that the node knows that it depends
-            // on them. If one of these deps is the error transience node, the check we did above
-            // in #invalidatedByErrorTransience means that the error transience node is not newer
-            // than this node, so we are going to mark it clean (since the error transience node is
-            // always the last dep).
+            // If this isn't the error transience value, it is safe to add these deps back to the
+            // node -- even if one of them has changed, the contract of pruning is that the node
+            // will request these deps again when it rebuilds. We must add these deps before
+            // enqueuing them, so that the node knows that it depends on them.
             state.addTemporaryDirectDeps(GroupedListHelper.create(directDepsToCheck));
             for (SkyKey directDep : directDepsToCheck) {
               enqueueChild(skyKey, state, directDep);
