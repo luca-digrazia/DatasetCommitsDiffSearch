@@ -28,7 +28,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.graph.Digraph;
-import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeFormatter;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -39,11 +38,9 @@ import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.ProtoUtils;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.FakeLoadTarget;
+import com.google.devtools.build.lib.query2.FakeSubincludeTarget;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
-import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
-import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDependencyMode;
 import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
@@ -53,6 +50,7 @@ import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult.Bu
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.SourceFile;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collection;
@@ -84,7 +82,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
   private boolean relativeLocations = false;
   protected boolean includeDefaultValues = true;
-  private boolean flattenSelects = true;
 
   protected void setDependencyFilter(QueryOptions options) {
     this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
@@ -100,7 +97,6 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
     super.setOptions(options, aspectResolver);
     this.relativeLocations = options.relativeLocations;
     this.includeDefaultValues = options.protoIncludeDefaultValues;
-    this.flattenSelects = options.protoFlattenSelects;
   }
 
   @Override
@@ -134,16 +130,9 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   @Override
-  public ThreadSafeOutputFormatterCallback<Target> createStreamCallback(
+  public OutputFormatterCallback<Target> createStreamCallback(
       OutputStream out, QueryOptions options, QueryEnvironment<?> env) {
-    return createStreamCallback(out, options);
-  }
-
-  @VisibleForTesting
-  public ThreadSafeOutputFormatterCallback<Target> createStreamCallback(
-      OutputStream out, QueryOptions options) {
-    return new SynchronizedDelegatingOutputFormatterCallback<>(
-        createPostFactoStreamCallback(out, options));
+    return createPostFactoStreamCallback(out, options);
   }
 
   private static Iterable<Target> getSortedLabels(Digraph<Target> result) {
@@ -171,23 +160,17 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
         rulePb.setLocation(location);
       }
       Map<Attribute, Build.Attribute> serializedAttributes = Maps.newHashMap();
-      AggregatingAttributeMapper attributeMapper = AggregatingAttributeMapper.of(rule);
       for (Attribute attr : rule.getAttributes()) {
         if ((!includeDefaultValues && !rule.isAttributeValueExplicitlySpecified(attr))
             || !includeAttribute(rule, attr)) {
           continue;
         }
-        Object attributeValue;
-        if (flattenSelects || !attributeMapper.isConfigurable(attr.getName())) {
-          attributeValue =
-              flattenAttributeValues(attr.getType(), getPossibleAttributeValues(rule, attr));
-        } else {
-          attributeValue = attributeMapper.getSelectorList(attr.getName(), attr.getType());
-        }
+        Object flattenedAttributeValue =
+            flattenAttributeValues(attr.getType(), getPossibleAttributeValues(rule, attr));
         Build.Attribute serializedAttribute =
             AttributeFormatter.getAttributeProto(
                 attr,
-                attributeValue,
+                flattenedAttributeValue,
                 rule.isAttributeValueExplicitlySpecified(attr),
                 /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
         rulePb.addAttribute(serializedAttribute);
@@ -307,7 +290,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
       targetPb.setType(SOURCE_FILE);
       targetPb.setSourceFile(input);
-    } else if (target instanceof FakeLoadTarget) {
+    } else if (target instanceof FakeSubincludeTarget) {
       Label label = target.getLabel();
       SourceFile.Builder input = SourceFile.newBuilder()
                                            .setName(label.toString());
@@ -447,9 +430,9 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
 
     // Same for maps as for collections.
     if (attrType == Type.STRING_DICT
+        || attrType == Type.STRING_DICT_UNARY
         || attrType == Type.STRING_LIST_DICT
-        || attrType == BuildType.LABEL_DICT_UNARY
-        || attrType == BuildType.LABEL_KEYED_STRING_DICT) {
+        || attrType == BuildType.LABEL_DICT_UNARY) {
       Map<Object, Object> mergedDict = new HashMap<>();
       for (Object possibleValue : possibleValues) {
         Map<Object, Object> stringDict = (Map<Object, Object>) possibleValue;

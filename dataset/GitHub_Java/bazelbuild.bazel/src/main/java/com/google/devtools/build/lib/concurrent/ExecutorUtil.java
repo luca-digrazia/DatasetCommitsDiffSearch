@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.concurrent;
 
-import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -105,16 +107,17 @@ public class ExecutorUtil {
     // Using a synchronous queue with a bounded thread pool means we'll reject
     // tasks after the pool size. The CallerRunsPolicy, however, implies that
     // saturation is handled in the calling thread.
-    ThreadPoolExecutor pool = new ThreadPoolExecutor(
-        threads,
-        threads,
-        3L,
-        TimeUnit.SECONDS,
-        new SynchronousQueue<Runnable>(),
-        new ThreadFactoryBuilder().setNameFormat(name + " %d").build(),
-        (r, e) -> r.run());
+    ThreadPoolExecutor pool = new ThreadPoolExecutor(threads, threads, 3L, TimeUnit.SECONDS,
+        new SynchronousQueue<Runnable>());
     // Do not consume threads when not in use.
     pool.allowCoreThreadTimeOut(true);
+    pool.setThreadFactory(new ThreadFactoryBuilder().setNameFormat(name + " %d").build());
+    pool.setRejectedExecutionHandler(new RejectedExecutionHandler() {
+      @Override
+      public void rejectedExecution(Runnable r, ThreadPoolExecutor executor) {
+        r.run();
+      }
+    });
     return pool;
   }
 }

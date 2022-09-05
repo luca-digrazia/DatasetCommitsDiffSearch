@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.output;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -27,14 +26,13 @@ import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.query2.CommonQueryOptions;
-import com.google.devtools.build.lib.query2.FakeLoadTarget;
+import com.google.devtools.build.lib.query2.FakeSubincludeTarget;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
-import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
-import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.output.AspectResolver.BuildFileDependencyMode;
 import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
 import com.google.devtools.build.lib.syntax.Type;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Collection;
@@ -58,29 +56,15 @@ import org.w3c.dom.Element;
  * An output formatter that prints the result as XML.
  */
 class XmlOutputFormatter extends AbstractUnorderedFormatter {
-
-  // AbstractUnorderedFormatter also has an options field it's of type CommonQueryOptions, a
-  // superclass of QueryOptions. Store this here to ensure correct type is passed to this class.
-  private QueryOptions queryOptions;
-
   @Override
   public String getName() {
     return "xml";
   }
 
   @Override
-  public ThreadSafeOutputFormatterCallback<Target> createStreamCallback(
+  public OutputFormatterCallback<Target> createStreamCallback(
       OutputStream out, QueryOptions options, QueryEnvironment<?> env) {
-    return new SynchronizedDelegatingOutputFormatterCallback<>(
-        createPostFactoStreamCallback(out, options));
-  }
-
-  @Override
-  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
-    super.setOptions(options, aspectResolver);
-
-    Preconditions.checkArgument(options instanceof QueryOptions);
-    this.queryOptions = (QueryOptions) options;
+    return createPostFactoStreamCallback(out, options);
   }
 
   @Override
@@ -151,7 +135,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
       elem.setAttribute("class", rule.getRuleClass());
       for (Attribute attr : rule.getAttributes()) {
         PossibleAttributeValues values = getPossibleAttributeValues(rule, attr);
-        if (values.source == AttributeValueSource.RULE || queryOptions.xmlShowDefaultValues) {
+        if (values.source == AttributeValueSource.RULE || options.xmlShowDefaultValues) {
           Element attrElem = createValueElement(doc, attr.getType(), values);
           attrElem.setAttribute("name", attr.getName());
           elem.appendChild(attrElem);
@@ -178,7 +162,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
         outputElem.setAttribute("name", outputFile.getLabel().toString());
         elem.appendChild(outputElem);
       }
-      for (String feature : rule.getPackage().getFeatures()) {
+      for (String feature : rule.getFeatures()) {
         Element outputElem = doc.createElement("rule-default-setting");
         outputElem.setAttribute("name", feature);
         elem.appendChild(outputElem);
@@ -205,6 +189,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
       elem = doc.createElement("source-file");
       InputFile inputFile = (InputFile) target;
       if (inputFile.getName().equals("BUILD")) {
+        addSubincludedFilesToElement(doc, elem, inputFile);
         addSkylarkFilesToElement(doc, elem, inputFile);
         addFeaturesToElement(doc, elem, inputFile);
         elem.setAttribute("package_contains_errors",
@@ -226,7 +211,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
           envGroup.getDefaults());
       defaults.setAttribute("name", "defaults");
       elem.appendChild(defaults);
-    } else if (target instanceof FakeLoadTarget) {
+    } else if (target instanceof FakeSubincludeTarget) {
       elem = doc.createElement("source-file");
     } else {
       throw new IllegalArgumentException(target.toString());
@@ -234,7 +219,7 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
 
     elem.setAttribute("name", target.getLabel().toString());
     String location = getLocation(target, options.relativeLocations);
-    if (!queryOptions.xmlLineNumbers) {
+    if (!options.xmlLineNumbers) {
       int firstColon = location.indexOf(':');
       if (firstColon != -1) {
         location = location.substring(0, firstColon);
@@ -267,10 +252,22 @@ class XmlOutputFormatter extends AbstractUnorderedFormatter {
     }
   }
 
+  private void addSubincludedFilesToElement(Document doc, Element parent, InputFile inputFile)
+      throws InterruptedException {
+    Iterable<Label> dependencies = aspectResolver.computeBuildFileDependencies(
+            inputFile.getPackage(), BuildFileDependencyMode.SUBINCLUDE);
+
+    for (Label subinclude : dependencies) {
+      Element elem = doc.createElement("subinclude");
+      elem.setAttribute("name", subinclude.toString());
+      parent.appendChild(elem);
+    }
+  }
+
   private void addSkylarkFilesToElement(Document doc, Element parent, InputFile inputFile)
       throws InterruptedException {
-    Iterable<Label> dependencies =
-        aspectResolver.computeBuildFileDependencies(inputFile.getPackage());
+    Iterable<Label> dependencies = aspectResolver.computeBuildFileDependencies(
+        inputFile.getPackage(), BuildFileDependencyMode.SKYLARK);
 
     for (Label skylarkFileDep : dependencies) {
       Element elem = doc.createElement("load");

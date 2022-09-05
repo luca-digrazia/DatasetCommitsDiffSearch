@@ -853,20 +853,17 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   public Map<SkyKey, Target> makeTargetsFromPackageKeyToTargetKeyMap(
       Multimap<SkyKey, SkyKey> packageKeyToTargetKeyMap) throws InterruptedException {
     ImmutableMap.Builder<SkyKey, Target> result = ImmutableMap.builder();
-    Set<SkyKey> processedTargets = new HashSet<>();
     Map<SkyKey, SkyValue> packageMap = graph.getSuccessfulValues(packageKeyToTargetKeyMap.keySet());
     for (Map.Entry<SkyKey, SkyValue> entry : packageMap.entrySet()) {
       for (SkyKey targetKey : packageKeyToTargetKeyMap.get(entry.getKey())) {
-        if (processedTargets.add(targetKey)) {
-          try {
-            result.put(
-                targetKey,
-                ((PackageValue) entry.getValue())
-                    .getPackage()
-                    .getTarget((SKYKEY_TO_LABEL.apply(targetKey)).getName()));
-          } catch (NoSuchTargetException e) {
-            // Skip missing target.
-          }
+        try {
+          result.put(
+              targetKey,
+              ((PackageValue) entry.getValue())
+                  .getPackage()
+                  .getTarget((SKYKEY_TO_LABEL.apply(targetKey)).getName()));
+        } catch (NoSuchTargetException e) {
+          // Skip missing target.
         }
       }
     }
@@ -1016,7 +1013,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       ThreadSafeCallback<Target> callback,
       ForkJoinPool forkJoinPool)
       throws QueryException, InterruptedException {
-    ParallelSkyQueryUtils.getRBuildFilesParallel(this, fileIdentifiers, callback, packageSemaphore);
+    ParallelSkyQueryUtils.getRBuildFilesParallel(
+        this, fileIdentifiers, callback, forkJoinPool, packageSemaphore);
   }
 
   /**
@@ -1201,7 +1199,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       ForkJoinPool forkJoinPool)
       throws QueryException, InterruptedException {
     ParallelSkyQueryUtils.getAllRdepsUnboundedParallel(
-        this, expression, context, callback, packageSemaphore);
+        this, expression, context, callback, forkJoinPool, packageSemaphore);
   }
 
   @ThreadSafe
