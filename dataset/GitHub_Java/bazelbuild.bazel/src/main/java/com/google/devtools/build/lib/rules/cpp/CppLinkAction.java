@@ -799,8 +799,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
               .setNeedWholeArchive(needWholeArchive)
               .setParamFile(paramFile)
               .setAllLTOArtifacts(isLTOIndexing ? null : allLTOArtifacts)
-              .setToolchain(toolchain)
-              .setFeatureConfiguration(featureConfiguration);
+              .setToolchain(toolchain);
 
       if (!isLTOIndexing) {
         linkCommandLineBuilder

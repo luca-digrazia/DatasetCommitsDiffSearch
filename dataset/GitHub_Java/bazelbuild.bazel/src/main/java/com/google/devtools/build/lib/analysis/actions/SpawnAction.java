@@ -60,7 +60,6 @@ import java.util.List;
 import java.util.Map;
 
 import javax.annotation.CheckReturnValue;
-import javax.annotation.Nullable;
 
 /**
  * An Action representing an arbitrary subprocess to be forked and exec'd.
@@ -484,9 +483,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
 
     /**
-     * Builds the SpawnAction and ParameterFileWriteAction (if param file is used) using the passed-
-     * in action configuration. The first item of the returned array is always the SpawnAction
-     * itself.
+     * Builds the SpawnAction using the passed in action configuration and returns it and all
+     * dependent actions. The first item of the returned array is always the SpawnAction itself.
      *
      * <p>This method makes a copy of all the collections, so it is safe to reuse the builder after
      * this method returns.
@@ -509,65 +507,32 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     @VisibleForTesting @CheckReturnValue
     public Action[] build(ActionOwner owner, AnalysisEnvironment analysisEnvironment,
         BuildConfiguration configuration) {
-      Iterable<String> arguments = argumentsBuilder.build();
-      // Check to see if we need to use param file.
-      Artifact paramsFile = ParamFileHelper.getParamsFileMaybe(
-          buildExecutableArgs(configuration.getShExecutable()),
-          arguments,
-          commandLine,
-          paramFileInfo,
-          configuration,
-          analysisEnvironment,
-          outputs);
+      if (isShellCommand && executable == null) {
+        executable = configuration.getShExecutable();
+      }
+      Preconditions.checkNotNull(executable);
+      Preconditions.checkNotNull(executableArgs);
 
-      List<Action> actions = new ArrayList<>(2);
-
-      // Set up the SpawnAction itself.
-      actions.add(buildSpawnAction(owner, configuration.getLocalShellEnvironment(),
-          configuration.getShExecutable(), paramsFile));
-
-      // If param file is to be used, set up the param file write action as well.
-      if (paramsFile != null) {
-        actions.add(ParamFileHelper.createParameterFileWriteAction(
-            arguments,
-            commandLine,
-            owner,
-            paramsFile,
-            paramFileInfo));
+      if (useDefaultShellEnvironment) {
+        this.environment = configuration.getLocalShellEnvironment();
       }
 
-      return actions.toArray(new Action[actions.size()]);
-    }
+      ImmutableList<String> argv = ImmutableList.<String>builder()
+          .add(executable.getPathString())
+          .addAll(executableArgs)
+          .build();
 
-    /**
-     * Builds the SpawnAction using the passed-in action configuration.
-     *
-     * <p>This method makes a copy of all the collections, so it is safe to reuse the builder after
-     * this method returns.
-     *
-     * <p>This method is invoked by {@link SpawnActionTemplate} in the execution phase. It is
-     * important that analysis-phase objects (RuleContext, Configuration, etc.) are not directly
-     * referenced in this function to prevent them from bleeding into the execution phase.
-     *
-     * @param owner the {@link ActionOwner} for the SpawnAction
-     * @param defaultShellEnvironment the default shell environment to use. May be null if not used.
-     * @param defaultShellExecutable the default shell executable path. May be null if not used.
-     * @param paramsFile the parameter file for the SpawnAction. May be null if not used.
-     * @return the SpawnAction and any actions required by it, with the first item always being the
-     *      SpawnAction itself.
-     */
-    SpawnAction buildSpawnAction(
-        ActionOwner owner,
-        @Nullable Map<String, String> defaultShellEnvironment,
-        @Nullable PathFragment defaultShellExecutable,
-        @Nullable Artifact paramsFile) {
-      List<String> argv = buildExecutableArgs(defaultShellExecutable);
       Iterable<String> arguments = argumentsBuilder.build();
+
+      Artifact paramsFile = ParamFileHelper.getParamsFileMaybe(argv, arguments, commandLine,
+          paramFileInfo, configuration, analysisEnvironment, outputs);
+
+      List<Action> actions = new ArrayList<>();
       CommandLine actualCommandLine;
       if (paramsFile != null) {
+        actualCommandLine = ParamFileHelper.createWithParamsFile(argv, arguments, commandLine,
+            isShellCommand, owner, actions, paramFileInfo, paramsFile);
         inputsBuilder.add(paramsFile);
-        actualCommandLine = ParamFileHelper.createWithParamsFile(argv, isShellCommand,
-            paramFileInfo, paramsFile);
       } else {
         actualCommandLine = ParamFileHelper.createWithoutParamsFile(argv, arguments, commandLine,
             isShellCommand);
@@ -586,41 +551,23 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           new LinkedHashMap<>(inputManifests);
       inputAndToolManifests.putAll(toolManifests);
 
-      Map<String, String> env;
-      if (useDefaultShellEnvironment) {
-        env = Preconditions.checkNotNull(defaultShellEnvironment);
-      } else {
-        env = this.environment;
-      }
-
-      return new SpawnAction(
-          owner,
-          tools,
-          inputsAndTools,
-          ImmutableList.copyOf(outputs),
-          resourceSet,
-          actualCommandLine,
-          ImmutableMap.copyOf(env),
-          executionInfo,
-          progressMessage,
-          ImmutableMap.copyOf(inputAndToolManifests),
-          mnemonic,
-          executeUnconditionally,
-          extraActionInfoSupplier);
-    }
-
-    private List<String> buildExecutableArgs(@Nullable PathFragment defaultShellExecutable) {
-      if (isShellCommand && executable == null) {
-        Preconditions.checkNotNull(defaultShellExecutable);
-        executable = defaultShellExecutable;
-      }
-      Preconditions.checkNotNull(executable);
-      Preconditions.checkNotNull(executableArgs);
-
-      return ImmutableList.<String>builder()
-          .add(executable.getPathString())
-          .addAll(executableArgs)
-          .build();
+      actions.add(
+          0,
+          new SpawnAction(
+              owner,
+              tools,
+              inputsAndTools,
+              ImmutableList.copyOf(outputs),
+              resourceSet,
+              actualCommandLine,
+              environment,
+              executionInfo,
+              progressMessage,
+              ImmutableMap.copyOf(inputAndToolManifests),
+              mnemonic,
+              executeUnconditionally,
+              extraActionInfoSupplier));
+      return actions.toArray(new Action[actions.size()]);
     }
 
     /**
