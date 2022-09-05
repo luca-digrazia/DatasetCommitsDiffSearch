@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
@@ -53,31 +54,44 @@ public final class SingleJarActionBuilder {
       Map<PathFragment, Artifact> resources,
       Collection<Artifact> resourceJars,
       Artifact outputJar) {
+    PathFragment javaPath =
+        ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable();
+    NestedSet<Artifact> hostJavabaseInputs = JavaHelper.getHostJavabaseInputs(ruleContext);
     Artifact singleJar = getSingleJar(ruleContext);
-    SpawnAction.Builder builder = new SpawnAction.Builder();
+
     // If singlejar's name ends with .jar, it is Java application, otherwise it is native.
     // TODO(asmundak): once https://github.com/bazelbuild/bazel/issues/2241 is fixed (that is,
     // the native singlejar is used on windows) remove support for the Java implementation
     if (singleJar.getFilename().endsWith(".jar")) {
-      builder
-          .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
-          .setJarExecutable(
-              ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
-              singleJar,
-              JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
-          .setExecutionInfo(ImmutableMap.of("supports-workers", "1"));
+      ruleContext.registerAction(
+          new SpawnAction.Builder()
+              .addOutput(outputJar)
+              .addInputs(resources.values())
+              .addInputs(resourceJars)
+              .addTransitiveInputs(hostJavabaseInputs)
+              .setJarExecutable(
+                  javaPath,
+                  singleJar,
+                  JavaToolchainProvider.fromRuleContext(ruleContext).getJvmOptions())
+              .setCommandLine(sourceJarCommandLine(outputJar, resources, resourceJars))
+              .alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED)
+              .setProgressMessage("Building source jar " + outputJar.prettyPrint())
+              .setMnemonic("JavaSourceJar")
+              .setExecutionInfo(ImmutableMap.of("supports-workers", "1"))
+              .build(ruleContext));
     } else {
-      builder.setExecutable(singleJar);
+      ruleContext.registerAction(
+          new SpawnAction.Builder()
+              .addOutput(outputJar)
+              .addInputs(resources.values())
+              .addInputs(resourceJars)
+              .setExecutable(singleJar)
+              .setCommandLine(sourceJarCommandLine(outputJar, resources, resourceJars))
+              .alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED)
+              .setProgressMessage("Building source jar " + outputJar.prettyPrint())
+              .setMnemonic("JavaSourceJar")
+              .build(ruleContext));
     }
-    builder
-        .addOutput(outputJar)
-        .addInputs(resources.values())
-        .addInputs(resourceJars)
-        .setCommandLine(sourceJarCommandLine(outputJar, resources, resourceJars))
-        .alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED)
-        .setProgressMessage("Building source jar " + outputJar.prettyPrint())
-        .setMnemonic("JavaSourceJar");
-    ruleContext.registerAction(builder.build(ruleContext));
   }
 
   /** Returns the SingleJar deploy jar Artifact. */
@@ -95,11 +109,9 @@ public final class SingleJarActionBuilder {
     args.addExecPath("--output", outputJar);
     args.add(SOURCE_JAR_COMMAND_LINE_ARGS);
     args.addExecPaths("--sources", resourceJars);
-    if (!resources.isEmpty()) {
-      args.add("--resources");
-      for (Map.Entry<PathFragment, Artifact> resource : resources.entrySet()) {
-        args.addPaths("%s:%s", resource.getValue().getExecPath(), resource.getKey());
-      }
+    args.add("--resources");
+    for (Map.Entry<PathFragment, Artifact> resource : resources.entrySet()) {
+      args.addPaths("%s:%s", resource.getValue().getExecPath(), resource.getKey());
     }
     return args.build();
   }
