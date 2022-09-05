@@ -85,10 +85,10 @@ public class UeditorController {
         String path = fileService.saveStaticFile(file.getInputStream(), System.currentTimeMillis() + suffix);
         State state = new BaseState(true);
         state.putInfo("size", file.getSize());
-        state.putInfo("title",fileName);
+        state.putInfo("title", file.getOriginalFilename());
         state.putInfo("url", path);
         state.putInfo("type", suffix);
-        state.putInfo("original",fileName);
+        state.putInfo("original", file.getOriginalFilename());
         return state.toJSONString();
     }
 
