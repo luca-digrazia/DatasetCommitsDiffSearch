@@ -1,12 +1,10 @@
 package org.nlpcn.es4sql.query.maker;
 
 import java.math.BigDecimal;
-import java.time.ZoneOffset;
 import java.util.*;
 
-import org.elasticsearch.join.aggregations.JoinAggregationBuilders;
 import org.elasticsearch.script.Script;
-import org.elasticsearch.script.ScriptType;
+import org.elasticsearch.script.ScriptService;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
@@ -117,7 +115,7 @@ public class AggMaker {
                 return scriptedMetric(field);
             case "COUNT":
                 groupMap.put(field.getAlias(), new KVValue("COUNT", parent));
-                return addFieldToAgg(field, makeCountAgg(field));
+                return makeCountAgg(field);
             default:
                 throw new SqlParseException("the agg function not to define !");
         }
@@ -195,7 +193,7 @@ public class AggMaker {
 
             String childrenAggName = childrenType.field + "@CHILDREN";
 
-            childrenBuilder = JoinAggregationBuilders.children(childrenAggName,childrenType.childType);
+            childrenBuilder = AggregationBuilders.children(childrenAggName,childrenType.childType);
 
             return childrenBuilder;
         }
@@ -321,37 +319,37 @@ public class AggMaker {
                     scriptedMetricBuilder.mapScript(new Script(paramValue));
                     break;
                 case "map_script_id":
-                    scriptedMetricBuilder.mapScript(new Script(ScriptType.STORED, Script.DEFAULT_SCRIPT_LANG,paramValue, new HashMap<String, Object>()));
+                    scriptedMetricBuilder.mapScript(new Script(paramValue, ScriptService.ScriptType.STORED, null, null));
                     break;
                 case "map_script_file":
-                    scriptedMetricBuilder.mapScript(new Script(ScriptType.FILE ,Script.DEFAULT_SCRIPT_LANG,paramValue, new HashMap<String, Object>()));
+                    scriptedMetricBuilder.mapScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, null));
                     break;
                 case "init_script":
                     scriptedMetricBuilder.initScript(new Script(paramValue));
                     break;
                 case "init_script_id":
-                    scriptedMetricBuilder.initScript(new Script(ScriptType.STORED,Script.DEFAULT_SCRIPT_LANG,paramValue, new HashMap<String, Object>()));
+                    scriptedMetricBuilder.initScript(new Script(paramValue, ScriptService.ScriptType.STORED, null, null));
                     break;
                 case "init_script_file":
-                    scriptedMetricBuilder.initScript(new Script(ScriptType.FILE,Script.DEFAULT_SCRIPT_LANG,paramValue, new HashMap<String, Object>()));
+                    scriptedMetricBuilder.initScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, null));
                     break;
                 case "combine_script":
                     scriptedMetricBuilder.combineScript(new Script(paramValue));
                     break;
                 case "combine_script_id":
-                    scriptedMetricBuilder.combineScript(new Script(ScriptType.STORED, Script.DEFAULT_SCRIPT_LANG,paramValue, new HashMap<String, Object>()));
+                    scriptedMetricBuilder.combineScript(new Script(paramValue, ScriptService.ScriptType.STORED, null, null));
                     break;
                 case "combine_script_file":
-                    scriptedMetricBuilder.combineScript(new Script(ScriptType.FILE, Script.DEFAULT_SCRIPT_LANG,paramValue, new HashMap<String, Object>()));
+                    scriptedMetricBuilder.combineScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, null));
                     break;
                 case "reduce_script":
-                    scriptedMetricBuilder.reduceScript(new Script(ScriptType.INLINE,  Script.DEFAULT_SCRIPT_LANG , paramValue, reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.INLINE, null, reduceScriptAdditionalParams));
                     break;
                 case "reduce_script_id":
-                    scriptedMetricBuilder.reduceScript(new Script(ScriptType.STORED,  Script.DEFAULT_SCRIPT_LANG,paramValue, reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.STORED, null, reduceScriptAdditionalParams));
                     break;
                 case "reduce_script_file":
-                    scriptedMetricBuilder.reduceScript(new Script(ScriptType.FILE,  Script.DEFAULT_SCRIPT_LANG, paramValue, reduceScriptAdditionalParams));
+                    scriptedMetricBuilder.reduceScript(new Script(paramValue, ScriptService.ScriptType.FILE, null, reduceScriptAdditionalParams));
                     break;
                 case "alias":
                 case "nested":
@@ -417,9 +415,6 @@ public class AggMaker {
             } else if ("format".equals(kv.key)) {
                 dateRange.format(value);
                 continue;
-            } else if ("time_zone".equals(kv.key)) {
-                dateRange.timeZone(DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneOffset.of(value))));
-                continue;
             } else if ("from".equals(kv.key)) {
                 dateRange.addUnboundedFrom(kv.value.toString());
                 continue;
@@ -464,13 +459,7 @@ public class AggMaker {
                     dateHistogram.format(value);
                     break;
                 case "time_zone":
-                    dateHistogram.timeZone(DateTimeZone.forTimeZone(TimeZone.getTimeZone(ZoneOffset.of(value))));
-                    break;
-                case "min_doc_count":
-                    dateHistogram.minDocCount(Long.parseLong(value));
-                    break;
-                case "order":
-                    dateHistogram.order("desc".equalsIgnoreCase(value) ? Histogram.Order.KEY_DESC : Histogram.Order.KEY_ASC);
+                    dateHistogram.timeZone(DateTimeZone.forTimeZone(TimeZone.getTimeZone(value)));
                     break;
 
                 case "alias":
@@ -576,7 +565,7 @@ public class AggMaker {
      * @param field The count function
      * @return AggregationBuilder use to count result
      */
-    private ValuesSourceAggregationBuilder makeCountAgg(MethodField field) {
+    private AbstractAggregationBuilder makeCountAgg(MethodField field) {
 
         // Cardinality is approximate DISTINCT.
         if ("DISTINCT".equals(field.getOption())) {
@@ -594,9 +583,7 @@ public class AggMaker {
 
         // In case of count(*) we use '_index' as field parameter to count all documents
         if ("*".equals(fieldName)) {
-            KVValue kvValue = new KVValue(null, "_index");
-            field.getParams().set(0, kvValue);
-            return AggregationBuilders.count(field.getAlias()).field(kvValue.toString());
+            return AggregationBuilders.count(field.getAlias()).field("_index");
         } else {
             return AggregationBuilders.count(field.getAlias()).field(fieldName);
         }

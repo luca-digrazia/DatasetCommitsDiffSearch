@@ -72,9 +72,7 @@ public class AggregationQueryAction extends QueryAction {
                             }
                         }
                     }
-                    if(select.getRowCount()>0) {
-                        ((TermsAggregationBuilder) lastAgg).size(select.getRowCount());
-                    }
+                    ((TermsAggregationBuilder) lastAgg).size(select.getRowCount());
                 }
 
                 if (field.isNested()) {
@@ -104,11 +102,9 @@ public class AggregationQueryAction extends QueryAction {
                 for (int i = 1; i < groupBy.size(); i++) {
                     field = groupBy.get(i);
                     AggregationBuilder subAgg = getGroupAgg(field, select);
-                      //ES5.0 termsaggregation with size = 0 not supported anymore
-//                    if (subAgg instanceof TermsAggregationBuilder && !(field instanceof MethodField)) {
-
-//                        //((TermsAggregationBuilder) subAgg).size(0);
-//                    }
+                    if (subAgg instanceof TermsAggregationBuilder && !(field instanceof MethodField)) {
+                        ((TermsAggregationBuilder) subAgg).size(0);
+                    }
 
                     if (field.isNested()) {
                         AggregationBuilder nestedBuilder = createNestedAggregation(field);
