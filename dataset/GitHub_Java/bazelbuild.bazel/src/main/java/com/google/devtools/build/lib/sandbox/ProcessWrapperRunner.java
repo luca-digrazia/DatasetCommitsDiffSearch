@@ -18,6 +18,7 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -27,31 +28,33 @@ import java.util.Map;
  * platforms and gives at least some isolation between running actions.
  */
 final class ProcessWrapperRunner extends SandboxRunner {
-  private static final String PROCESS_WRAPPER = "process-wrapper" + OsUtils.executableExtension();
-
   private final Path execRoot;
   private final Path sandboxExecRoot;
 
-  ProcessWrapperRunner(Path execRoot, Path sandboxExecRoot, boolean verboseFailures) {
-    super(verboseFailures);
+  ProcessWrapperRunner(
+      Path execRoot, Path sandboxPath, Path sandboxExecRoot, boolean verboseFailures) {
+    super(sandboxExecRoot, verboseFailures);
     this.execRoot = execRoot;
     this.sandboxExecRoot = sandboxExecRoot;
   }
 
   static boolean isSupported(CommandEnvironment commandEnv) {
-    // We can only use this runner, if the process-wrapper exists in the embedded tools.
-    // This might not always be the case, e.g. while bootstrapping.
-    return commandEnv.getBlazeWorkspace().getBinTools().getExecPath(PROCESS_WRAPPER) != null;
+    PathFragment embeddedTool =
+        commandEnv
+            .getBlazeWorkspace()
+            .getBinTools()
+            .getExecPath("process-wrapper" + OsUtils.executableExtension());
+    if (embeddedTool == null) {
+      // The embedded tool does not exist, meaning that we don't support sandboxing (e.g., while
+      // bootstrapping).
+      return false;
+    }
+    return true;
   }
 
   @Override
   protected Command getCommand(
-      List<String> spawnArguments,
-      Map<String, String> env,
-      int timeout,
-      boolean allowNetwork,
-      boolean useFakeHostname,
-      boolean useFakeUsername) {
+      List<String> spawnArguments, Map<String, String> env, int timeout, boolean allowNetwork) {
     List<String> commandLineArgs = new ArrayList<>(5 + spawnArguments.size());
     commandLineArgs.add(execRoot.getRelative("_bin/process-wrapper").getPathString());
     commandLineArgs.add(Integer.toString(timeout));

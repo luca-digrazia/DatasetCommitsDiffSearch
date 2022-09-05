@@ -17,15 +17,10 @@ package com.google.devtools.build.lib.sandbox;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
-import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
-import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
@@ -102,29 +97,15 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
+
     // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
     if (!spawn.isRemotable() || spawn.hasNoSandbox()) {
       SandboxHelpers.fallbackToNonSandboxedExecution(spawn, actionExecutionContext, executor);
       return;
     }
 
-    EventBus eventBus = actionExecutionContext.getExecutor().getEventBus();
-    ActionExecutionMetadata owner = spawn.getResourceOwner();
-    eventBus.post(ActionStatusMessage.schedulingStrategy(owner));
-    try (ResourceHandle handle =
-        ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
-      SandboxHelpers.postActionStatusMessage(eventBus, spawn);
-      actuallyExec(spawn, actionExecutionContext, writeOutputFiles);
-    }
-  }
-
-  public void actuallyExec(
-      Spawn spawn,
-      ActionExecutionContext actionExecutionContext,
-      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
-      throws ExecException, InterruptedException {
-    Executor executor = actionExecutionContext.getExecutor();
     SandboxHelpers.reportSubcommand(executor, spawn);
+    SandboxHelpers.postActionStatusMessage(executor, spawn);
 
     // Each invocation of "exec" gets its own sandbox.
     Path sandboxPath = SandboxHelpers.getSandboxRoot(blazeDirs, productName, uuid, execCounter);
@@ -186,7 +167,7 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
           verboseFailures,
           sandboxOptions.sandboxDebug);
     } else {
-      return new ProcessWrapperRunner(execRoot, sandboxExecRoot, verboseFailures);
+      return new ProcessWrapperRunner(execRoot, sandboxPath, sandboxExecRoot, verboseFailures);
     }
   }
 
