@@ -302,11 +302,12 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
             + "Jack and Jill.")
     public boolean incrementalDexing;
 
+    // Do not use on the command line and instead flip this default globally.
     @Option(name = "host_incremental_dexing",
         defaultValue = "false",
         category = "hidden",
-        help = "This flag is deprecated in favor of applying --incremental_dexing to both host "
-            + "and target configuration.  This flag will be removed in a future release.")
+        help = "Does most of the work for dexing separately for each Jar file that's part of an "
+            + "Android binary built in host configuration.")
     public boolean hostIncrementalDexing;
 
     // Do not use on the command line.
@@ -425,7 +426,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       host.fatApkCpus = ImmutableList.<String>of(); // Fat APK archs don't apply to the host.
 
       host.desugarJava8 = desugarJava8;
-      host.incrementalDexing = incrementalDexing;
+      host.incrementalDexing = hostIncrementalDexing;
       host.incrementalDexingBinaries = incrementalDexingBinaries;
       host.nonIncrementalPerTargetDexopts = nonIncrementalPerTargetDexopts;
       host.dexoptsSupportedInIncrementalDexing = dexoptsSupportedInIncrementalDexing;
