@@ -17,14 +17,15 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.util.Classpath;
-import com.google.devtools.build.lib.util.Classpath.ClassPathException;
+
+import junit.framework.TestCase;
+
+import org.junit.runner.RunWith;
+
 import java.lang.reflect.Modifier;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.Set;
-import junit.framework.TestCase;
-import org.junit.runner.RunWith;
 
 /**
  * A collector for test classes, for both JUnit 3 and 4. To be used in combination with {@link
@@ -34,20 +35,6 @@ public final class TestSuiteBuilder {
 
   private Set<Class<?>> testClasses = Sets.newTreeSet(new TestClassNameComparator());
   private Predicate<Class<?>> matchClassPredicate = Predicates.alwaysTrue();
-  private final boolean tolerateEmptyTestSuites;
-
-  public TestSuiteBuilder() {
-    tolerateEmptyTestSuites = false;
-  }
-
-  /**
-   * @param tolerateEmptyTestSuites set this to true to add an empty test which passes to the suite.
-   *     Its better for Test Suites to fail when they create an empty set of classes to test, so new
-   *     suites should avoid setting this to true.
-   */
-  public TestSuiteBuilder(boolean tolerateEmptyTestSuites) {
-    this.tolerateEmptyTestSuites = tolerateEmptyTestSuites;
-  }
 
   /**
    * Adds the tests found (directly) in class {@code c} to the set of tests
@@ -72,14 +59,10 @@ public final class TestSuiteBuilder {
 
   private Set<Class<?>> getClassesRecursive(String pkgName) {
     Set<Class<?>> result = new LinkedHashSet<>();
-    try {
-      for (Class<?> clazz : Classpath.findClasses(pkgName)) {
-        if (isTestClass(clazz)) {
-          result.add(clazz);
-        }
+    for (Class<?> clazz : Classpath.findClasses(pkgName)) {
+      if (isTestClass(clazz)) {
+        result.add(clazz);
       }
-    } catch (ClassPathException e) {
-      throw new AssertionError("Cannot retrive classes: " + e.getMessage());
     }
     return result;
   }
@@ -101,7 +84,7 @@ public final class TestSuiteBuilder {
     for (Class<?> testClass : Iterables.filter(testClasses, matchClassPredicate)) {
       result.add(testClass);
     }
-    if (tolerateEmptyTestSuites && result.isEmpty()) {
+    if (result.isEmpty()) {
       // We have some cases where the resulting test suite is empty, which some of our test
       // infrastructure treats as an error.
       result.add(TautologyTest.class);
@@ -118,6 +101,7 @@ public final class TestSuiteBuilder {
   private static boolean isTestClass(Class<?> container) {
     return (isJunit4Test(container) || isJunit3Test(container))
         && !isSuite(container)
+        && Modifier.isPublic(container.getModifiers())
         && !Modifier.isAbstract(container.getModifiers());
   }
 
