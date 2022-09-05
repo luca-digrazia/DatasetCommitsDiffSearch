@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 
 /**
  * Various constants required by Bazel.
@@ -45,7 +44,6 @@ public class Constants {
       "templates/attributes/common/deprecation.html",
       "templates/attributes/common/deps.html",
       "templates/attributes/common/distribs.html",
-      "templates/attributes/common/features.html",
       "templates/attributes/common/licenses.html",
       "templates/attributes/common/tags.html",
       "templates/attributes/common/testonly.html",
@@ -81,9 +79,4 @@ public class Constants {
    */
   public static final String PARSER_ERROR_EXTENSION_NEEDED =
       "Move this construct to a macro in a .bzl file and load it";
-
-  /**
-   * Rule classes which specify iOS devices for running tests.
-   */
-  public static final ImmutableSet<String> IOS_DEVICE_RULE_CLASSES = ImmutableSet.of("ios_device");
 }
