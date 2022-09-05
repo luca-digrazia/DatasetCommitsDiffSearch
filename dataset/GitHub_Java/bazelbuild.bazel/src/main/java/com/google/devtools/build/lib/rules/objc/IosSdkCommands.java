@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,11 +64,7 @@ public class IosSdkCommands {
     throw new UnsupportedOperationException("static-only");
   }
 
-  /**
-   * Returns the platform plist name (for example, iPhoneSimulator) for the platform corresponding
-   * to the value of {@code --ios_cpu} in the given configuration.
-   */
-  public static String getPlatformPlistName(ObjcConfiguration configuration) {
+  private static String getPlatformPlistName(ObjcConfiguration configuration) {
     return Platform.forArch(configuration.getIosCpu()).getNameInPlist();
   }
 
