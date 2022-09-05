@@ -16,13 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.skyframe.SkyframeExecutor.DEFAULT_THREAD_COUNT;
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
@@ -61,10 +54,7 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
+import junit.framework.TestCase;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -84,8 +74,7 @@ import javax.annotation.Nullable;
 /**
  * Tests for {@link FileFunction}.
  */
-@RunWith(JUnit4.class)
-public class FileFunctionTest {
+public class FileFunctionTest extends TestCase {
   private CustomInMemoryFs fs;
   private Path pkgRoot;
   private PathPackageLocator pkgLocator;
@@ -94,9 +83,9 @@ public class FileFunctionTest {
   private ManualClock manualClock;
   private RecordingDifferencer differencer;
 
-  @Before
-  public void setUp() throws Exception {
-
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
     fastMd5 = true;
     manualClock = new ManualClock();
     createFsAndRoot(new CustomInMemoryFs(manualClock));
@@ -153,7 +142,6 @@ public class FileFunctionTest {
     return result.get(key);
   }
 
-  @Test
   public void testFileValueHashCodeAndEqualsContract() throws Exception {
     Path pathA = file(pkgRoot + "a", "a");
     Path pathB = file(pkgRoot + "b", "b");
@@ -167,7 +155,6 @@ public class FileFunctionTest {
         .testEquals();
   }
 
-  @Test
   public void testIsDirectory() throws Exception {
     assertFalse(valueForPath(file("a")).isDirectory());
     assertFalse(valueForPath(path("nonexistent")).isDirectory());
@@ -179,7 +166,6 @@ public class FileFunctionTest {
     assertTrue(valueForPath(symlink("ssdir", "sdir")).isDirectory());
   }
 
-  @Test
   public void testIsFile() throws Exception {
     assertTrue(valueForPath(file("a")).isFile());
     assertFalse(valueForPath(path("nonexistent")).isFile());
@@ -191,7 +177,6 @@ public class FileFunctionTest {
     assertTrue(valueForPath(symlink("ssfile", "sa")).isFile());
   }
 
-  @Test
   public void testSimpleIndependentFiles() throws Exception {
     file("a");
     file("b");
@@ -202,7 +187,6 @@ public class FileFunctionTest {
     assertThat(seenFiles).containsExactly(rootedPath("a"), rootedPath("b"), rootedPath(""));
   }
 
-  @Test
   public void testSimpleSymlink() throws Exception {
     symlink("a", "b");
     file("b");
@@ -211,7 +195,6 @@ public class FileFunctionTest {
     assertValueChangesIfContentsOfFileChanges("b", true, "a");
   }
 
-  @Test
   public void testTransitiveSymlink() throws Exception {
     symlink("a", "b");
     symlink("b", "c");
@@ -224,14 +207,12 @@ public class FileFunctionTest {
     assertValueChangesIfContentsOfFileChanges("c", true, "a");
   }
 
-  @Test
   public void testFileUnderDirectorySymlink() throws Exception {
     symlink("a", "b/c");
     symlink("b", "d");
     assertValueChangesIfContentsOfDirectoryChanges("b", true, "a/e");
   }
 
-  @Test
   public void testSymlinkInDirectory() throws Exception {
     symlink("a/aa", "ab");
     file("a/ab");
@@ -240,21 +221,18 @@ public class FileFunctionTest {
     assertValueChangesIfContentsOfFileChanges("a/ab", true, "a/aa");
   }
 
-  @Test
   public void testRelativeSymlink() throws Exception {
     symlink("a/aa/aaa", "../ab/aba");
     file("a/ab/aba");
     assertValueChangesIfContentsOfFileChanges("a/ab/aba", true, "a/aa/aaa");
   }
 
-  @Test
   public void testDoubleRelativeSymlink() throws Exception {
     symlink("a/b/c/d", "../../e/f");
     file("a/e/f");
     assertValueChangesIfContentsOfFileChanges("a/e/f", true, "a/b/c/d");
   }
 
-  @Test
   public void testExternalRelativeSymlink() throws Exception {
     symlink("a", "../outside");
     file("b");
@@ -271,7 +249,6 @@ public class FileFunctionTest {
             RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("outside")));
   }
 
-  @Test
   public void testAbsoluteSymlink() throws Exception {
     symlink("a", "/absolute");
     file("b");
@@ -288,21 +265,18 @@ public class FileFunctionTest {
             RootedPath.toRootedPath(fs.getRootDirectory(), new PathFragment("absolute")));
   }
 
-  @Test
   public void testSymlinkAsAncestor() throws Exception {
     file("a/b/c/d");
     symlink("f", "a/b/c");
     assertValueChangesIfContentsOfFileChanges("a/b/c/d", true, "f/d");
   }
 
-  @Test
   public void testSymlinkAsAncestorNested() throws Exception {
     file("a/b/c/d");
     symlink("f", "a/b");
     assertValueChangesIfContentsOfFileChanges("a/b/c/d", true, "f/c/d");
   }
 
-  @Test
   public void testTwoSymlinksInAncestors() throws Exception {
     file("a/aa/aaa/aaaa");
     symlink("b/ba/baa", "../../a/aa");
@@ -313,26 +287,22 @@ public class FileFunctionTest {
     assertValueChangesIfContentsOfFileChanges("a/aa/aaa/aaaa", true, "c/ca/baa/aaa/aaaa");
   }
 
-  @Test
   public void testSelfReferencingSymlink() throws Exception {
     symlink("a", "a");
     assertError("a");
   }
 
-  @Test
   public void testMutuallyReferencingSymlinks() throws Exception {
     symlink("a", "b");
     symlink("b", "a");
     assertError("a");
   }
 
-  @Test
   public void testRecursiveNestingSymlink() throws Exception {
     symlink("a/a", "../a");
     assertError("a/a/b");
   }
 
-  @Test
   public void testBrokenSymlink() throws Exception {
     symlink("a", "b");
     Set<RootedPath> seenFiles = Sets.newHashSet();
@@ -341,7 +311,6 @@ public class FileFunctionTest {
     assertThat(seenFiles).containsExactly(rootedPath("a"), rootedPath("b"), rootedPath(""));
   }
 
-  @Test
   public void testBrokenDirectorySymlink() throws Exception {
     symlink("a", "b");
     file("c");
@@ -353,7 +322,6 @@ public class FileFunctionTest {
     assertValueChangesIfContentsOfFileChanges("c", false, "a/aa");
   }
 
-  @Test
   public void testTraverseIntoVirtualNonDirectory() throws Exception {
     file("dir/a");
     symlink("vdir", "dir");
@@ -361,7 +329,6 @@ public class FileFunctionTest {
     assertNoError("vdir/a/aa/aaa");
   }
 
-  @Test
   public void testFileCreation() throws Exception {
     FileValue a = valueForPath(path("file"));
     Path p = file("file");
@@ -369,7 +336,6 @@ public class FileFunctionTest {
     assertFalse(a.equals(b));
   }
 
-  @Test
   public void testEmptyFile() throws Exception {
     final byte[] digest = new byte[] {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     createFsAndRoot(
@@ -396,7 +362,6 @@ public class FileFunctionTest {
     assertThat(valueForPath(p)).isNotEqualTo(a);
   }
 
-  @Test
   public void testFileModificationModTime() throws Exception {
     fastMd5 = false;
     Path p = file("file");
@@ -406,7 +371,6 @@ public class FileFunctionTest {
     assertFalse(a.equals(b));
   }
 
-  @Test
   public void testFileModificationDigest() throws Exception {
     fastMd5 = true;
     Path p = file("file");
@@ -416,7 +380,6 @@ public class FileFunctionTest {
     assertFalse(a.equals(b));
   }
 
-  @Test
   public void testModTimeVsDigest() throws Exception {
     Path p = file("somefile", "fizzley");
 
@@ -428,7 +391,6 @@ public class FileFunctionTest {
     new EqualsTester().addEqualityGroup(aMd5).addEqualityGroup(aModTime).testEquals();
   }
 
-  @Test
   public void testFileDeletion() throws Exception {
     Path p = file("file");
     FileValue a = valueForPath(p);
@@ -437,7 +399,6 @@ public class FileFunctionTest {
     assertFalse(a.equals(b));
   }
 
-  @Test
   public void testFileTypeChange() throws Exception {
     Path p = file("file");
     FileValue a = valueForPath(p);
@@ -452,7 +413,6 @@ public class FileFunctionTest {
     assertFalse(a.equals(c));
   }
 
-  @Test
   public void testSymlinkTargetChange() throws Exception {
     Path p = symlink("symlink", "foo");
     FileValue a = valueForPath(p);
@@ -462,7 +422,6 @@ public class FileFunctionTest {
     assertThat(b).isNotEqualTo(a);
   }
 
-  @Test
   public void testSymlinkTargetContentsChangeModTime() throws Exception {
     fastMd5 = false;
     Path fooPath = file("foo");
@@ -474,7 +433,6 @@ public class FileFunctionTest {
     assertThat(b).isNotEqualTo(a);
   }
 
-  @Test
   public void testSymlinkTargetContentsChangeDigest() throws Exception {
     fastMd5 = true;
     Path fooPath = file("foo");
@@ -486,7 +444,6 @@ public class FileFunctionTest {
     assertThat(b).isNotEqualTo(a);
   }
 
-  @Test
   public void testRealPath() throws Exception {
     file("file");
     directory("directory");
@@ -517,7 +474,6 @@ public class FileFunctionTest {
     assertRealPath("deadlink", "missing_file");
   }
 
-  @Test
   public void testRealPathRelativeSymlink() throws Exception {
     directory("dir");
     symlink("dir/link", "../dir2");
@@ -528,7 +484,6 @@ public class FileFunctionTest {
     checkRealPath("dir/link/filelink");
   }
 
-  @Test
   public void testSymlinkAcrossPackageRoots() throws Exception {
     Path otherPkgRoot = fs.getRootDirectory().getRelative("other_root");
     pkgLocator = new PathPackageLocator(pkgRoot, otherPkgRoot);
@@ -536,7 +491,6 @@ public class FileFunctionTest {
     assertValueChangesIfContentsOfFileChanges("/other_root/b", true, "a");
   }
 
-  @Test
   public void testFilesOutsideRootHasDepOnBuildID() throws Exception {
     Path file = file("/outsideroot");
     SequentialBuildDriver driver = makeDriver();
@@ -573,7 +527,6 @@ public class FileFunctionTest {
     assertFalse(newValue.exists());
   }
 
-  @Test
   public void testFilesOutsideRootWhenExternalDisallowed() throws Exception {
     file("/outsideroot");
 
@@ -588,7 +541,6 @@ public class FileFunctionTest {
         .isInstanceOf(FileOutsidePackageRootsException.class);
   }
 
-  @Test
   public void testAbsoluteSymlinksToFilesOutsideRootWhenExternalDisallowed() throws Exception {
     file("/outsideroot");
     symlink("a", "/outsideroot");
@@ -604,7 +556,6 @@ public class FileFunctionTest {
         .isInstanceOf(FileOutsidePackageRootsException.class);
   }
 
-  @Test
   public void testRelativeSymlinksToFilesOutsideRootWhenExternalDisallowed() throws Exception {
     file("../outsideroot");
     symlink("a", "../outsideroot");
@@ -618,7 +569,6 @@ public class FileFunctionTest {
         .isInstanceOf(FileOutsidePackageRootsException.class);
   }
 
-  @Test
   public void testAbsoluteSymlinksBackIntoSourcesOkWhenExternalDisallowed() throws Exception {
     Path file = file("insideroot");
     symlink("a", file.getPathString());
@@ -644,7 +594,6 @@ public class FileFunctionTest {
                     SkyKey.NODE_NAME));
   }
 
-  @Test
   public void testSize() throws Exception {
     Path file = file("file");
     int fileSize = 20;
@@ -686,7 +635,6 @@ public class FileFunctionTest {
     }
   }
 
-  @Test
   public void testDigest() throws Exception {
     final AtomicInteger digestCalls = new AtomicInteger(0);
     int expectedCalls = 0;
@@ -753,7 +701,6 @@ public class FileFunctionTest {
     assertEquals(0, digestCalls.get());
   }
 
-  @Test
   public void testFilesystemInconsistencies_ParentDoesntExistAndChildIsSymlink() throws Exception {
     symlink("a/b", "doesntmatter");
     // Our custom filesystem says "a/b" exists but "a" does not exist.
@@ -772,7 +719,6 @@ public class FileFunctionTest {
                 + "nonexistent path");
   }
 
-  @Test
   public void testFilesystemInconsistencies_ParentIsntADirectory() throws Exception {
     file("a/b");
     // Our custom filesystem says "a/b" exists but its parent "a" is a file.
@@ -834,7 +780,6 @@ public class FileFunctionTest {
         .contains("file /root/a/b exists but its parent path /root/a isn't an existing directory");
   }
 
-  @Test
   public void testFilesystemInconsistencies_GetFastDigest() throws Exception {
     file("a");
     // Our custom filesystem says "a/b" exists but "a" does not exist.
@@ -929,27 +874,22 @@ public class FileFunctionTest {
         .contains("circular symlinks detected");
   }
 
-  @Test
   public void testSymlinkCycle_AncestorCycle_StartInCycle() throws Exception {
     runTestSymlinkCycle(/*ancestorCycle=*/ true, /*startInCycle=*/ true);
   }
 
-  @Test
   public void testSymlinkCycle_AncestorCycle_StartOutOfCycle() throws Exception {
     runTestSymlinkCycle(/*ancestorCycle=*/ true, /*startInCycle=*/ false);
   }
 
-  @Test
   public void testSymlinkCycle_RegularCycle_StartInCycle() throws Exception {
     runTestSymlinkCycle(/*ancestorCycle=*/ false, /*startInCycle=*/ true);
   }
 
-  @Test
   public void testSymlinkCycle_RegularCycle_StartOutOfCycle() throws Exception {
     runTestSymlinkCycle(/*ancestorCycle=*/ false, /*startInCycle=*/ false);
   }
 
-  @Test
   public void testSerialization() throws Exception {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     ObjectOutputStream oos = new ObjectOutputStream(bos);
@@ -989,7 +929,6 @@ public class FileFunctionTest {
     }
   }
 
-  @Test
   public void testFileStateEquality() throws Exception {
     file("a");
     symlink("b1", "a");
@@ -1022,7 +961,6 @@ public class FileFunctionTest {
         .testEquals();
   }
 
-  @Test
   public void testSymlinkToPackagePathBoundary() throws Exception {
     Path path = path("this/is/a/path");
     FileSystemUtils.ensureSymbolicLink(path, pkgRoot);
@@ -1096,27 +1034,22 @@ public class FileFunctionTest {
         .contains("infinite symlink expansion detected");
   }
 
-  @Test
   public void testInfiniteSymlinkExpansion_AbsoluteSymlinkToDescendant() throws Exception {
     runTestInfiniteSymlinkExpansion(/*ancestor=*/ false, /*absoluteSymlink=*/ true);
   }
 
-  @Test
   public void testInfiniteSymlinkExpansion_RelativeSymlinkToDescendant() throws Exception {
     runTestInfiniteSymlinkExpansion(/*ancestor=*/ false, /*absoluteSymlink=*/ false);
   }
 
-  @Test
   public void testInfiniteSymlinkExpansion_AbsoluteSymlinkToAncestor() throws Exception {
     runTestInfiniteSymlinkExpansion(/*ancestor=*/ true, /*absoluteSymlink=*/ true);
   }
 
-  @Test
   public void testInfiniteSymlinkExpansion_RelativeSymlinkToAncestor() throws Exception {
     runTestInfiniteSymlinkExpansion(/*ancestor=*/ true, /*absoluteSymlink=*/ false);
   }
 
-  @Test
   public void testChildOfNonexistentParent() throws Exception {
     Path ancestor = directory("this/is/an/ancestor");
     Path parent = ancestor.getChild("parent");
