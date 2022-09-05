@@ -18,11 +18,11 @@
 
 package org.hswebframework.web.service;
 
-import org.hswebframework.ezorm.core.dsl.Query;
+import org.hsweb.ezorm.core.dsl.Query;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
-import org.hswebframework.web.dao.dynamic.QueryByEntityDao;
+import org.hswebframework.web.dao.dynamic.QueryByBeanDao;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
@@ -31,35 +31,26 @@ import java.util.List;
 public interface DefaultQueryByEntityService<E>
         extends QueryByEntityService<E> {
 
-    QueryByEntityDao<E> getDao();
+    QueryByBeanDao<E> getDao();
 
     /**
      * 分页进行查询数据，查询条件同 {@link DefaultQueryByEntityService#select}
      *
      * @param param 查询参数
-     * @return 分页查询结果
+     * @return 分页结果
+     * @ 查询异常
      */
     @Override
     default PagerResult<E> selectPager(Entity param) {
         PagerResult<E> pagerResult = new PagerResult<>();
-        if (param instanceof QueryParamEntity) {
-            QueryParamEntity entity = ((QueryParamEntity) param);
-            //不分页,不进行count
-            if (!entity.isPaging()) {
-                pagerResult.setData(getDao().query(param));
-                pagerResult.setTotal(pagerResult.getData().size());
-                return pagerResult;
-            }
-        }
         int total = getDao().count(param);
         pagerResult.setTotal(total);
         if (total == 0) {
             pagerResult.setData(Collections.emptyList());
         } else {
             //根据实际记录数量重新指定分页参数
-            if (param instanceof QueryParamEntity) {
+            if (param instanceof QueryParamEntity)
                 ((QueryParamEntity) param).rePaging(total);
-            }
             pagerResult.setData(getDao().query(param));
         }
         return pagerResult;
@@ -75,9 +66,7 @@ public interface DefaultQueryByEntityService<E>
     @Override
     @Transactional(readOnly = true)
     default List<E> select(Entity param) {
-        if (param == null) {
-            param = QueryParamEntity.empty();
-        }
+        if (param == null) param = QueryParamEntity.empty();
         return getDao().query(param);
     }
 
@@ -91,30 +80,25 @@ public interface DefaultQueryByEntityService<E>
     @Override
     @Transactional(readOnly = true)
     default int count(Entity param) {
-        if (param == null) {
-            param = QueryParamEntity.empty();
-        }
+        if (param == null) param = QueryParamEntity.empty();
         return getDao().count(param);
     }
 
     /**
-     * 查询只返回单个结果,如果有多个结果,只返回第一个
+     * 查询只返回单个结果
      *
      * @param param 查询条件
-     * @return 单个查询结果
+     * @return 单个结果
+     * @see this#select(Entity)
      */
     @Override
     @Transactional(readOnly = true)
     default E selectSingle(Entity param) {
-        if (param instanceof QueryParamEntity) {
+        if (param instanceof QueryParamEntity)
             ((QueryParamEntity) param).doPaging(0, 1);
-        }
         List<E> list = this.select(param);
-        if (list.isEmpty()) {
-            return null;
-        } else {
-            return list.get(0);
-        }
+        if (list.size() == 0) return null;
+        else return list.get(0);
     }
 
 }
