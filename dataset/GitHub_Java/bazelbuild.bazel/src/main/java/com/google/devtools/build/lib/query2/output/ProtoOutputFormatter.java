@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
@@ -52,7 +51,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
@@ -143,7 +141,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
       if (includeLocation()) {
         rulePb.setLocation(location);
       }
-      Map<Attribute, Build.Attribute> serializedAttributes = Maps.newHashMap();
+
       for (Attribute attr : rule.getAttributes()) {
         if (!includeDefaultValues && !rule.isAttributeValueExplicitlySpecified(attr)
             || !includeAttribute(rule, attr)) {
@@ -162,10 +160,9 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
                 /*includeGlobs=*/ false,
                 /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
         rulePb.addAttribute(serializedAttribute);
-        serializedAttributes.put(attr, serializedAttribute);
       }
 
-      postProcess(rule, rulePb, serializedAttributes);
+      postProcess(rule, rulePb);
 
       Environment env = rule.getRuleClassObject().getRuleDefinitionEnvironment();
       if (env != null && includeRuleDefinitionEnvironment()) {
@@ -341,8 +338,7 @@ public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   }
 
   /** Further customize the proto output */
-  protected void postProcess(Rule rule, Build.Rule.Builder rulePb, Map<Attribute,
-      Build.Attribute> serializedAttributes) { }
+  protected void postProcess(Rule rule, Build.Rule.Builder rulePb) { }
 
   /** Filter out some attributes */
   protected boolean includeAttribute(Rule rule, Attribute attr) {
