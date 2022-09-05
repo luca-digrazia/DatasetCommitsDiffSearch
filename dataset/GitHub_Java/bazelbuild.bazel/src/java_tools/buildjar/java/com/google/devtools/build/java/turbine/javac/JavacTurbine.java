@@ -27,11 +27,7 @@ import com.google.devtools.build.java.turbine.javac.ZipOutputFileManager.OutputF
 import com.sun.tools.javac.util.Context;
 
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.FieldVisitor;
-import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -247,7 +243,7 @@ public class JavacTurbine implements AutoCloseable {
         String name = entry.getKey();
         byte[] bytes = entry.getValue().asBytes();
         if (name.endsWith(".class")) {
-          bytes = processBytecode(bytes);
+          bytes = removeCode(bytes);
         }
         ZipUtil.storeEntry(name, bytes, zipOut);
         hasEntries = true;
@@ -260,56 +256,18 @@ public class JavacTurbine implements AutoCloseable {
   }
 
   /**
-   * Remove code attributes and private members.
+   * Strip any remaining code attributes.
    *
    * <p>Most code will already have been removed after parsing, but the bytecode will still
    * contain e.g. lowered class and instance initializers.
    */
-  private static byte[] processBytecode(byte[] bytes) {
+  // TODO(cushon): add additional stripping to produce ijar-compatible output,
+  // e.g. removing private members.
+  private static byte[] removeCode(byte[] bytes) {
     ClassWriter cw = new ClassWriter(0);
     new ClassReader(bytes)
-        .accept(
-            new PrivateMemberPruner(cw),
-            ClassReader.SKIP_CODE | ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
+        .accept(cw, ClassReader.SKIP_CODE | ClassReader.SKIP_FRAMES | ClassReader.SKIP_DEBUG);
     return cw.toByteArray();
-  }
-
-  /**
-   * Prune private members.
-   *
-   * <p>Like ijar, turbine prunes private fields and members to improve caching
-   * and reduce output size.
-   *
-   * <p>This is not always a safe optimization: it can prevent javac from emitting
-   * diagnostics e.g. when a public member is hidden by a private member which has
-   * then pruned. The impact of that is believed to be small, and as long as ijar
-   * continues to prune private members turbine should do the same for compatibility.
-   *
-   * <p>Some of this work could be done during tree pruning, but it's not completely
-   * trivial to detect private members at that point (e.g. with implicit modifiers).
-   */
-  static class PrivateMemberPruner extends ClassVisitor {
-    public PrivateMemberPruner(ClassVisitor cv) {
-      super(Opcodes.ASM5, cv);
-    }
-
-    @Override
-    public FieldVisitor visitField(
-        int access, String name, String desc, String signature, Object value) {
-      if ((access & Opcodes.ACC_PRIVATE) == Opcodes.ACC_PRIVATE) {
-        return null;
-      }
-      return super.visitField(access, name, desc, signature, value);
-    }
-
-    @Override
-    public MethodVisitor visitMethod(
-        int access, String name, String desc, String signature, String[] exceptions) {
-      if ((access & Opcodes.ACC_PRIVATE) == Opcodes.ACC_PRIVATE) {
-        return null;
-      }
-      return super.visitMethod(access, name, desc, signature, exceptions);
-    }
   }
 
   /** Convert string elements of a classpath to {@link Path}s. */

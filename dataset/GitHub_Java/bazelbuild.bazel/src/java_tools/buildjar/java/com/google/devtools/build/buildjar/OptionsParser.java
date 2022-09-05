@@ -16,8 +16,6 @@ package com.google.devtools.build.buildjar;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -38,11 +36,10 @@ import java.util.Set;
  * command-line flags and options files and provides them via getters.
  */
 public final class OptionsParser {
-  private static final Splitter SPACE_SPLITTER = Splitter.on(' ');
   private final List<String> javacOpts = new ArrayList<>();
 
-  private final Map<String, JarOwner> directJarsToTargets = new HashMap<>();
-  private final Map<String, JarOwner> indirectJarsToTargets = new HashMap<>();
+  private final Map<String, String> directJarsToTargets = new HashMap<>();
+  private final Map<String, String> indirectJarsToTargets = new HashMap<>();
 
   private String strictJavaDeps;
 
@@ -83,8 +80,8 @@ public final class OptionsParser {
   private String targetLabel;
 
   /**
-   * Constructs an {@code OptionsParser} from a list of command args. Sets the same JavacRunner for
-   * both compilation and annotation processing.
+   * Constructs an {@code OptionsParser} from a list of command args. Sets the same
+   * JavacRunner for both compilation and annotation processing.
    *
    * @param args the list of command line args.
    * @throws InvalidCommandLineException on any command line error.
@@ -111,15 +108,15 @@ public final class OptionsParser {
         case "--direct_dependency":
           {
             String jar = getArgument(argQueue, arg);
-            JarOwner owner = parseJarOwner(getArgument(argQueue, arg));
-            directJarsToTargets.put(jar, owner);
+            String target = getArgument(argQueue, arg);
+            directJarsToTargets.put(jar, target);
             break;
           }
         case "--indirect_dependency":
           {
             String jar = getArgument(argQueue, arg);
-            JarOwner owner = parseJarOwner(getArgument(argQueue, arg));
-            indirectJarsToTargets.put(jar, owner);
+            String target = getArgument(argQueue, arg);
+            indirectJarsToTargets.put(jar, target);
             break;
           }
         case "--strict_java_deps":
@@ -207,21 +204,9 @@ public final class OptionsParser {
     }
   }
 
-  private JarOwner parseJarOwner(String line) {
-    List<String> ownerStringParts = SPACE_SPLITTER.splitToList(line);
-    JarOwner owner;
-    Preconditions.checkState(ownerStringParts.size() == 1 || ownerStringParts.size() == 2);
-    if (ownerStringParts.size() == 1) {
-      owner = JarOwner.create(ownerStringParts.get(0));
-    } else {
-      owner = JarOwner.create(ownerStringParts.get(0), ownerStringParts.get(1));
-    }
-    return owner;
-  }
-
   /**
-   * Pre-processes an argument list, expanding options @filename to read in the content of the file
-   * and add it to the list of arguments.
+   * Pre-processes an argument list, expanding options @filename to read in
+   * the content of the file and add it to the list of arguments.
    *
    * @param args the List of arguments to pre-process.
    * @return the List of pre-processed arguments.
@@ -236,8 +221,8 @@ public final class OptionsParser {
   }
 
   /**
-   * Expands a single argument, expanding options @filename to read in the content of the file and
-   * add it to the list of processed arguments. The @ itself can be escaped with @@.
+   * Expands a single argument, expanding options @filename to read in the content of the file
+   * and add it to the list of processed arguments. The @ itself can be escaped with @@.
    *
    * @param expanded the list of processed arguments.
    * @param arg the argument to pre-process.
@@ -275,16 +260,15 @@ public final class OptionsParser {
   }
 
   /**
-   * Collects the arguments for the --processors command line flag until it finds a flag that starts
-   * with the terminatorPrefix.
+   * Collects the arguments for the --processors command line flag until it finds a flag that
+   * starts with the terminatorPrefix.
    *
    * @param output where to put the collected flag arguments.
    * @param args
    * @param terminatorPrefix the terminator prefix to stop collecting of argument flags.
    */
-  private static void collectProcessorArguments(
-      List<String> output, Deque<String> args, String terminatorPrefix)
-      throws InvalidCommandLineException {
+  private static void collectProcessorArguments(List<String> output, Deque<String> args,
+      String terminatorPrefix) throws InvalidCommandLineException {
     for (String arg = args.pollFirst(); arg != null; arg = args.pollFirst()) {
       if (arg.startsWith(terminatorPrefix)) {
         args.addFirst(arg);
@@ -318,11 +302,11 @@ public final class OptionsParser {
     return javacOpts;
   }
 
-  public Map<String, JarOwner> getDirectMappings() {
+  public Map<String, String> getDirectMappings() {
     return directJarsToTargets;
   }
 
-  public Map<String, JarOwner> getIndirectMappings() {
+  public Map<String, String> getIndirectMappings() {
     return indirectJarsToTargets;
   }
 
