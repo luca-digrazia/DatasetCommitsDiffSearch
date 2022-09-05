@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -154,16 +153,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
       }
     };
 
-    ProtoJavaApiInfoAspectProvider.Builder protoAspectBuilder =
-        ProtoJavaApiInfoAspectProvider.builder();
-    for (TransitiveInfoCollection dep : common.getDependencies()) {
-      ProtoJavaApiInfoAspectProvider protoProvider =
-          JavaProvider.getProvider(ProtoJavaApiInfoAspectProvider.class, dep);
-      if (protoProvider != null) {
-        protoAspectBuilder.addTransitive(protoProvider);
-      }
-    }
-
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
 
@@ -174,7 +163,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider =
         JavaRuleOutputJarsProvider.builder()
-            .addOutputJar(classJar, iJar, ImmutableList.of(srcJar))
+            .addOutputJar(classJar, iJar, srcJar)
             .setJdeps(outputDepsProto)
             .build();
     JavaCompilationArgsProvider compilationArgsProvider =
@@ -199,7 +188,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     JavaProvider javaProvider = JavaProvider.Builder.create()
         .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .addProvider(ProtoJavaApiInfoAspectProvider.class, protoAspectBuilder.build())
         .build();
     builder
         .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, skylarkApiProvider.build())
