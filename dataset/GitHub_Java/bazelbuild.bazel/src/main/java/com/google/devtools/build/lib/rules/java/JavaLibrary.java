@@ -129,9 +129,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     boolean neverLink = JavaCommon.isNeverLink(ruleContext);
     JavaCompilationArtifacts javaArtifacts = javaArtifactsBuilder.build();
     common.setJavaCompilationArtifacts(javaArtifacts);
-    common.setClassPathFragment(
-        new ClasspathConfiguredFragment(
-            javaArtifacts, attributes, neverLink, helper.getBootclasspathOrDefault()));
+    common.setClassPathFragment(new ClasspathConfiguredFragment(
+        javaArtifacts, attributes, neverLink));
     CppCompilationContext transitiveCppDeps = common.collectTransitiveCppDeps();
 
     NestedSet<Artifact> transitiveSourceJars = common.collectTransitiveSourceJars(srcJar);
