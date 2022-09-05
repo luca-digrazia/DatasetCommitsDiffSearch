@@ -3,8 +3,6 @@ package org.nlpcn.es4sql.query.maker;
 import java.io.IOException;
 import java.util.Set;
 
-import com.alibaba.druid.sql.ast.expr.SQLIdentifierExpr;
-import com.alibaba.druid.sql.ast.expr.SQLMethodInvokeExpr;
 import org.elasticsearch.common.collect.Sets;
 import org.elasticsearch.common.geo.ShapeRelation;
 import org.elasticsearch.common.geo.builders.ShapeBuilder;
@@ -17,7 +15,8 @@ import org.nlpcn.es4sql.domain.Condition.OPEAR;
 import org.nlpcn.es4sql.domain.Paramer;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
-
+import org.durid.sql.ast.expr.SQLIdentifierExpr;
+import org.durid.sql.ast.expr.SQLMethodInvokeExpr;
 import org.nlpcn.es4sql.spatial.*;
 
 public abstract class Maker {
@@ -143,7 +142,7 @@ public abstract class Maker {
 				break;
 			}
 		case LIKE:
-        case NLIKE:
+		case NLIKE:
 			String queryStr = ((String) value).replace('%', '*').replace('_', '?');
 			WildcardQueryBuilder wildcardQuery = QueryBuilders.wildcardQuery(name, queryStr);
 			x = isQuery ? wildcardQuery : FilterBuilders.queryFilter(wildcardQuery);
