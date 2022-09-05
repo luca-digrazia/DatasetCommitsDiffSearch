@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -160,7 +159,7 @@ public abstract class RepositoryFunction {
    * <p>If this is false, Bazel may decide not to re-fetch the repository, for example when the
    * {@code --nofetch} command line option is used.
    */
-  protected abstract boolean isLocal(Rule rule);
+  protected abstract boolean isLocal();
 
   /**
    * Returns a block of data that must be equal for two Rules for them to be considered the same.
@@ -217,6 +216,7 @@ public abstract class RepositoryFunction {
     }
   }
 
+
   protected Path prepareLocalRepositorySymlinkTree(Rule rule, Path repositoryDirectory)
       throws RepositoryFunctionException {
     try {
@@ -242,8 +242,8 @@ public abstract class RepositoryFunction {
     }
   }
 
-  protected static RepositoryDirectoryValue writeBuildFile(
-      Path repositoryDirectory, String contents) throws RepositoryFunctionException {
+  protected RepositoryDirectoryValue writeBuildFile(Path repositoryDirectory, String contents)
+      throws RepositoryFunctionException {
     Path buildFilePath = repositoryDirectory.getRelative("BUILD");
     try {
       FileSystemUtils.writeContentAsLatin1(buildFilePath, contents);
@@ -252,6 +252,64 @@ public abstract class RepositoryFunction {
     }
 
     return RepositoryDirectoryValue.create(repositoryDirectory);
+  }
+
+  protected FileValue getBuildFileValue(Rule rule, Environment env)
+      throws RepositoryFunctionException {
+    AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
+    PathFragment buildFile = new PathFragment(mapper.get("build_file", Type.STRING));
+    Path buildFileTarget = directories.getWorkspace().getRelative(buildFile);
+    if (!buildFileTarget.exists()) {
+      throw new RepositoryFunctionException(
+          new EvalException(rule.getLocation(),
+              String.format("In %s the 'build_file' attribute does not specify an existing file "
+                  + "(%s does not exist)", rule, buildFileTarget)),
+          Transience.PERSISTENT);
+    }
+
+    RootedPath rootedBuild;
+    if (buildFile.isAbsolute()) {
+      rootedBuild = RootedPath.toRootedPath(
+          buildFileTarget.getParentDirectory(), new PathFragment(buildFileTarget.getBaseName()));
+    } else {
+      rootedBuild = RootedPath.toRootedPath(directories.getWorkspace(), buildFile);
+    }
+    SkyKey buildFileKey = FileValue.key(rootedBuild);
+    FileValue buildFileValue;
+    try {
+      // Note that this dependency is, strictly speaking, not necessary: the symlink could simply
+      // point to this FileValue and the symlink chasing could be done while loading the package
+      // but this results in a nicer error message and it's correct as long as RepositoryFunctions
+      // don't write to things in the file system this FileValue depends on. In theory, the latter
+      // is possible if the file referenced by build_file is a symlink to somewhere under the
+      // external/ directory, but if you do that, you are really asking for trouble.
+      buildFileValue = (FileValue) env.getValueOrThrow(buildFileKey, IOException.class,
+          FileSymlinkException.class, InconsistentFilesystemException.class);
+      if (buildFileValue == null) {
+        return null;
+      }
+    } catch (IOException | FileSymlinkException | InconsistentFilesystemException e) {
+      throw new RepositoryFunctionException(
+          new IOException("Cannot lookup " + buildFile + ": " + e.getMessage()),
+          Transience.TRANSIENT);
+    }
+
+    return buildFileValue;
+  }
+
+  /**
+   * Symlinks a BUILD file from the local filesystem into the external repository's root.
+   * @param buildFileValue {@link FileValue} representing the BUILD file to be linked in
+   * @param outputDirectory the directory of the remote repository
+   * @return the file value of the symlink created.
+   * @throws RepositoryFunctionException if the BUILD file specified does not exist or cannot be
+   *         linked.
+   */
+  protected RepositoryDirectoryValue symlinkBuildFile(
+      FileValue buildFileValue, Path outputDirectory) throws RepositoryFunctionException {
+    Path buildFilePath = outputDirectory.getRelative("BUILD");
+    createSymbolicLink(buildFilePath, buildFileValue.realRootedPath().asPath());
+    return RepositoryDirectoryValue.create(outputDirectory);
   }
 
   @VisibleForTesting
@@ -292,7 +350,7 @@ public abstract class RepositoryFunction {
     return true;
   }
 
-  static void createSymbolicLink(Path from, Path to)
+  private static void createSymbolicLink(Path from, Path to)
       throws RepositoryFunctionException {
     try {
       // Remove not-symlinks that are already there.
@@ -331,9 +389,9 @@ public abstract class RepositoryFunction {
       if (value == null) {
         return null;
       }
+      // TODO(dmarting): stop at cycle and report a more intelligible error than cycle reporting.
       Package externalPackage = value.getPackage();
       if (externalPackage.containsErrors()) {
-        Event.replayEventsOn(env.getListener(), externalPackage.getEvents());
         throw new RepositoryFunctionException(
             new BuildFileContainsErrorsException(
                 Label.EXTERNAL_PACKAGE_IDENTIFIER, "Could not load //external package"),

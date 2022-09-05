@@ -163,6 +163,7 @@ public class WindowsFileSystem extends JavaIoFileSystem {
           return false;
         }
       } catch (IOException e) {
+        e.printStackTrace();
         return false;
       }
     }

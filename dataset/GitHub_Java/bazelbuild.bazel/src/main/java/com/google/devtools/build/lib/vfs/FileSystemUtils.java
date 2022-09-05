@@ -424,7 +424,7 @@ public class FileSystemUtils {
     }
   }
 
-  public static ByteSource asByteSource(final Path path) {
+  private static ByteSource asByteSource(final Path path) {
     return new ByteSource() {
       @Override public InputStream openStream() throws IOException {
         return path.getInputStream();
@@ -432,7 +432,7 @@ public class FileSystemUtils {
     };
   }
 
-  public static ByteSink asByteSink(final Path path, final boolean append) {
+  private static ByteSink asByteSink(final Path path, final boolean append) {
     return new ByteSink() {
       @Override public OutputStream openStream() throws IOException {
         return path.getOutputStream(append);
@@ -440,7 +440,7 @@ public class FileSystemUtils {
     };
   }
 
-  public static ByteSink asByteSink(final Path path) {
+  private static ByteSink asByteSink(final Path path) {
     return asByteSink(path, false);
   }
 
