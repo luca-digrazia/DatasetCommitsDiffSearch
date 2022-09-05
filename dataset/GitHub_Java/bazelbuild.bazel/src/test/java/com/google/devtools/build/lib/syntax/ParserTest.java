@@ -518,10 +518,10 @@ public class ParserTest extends EvaluationTestCase {
     assertThat(loop).hasSize(3);
 
     assertThat(((FlowStatement) loop.get(0)).getKind()).isEqualTo(FlowStatement.Kind.BREAK);
-    assertLocation(34, 39, loop.get(0).getLocation());
+    assertLocation(34, 40, loop.get(0).getLocation());
 
     assertThat(((FlowStatement) loop.get(1)).getKind()).isEqualTo(FlowStatement.Kind.CONTINUE);
-    assertLocation(44, 52, loop.get(1).getLocation());
+    assertLocation(44, 53, loop.get(1).getLocation());
 
     assertThat(((FlowStatement) loop.get(2)).getKind()).isEqualTo(FlowStatement.Kind.BREAK);
     assertLocation(57, 62, loop.get(2).getLocation());
@@ -1013,15 +1013,15 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements =
         parseFileForSkylark("load('" + importString + "', 'fun_test')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    SkylarkImport imp = SkylarkImports.create(stmt.getImport().getValue());
+    SkylarkImport imp = SkylarkImports.create(stmt.getImport());
 
     assertThat(imp.getImportString()).named("getImportString()").isEqualTo("/some/skylark/file");
     assertThat(imp.hasAbsolutePath()).named("hasAbsolutePath()").isTrue();
     assertThat(imp.getAbsolutePath()).named("getAbsolutePath()")
         .isEqualTo(new PathFragment("/some/skylark/file.bzl"));
 
-    int startOffset = stmt.getImport().getLocation().getStartOffset();
-    int endOffset = stmt.getImport().getLocation().getEndOffset();
+    int startOffset = stmt.getImportLocation().getStartOffset();
+    int endOffset = stmt.getImportLocation().getEndOffset();
     assertThat(startOffset).named("getStartOffset()").isEqualTo(5);
     assertThat(endOffset).named("getEndOffset()")
         .isEqualTo(startOffset + importString.length() + 2);
@@ -1032,7 +1032,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements =
         parseFileForSkylark("load('" + importString + "', 'fun_test')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    SkylarkImport imp = SkylarkImports.create(stmt.getImport().getValue());
+    SkylarkImport imp = SkylarkImports.create(stmt.getImport());
 
     assertThat(imp.getImportString()).named("getImportString()").isEqualTo(importString);
     assertThat(imp.hasAbsolutePath()).named("hasAbsolutePath()").isFalse();
@@ -1041,8 +1041,8 @@ public class ParserTest extends EvaluationTestCase {
     assertThat(imp.getLabel(containingFileLabel)).named("containingFileLabel()")
         .isEqualTo(Label.parseAbsoluteUnchecked(expectedLabelString)); 
 
-    int startOffset = stmt.getImport().getLocation().getStartOffset();
-    int endOffset = stmt.getImport().getLocation().getEndOffset();
+    int startOffset = stmt.getImportLocation().getStartOffset();
+    int endOffset = stmt.getImportLocation().getEndOffset();
     assertThat(startOffset).named("getStartOffset()").isEqualTo(5);
     assertThat(endOffset).named("getEndOffset()")
         .isEqualTo(startOffset + importString.length() + 2);
@@ -1165,7 +1165,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements = parseFileForSkylark(
         "load('/foo/bar/file', 'fun_test')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    assertEquals("/foo/bar/file", stmt.getImport().getValue());
+    assertEquals("/foo/bar/file", stmt.getImport());
     assertThat(stmt.getSymbols()).hasSize(1);
     Identifier sym = stmt.getSymbols().get(0);
     int startOffset = sym.getLocation().getStartOffset();
@@ -1179,7 +1179,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements = parseFileForSkylark(
         "load('/foo/bar/file', 'fun_test',)\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    assertEquals("/foo/bar/file", stmt.getImport().getValue());
+    assertEquals("/foo/bar/file", stmt.getImport());
     assertThat(stmt.getSymbols()).hasSize(1);
   }
 
@@ -1188,7 +1188,7 @@ public class ParserTest extends EvaluationTestCase {
     List<Statement> statements = parseFileForSkylark(
         "load('file', 'foo', 'bar')\n");
     LoadStatement stmt = (LoadStatement) statements.get(0);
-    assertEquals("file", stmt.getImport().getValue());
+    assertEquals("file", stmt.getImport());
     assertThat(stmt.getSymbols()).hasSize(2);
   }
 
