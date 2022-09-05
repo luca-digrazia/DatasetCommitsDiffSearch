@@ -17,7 +17,7 @@
 
 package org.hswebframework.web.starter.resolver;
 
-import org.hswebframework.web.starter.convert.FastJsonGenericHttpMessageConverter;
+import org.hswebframework.web.starter.convert.FastJsonHttpMessageConverter;
 import org.springframework.core.MethodParameter;
 import org.springframework.web.bind.support.WebDataBinderFactory;
 import org.springframework.web.context.request.NativeWebRequest;
@@ -31,11 +31,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  */
 public class JsonParamResolver implements HandlerMethodArgumentResolver {
 
-    private FastJsonGenericHttpMessageConverter fastJsonHttpMessageConverter;
-
-    public JsonParamResolver(FastJsonGenericHttpMessageConverter fastJsonHttpMessageConverter) {
-        this.fastJsonHttpMessageConverter = fastJsonHttpMessageConverter;
-    }
+    private FastJsonHttpMessageConverter fastJsonHttpMessageConverter;
 
     @Override
     public boolean supportsParameter(MethodParameter parameter) {
@@ -53,4 +49,7 @@ public class JsonParamResolver implements HandlerMethodArgumentResolver {
         return null;
     }
 
+    public void setFastJsonHttpMessageConverter(FastJsonHttpMessageConverter fastJsonHttpMessageConverter) {
+        this.fastJsonHttpMessageConverter = fastJsonHttpMessageConverter;
+    }
 }
