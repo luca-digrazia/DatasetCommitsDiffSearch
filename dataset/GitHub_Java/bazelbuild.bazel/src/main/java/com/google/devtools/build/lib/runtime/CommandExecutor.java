@@ -13,8 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownMethod;
 import com.google.devtools.build.lib.server.ServerCommand;
 import com.google.devtools.build.lib.util.io.OutErr;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.List;
@@ -28,12 +30,12 @@ import java.util.logging.Logger;
 public class CommandExecutor implements ServerCommand {
   private static final Logger LOG = Logger.getLogger(CommandExecutor.class.getName());
 
-  private boolean shutdown;
+  private ShutdownMethod shutdown;
   private final BlazeRuntime runtime;
   private final BlazeCommandDispatcher dispatcher;
 
   CommandExecutor(BlazeRuntime runtime, BlazeCommandDispatcher dispatcher) {
-    this.shutdown = false;
+    this.shutdown = ShutdownMethod.NONE;
     this.runtime = runtime;
     this.dispatcher = dispatcher;
   }
@@ -54,7 +56,7 @@ public class CommandExecutor implements ServerCommand {
         writer.flush();
         LOG.severe(message.toString());
       }
-      shutdown = true;
+      shutdown = e.getMethod();
       runtime.shutdown();
       dispatcher.shutdown();
       return e.getExitStatus();
@@ -62,7 +64,7 @@ public class CommandExecutor implements ServerCommand {
   }
 
   @Override
-  public boolean shutdown() {
+  public ShutdownMethod shutdown() {
     return shutdown;
   }
 }

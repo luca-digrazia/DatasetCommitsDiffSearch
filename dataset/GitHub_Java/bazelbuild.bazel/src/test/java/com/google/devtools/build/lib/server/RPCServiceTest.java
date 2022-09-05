@@ -15,12 +15,18 @@
 package com.google.devtools.build.lib.server;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.LockingMode;
+import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher.ShutdownMethod;
 import com.google.devtools.build.lib.server.RPCService.UnknownCommandException;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.util.io.RecordingOutErr;
 
-import junit.framework.TestCase;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,24 +35,27 @@ import java.util.List;
 /**
  * Just makes sure the RPC service understands commands.
  */
-public class RPCServiceTest extends TestCase {
+@RunWith(JUnit4.class)
+public class RPCServiceTest {
 
   private ServerCommand helloWorldCommand = new ServerCommand() {
     @Override
-    public int exec(List<String> args, OutErr outErr, long firstContactTime) throws Exception {
+    public int exec(List<String> args, OutErr outErr, LockingMode lockingMode,
+        String clientDescription, long firstContactTime) {
       outErr.printOut("Heelllloo....");
       outErr.printErr("...world!");
       return 42;
     }
     @Override
-    public boolean shutdown() {
-      return false;
+    public ShutdownMethod shutdown() {
+      return ShutdownMethod.NONE;
     }
   };
 
   private RPCService service =
       new RPCService(helloWorldCommand);
 
+  @Test
   public void testUnknownCommandException() {
     try {
       service.executeRequest(Arrays.asList("unknown"), new RecordingOutErr(), 0);
@@ -58,6 +67,7 @@ public class RPCServiceTest extends TestCase {
     }
   }
 
+  @Test
   public void testCommandGetsExecuted() throws Exception {
     RecordingOutErr outErr = new RecordingOutErr();
     int exitStatus = service.executeRequest(Arrays.asList("blaze"), outErr, 0);
@@ -67,20 +77,21 @@ public class RPCServiceTest extends TestCase {
     assertEquals("...world!", outErr.errAsLatin1());
   }
 
+  @Test
   public void testDelimitation() throws Exception {
     final List<String> savedArgs = new ArrayList<>();
 
     RPCService service =
         new RPCService(new ServerCommand() {
             @Override
-            public int exec(List<String> args, OutErr outErr, long firstContactTime)
-                throws Exception {
+            public int exec(List<String> args, OutErr outErr, LockingMode lockingMode,
+                String clientDescription, long firstContactTime) {
               savedArgs.addAll(args);
               return 0;
             }
             @Override
-            public boolean shutdown() {
-              return false;
+            public ShutdownMethod shutdown() {
+              return ShutdownMethod.NONE;
             }
           });
 
@@ -90,17 +101,26 @@ public class RPCServiceTest extends TestCase {
                  savedArgs);
   }
 
+  @Test
   public void testShutdownState() throws Exception {
-    assertFalse(service.isShutdown());
-    service.shutdown();
-    assertTrue(service.isShutdown());
-    service.shutdown();
-    assertTrue(service.isShutdown());
+    assertEquals(ShutdownMethod.NONE, service.getShutdown());
+    service.shutdown(ShutdownMethod.CLEAN);
+    assertEquals(ShutdownMethod.CLEAN, service.getShutdown());
+    service.shutdown(ShutdownMethod.EXPUNGE);
+    assertEquals(ShutdownMethod.CLEAN, service.getShutdown());
   }
 
+  @Test
+  public void testExpungeShutdown() throws Exception {
+    assertEquals(ShutdownMethod.NONE, service.getShutdown());
+    service.shutdown(ShutdownMethod.EXPUNGE);
+    assertEquals(ShutdownMethod.EXPUNGE, service.getShutdown());
+  }
+
+  @Test
   public void testCommandFailsAfterShutdown() throws Exception {
     RecordingOutErr outErr = new RecordingOutErr();
-    service.shutdown();
+    service.shutdown(ShutdownMethod.CLEAN);
     try {
       service.executeRequest(Arrays.asList("blaze"), outErr, 0);
       fail();

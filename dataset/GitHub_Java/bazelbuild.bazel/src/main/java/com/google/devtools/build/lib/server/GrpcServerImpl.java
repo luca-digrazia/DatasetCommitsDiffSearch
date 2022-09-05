@@ -41,6 +41,7 @@ import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.charset.Charset;
@@ -248,7 +249,7 @@ public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.Comma
       }
     }
 
-    server.shutdown();
+    server.shutdownNow();
   }
 
   @Override
@@ -265,7 +266,8 @@ public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.Comma
   @Override
   public void serve() throws IOException {
     Preconditions.checkState(!serving);
-    server = NettyServerBuilder.forAddress(new InetSocketAddress("localhost", port))
+    InetAddress loopbackAddress = InetAddress.getLoopbackAddress();
+    server = NettyServerBuilder.forAddress(new InetSocketAddress(loopbackAddress, port))
         .addService(CommandServerGrpc.bindService(this))
         .build();
 
@@ -277,13 +279,17 @@ public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.Comma
           timeoutThread();
         }
       });
-
+      
       timeoutThread.setDaemon(true);
       timeoutThread.start();
     }
     serving = true;
 
-    writeServerFile(PORT_FILE, getAddressString());
+    if (port == 0) {
+      port = getActualServerPort();
+    }
+
+    writeServerFile(PORT_FILE, loopbackAddress.getHostAddress() + ":" + Integer.toString(port));
     writeServerFile(REQUEST_COOKIE_FILE, requestCookie);
     writeServerFile(RESPONSE_COOKIE_FILE, responseCookie);
 
@@ -307,16 +313,12 @@ public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.Comma
    * <p>The implementation is awful, but gRPC doesn't provide an official way to do this:
    * https://github.com/grpc/grpc-java/issues/72
    */
-  private String getAddressString() {
+  private int getActualServerPort() {
     try {
       ServerSocketChannel channel =
           (ServerSocketChannel) getField(server, "transportServer", "channel", "ch");
       InetSocketAddress address = (InetSocketAddress) channel.getLocalAddress();
-      String host = address.getAddress().getHostAddress();
-      if (host.contains(":")) {
-        host = "[" + host + "]";
-      }
-      return host + ":" + address.getPort();
+      return address.getPort();
     } catch (IllegalAccessException | NullPointerException | IOException e) {
       throw new IllegalStateException("Cannot read server socket address from gRPC");
     }

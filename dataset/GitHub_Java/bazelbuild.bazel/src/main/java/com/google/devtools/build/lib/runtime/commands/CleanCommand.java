@@ -105,8 +105,8 @@ public final class CleanCommand implements BlazeCommand {
 
     env.getReporter().handle(Event.info(null/*location*/, cleanBanner));
     try {
-      String symlinkPrefix = options.getOptions(BuildRequest.BuildRequestOptions.class)
-          .getSymlinkPrefix(env.getRuntime().getProductName());
+      String symlinkPrefix =
+          options.getOptions(BuildRequest.BuildRequestOptions.class).getSymlinkPrefix();
       actuallyClean(env, env.getOutputBase(), cleanOptions, symlinkPrefix);
       return ExitCode.SUCCESS;
     } catch (IOException e) {
@@ -174,8 +174,7 @@ public final class CleanCommand implements BlazeCommand {
     }
     // remove convenience links
     OutputDirectoryLinksUtils.removeOutputDirectoryLinks(
-        env.getWorkspaceName(), env.getWorkspace(), env.getReporter(), symlinkPrefix,
-        env.getRuntime().getProductName());
+        env.getWorkspaceName(), env.getWorkspace(), env.getReporter(), symlinkPrefix);
     // shutdown on expunge cleans
     if (cleanOptions.expunge || cleanOptions.expunge_async) {
       throw new ShutdownBlazeServerException(0, ShutdownMethod.EXPUNGE);
