@@ -4,17 +4,13 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.charset.Charset;
 import java.util.regex.Pattern;
 
 /**
  * A client to a Carbon server using unconnected UDP
  */
 public class GraphiteUDP implements GraphiteSender {
-
     private static final Pattern WHITESPACE = Pattern.compile("[\\s]+");
-
-    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final InetSocketAddress address;
 
@@ -27,27 +23,27 @@ public class GraphiteUDP implements GraphiteSender {
      * @param address the address of the Carbon server
      */
     public GraphiteUDP(InetSocketAddress address) {
-        this.address = address;
+    	this.address = address;
     }
 
     @Override
     public void connect() throws IllegalStateException, IOException {
-        // Only open the channel the first time...
-        if (datagramChannel == null) {
-            datagramChannel = DatagramChannel.open();
-        }
+    	// Only open the channel the first time...
+    	if (datagramChannel == null){
+        	datagramChannel = DatagramChannel.open();
+    	}
     }
 
     @Override
     public void send(String name, String value, long timestamp) throws IOException {
-        // Underlying socket can be closed by ICMP
-        if (datagramChannel.socket().isClosed()) {
-            datagramChannel.close();
-            datagramChannel = DatagramChannel.open();
-        }
+    	// Underlying socket can be closed by ICMP
+    	if (datagramChannel.socket().isClosed()){
+    		datagramChannel.close();
+        	datagramChannel = DatagramChannel.open();
+    	}
 
         try {
-            StringBuilder buf = new StringBuilder();
+        	StringBuilder buf = new StringBuilder();
             buf.append(sanitize(name));
             buf.append(' ');
             buf.append(sanitize(value));
@@ -55,7 +51,7 @@ public class GraphiteUDP implements GraphiteSender {
             buf.append(Long.toString(timestamp));
             buf.append('\n');
             String str = buf.toString();
-            ByteBuffer byteBuffer = ByteBuffer.wrap(str.getBytes(UTF_8));
+            ByteBuffer byteBuffer = ByteBuffer.wrap(str.getBytes());
             datagramChannel.send(byteBuffer, address);
             this.failures = 0;
         } catch (IOException e) {
@@ -71,11 +67,10 @@ public class GraphiteUDP implements GraphiteSender {
 
     @Override
     public void close() throws IOException {
-        // Leave channel & socket open for next metrics
+    	// Leave channel & socket open for next metrics
     }
 
     protected String sanitize(String s) {
         return WHITESPACE.matcher(s).replaceAll("-");
     }
-
 }

@@ -23,28 +23,6 @@ public class Graphite implements GraphiteSender {
     private Socket socket;
     private Writer writer;
     private int failures;
-    
-    /**
-     * Creates a new client which connects to the given address using the default
-     * {@link SocketFactory}.
-     *
-     * @param hostname The hostname of the Carbon server
-     * @param port The port of the Carbon server
-     */
-    public Graphite(String hostname, int port) {
-        this(new InetSocketAddress(hostname, port));
-    }
-    
-    /**
-     * Creates a new client which connects to the given address and socket factory.
-     *
-     * @param hostname The hostname of the Carbon server
-     * @param port The port of the Carbon server
-     * @param socketFactory the socket factory
-     */
-    public Graphite(String hostname, int port, SocketFactory socketFactory) {
-        this(new InetSocketAddress(hostname, port), socketFactory);
-    }
 
     /**
      * Creates a new client which connects to the given address using the default
@@ -102,6 +80,7 @@ public class Graphite implements GraphiteSender {
             writer.write(' ');
             writer.write(Long.toString(timestamp));
             writer.write('\n');
+            writer.flush();
             this.failures = 0;
         } catch (IOException e) {
             failures++;
@@ -116,9 +95,6 @@ public class Graphite implements GraphiteSender {
 
     @Override
     public void close() throws IOException {
-        if (writer != null) {
-            writer.flush();
-        }
         if (socket != null) {
             socket.close();
         }
