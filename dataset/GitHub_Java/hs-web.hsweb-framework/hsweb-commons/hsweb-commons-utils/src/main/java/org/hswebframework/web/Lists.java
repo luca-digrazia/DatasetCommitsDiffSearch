@@ -5,12 +5,6 @@ import java.util.function.Supplier;
 
 /**
  * List工具，用于构建list等操作
- * <pre>
- *     Lists.buildList("1","2")
- *     .add("3")
- *     .add("4","5","6")
- *     .get();
- * </pre>
  *
  * @author zhouhao
  */
@@ -36,14 +30,10 @@ public class Lists {
             this.target = target;
         }
 
-        public ListBuilder<V> add(V value, V... more) {
+        public ListBuilder<V> add(V value) {
             this.target.add(value);
-            if (more.length > 0) {
-                addAll(Arrays.asList(more));
-            }
             return this;
         }
-
 
         public ListBuilder<V> addAll(Collection<V> value) {
             this.target.addAll(value);
@@ -55,5 +45,4 @@ public class Lists {
         }
 
     }
-
 }
