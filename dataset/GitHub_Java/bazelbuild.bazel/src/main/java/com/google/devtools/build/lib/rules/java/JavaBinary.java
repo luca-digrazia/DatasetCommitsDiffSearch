@@ -75,9 +75,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     ruleContext.checkSrcsSamePackage(true);
     boolean createExecutable = ruleContext.attributes().get("create_executable", Type.BOOLEAN);
     List<TransitiveInfoCollection> deps =
-        // Do not remove <TransitiveInfoCollection>: workaround for Java 7 type inference.
-        Lists.<TransitiveInfoCollection>newArrayList(
-            common.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
+        Lists.newArrayList(common.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     semantics.checkRule(ruleContext, common);
     String mainClass = semantics.getMainClass(ruleContext, common);
     String originalMainClass = mainClass;

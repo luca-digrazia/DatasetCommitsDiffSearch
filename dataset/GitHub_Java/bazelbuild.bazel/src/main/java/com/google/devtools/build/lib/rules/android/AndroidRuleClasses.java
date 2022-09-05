@@ -72,10 +72,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}.aar");
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_AAR_CLASSES_JAR =
       fromTemplates("%{name}_aar/classes.jar");
-  public static final SafeImplicitOutputsFunction ANDROID_RESOURCES_SOURCE_JAR =
-      fromTemplates("%{name}_resources-src.jar");
-  public static final SafeImplicitOutputsFunction ANDROID_RESOURCES_CLASS_JAR =
-      fromTemplates("%{name}_resources.jar");
   public static final SafeImplicitOutputsFunction ANDROID_RESOURCES_APK =
       fromTemplates("%{name}.ap_");
   public static final SafeImplicitOutputsFunction ANDROID_INCREMENTAL_RESOURCES_APK =
@@ -712,7 +708,6 @@ com/google/common/base/Objects.class
             </ul>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("legacy_native_support", TRISTATE).value(TriState.AUTO))
-          .add(attr(":extra_proguard_specs", LABEL_LIST).value(JavaSemantics.EXTRA_PROGUARD_SPECS))
           .advertiseProvider(JavaCompilationArgsProvider.class)
           .build();
       }

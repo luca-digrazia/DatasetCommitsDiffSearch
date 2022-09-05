@@ -68,7 +68,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> transitiveProguardConfigs =
         new ProguardLibrary(ruleContext).collectProguardSpecs();
     JavaCommon javaCommon = new JavaCommon(ruleContext, javaSemantics);
-    AndroidCommon androidCommon = new AndroidCommon(javaCommon);
+    AndroidCommon androidCommon = new AndroidCommon(ruleContext, javaCommon);
 
     boolean definesLocalResources =
       LocalResourceContainer.definesAndroidResources(ruleContext.attributes());

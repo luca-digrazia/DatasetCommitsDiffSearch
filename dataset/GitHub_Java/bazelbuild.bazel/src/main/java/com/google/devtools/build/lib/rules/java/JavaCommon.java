@@ -725,8 +725,4 @@ public class JavaCommon {
   public NestedSet<Artifact> getCompileTimeClasspath() {
     return classpathFragment.getCompileTimeClasspath();
   }
-  
-  public RuleContext getRuleContext() {
-    return ruleContext;
-  }
 }

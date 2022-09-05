@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -25,7 +26,6 @@ import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -85,6 +85,7 @@ public class JavaTargetAttributes {
         BuildConfiguration.StrictDepsMode.OFF;
     private final List<Artifact> directJars = new ArrayList<>();
     private final List<Artifact> compileTimeDependencyArtifacts = new ArrayList<>();
+    private final List<Artifact> runtimeDependencyArtifacts = new ArrayList<>();
     private String ruleKind;
     private Label targetLabel;
 
@@ -251,6 +252,12 @@ public class JavaTargetAttributes {
     public Builder addCompileTimeDependencyArtifacts(Iterable<Artifact> dependencyArtifacts) {
       Preconditions.checkArgument(!built);
       Iterables.addAll(this.compileTimeDependencyArtifacts, dependencyArtifacts);
+      return this;
+    }
+
+    public Builder addRuntimeDependencyArtifacts(Iterable<Artifact> dependencyArtifacts) {
+      Preconditions.checkArgument(!built);
+      Iterables.addAll(this.runtimeDependencyArtifacts, dependencyArtifacts);
       return this;
     }
 

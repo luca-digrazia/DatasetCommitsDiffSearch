@@ -84,8 +84,6 @@ public class AndroidCommon {
 
   private final RuleContext ruleContext;
   private final JavaCommon javaCommon;
-  private final boolean asNeverLink;
-  private final boolean exportDeps;
 
   private NestedSet<Artifact> compileTimeDependencyArtifacts;
   private NestedSet<Artifact> filesToBuild;
@@ -102,22 +100,28 @@ public class AndroidCommon {
   private Artifact genClassJar;
   private Artifact genSourceJar;
 
+  private boolean asNeverLink;
+  private boolean exportDeps;
   private Artifact manifestProtoOutput;
   private AndroidIdlHelper idlHelper;
 
-  public AndroidCommon(JavaCommon javaCommon) {
-    this(javaCommon, JavaCommon.isNeverLink(javaCommon.getRuleContext()), false);
+  public AndroidCommon(RuleContext ruleContext, JavaCommon javaCommon) {
+    this.ruleContext = ruleContext;
+    this.javaCommon = javaCommon;
+    this.asNeverLink = JavaCommon.isNeverLink(ruleContext);
   }
 
   /**
    * Creates a new AndroidCommon.
+   * @param ruleContext The rule context associated with this instance.
    * @param common the JavaCommon instance
    * @param asNeverLink Boolean to indicate if this rule should be treated as a compile time dep
    *    by consuming rules.
    * @param exportDeps Boolean to indicate if the dependencies should be treated as "exported" deps.
    */
-  public AndroidCommon(JavaCommon common, boolean asNeverLink, boolean exportDeps) {
-    this.ruleContext = common.getRuleContext();
+  public AndroidCommon(
+      RuleContext ruleContext, JavaCommon common, boolean asNeverLink, boolean exportDeps) {
+    this.ruleContext = ruleContext;
     this.asNeverLink = asNeverLink;
     this.exportDeps = exportDeps;
     this.javaCommon = common;
