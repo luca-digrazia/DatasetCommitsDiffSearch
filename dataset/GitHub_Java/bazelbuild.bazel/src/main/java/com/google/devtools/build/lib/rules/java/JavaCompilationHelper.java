@@ -157,7 +157,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.addProcessorPaths(attributes.getProcessorPath());
     builder.addProcessorNames(attributes.getProcessorNames());
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
-    builder.setDirectJars(attributes.getDirectJars());
+    builder.addDirectJars(attributes.getDirectJars());
     builder.addCompileTimeDependencyArtifacts(attributes.getCompileTimeDependencyArtifacts());
     builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(attributes.getTargetLabel());
@@ -279,7 +279,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setOutputDepsProto(headerDeps);
     builder.setStrictJavaDeps(attributes.getStrictJavaDeps());
     builder.addCompileTimeDependencyArtifacts(attributes.getCompileTimeDependencyArtifacts());
-    builder.setDirectJars(attributes.getDirectJars());
+    builder.addDirectJars(attributes.getDirectJars());
     builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(attributes.getTargetLabel());
     builder.setJavaBaseInputs(getHostJavabaseInputsNonStatic(ruleContext));
@@ -340,25 +340,34 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
    */
   public void createGenJarAction(Artifact classJar, Artifact manifestProto,
       Artifact genClassJar) {
-    getRuleContext().registerAction(new SpawnAction.Builder()
-      .addInput(manifestProto)
-      .addInput(classJar)
-      .addOutput(genClassJar)
-      .addTransitiveInputs(getHostJavabaseInputsNonStatic(getRuleContext()))
-      .setJarExecutable(
-          getRuleContext().getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),
-          getGenClassJar(ruleContext),
-          ImmutableList.of("-client", GENCLASS_MAX_MEMORY))
-      .setCommandLine(CustomCommandLine.builder()
-          .addExecPath("--manifest_proto", manifestProto)
-          .addExecPath("--class_jar", classJar)
-          .addExecPath("--output_jar", genClassJar)
-          .add("--temp_dir").addPath(tempDir(genClassJar))
-          .build())
-      .useParameterFile(ParameterFileType.SHELL_QUOTED)
-      .setProgressMessage("Building genclass jar " + genClassJar.prettyPrint())
-      .setMnemonic("JavaSourceJar")
-      .build(getRuleContext()));
+    ImmutableList<String> jvmOpts =
+        ImmutableList.of("-XX:+TieredCompilation", "-XX:TieredStopAtLevel=1", GENCLASS_MAX_MEMORY);
+    getRuleContext()
+        .registerAction(
+            new SpawnAction.Builder()
+                .addInput(manifestProto)
+                .addInput(classJar)
+                .addOutput(genClassJar)
+                .addTransitiveInputs(getHostJavabaseInputsNonStatic(getRuleContext()))
+                .setJarExecutable(
+                    getRuleContext()
+                        .getHostConfiguration()
+                        .getFragment(Jvm.class)
+                        .getJavaExecutable(),
+                    getGenClassJar(ruleContext),
+                    jvmOpts)
+                .setCommandLine(
+                    CustomCommandLine.builder()
+                        .addExecPath("--manifest_proto", manifestProto)
+                        .addExecPath("--class_jar", classJar)
+                        .addExecPath("--output_jar", genClassJar)
+                        .add("--temp_dir")
+                        .addPath(tempDir(genClassJar))
+                        .build())
+                .useParameterFile(ParameterFileType.SHELL_QUOTED)
+                .setProgressMessage("Building genclass jar " + genClassJar.prettyPrint())
+                .setMnemonic("JavaSourceJar")
+                .build(getRuleContext()));
   }
 
   /** Returns the GenClass deploy jar Artifact. */
@@ -512,10 +521,10 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     return jar;
   }
 
-  private void addArgsAndJarsToAttributes(
-      JavaCompilationArgs args, NestedSet<Artifact> directJars) {
+  private void addArgsAndJarsToAttributes(JavaCompilationArgs args, Iterable<Artifact> directJars) {
     // Can only be non-null when isStrict() returns true.
     if (directJars != null) {
+      attributes.addDirectCompileTimeClassPathEntries(directJars);
       attributes.addDirectJars(directJars);
     }
 
