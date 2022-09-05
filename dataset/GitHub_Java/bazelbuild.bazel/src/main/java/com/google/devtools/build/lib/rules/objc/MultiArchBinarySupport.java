@@ -138,16 +138,12 @@ public class MultiArchBinarySupport {
     ImmutableMap.Builder<BuildConfiguration, ObjcCommon> configurationToObjcCommonBuilder =
         ImmutableMap.builder();
     for (BuildConfiguration childConfig : childConfigurations) {
-      Optional<ObjcProvider> protosObjcProvider;
-      if (ObjcRuleClasses.objcConfiguration(ruleContext).enableAppleBinaryNativeProtos()) {
-        ProtobufSupport protoSupport =
-            new ProtobufSupport(ruleContext, childConfig)
-                .registerGenerationActions()
-                .registerCompilationActions();
-        protosObjcProvider = protoSupport.getObjcProvider();
-      } else {
-        protosObjcProvider = Optional.absent();
-      }
+      ProtobufSupport protoSupport =
+          new ProtobufSupport(ruleContext, childConfig)
+              .registerGenerationActions()
+              .registerCompilationActions();
+
+      Optional<ObjcProvider> protosObjcProvider = protoSupport.getObjcProvider();
 
       IntermediateArtifacts intermediateArtifacts =
           ObjcRuleClasses.intermediateArtifacts(ruleContext, childConfig);
@@ -164,10 +160,10 @@ public class MultiArchBinarySupport {
               nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
               nullToEmptyList(configurationToNonPropagatedObjcMap.get(childConfig)),
               additionalDepProviders);
-
+      
       configurationToObjcCommonBuilder.put(childConfig, common);
     }
-
+    
     return configurationToObjcCommonBuilder.build();
   }
 
