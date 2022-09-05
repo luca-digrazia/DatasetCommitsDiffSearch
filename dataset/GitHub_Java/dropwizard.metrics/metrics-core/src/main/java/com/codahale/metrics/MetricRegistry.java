@@ -516,7 +516,6 @@ public class MetricRegistry implements MetricSet {
         return Collections.unmodifiableMap(metrics);
     }
 
-    @FunctionalInterface
     public interface MetricSupplier<T extends Metric> {
         T newMetric();
     }
