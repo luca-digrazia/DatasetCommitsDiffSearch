@@ -96,12 +96,6 @@ public final class ConfigurationFactory {
       BuildOptions buildOptions, boolean actionsDisabled, Cache<String, BuildConfiguration> cache)
       throws InvalidConfigurationException {
 
-    String cacheKey = buildOptions.computeCacheKey();
-    BuildConfiguration result = cache.getIfPresent(cacheKey);
-    if (result != null) {
-      return result;
-    }
-
     Map<Class<? extends Fragment>, Fragment> fragments = new HashMap<>();
     // Create configuration fragments
     for (ConfigurationFragmentFactory factory : configurationFragmentFactories) {
@@ -126,9 +120,15 @@ public final class ConfigurationFactory {
       }
     });
     fragments = ImmutableMap.copyOf(fragments);
-    result = new BuildConfiguration(directories, fragments, buildOptions, actionsDisabled);
-    cache.put(cacheKey, result);
-    return result;
+
+    String key = BuildConfiguration.computeCacheKey(
+        directories, fragments, buildOptions);
+    BuildConfiguration configuration = cache.getIfPresent(key);
+    if (configuration == null) {
+      configuration = new BuildConfiguration(directories, fragments, buildOptions, actionsDisabled);
+      cache.put(key, configuration);
+    }
+    return configuration;
   }
 
   public List<ConfigurationFragmentFactory> getFactories() {
