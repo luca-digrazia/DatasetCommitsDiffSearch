@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,7 +60,7 @@ public abstract class ValueWithMetadata implements SkyValue {
     if (errorInfo == null) {
       return transitiveEvents.isEmpty()
           ? value
-          : ValueWithEvents.createValueWithEvents(value, transitiveEvents);
+          : new ValueWithEvents(value, transitiveEvents);
     }
     return new ErrorInfoValue(errorInfo, value, transitiveEvents);
   }
@@ -75,22 +75,13 @@ public abstract class ValueWithMetadata implements SkyValue {
   public abstract NestedSet<TaggedEvents> getTransitiveEvents();
 
   /** Implementation of {@link ValueWithMetadata} for the value case. */
-  public static class ValueWithEvents extends ValueWithMetadata {
+  public static final class ValueWithEvents extends ValueWithMetadata {
 
     private final NestedSet<TaggedEvents> transitiveEvents;
 
-    private ValueWithEvents(SkyValue value, NestedSet<TaggedEvents> transitiveEvents) {
+    public ValueWithEvents(SkyValue value, NestedSet<TaggedEvents> transitiveEvents) {
       super(Preconditions.checkNotNull(value));
       this.transitiveEvents = Preconditions.checkNotNull(transitiveEvents);
-    }
-
-    public static ValueWithEvents createValueWithEvents(SkyValue value,
-            NestedSet<TaggedEvents> transitiveEvents) {
-      if (value instanceof NotComparableSkyValue) {
-        return new NotComparableValueWithEvents(value, transitiveEvents);
-      } else {
-        return new ValueWithEvents(value, transitiveEvents);
-      }
     }
 
     @Nullable
@@ -133,21 +124,8 @@ public abstract class ValueWithMetadata implements SkyValue {
     public String toString() { return value.toString(); }
   }
 
-  private static final class NotComparableValueWithEvents extends ValueWithEvents
-          implements NotComparableSkyValue {
-    private NotComparableValueWithEvents(SkyValue value,
-            NestedSet<TaggedEvents> transitiveEvents) {
-      super(value, transitiveEvents);
-    }
-  }
-
-  /**
-   * Implementation of {@link ValueWithMetadata} for the error case.
-   *
-   * ErorInfo does not override equals(), so it may as well be marked NotComparableSkyValue.
-   */
-  private static final class ErrorInfoValue extends ValueWithMetadata
-          implements NotComparableSkyValue {
+  /** Implementation of {@link ValueWithMetadata} for the error case. */
+  private static final class ErrorInfoValue extends ValueWithMetadata {
 
     private final ErrorInfo errorInfo;
     private final NestedSet<TaggedEvents> transitiveEvents;
@@ -220,7 +198,7 @@ public abstract class ValueWithMetadata implements SkyValue {
     if (value instanceof ValueWithMetadata) {
       return (ValueWithMetadata) value;
     }
-    return ValueWithEvents.createValueWithEvents(value, NO_EVENTS);
+    return new ValueWithEvents(value, NO_EVENTS);
   }
 
   @Nullable
