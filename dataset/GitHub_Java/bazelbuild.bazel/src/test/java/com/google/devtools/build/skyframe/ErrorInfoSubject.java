@@ -43,16 +43,4 @@ public class ErrorInfoSubject extends Subject<ErrorInfoSubject, ErrorInfo> {
       fail("has root cause of exception " + key);
     }
   }
-
-  public void isTransient() {
-    if (!getSubject().isTransient()) {
-      fail("is transient");
-    }
-  }
-
-  public void isNotTransient() {
-    if (getSubject().isTransient()) {
-      fail("is not transient");
-    }
-  }
 }
