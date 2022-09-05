@@ -1090,12 +1090,8 @@ public final class Attribute implements Comparable<Attribute> {
    */
   public interface LateBoundDefault<T> {
     /**
-     * Whether to look up the label in the host configuration. This is only here for host
-     * compilation tools - we usually need to look up labels in the target configuration.
-     *
-     * <p>This method only sets the configuration passed to {@link #resolve}. If you want the
-     * dependency to also be analyzed in the host configuration, use
-     * {@link ConfigurationTransition#HOST}.
+     * Whether to look up the label in the host configuration. This is only here for the host JDK -
+     * we usually need to look up labels in the target configuration.
      */
     boolean useHostConfiguration();
 
