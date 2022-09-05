@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -88,7 +89,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
   private final int shardNum;
   private final int runNumber;
   private final String workspaceName;
-  private final boolean useTestRunner;
 
   // Mutable state related to test caching.
   private boolean checkedCaching = false;
@@ -127,8 +127,7 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
       int shardNum,
       int runNumber,
       BuildConfiguration configuration,
-      String workspaceName,
-      boolean useTestRunner) {
+      String workspaceName) {
     super(owner, inputs,
         // Note that this action only cares about the runfiles, not the mapping.
         new RunfilesSupplierImpl(new PathFragment("runfiles"), executionSettings.getRunfiles()),
@@ -168,7 +167,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     this.undeclaredOutputsAnnotationsPath = undeclaredOutputsAnnotationsDir.getChild("ANNOTATIONS");
     this.testInfrastructureFailure = baseDir.getChild("test.infrastructure_failure");
     this.workspaceName = workspaceName;
-    this.useTestRunner = useTestRunner;
 
     Map<String, String> mergedTestEnv = new HashMap<>(configuration.getTestEnv());
     mergedTestEnv.putAll(extraTestEnv);
@@ -291,6 +289,11 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
     } catch (IOException e) {
       LoggingUtil.logToRemote(Level.WARNING, "Failed creating cached protocol buffer", e);
     }
+  }
+
+  @Override
+  public ResourceSet estimateResourceConsumption(Executor executor) {
+    return ResourceSet.ZERO;
   }
 
   @Override
@@ -580,10 +583,6 @@ public class TestRunnerAction extends AbstractAction implements NotifyOnActionCa
 
   public TestTargetExecutionSettings getExecutionSettings() {
     return executionSettings;
-  }
-
-  public boolean useTestRunner() {
-    return useTestRunner;
   }
 
   public boolean isSharded() {
