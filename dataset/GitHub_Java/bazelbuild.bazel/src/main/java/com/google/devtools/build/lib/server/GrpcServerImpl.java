@@ -59,7 +59,6 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -69,8 +68,6 @@ import javax.annotation.concurrent.GuardedBy;
  * bootstrapping.
  */
 public class GrpcServerImpl extends RPCServer {
-  private static final Logger LOG = Logger.getLogger(GrpcServerImpl.class.getName());
-
   // UTF-8 won't do because we want to be able to pass arbitrary binary strings.
   // Not that the internals of Bazel handle that correctly, but why not make at least this little
   // part correct?
@@ -89,8 +86,6 @@ public class GrpcServerImpl extends RPCServer {
         runningCommands.put(id, this);
         runningCommands.notify();
       }
-
-      LOG.info(String.format("Starting command %s on thread %s", id, thread.getName()));
     }
 
     @Override
@@ -99,8 +94,6 @@ public class GrpcServerImpl extends RPCServer {
         runningCommands.remove(id);
         runningCommands.notify();
       }
-
-      LOG.info(String.format("Finished command %s on thread %s", id, thread.getName()));
     }
   }
 
@@ -480,11 +473,7 @@ public class GrpcServerImpl extends RPCServer {
             synchronized (runningCommands) {
               RunningCommand pendingCommand = runningCommands.get(request.getCommandId());
               if (pendingCommand != null) {
-                LOG.info(String.format("Interrupting command %s on thread %s",
-                        request.getCommandId(), pendingCommand.thread.getName()));
                 pendingCommand.thread.interrupt();
-              } else {
-                LOG.info("Cannot find command " + request.getCommandId() + " to interrupt");
               }
 
               startSlowInterruptWatcher(ImmutableSet.of(request.getCommandId()));
