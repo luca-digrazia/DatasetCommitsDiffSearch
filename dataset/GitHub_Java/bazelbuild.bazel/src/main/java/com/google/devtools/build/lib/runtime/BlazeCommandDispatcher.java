@@ -27,6 +27,8 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.io.Flushables;
+import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
+import com.google.devtools.build.lib.buildeventstream.transports.TextFormatFileTransport;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
@@ -147,7 +149,6 @@ public class BlazeCommandDispatcher {
   private String currentClientDescription = null;
   private String shutdownReason = null;
   private OutputStream logOutputStream = null;
-  private Level lastLogVerbosityLevel = null;
   private final LoadingCache<BlazeCommand, OpaqueOptionsData> optionsDataCache =
       CacheBuilder.newBuilder().build(
           new CacheLoader<BlazeCommand, OpaqueOptionsData>() {
@@ -441,10 +442,7 @@ public class BlazeCommandDispatcher {
     }
 
     CommonCommandOptions commonOptions = optionsParser.getOptions(CommonCommandOptions.class);
-    if (!commonOptions.verbosity.equals(lastLogVerbosityLevel)) {
-      BlazeRuntime.setupLogging(commonOptions.verbosity);
-      lastLogVerbosityLevel = commonOptions.verbosity;
-    }
+    BlazeRuntime.setupLogging(commonOptions.verbosity);
 
     // Do this before an actual crash so we don't have to worry about
     // allocating memory post-crash.
@@ -457,6 +455,18 @@ public class BlazeCommandDispatcher {
     Reporter reporter = env.getReporter();
     reporter.addHandler(handler);
     env.getEventBus().register(handler);
+    if (eventHandlerOptions.buildEventTextFile.length() > 0) {
+      try {
+        BuildEventStreamer streamer =
+            new BuildEventStreamer(
+                ImmutableSet.<BuildEventTransport>of(
+                    new TextFormatFileTransport(eventHandlerOptions.buildEventTextFile)));
+        reporter.addHandler(streamer);
+        env.getEventBus().register(streamer);
+      } catch (IOException e) {
+        return ExitCode.LOCAL_ENVIRONMENTAL_ERROR.getNumericExitCode();
+      }
+    }
 
     // We register an ANSI-allowing handler associated with {@code handler} so that ANSI control
     // codes can be re-introduced later even if blaze is invoked with --color=no. This is useful
