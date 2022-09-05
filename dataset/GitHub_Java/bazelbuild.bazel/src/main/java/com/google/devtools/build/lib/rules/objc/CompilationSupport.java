@@ -47,6 +47,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -88,7 +89,6 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.Local
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -410,7 +410,7 @@ public final class CompilationSupport {
     }
 
     // TODO(bazel-team): Remote private headers from inputs once they're added to the provider.
-    ruleContext.registerAction(ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("ObjcCompile")
         .setExecutable(xcrunwrapper(ruleContext))
         .setCommandLine(commandLine.build())
@@ -508,7 +508,7 @@ public final class CompilationSupport {
     }
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
             .setMnemonic("SwiftCompile")
             .setExecutable(xcrunwrapper(ruleContext))
             .setCommandLine(commandLine.build())
@@ -578,7 +578,7 @@ public final class CompilationSupport {
       commandLine.add("-I").add(moduleMapPath.getParentDirectory().toString());
     }
 
-    ruleContext.registerAction(ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("SwiftModuleMerge")
         .setExecutable(xcrunwrapper(ruleContext))
         .setCommandLine(commandLine.build())
@@ -614,7 +614,7 @@ public final class CompilationSupport {
         Artifact.joinExecPaths("\n", objFiles),
         /*makeExecutable=*/ false));
 
-    actions.add(ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+    actions.add(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("ObjcLink")
         .setExecutable(xcrunwrapper(ruleContext))
         .setCommandLine(new CustomCommandLine.Builder()
@@ -638,7 +638,7 @@ public final class CompilationSupport {
     Artifact archive = ruleContext.getImplicitOutputArtifact(FULLY_LINKED_LIB);
 
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
-    ruleContext.registerAction(ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("ObjcLink")
         .setExecutable(xcrunwrapper(ruleContext))
         .setCommandLine(new CustomCommandLine.Builder()
@@ -785,7 +785,7 @@ public final class CompilationSupport {
 
     ImmutableList<Artifact> ccLibraries = ccLibraries(objcProvider);
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
             .setMnemonic("ObjcLink")
             .setShellCommand(ImmutableList.of("/bin/bash", "-c"))
             .setCommandLine(
@@ -809,7 +809,7 @@ public final class CompilationSupport {
       Artifact strippedBinary = intermediateArtifacts.strippedSingleArchitectureBinary();
 
       ruleContext.registerAction(
-          ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+          ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
               .setMnemonic("ObjcBinarySymbolStrip")
               .setExecutable(xcrunwrapper(ruleContext))
               .setCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))
@@ -1225,7 +1225,7 @@ public final class CompilationSupport {
 
     Artifact dumpsyms = ruleContext.getPrerequisiteArtifact(":dumpsyms", Mode.HOST);
     Artifact breakpadFile = intermediateArtifacts.breakpadSym();
-    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder(ruleContext)
         .setMnemonic("GenBreakpad")
         .setProgressMessage("Generating breakpad file: " + ruleContext.getLabel())
         .setShellCommand(ImmutableList.of("/bin/bash", "-c"))
@@ -1336,7 +1336,6 @@ public final class CompilationSupport {
     return Iterables.concat(
         AppleToolchain.DEFAULT_WARNINGS.values(),
         platformSpecificCompileFlagsForClang(configuration),
-        configuration.getBitcodeMode().getCompilerFlags(),
         DEFAULT_COMPILER_FLAGS
     );
   }
