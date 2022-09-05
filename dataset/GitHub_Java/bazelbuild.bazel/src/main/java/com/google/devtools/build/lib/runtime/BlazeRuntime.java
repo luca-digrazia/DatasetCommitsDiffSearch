@@ -19,6 +19,7 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -87,7 +88,6 @@ import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ThreadUtils;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -987,10 +987,6 @@ public final class BlazeRuntime {
   }
 
   private static FileSystem fileSystemImplementation() {
-    if ("0".equals(System.getProperty("io.bazel.UnixFileSystem"))) {
-      // Ignore UnixFileSystem, to be used for bootstrapping.
-      return new JavaIoFileSystem();
-    }
     // The JNI-based UnixFileSystem is faster, but on Windows it is not available.
     return OS.getCurrent() == OS.WINDOWS ? new JavaIoFileSystem() : new UnixFileSystem();
   }
@@ -1145,14 +1141,6 @@ public final class BlazeRuntime {
     Path workspaceDirectoryPath = null;
     if (!workspaceDirectory.equals(PathFragment.EMPTY_FRAGMENT)) {
       workspaceDirectoryPath = fs.getPath(workspaceDirectory);
-    }
-
-    if (fs instanceof UnixFileSystem) {
-      ((UnixFileSystem) fs).setRootsWithAllowedHardlinks(
-          // Some tests pass nulls for these paths, so remove these from the list
-          Iterables.filter(
-              Arrays.asList(installBasePath, outputBasePath, workspaceDirectoryPath),
-              Predicates.notNull()));
     }
 
     BlazeDirectories directories =
