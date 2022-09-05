@@ -241,8 +241,7 @@ public class ActionCacheChecker {
   }
 
   @Nullable
-  public Iterable<Artifact> getCachedInputs(Action action, PackageRootResolver resolver)
-      throws PackageRootResolutionException {
+  public Iterable<Artifact> getCachedInputs(Action action, PackageRootResolver resolver) {
     ActionCache.Entry entry = getCacheEntry(action);
     if (entry == null || entry.isCorrupted()) {
       return ImmutableList.of();
