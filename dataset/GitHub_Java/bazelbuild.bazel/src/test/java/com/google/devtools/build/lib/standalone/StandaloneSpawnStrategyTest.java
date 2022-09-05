@@ -191,10 +191,7 @@ public class StandaloneSpawnStrategyTest extends TestCase {
   // Test an action with environment variables set indicating an action running on a darwin host 
   // system. Such actions should fail given the fact that these tests run on a non darwin
   // architecture.
-  public void testIOSEnvironmentOnNonDarwin() throws Exception {
-    if (OS.getCurrent() == OS.DARWIN) {
-      return;
-    }
+  public void testActionOnDarwin() throws Exception {
     Spawn spawn = new BaseSpawn.Local(Arrays.asList("/bin/sh", "-c", "echo $SDKROOT"),
         ImmutableMap.<String, String>of(AppleConfiguration.APPLE_SDK_VERSION_ENV_NAME, "8.4",
             AppleConfiguration.APPLE_SDK_PLATFORM_ENV_NAME, "iPhoneSimulator"),
@@ -202,9 +199,16 @@ public class StandaloneSpawnStrategyTest extends TestCase {
 
     try {
       run(spawn);
-      fail("action should fail due to being unable to resolve SDKROOT");
+      if (OS.getCurrent() != OS.DARWIN) {
+        fail("action should fail due to being unable to resolve SDKROOT");
+      }
+
     } catch (ExecException e) {
-      assertThat(e.getMessage()).contains("Cannot locate iOS SDK on non-darwin operating system");
+      if (OS.getCurrent() != OS.DARWIN) {
+        assertThat(e.getMessage()).contains("Cannot locate iOS SDK on non-darwin operating system");
+      } else {
+        fail("This test should pass on OSX.");
+      }
     }
   }
 }
