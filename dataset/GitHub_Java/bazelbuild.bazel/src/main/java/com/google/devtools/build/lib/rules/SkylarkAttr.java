@@ -91,8 +91,7 @@ public final class SkylarkAttr {
 
   private static final String CONFIGURATION_ARG = "cfg";
   private static final String CONFIGURATION_DOC =
-      "configuration of the attribute. It can be either \"data\" or \"host\". This parameter is "
-          + "required if <code>executable</code> is True.";
+      "configuration of the attribute. It can be either \"data\" or \"host\".";
 
   private static final String DEFAULT_ARG = "default";
   private static final String DEFAULT_DOC = "the default value of the attribute.";
@@ -203,10 +202,8 @@ public final class SkylarkAttr {
     if (containsNonNoneKey(arguments, EXECUTABLE_ARG) && (Boolean) arguments.get(EXECUTABLE_ARG)) {
       builder.setPropertyFlag("EXECUTABLE");
       if (!containsNonNoneKey(arguments, CONFIGURATION_ARG)) {
-        String message = "Argument `cfg = \"host\"` or `cfg = \"data\"` is required if "
-            + "`executable = True` is provided for a label. Please see "
-            + "https://www.bazel.build/versions/master/docs/skylark/rules.html#configurations "
-            + "for more details.";
+        String message = "Argument `cfg = \"host\"` or `cfg = \"data\"` is required if"
+            + " `executable = True` is provided for a label";
         env.handleEvent(Event.warn(loc, message));
       }
     }
@@ -273,8 +270,8 @@ public final class SkylarkAttr {
       Object trans = arguments.get(CONFIGURATION_ARG);
       if (trans instanceof ConfigurationTransition) {
         // TODO(laurentlb): Deprecated, to be removed in August 2016.
-        String message = "Variables HOST_CFG and DATA_CFG are deprecated in favor of strings "
-            + "\"host\" and \"data\" correspondingly";
+        String message = "Variables HOST_CFG and DATA_CFG are deprecated in favor of strings"
+            + " \"host\" and \"data\" correspondingly";
         env.handleEvent(Event.warn(loc, message));
         builder.cfg((ConfigurationTransition) trans);
       } else if (trans.equals("data")) {
@@ -1258,8 +1255,8 @@ public final class SkylarkAttr {
     name = "attr_defintion",
     category = SkylarkModuleCategory.NONE,
     doc =
-        "Representation of a definition of an attribute; constructed by <code>attr.*</code> "
-            + "functions. They are only for use with <a href=\"globals.html#rule\">rule</a> or "
+        "Representation of a definition of an attribute; constructed by <code>attr.*</code>"
+            + " functions. They are only for use with <a href=\"globals.html#rule\">rule</a> or "
             + "<a href=\"globals.html#aspect\">aspect</a>."
 
   )

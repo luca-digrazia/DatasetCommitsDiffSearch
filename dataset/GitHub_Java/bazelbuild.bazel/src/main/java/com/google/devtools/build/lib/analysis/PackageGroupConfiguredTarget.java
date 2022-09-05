@@ -18,10 +18,10 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor.Key;
 import com.google.devtools.build.lib.util.Preconditions;
 import javax.annotation.Nullable;
 
@@ -40,7 +40,7 @@ public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
     NestedSetBuilder<PackageSpecification> builder =
         NestedSetBuilder.stableOrder();
     for (Label label : packageGroup.getIncludes()) {
-      TransitiveInfoCollection include = targetContext.maybeFindDirectPrerequisite(
+      TransitiveInfoCollection include = targetContext.findDirectPrerequisite(
           label, targetContext.getConfiguration());
       PackageSpecificationProvider provider = include == null ? null :
           include.getProvider(PackageSpecificationProvider.class);
@@ -75,7 +75,7 @@ public final class PackageGroupConfiguredTarget extends AbstractConfiguredTarget
 
   @Nullable
   @Override
-  public SkylarkClassObject get(ClassObjectConstructor.Key providerKey) {
+  public SkylarkClassObject get(Key providerKey) {
     // No providers.
     return null;
   }
