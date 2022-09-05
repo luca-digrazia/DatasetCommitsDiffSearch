@@ -215,9 +215,6 @@ public class CppCompileAction extends AbstractAction
   /** Set when a two-stage input discovery is used. */
   private Collection<Artifact> usedModules = null;
 
-  /** Used modules that are not transitively used through other topLevelModules. */
-  private Collection<Artifact> topLevelModules = null;
-
   private CcToolchainFeatures.Variables overwrittenVariables = null;
 
   private ImmutableList<Artifact> resolvedInputs = ImmutableList.<Artifact>of();
@@ -505,7 +502,6 @@ public class CppCompileAction extends AbstractAction
     if (shouldPruneModules) {
       Set<Artifact> initialResultSet = Sets.newLinkedHashSet(initialResult);
       usedModules = Sets.newLinkedHashSet();
-      topLevelModules = null;
       for (CppCompilationContext.TransitiveModuleHeaders usedModule :
           context.getUsedModules(usePic, initialResultSet)) {
         usedModules.add(usedModule.getModule());
@@ -561,13 +557,6 @@ public class CppCompileAction extends AbstractAction
         }
       }
     }
-    ImmutableSet.Builder<Artifact> topLevelModules = ImmutableSet.builder();
-    for (Artifact artifact : this.usedModules) {
-      if (!additionalModules.contains(artifact)) {
-        topLevelModules.add(artifact);
-      }
-    }
-    this.topLevelModules = topLevelModules.build();
     this.additionalInputs =
         new ImmutableList.Builder<Artifact>()
             .addAll(this.additionalInputs)
@@ -580,11 +569,8 @@ public class CppCompileAction extends AbstractAction
   @Override
   public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
     if (useHeaderModules) {
-      additionalInputs = Sets.newLinkedHashSet(context.getTransitiveModules(usePic).toCollection());
-      // Here, we cannot really know what the top-level modules are, so we just mark all
-      // transitive modules as "top level".
-      topLevelModules = additionalInputs;
-      return additionalInputs;
+      this.additionalInputs = context.getTransitiveModules(usePic).toCollection();
+      return this.additionalInputs;
     }
     return null;
   }
@@ -1026,14 +1012,11 @@ public class CppCompileAction extends AbstractAction
   /** Sets module file flags based on the action's inputs. */
   protected void setModuleFileFlags() {
     if (useHeaderModules) {
-      // If modules pruning is used, modules will be supplied via topLevelModules, otherwise they
+      // If modules pruning is used, modules will be supplied via additionalInputs, otherwise they
       // are regular inputs.
-      if (shouldPruneModules) {
-        Preconditions.checkNotNull(this.topLevelModules);
-        overwrittenVariables = getOverwrittenVariables(topLevelModules);
-      } else {
-        overwrittenVariables = getOverwrittenVariables(getInputs());
-      }
+      Preconditions.checkNotNull(additionalInputs);
+      this.overwrittenVariables =
+          getOverwrittenVariables(shouldPruneModules ? additionalInputs : getInputs());
     }
   }
 
