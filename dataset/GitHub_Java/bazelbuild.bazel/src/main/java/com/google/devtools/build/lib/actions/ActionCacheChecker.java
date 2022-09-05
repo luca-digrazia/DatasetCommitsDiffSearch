@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action.MiddlemanType;
 import com.google.devtools.build.lib.actions.cache.ActionCache;
@@ -143,8 +142,8 @@ public class ActionCacheChecker {
    */
   // Note: the handler should only be used for DEPCHECKER events; there's no
   // guarantee it will be available for other events.
-  public Token getTokenIfNeedToExecute(Action action, Iterable<Artifact> resolvedCacheArtifacts,
-      EventHandler handler, MetadataHandler metadataHandler) {
+  public Token getTokenIfNeedToExecute(Action action, EventHandler handler,
+      MetadataHandler metadataHandler, PackageRootResolver resolver) {
     // TODO(bazel-team): (2010) For RunfilesAction/SymlinkAction and similar actions that
     // produce only symlinks we should not check whether inputs are valid at all - all that matters
     // that inputs and outputs are still exist (and new inputs have not appeared). All other checks
@@ -161,15 +160,17 @@ public class ActionCacheChecker {
       return null;
     }
     Iterable<Artifact> actionInputs = action.getInputs();
+    ActionCache.Entry entry = getCacheEntry(action);
     // Resolve action inputs from cache, if necessary.
     boolean inputsKnown = action.inputsKnown();
-    if (!inputsKnown && resolvedCacheArtifacts != null) {
-      // The action doesn't know its inputs, but the caller has a good idea of what they are.
-      Preconditions.checkState(action.discoversInputs(),
-          "Actions that don't know their inputs must discover them: %s", action);
-      actionInputs = resolvedCacheArtifacts;
+    if (entry != null && !entry.isCorrupted() && !inputsKnown) {
+      Preconditions.checkState(action.discoversInputs(), action);
+      actionInputs = resolveCachedActionInputs(action, entry, resolver);
+      if (actionInputs == null) {
+        // Not all inputs could be resolved. Try again next time.
+        return Token.NEED_TO_RERUN;
+      }
     }
-    ActionCache.Entry entry = getCacheEntry(action);
     if (mustExecute(action, entry, handler, metadataHandler, actionInputs)) {
       if (entry != null) {
         removeCacheEntry(action);
@@ -240,12 +241,10 @@ public class ActionCacheChecker {
     actionCache.put(key, entry);
   }
 
-  @Nullable
-  public Iterable<Artifact> getCachedInputs(Action action, PackageRootResolver resolver) {
-    ActionCache.Entry entry = getCacheEntry(action);
-    if (entry == null || entry.isCorrupted()) {
-      return ImmutableList.of();
-    }
+  private Iterable<Artifact> resolveCachedActionInputs(Action action, ActionCache.Entry entry,
+      PackageRootResolver resolver) {
+    Preconditions.checkNotNull(entry, action);
+    Preconditions.checkState(!entry.isCorrupted(), action);
 
     List<PathFragment> outputs = new ArrayList<>();
     for (Artifact output : action.getOutputs()) {
@@ -354,6 +353,7 @@ public class ActionCacheChecker {
 
   /** Wrapper for all context needed by the ActionCacheChecker to handle a single action. */
   public static final class Token {
+    public static final Token NEED_TO_RERUN = new Token("need to rerun");
     private final String cacheKey;
 
     private Token(String cacheKey) {
