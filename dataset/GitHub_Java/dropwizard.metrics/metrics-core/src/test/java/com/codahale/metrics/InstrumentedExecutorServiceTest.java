@@ -26,21 +26,20 @@ public class InstrumentedExecutorServiceTest {
         final Counter running = registry.counter("xs.running");
         final Meter completed = registry.meter("xs.completed");
         final Timer duration = registry.timer("xs.duration");
-        final Timer idle = registry.timer("xs.idle");
 
         assertThat(submitted.getCount()).isEqualTo(0);
         assertThat(running.getCount()).isEqualTo(0);
         assertThat(completed.getCount()).isEqualTo(0);
         assertThat(duration.getCount()).isEqualTo(0);
-        assertThat(idle.getCount()).isEqualTo(0);
 
-        Future<?> theFuture = instrumentedExecutorService.submit(() -> {
-            assertThat(submitted.getCount()).isEqualTo(1);
-            assertThat(running.getCount()).isEqualTo(1);
-            assertThat(completed.getCount()).isEqualTo(0);
-            assertThat(duration.getCount()).isEqualTo(0);
-            assertThat(idle.getCount()).isEqualTo(1);
-    });
+        Future<?> theFuture = instrumentedExecutorService.submit(new Runnable() {
+            public void run() {
+                assertThat(submitted.getCount()).isEqualTo(1);
+                assertThat(running.getCount()).isEqualTo(1);
+                assertThat(completed.getCount()).isEqualTo(0);
+                assertThat(duration.getCount()).isEqualTo(0);
+	    }
+	});
 
         theFuture.get();
 
@@ -49,8 +48,6 @@ public class InstrumentedExecutorServiceTest {
         assertThat(completed.getCount()).isEqualTo(1);
         assertThat(duration.getCount()).isEqualTo(1);
         assertThat(duration.getSnapshot().size()).isEqualTo(1);
-        assertThat(idle.getCount()).isEqualTo(1);
-        assertThat(idle.getSnapshot().size()).isEqualTo(1);
     }
 
     @After
