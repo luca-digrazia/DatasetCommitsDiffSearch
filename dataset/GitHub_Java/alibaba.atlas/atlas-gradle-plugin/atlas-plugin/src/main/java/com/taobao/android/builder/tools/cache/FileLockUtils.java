@@ -213,6 +213,7 @@ import java.io.File;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileLock;
 
+import org.gradle.api.GradleException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -225,16 +226,28 @@ public class FileLockUtils {
 
     public static boolean lock(File file, Runnable runnable) {
         try {
-            final RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rxw");
-            final FileLock fileLock = randomAccessFile.getChannel().tryLock();
+
+            File lockFile = file;
+            if (lockFile.isDirectory()) {
+                lockFile = new File(lockFile, ".atlaslock");
+            }
+            RandomAccessFile randomAccessFile;
+            FileLock fileLock ;
+            try {
+                randomAccessFile = new RandomAccessFile(lockFile, "rw");
+                fileLock = randomAccessFile.getChannel().tryLock();
+            } catch (Exception e) {
+                throw new GradleException(e.getMessage(),e);
+            }
             if (fileLock != null) {
+                File finalLockFile = lockFile;
                 Runtime.getRuntime().addShutdownHook(new Thread() {
                     @Override
                     public void run() {
                         try {
                             fileLock.release();
                             randomAccessFile.close();
-                            file.delete();
+                            finalLockFile.delete();
                         } catch (Exception e) {
                             log.error("Unable to remove lock file: " + file.getAbsolutePath(), e);
                         }
@@ -243,10 +256,12 @@ public class FileLockUtils {
 
                 runnable.run();
 
+                lockFile.delete();
                 return true;
             }
-        } catch (Exception e) {
-            log.error("Unable to create and/or lock file: " + file.getAbsolutePath(), e);
+
+        } finally {
+
         }
         return false;
     }

@@ -226,6 +226,7 @@ public class ClazzRefInfo {
      */
     private boolean needExtend;
 
+    //for json serizable
     public ClazzRefInfo() {
     }
 
