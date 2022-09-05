@@ -254,6 +254,16 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
     return configurationDistinguisher;
   }
 
+  @Override
+  public String getName() {
+    return "Objective-C";
+  }
+
+  @Override
+  public String cacheKey() {
+    return iosSdkVersion;
+  }
+
   @Nullable
   @Override
   public String getOutputDirectoryName() {

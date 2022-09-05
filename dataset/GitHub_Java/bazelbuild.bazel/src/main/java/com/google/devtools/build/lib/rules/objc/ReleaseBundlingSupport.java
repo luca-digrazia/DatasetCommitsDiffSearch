@@ -219,7 +219,6 @@ public final class ReleaseBundlingSupport {
     }
 
     registerEmbedLabelPlistAction();
-    registerEnvironmentPlistAction();
 
     BundleMergeControlBytes bundleMergeControlBytes = new BundleMergeControlBytes(
         bundling, maybeSignedIpa, objcConfiguration, bundleSupport.targetDeviceFamilies());
@@ -232,68 +231,41 @@ public final class ReleaseBundlingSupport {
   private void registerEmbedLabelPlistAction() {
     Artifact buildInfo = Iterables.getOnlyElement(
         ruleContext.getBuildInfo(ObjcBuildInfoFactory.KEY));
-    String generatedVersionPlistPath = getGeneratedVersionPlist().getShellEscapedExecPathString();
-    String shellCommand = "VERSION=\"$("
-        + "grep \"^" + BuildInfo.BUILD_EMBED_LABEL + "\" "
-        + buildInfo.getShellEscapedExecPathString()
-        + " | cut -d' ' -f2- | sed -e '" + EXTRACT_VERSION_NUMBER_SED_COMMAND + "' | "
-        + "sed -e 's#\"#\\\"#g')\" && "
-        + "cat >" + generatedVersionPlistPath + " <<EOF\n"
-        + "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
-        + "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
-        + "<plist version=\"1.0\">\n"
-        + "<dict>\n"
-        + "EOF\n"
-
-            + "if [[ -n \"${VERSION}\" ]]; then\n"
-            + "  for KEY in CFBundleVersion CFBundleShortVersionString; do\n"
-            + "    echo \"  <key>${KEY}</key>\n\" >> "
-            + generatedVersionPlistPath + "\n"
-            + "    echo \"  <string>${VERSION}</string>\n\" >> "
-            + generatedVersionPlistPath + "\n"
-            + "  done\n"
-            + "fi\n"
-
-            + "cat >>" + generatedVersionPlistPath + " <<EOF\n"
-            + "</dict>\n"
-            + "</plist>\n"
-            + "EOF\n";
     ruleContext.registerAction(new SpawnAction.Builder()
         .setMnemonic("ObjcVersionPlist")
-        .setShellCommand(shellCommand)
+        .setExecutable(new PathFragment("/bin/bash"))
+        .setCommandLine(new CustomCommandLine.Builder()
+            .add("-c")
+            .add(
+                "VERSION=\"$("
+                + "grep \"^" + BuildInfo.BUILD_EMBED_LABEL + "\" " + buildInfo.getExecPathString()
+                + " | cut -d' ' -f2- | sed -e '" + EXTRACT_VERSION_NUMBER_SED_COMMAND + "' | "
+                + "sed -e 's#\"#\\\"#g')\" && "
+                + "cat >" + getGeneratedVersionPlist().getExecPathString() + " <<EOF\n"
+                + "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
+                + "\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+                + "<plist version=\"1.0\">\n"
+                + "<dict>\n"
+                + "EOF\n"
+
+                    + "if [[ -n \"${VERSION}\" ]]; then\n"
+                    + "  for KEY in CFBundleVersion CFBundleShortVersionString; do\n"
+                    + "    echo \"  <key>${KEY}</key>\n\" >> "
+                    + getGeneratedVersionPlist().getExecPathString() + "\n"
+                    + "    echo \"  <string>${VERSION}</string>\n\" >> "
+                    + getGeneratedVersionPlist().getExecPathString() + "\n"
+                    + "  done\n"
+                    + "fi\n"
+
+                    + "cat >>" + getGeneratedVersionPlist().getExecPathString() + " <<EOF\n"
+                    + "</dict>\n"
+                    + "</plist>\n"
+                    + "EOF\n"
+            )
+            .build())
         .addInput(buildInfo)
         .addOutput(getGeneratedVersionPlist())
-        .build(ruleContext));
-  }
-
-  private void registerEnvironmentPlistAction() {
-    ObjcConfiguration configuration = ObjcRuleClasses.objcConfiguration(ruleContext);
-    // Generates a .plist that contains environment values (such as the SDK used to build, the Xcode
-    // version, etc), which are parsed from various .plist files of the OS, namely XCodes' and
-    // Platforms' plists.
-    // The resulting file is meant to be merged with the final bundle.
-    String command = Joiner.on(" && ").join(
-        "PLATFORM_PLIST=" + IosSdkCommands.platformDir(configuration) + "/Info.plist",
-        "PLIST=${TMPDIR}/env.plist",
-        "os_build=$(/usr/bin/defaults read ${PLATFORM_PLIST} BuildMachineOSBuild)",
-        "compiler=$(/usr/bin/defaults read ${PLATFORM_PLIST} DTCompiler)",
-        "platform_version=$(/usr/bin/defaults read ${PLATFORM_PLIST} Version)",
-        "sdk_build=$(/usr/bin/defaults read ${PLATFORM_PLIST} DTSDKBuild)",
-        "platform_build=$(/usr/bin/defaults read ${PLATFORM_PLIST} DTPlatformBuild)",
-        "xcode_build=$(/usr/bin/defaults read ${PLATFORM_PLIST} DTXcodeBuild)",
-        "xcode_version=$(/usr/bin/defaults read ${PLATFORM_PLIST} DTXcode)",
-        "/usr/bin/defaults write ${PLIST} DTPlatformBuild -string ${platform_build}",
-        "/usr/bin/defaults write ${PLIST} DTSDKBuild -string ${sdk_build}",
-        "/usr/bin/defaults write ${PLIST} DTPlatformVersion -string ${platform_version}",
-        "/usr/bin/defaults write ${PLIST} DTXcode -string ${xcode_version}",
-        "/usr/bin/defaults write ${PLIST} DTXCodeBuild -string ${xcode_build}",
-        "/usr/bin/defaults write ${PLIST} DTCompiler -string ${compiler}",
-        "/usr/bin/defaults write ${PLIST} BuildMachineOSBuild -string ${os_build}",
-        "cat ${PLIST} > " + getGeneratedEnvironmentPlist().getShellEscapedExecPathString());
-    ruleContext.registerAction(ObjcRuleClasses.spawnBashOnDarwinActionBuilder(command)
-        .setMnemonic("EnvironmentPlist")
-        .addOutput(getGeneratedEnvironmentPlist())
         .build(ruleContext));
   }
 
@@ -464,7 +436,6 @@ public final class ReleaseBundlingSupport {
         .setObjcProvider(objcProvider)
         .addInfoplistInputFromRule(ruleContext)
         .addInfoplistInput(getGeneratedVersionPlist())
-        .addInfoplistInput(getGeneratedEnvironmentPlist())
         .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
         .setPrimaryBundleId(primaryBundleId)
         .setFallbackBundleId(fallbackBundleId)
@@ -542,11 +513,10 @@ public final class ReleaseBundlingSupport {
     // Explicitly sign Swift frameworks. Unfortunately --deep option on codesign doesn't do this
     // automatically.
     // The order here is important. The innermost code must singed first.
-    String bundleDir = ShellUtils.shellEscape(bundling.getBundleDir());
     if (objcProvider.is(USES_SWIFT)) {
-      dirsToSign.add(bundleDir + "/Frameworks/*");
+      dirsToSign.add(bundling.getBundleDir() + "/Frameworks/*");
     }
-    dirsToSign.add(bundleDir);
+    dirsToSign.add(bundling.getBundleDir());
 
     StringBuilder codesignCommandLineBuilder = new StringBuilder();
     for (String dir : dirsToSign.build()) {
@@ -555,19 +525,20 @@ public final class ReleaseBundlingSupport {
           .append(" && ");
     }
 
-    // TODO(bazel-team): Support nested code signing.
-    String shellCommand = "set -e && "
-        + "t=$(mktemp -d -t signing_intermediate) && "
-        + "trap \"rm -rf ${t}\" EXIT && "
-        // Get an absolute path since we need to cd into the temp directory for zip.
-        + "signed_ipa=${PWD}/" + ipaOutput.getShellEscapedExecPathString() + " && "
-        + "/usr/bin/unzip -qq " + ipaUnsigned.getShellEscapedExecPathString() + " -d ${t} && "
-        + codesignCommandLineBuilder.toString()
-        // Using zip since we need to preserve permissions
-        + "cd ${t} && /usr/bin/zip -q -r \"${signed_ipa}\" .";
-    ruleContext.registerAction(ObjcRuleClasses.spawnBashOnDarwinActionBuilder(shellCommand)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("IosSignBundle")
         .setProgressMessage("Signing iOS bundle: " + ruleContext.getLabel())
+        .setExecutable(new PathFragment("/bin/bash"))
+        .addArgument("-c")
+        // TODO(bazel-team): Support nested code signing.
+        .addArgument("set -e && "
+            + "t=$(mktemp -d -t signing_intermediate) && "
+            // Get an absolute path since we need to cd into the temp directory for zip.
+            + "signed_ipa=${PWD}/" + ipaOutput.getExecPathString() + " && "
+            + "unzip -qq " + ipaUnsigned.getExecPathString() + " -d ${t} && "
+            + codesignCommandLineBuilder.toString()
+            // Using zip since we need to preserve permissions
+            + "cd \"${t}\" && /usr/bin/zip -q -r \"${signed_ipa}\" .")
         .addInput(ipaUnsigned)
         .addInput(attributes.provisioningProfile())
         .addInput(entitlements)
@@ -651,13 +622,15 @@ public final class ReleaseBundlingSupport {
   }
 
   private void registerExtractTeamPrefixAction(Artifact teamPrefixFile) {
-    String shellCommand = "set -e && "
-        + "PLIST=$(mktemp -t teamprefix.plist) && trap \"rm ${PLIST}\" EXIT && "
-        + extractPlistCommand(attributes.provisioningProfile()) + " > ${PLIST} && "
-        + "/usr/libexec/PlistBuddy -c 'Print ApplicationIdentifierPrefix:0' ${PLIST} > "
-        + teamPrefixFile.getShellEscapedExecPathString();
-    ruleContext.registerAction(ObjcRuleClasses.spawnBashOnDarwinActionBuilder(shellCommand)
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("ExtractIosTeamPrefix")
+        .setExecutable(new PathFragment("/bin/bash"))
+        .addArgument("-c")
+        .addArgument("set -e &&"
+            + "PLIST=$(mktemp -t teamprefix.plist) && trap \"rm ${PLIST}\" EXIT && "
+            + extractPlistCommand(attributes.provisioningProfile()) + " > ${PLIST} && "
+            + "/usr/libexec/PlistBuddy -c 'Print ApplicationIdentifierPrefix:0' ${PLIST} > "
+            + teamPrefixFile.getExecPathString())
         .addInput(attributes.provisioningProfile())
         .addOutput(teamPrefixFile)
         .build(ruleContext));
@@ -669,14 +642,17 @@ public final class ReleaseBundlingSupport {
     // TeamID is extracted from the provisioning profile.
     // BundleID consists of a reverse-DNS string to identify the app, where the last component
     // is the application name, and is specified as an attribute.
-    String shellCommand = "set -e && "
-        + "PLIST=$(mktemp -t entitlements.plist) && trap \"rm ${PLIST}\" EXIT && "
-        + extractPlistCommand(attributes.provisioningProfile()) + " > ${PLIST} && "
-        + "/usr/libexec/PlistBuddy -x -c 'Print Entitlements' ${PLIST} > "
-        + entitlements.getShellEscapedExecPathString();
-    ruleContext.registerAction(ObjcRuleClasses.spawnBashOnDarwinActionBuilder(shellCommand)
+
+    ruleContext.registerAction(ObjcRuleClasses.spawnOnDarwinActionBuilder()
         .setMnemonic("ExtractIosEntitlements")
         .setProgressMessage("Extracting entitlements: " + ruleContext.getLabel())
+        .setExecutable(new PathFragment("/bin/bash"))
+        .addArgument("-c")
+        .addArgument("set -e && "
+            + "PLIST=$(mktemp -t entitlements.plist) && trap \"rm ${PLIST}\" EXIT && "
+            + extractPlistCommand(attributes.provisioningProfile()) + " > ${PLIST} && "
+            + "/usr/libexec/PlistBuddy -x -c 'Print Entitlements' ${PLIST} > "
+            + entitlements.getExecPathString())
         .addInput(attributes.provisioningProfile())
         .addOutput(entitlements)
         .build(ruleContext));
@@ -687,28 +663,31 @@ public final class ReleaseBundlingSupport {
   private void registerEntitlementsVariableSubstitutionAction(Artifact in, Artifact out,
       Artifact prefix) {
     String escapedBundleId = ShellUtils.shellEscape(attributes.bundleId());
-    String shellCommand = "set -e && "
-        + "PREFIX=\"$(cat " + prefix.getShellEscapedExecPathString() + ")\" && "
-        + "sed "
-        // Replace .* from default entitlements file with bundle ID where suitable.
-        + "-e \"s#${PREFIX}\\.\\*#${PREFIX}." + escapedBundleId + "#g\" "
-
-        // Replace some variables that people put in their own entitlements files
-        + "-e \"s#\\$(AppIdentifierPrefix)#${PREFIX}.#g\" "
-        + "-e \"s#\\$(CFBundleIdentifier)#" + escapedBundleId + "#g\" "
-
-        + in.getShellEscapedExecPathString() + " "
-        + "> " + out.getShellEscapedExecPathString();
     ruleContext.registerAction(new SpawnAction.Builder()
         .setMnemonic("SubstituteIosEntitlements")
-        .setShellCommand(shellCommand)
+        .setExecutable(new PathFragment("/bin/bash"))
+        .addArgument("-c")
+        .addArgument("set -e && "
+            + "PREFIX=\"$(cat " + prefix.getExecPathString() + ")\" && "
+            + "sed "
+            // Replace .* from default entitlements file with bundle ID where suitable.
+            + "-e \"s#${PREFIX}\\.\\*#${PREFIX}." + escapedBundleId + "#g\" "
+
+            // Replace some variables that people put in their own entitlements files
+            + "-e \"s#\\$(AppIdentifierPrefix)#${PREFIX}.#g\" "
+            + "-e \"s#\\$(CFBundleIdentifier)#" + escapedBundleId + "#g\" "
+
+            + in.getExecPathString() + " "
+            + "> " + out.getExecPathString())
         .addInput(in)
         .addInput(prefix)
         .addOutput(out)
         .build(ruleContext));
   }
 
-  /** Registers an action to copy Swift standard library dylibs into app bundle. */
+  /**
+   * Registers an action to copy Swift standard library dylibs into app bundle.
+   */
   private void registerSwiftStdlibActionsIfNecessary() {
     if (!objcProvider.is(USES_SWIFT)) {
       return;
@@ -718,19 +697,17 @@ public final class ReleaseBundlingSupport {
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder()
         .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
+        .add("Frameworks")
+        .addPath(ObjcRuleClasses.SWIFT_STDLIB_TOOL)
         .add("--platform").add(IosSdkCommands.swiftPlatform(objcConfiguration))
         .addExecPath("--scan-executable", intermediateArtifacts.strippedSingleArchitectureBinary());
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnOnDarwinActionBuilder()
+        ObjcRuleClasses.spawnJavaOnDarwinActionBuilder(attributes.swiftStdlibToolDeployJar())
             .setMnemonic("SwiftStdlibCopy")
-            .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
             .addInput(intermediateArtifacts.strippedSingleArchitectureBinary())
-            // TODO(dmaclach): Adding realpath here should not be required once
-            // https://github.com/google/bazel/issues/285 is fixed.
-            .addInput(attributes.realpath())
             .build(ruleContext));
   }
 
@@ -749,18 +726,13 @@ public final class ReleaseBundlingSupport {
     return String.format(
         "/usr/bin/codesign --force --sign $(%s) --entitlements %s %s",
         fingerprintCommand,
-        entitlements.getShellEscapedExecPathString(),
+        entitlements.getExecPathString(),
         appDir);
   }
 
   private Artifact getGeneratedVersionPlist() {
     return ruleContext.getRelatedArtifact(
         ruleContext.getUniqueDirectory("plists"), "-version.plist");
-  }
-
-  private Artifact getGeneratedEnvironmentPlist() {
-    return ruleContext.getRelatedArtifact(
-        ruleContext.getUniqueDirectory("plists"), "-environment.plist");
   }
 
   /**
@@ -827,18 +799,11 @@ public final class ReleaseBundlingSupport {
           ruleContext.getPrerequisiteArtifact("$runner_script_template", Mode.HOST));
     }
 
-    /** Returns the location of the swiftstdlibtoolwrapper. */
-    FilesToRunProvider swiftStdlibToolWrapper() {
-      return ruleContext.getExecutablePrerequisite("$swiftstdlibtoolwrapper", Mode.HOST);
-    }
-
     /**
-     * Returns the location of the realpath tool.
-     * TODO(dmaclach): Should not be required once https://github.com/google/bazel/issues/285
-     * is fixed.
+     * Returns the location of the swiftstdlibtoolzip deploy jar.
      */
-    Artifact realpath() {
-      return ruleContext.getPrerequisiteArtifact("$realpath", Mode.HOST);
+    Artifact swiftStdlibToolDeployJar() {
+      return ruleContext.getPrerequisiteArtifact("$swiftstdlibtoolzip_deploy", Mode.HOST);
     }
 
     String bundleId() {
@@ -933,7 +898,9 @@ public final class ReleaseBundlingSupport {
       return true;
     }
 
-    /** Returns the configuration distinguisher for this transition instance. */
+    /**
+     * Returns the configuration distinguisher for this transition instance.
+     */
     protected ConfigurationDistinguisher getConfigurationDistinguisher() {
       return ConfigurationDistinguisher.APPLICATION;
     }

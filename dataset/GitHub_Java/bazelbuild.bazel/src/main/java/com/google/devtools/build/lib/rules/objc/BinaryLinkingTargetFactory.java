@@ -81,24 +81,12 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
         NestedSetBuilder.<Artifact>stableOrder()
             .add(intermediateArtifacts.strippedSingleArchitectureBinary());
 
-    new ResourceSupport(ruleContext)
-        .validateAttributes()
-        .addXcodeSettings(xcodeProviderBuilder);
-
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-
     new CompilationSupport(ruleContext)
         .registerJ2ObjcCompileAndArchiveActions(objcProvider)
         .registerCompileAndArchiveActions(common)
         .addXcodeSettings(xcodeProviderBuilder, common)
         .registerLinkActions(objcProvider, extraLinkArgs, ImmutableList.<Artifact>of())
         .validateAttributes();
-
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
 
     Optional<XcTestAppProvider> xcTestAppProvider;
     Optional<RunfilesSupport> maybeRunfilesSupport = Optional.absent();
@@ -130,6 +118,10 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
       default:
         throw new AssertionError();
     }
+
+    new ResourceSupport(ruleContext)
+        .validateAttributes()
+        .addXcodeSettings(xcodeProviderBuilder);
 
     XcodeSupport xcodeSupport = new XcodeSupport(ruleContext)
         // TODO(bazel-team): Use LIBRARY_STATIC as parameter instead of APPLICATION once objc_binary

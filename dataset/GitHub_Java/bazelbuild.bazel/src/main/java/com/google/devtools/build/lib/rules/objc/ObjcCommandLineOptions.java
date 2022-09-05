@@ -136,14 +136,6 @@ public class ObjcCommandLineOptions extends FragmentOptions {
           + "built with --cpu set to \"ios_<--ios_cpu>\" for any values in --ios_multi_cpu.")
   public boolean enableCcDeps;
 
-  // TODO(bazel-team): Add "-DDEBUG=1" to FASTBUILD_COPTS.
-  @Option(name = "experimental_objc_fastbuild_options",
-      defaultValue = "-O0",
-      category = "undocumented",
-      converter = CommaSeparatedOptionListConverter.class,
-      help = "Adds these strings to fastbuild compiler options.")
-  public List<String> fastbuildOptions;
-
   @Option(name = "objc_enable_binary_stripping",
       defaultValue = "false",
       category = "flags",
@@ -159,7 +151,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   // transitions for this purpose.
   // TODO(bazel-team): Remove this once we have dynamic configurations but make sure that different
   // configurations (e.g. by min os version) always use different output paths.
-  @Option(name = "iOS configuration distinguisher",
+  @Option(name = "DO_NOT_USE_configuration_distinguisher",
       defaultValue = "UNKNOWN",
       converter = ConfigurationDistinguisherConverter.class,
       category = "undocumented")
@@ -197,7 +189,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   public static final class ConfigurationDistinguisherConverter
       extends EnumConverter<ConfigurationDistinguisher> {
     public ConfigurationDistinguisherConverter() {
-      super(ConfigurationDistinguisher.class, "Objective C configuration distinguisher");
+      super(ConfigurationDistinguisher.class, "configuration distinguisher");
     }
   }
 }
