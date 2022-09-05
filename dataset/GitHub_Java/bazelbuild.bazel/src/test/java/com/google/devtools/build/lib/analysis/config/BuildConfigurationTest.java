@@ -29,12 +29,15 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.common.options.Options;
-import java.util.Map;
-import java.util.regex.Pattern;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * Tests for {@link BuildConfiguration}.
@@ -44,7 +47,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testBasics() throws Exception {
-    if (analysisMock.isThisBazel()) {
+    if (getAnalysisMock().isThisBazel()) {
       return;
     }
 
@@ -66,7 +69,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testPlatformSuffix() throws Exception {
-    if (analysisMock.isThisBazel()) {
+    if (getAnalysisMock().isThisBazel()) {
       return;
     }
 
@@ -77,7 +80,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testEnvironment() throws Exception {
-    if (analysisMock.isThisBazel()) {
+    if (getAnalysisMock().isThisBazel()) {
       return;
     }
 
@@ -103,7 +106,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testHostCrosstoolTop() throws Exception {
-    if (analysisMock.isThisBazel()) {
+    if (getAnalysisMock().isThisBazel()) {
       return;
     }
 
@@ -154,7 +157,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testMultiCpu() throws Exception {
-    if (analysisMock.isThisBazel()) {
+    if (getAnalysisMock().isThisBazel()) {
       return;
     }
 
@@ -171,7 +174,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
    */
   @Test
   public void testMultiCpuSorting() throws Exception {
-    if (analysisMock.isThisBazel()) {
+    if (getAnalysisMock().isThisBazel()) {
       return;
     }
 
@@ -233,11 +236,10 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testCycleInFragments() throws Exception {
-    configurationFactory =
-        new ConfigurationFactory(
-            analysisMock.createConfigurationCollectionFactory(),
-            createMockFragment(CppConfiguration.class, JavaConfiguration.class),
-            createMockFragment(JavaConfiguration.class, CppConfiguration.class));
+    configurationFactory = new ConfigurationFactory(
+        getAnalysisMock().createConfigurationCollectionFactory(),
+        createMockFragment(CppConfiguration.class, JavaConfiguration.class),
+        createMockFragment(JavaConfiguration.class, CppConfiguration.class));
     try {
       createCollection();
       fail();
@@ -248,10 +250,9 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testMissingFragment() throws Exception {
-    configurationFactory =
-        new ConfigurationFactory(
-            analysisMock.createConfigurationCollectionFactory(),
-            createMockFragment(CppConfiguration.class, JavaConfiguration.class));
+    configurationFactory = new ConfigurationFactory(
+        getAnalysisMock().createConfigurationCollectionFactory(),
+        createMockFragment(CppConfiguration.class, JavaConfiguration.class));
     try {
       createCollection();
       fail();
@@ -307,10 +308,9 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   @Test
   public void testEqualsOrIsSupersetOf() throws Exception {
     BuildConfiguration config = create();
-    BuildConfiguration trimmedConfig =
-        config.clone(
-            ImmutableSet.<Class<? extends Fragment>>of(CppConfiguration.class),
-            analysisMock.createRuleClassProvider());
+    BuildConfiguration trimmedConfig = config.clone(
+        ImmutableSet.<Class<? extends Fragment>>of(CppConfiguration.class),
+        TestRuleClassProvider.getRuleClassProvider());
     BuildConfiguration hostConfig = createHost();
 
     assertTrue(config.equalsOrIsSupersetOf(trimmedConfig));
@@ -331,47 +331,5 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     // Distinct because the j2objc options differ:
     assertThat(config1.getFragment(J2ObjcConfiguration.class))
         .isNotSameAs(config3.getFragment(J2ObjcConfiguration.class));
-  }
-
-  @Test
-  public void testCommandLineVariables() throws Exception {
-    BuildConfiguration config = create(
-        "--define", "a=b/c:d", "--define", "b=FOO", "--define", "DEFUN=Nope");
-    assertThat(config.getCommandLineBuildVariables().get("a")).isEqualTo("b/c:d");
-    assertThat(config.getCommandLineBuildVariables().get("b")).isEqualTo("FOO");
-    assertThat(config.getCommandLineBuildVariables().get("DEFUN")).isEqualTo("Nope");
-  }
-
-  // Regression test for bug #2518997:
-  // "--define in blazerc overrides --define from command line"
-  @Test
-  public void testCommandLineVariablesOverride() throws Exception {
-    BuildConfiguration config = create("--define", "a=b", "--define", "a=c");
-    assertThat(config.getCommandLineBuildVariables().get("a")).isEqualTo("c");
-  }
-
-  // This is really a test of option parsing, not command-line variable
-  // semantics.
-  @Test
-  public void testCommandLineVariablesWithFunnyCharacters() throws Exception {
-    BuildConfiguration config = create(
-        "--define", "foo=#foo",
-        "--define", "comma=a,b",
-        "--define", "space=foo bar",
-        "--define", "thing=a \"quoted\" thing",
-        "--define", "qspace=a\\ quoted\\ space",
-        "--define", "#a=pounda");
-    assertThat(config.getCommandLineBuildVariables().get("foo")).isEqualTo("#foo");
-    assertThat(config.getCommandLineBuildVariables().get("comma")).isEqualTo("a,b");
-    assertThat(config.getCommandLineBuildVariables().get("space")).isEqualTo("foo bar");
-    assertThat(config.getCommandLineBuildVariables().get("thing")).isEqualTo("a \"quoted\" thing");
-    assertThat(config.getCommandLineBuildVariables().get("qspace")).isEqualTo("a\\ quoted\\ space");
-    assertThat(config.getCommandLineBuildVariables().get("#a")).isEqualTo("pounda");
-  }
-
-  @Test
-  public void testHostDefine() throws Exception {
-    BuildConfiguration cfg = createHost("--define=foo=bar");
-    assertThat(cfg.getCommandLineBuildVariables().get("foo")).isEqualTo("bar");
   }
 }
