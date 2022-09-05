@@ -325,7 +325,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
   }
 
   private Artifact createTreeArtifact(String rootRelativePath) {
-    PathFragment relpath = PathFragment.create(rootRelativePath);
+    PathFragment relpath = new PathFragment(rootRelativePath);
     return new SpecialArtifact(
         root.getPath().getRelative(relpath),
         root,

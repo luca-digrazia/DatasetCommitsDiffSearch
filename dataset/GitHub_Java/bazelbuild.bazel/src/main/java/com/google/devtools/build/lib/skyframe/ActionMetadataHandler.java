@@ -352,17 +352,7 @@ public class ActionMetadataHandler implements MetadataHandler {
         // We do not cache exceptions besides nonexistence here, because it is unlikely that the
         // file will be requested from this cache too many times.
         if (fileValue == null) {
-          try {
-            fileValue = constructFileValue(treeFileArtifact, /*statNoFollow=*/ null);
-          } catch (FileNotFoundException e) {
-            String errorMessage = String.format(
-                "Failed to resolve relative path %s inside TreeArtifact %s. "
-                + "The associated file is either missing or is an invalid symlink.",
-                treeFileArtifact.getParentRelativePath(),
-                treeFileArtifact.getParent().getExecPathString());
-            throw new IOException(errorMessage, e);
-          }
-
+          fileValue = constructFileValue(treeFileArtifact, /*statNoFollow=*/ null);
           // A minor hack: maybeStoreAdditionalData will force the data to be stored
           // in additionalOutputData.
           maybeStoreAdditionalData(treeFileArtifact, fileValue, null);
