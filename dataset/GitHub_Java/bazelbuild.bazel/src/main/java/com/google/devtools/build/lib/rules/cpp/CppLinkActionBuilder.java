@@ -1432,64 +1432,66 @@ public class CppLinkActionBuilder {
                   || (linkType == LinkTargetType.EXECUTABLE
                       && linkStaticness == LinkStaticness.DYNAMIC));
 
+      String rpathRoot = null;
       ImmutableList.Builder<String> runtimeRpathEntries = ImmutableList.builder();
 
-      String origin =
-          useTestOnlyFlags && cppConfiguration.supportsExecOrigin()
-              ? "$EXEC_ORIGIN/"
-              : "$ORIGIN/";
-      if (runtimeRpath) {
-        runtimeRpathEntries.add("-Wl,-rpath," + origin + runtimeSolibName + "/");
-      }
-
-      String rpathRoot;
-      // Calculate the correct relative value for the "-rpath" link option (which sets
-      // the search path for finding shared libraries).
-      if (isSharedNativeLibrary()) {
-        // For shared native libraries, special symlinking is applied to ensure C++
-        // runtimes are available under $ORIGIN/_solib_[arch]. So we set the RPATH to find
-        // them.
-        //
-        // Note that we have to do this because $ORIGIN points to different paths for
-        // different targets. In other words, blaze-bin/d1/d2/d3/a_shareddeps.so and
-        // blaze-bin/d4/b_shareddeps.so have different path depths. The first could
-        // reference a standard blaze-bin/_solib_[arch] via $ORIGIN/../../../_solib[arch],
-        // and the second could use $ORIGIN/../_solib_[arch]. But since this is a shared
-        // artifact, both are symlinks to the same place, so
-        // there's no *one* RPATH setting that fits all targets involved in the sharing.
-        rpathRoot =
-            "-Wl,-rpath," + origin + ":" + origin + cppConfiguration.getSolibDirectory() + "/";
+      if (output != null) {
+        String origin =
+            useTestOnlyFlags && cppConfiguration.supportsExecOrigin()
+                ? "$EXEC_ORIGIN/"
+                : "$ORIGIN/";
         if (runtimeRpath) {
-          runtimeRpathEntries.add("-Wl,-rpath," + origin + "../" + runtimeSolibName + "/");
-        }
-      } else {
-        // For all other links, calculate the relative path from the output file to _solib_[arch]
-        // (the directory where all shared libraries are stored, which resides under the blaze-bin
-        // directory. In other words, given blaze-bin/my/package/binary, rpathRoot would be
-        // "../../_solib_[arch]".
-        if (runtimeRpath) {
-          runtimeRpathEntries.add(
-              "-Wl,-rpath,"
-                  + origin
-                  + Strings.repeat("../", output.getRootRelativePath().segmentCount() - 1)
-                  + runtimeSolibName
-                  + "/");
+          runtimeRpathEntries.add("-Wl,-rpath," + origin + runtimeSolibName + "/");
         }
 
-        rpathRoot =
-            "-Wl,-rpath,"
-                + origin
-                + Strings.repeat("../", output.getRootRelativePath().segmentCount() - 1)
-                + cppConfiguration.getSolibDirectory()
-                + "/";
-
-        if (isNativeDeps) {
-          // We also retain the $ORIGIN/ path to solibs that are in _solib_<arch>, as opposed to
-          // the package directory)
+        // Calculate the correct relative value for the "-rpath" link option (which sets
+        // the search path for finding shared libraries).
+        if (isSharedNativeLibrary()) {
+          // For shared native libraries, special symlinking is applied to ensure C++
+          // runtimes are available under $ORIGIN/_solib_[arch]. So we set the RPATH to find
+          // them.
+          //
+          // Note that we have to do this because $ORIGIN points to different paths for
+          // different targets. In other words, blaze-bin/d1/d2/d3/a_shareddeps.so and
+          // blaze-bin/d4/b_shareddeps.so have different path depths. The first could
+          // reference a standard blaze-bin/_solib_[arch] via $ORIGIN/../../../_solib[arch],
+          // and the second could use $ORIGIN/../_solib_[arch]. But since this is a shared
+          // artifact, both are symlinks to the same place, so
+          // there's no *one* RPATH setting that fits all targets involved in the sharing.
+          rpathRoot =
+              "-Wl,-rpath," + origin + ":" + origin + cppConfiguration.getSolibDirectory() + "/";
           if (runtimeRpath) {
             runtimeRpathEntries.add("-Wl,-rpath," + origin + "../" + runtimeSolibName + "/");
           }
-          rpathRoot += ":" + origin;
+        } else {
+          // For all other links, calculate the relative path from the output file to _solib_[arch]
+          // (the directory where all shared libraries are stored, which resides under the blaze-bin
+          // directory. In other words, given blaze-bin/my/package/binary, rpathRoot would be
+          // "../../_solib_[arch]".
+          if (runtimeRpath) {
+            runtimeRpathEntries.add(
+                "-Wl,-rpath,"
+                    + origin
+                    + Strings.repeat("../", output.getRootRelativePath().segmentCount() - 1)
+                    + runtimeSolibName
+                    + "/");
+          }
+
+          rpathRoot =
+              "-Wl,-rpath,"
+                  + origin
+                  + Strings.repeat("../", output.getRootRelativePath().segmentCount() - 1)
+                  + cppConfiguration.getSolibDirectory()
+                  + "/";
+
+          if (isNativeDeps) {
+            // We also retain the $ORIGIN/ path to solibs that are in _solib_<arch>, as opposed to
+            // the package directory)
+            if (runtimeRpath) {
+              runtimeRpathEntries.add("-Wl,-rpath," + origin + "../" + runtimeSolibName + "/");
+            }
+            rpathRoot += ":" + origin;
+          }
         }
       }
 
@@ -1555,7 +1557,7 @@ public class CppLinkActionBuilder {
       }
 
       // rpath ordering matters for performance; first add the one where most libraries are found.
-      if (includeSolibDir) {
+      if (includeSolibDir && rpathRoot != null) {
         linkArgCollector.setRpathRoot(rpathRoot);
       }
       if (includeRuntimeSolibDir) {
@@ -1590,7 +1592,8 @@ public class CppLinkActionBuilder {
 
       Artifact inputArtifact = input.getArtifact();
       PathFragment libDir = inputArtifact.getExecPath().getParentDirectory();
-      if (!libDir.equals(solibDir)
+      if (rpathRoot != null
+          && !libDir.equals(solibDir)
           && (runtimeSolibDir == null || !runtimeSolibDir.equals(libDir))) {
         String dotdots = "";
         PathFragment commonParent = solibDir;
@@ -1610,22 +1613,19 @@ public class CppLinkActionBuilder {
       if (CppFileTypes.SHARED_LIBRARY.matches(name)) {
         // Use normal shared library resolution rules for shared libraries.
         String libName = name.replaceAll("(^lib|\\.(so|dylib)$)", "");
-        librariesToLink.addValue(
-            LibraryToLinkValue.forDynamicLibrary(libName, inputIsWholeArchive));
+        librariesToLink.addValue(new LibraryToLinkValue("-l" + libName, inputIsWholeArchive));
       } else if (CppFileTypes.VERSIONED_SHARED_LIBRARY.matches(name)) {
         // Versioned shared libraries require the exact library filename, e.g.:
         // -lfoo -> libfoo.so
         // -l:libfoo.so.1 -> libfoo.so.1
-        librariesToLink.addValue(
-            LibraryToLinkValue.forVersionedDynamicLibrary(name, inputIsWholeArchive));
+        librariesToLink.addValue(new LibraryToLinkValue("-l:" + name, inputIsWholeArchive));
       } else {
         // Interface shared objects have a non-standard extension
         // that the linker won't be able to find.  So use the
         // filename directly rather than a -l option.  Since the
         // library has an SONAME attribute, this will work fine.
         librariesToLink.addValue(
-            LibraryToLinkValue.forInterfaceLibrary(
-                inputArtifact.getExecPathString(), inputIsWholeArchive));
+            new LibraryToLinkValue(inputArtifact.getExecPathString(), inputIsWholeArchive));
       }
     }
 
@@ -1640,8 +1640,7 @@ public class CppLinkActionBuilder {
         SequenceBuilder librariesToLink,
         boolean isRuntimeLinkerInput,
         @Nullable Map<Artifact, Artifact> ltoMap) {
-      ArtifactCategory artifactCategory = input.getArtifactCategory();
-      Preconditions.checkState(artifactCategory != ArtifactCategory.DYNAMIC_LIBRARY);
+      Preconditions.checkState(!(input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY));
       // If we had any LTO artifacts, ltoMap whould be non-null. In that case,
       // we should have created a thinltoParamFile which the LTO indexing
       // step will populate with the exec paths that correspond to the LTO
@@ -1670,38 +1669,33 @@ public class CppLinkActionBuilder {
           if (!nonLTOArchiveMembers.isEmpty()) {
             boolean inputIsWholeArchive = !isRuntimeLinkerInput && needWholeArchive;
             librariesToLink.addValue(
-                LibraryToLinkValue.forObjectFileGroup(nonLTOArchiveMembers, inputIsWholeArchive));
+                new LibraryToLinkValue(nonLTOArchiveMembers, inputIsWholeArchive, true));
           }
         }
       } else {
-        Preconditions.checkArgument(
-            artifactCategory.equals(ArtifactCategory.OBJECT_FILE)
-                || artifactCategory.equals(ArtifactCategory.STATIC_LIBRARY)
-                || artifactCategory.equals(ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY));
         boolean isAlwaysLinkStaticLibrary =
-            artifactCategory == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY;
+            input.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY;
+        // For anything else, add the input directly.
+        Artifact inputArtifact = input.getArtifact();
         boolean inputIsWholeArchive =
             (!isRuntimeLinkerInput && (isAlwaysLinkStaticLibrary || needWholeArchive))
                 || (isRuntimeLinkerInput && isAlwaysLinkStaticLibrary && !needWholeArchive);
 
-        Artifact inputArtifact = input.getArtifact();
         if (ltoMap != null && ltoMap.remove(inputArtifact) != null) {
           // The LTO artifacts that should be included in the final link
           // are listed in the thinltoParamFile.
           return;
         }
 
-        String name;
         if (input.isFake()) {
-          name = Link.FAKE_OBJECT_PREFIX + inputArtifact.getExecPathString();
+          librariesToLink.addValue(
+              new LibraryToLinkValue(
+                  Link.FAKE_OBJECT_PREFIX + inputArtifact.getExecPathString(),
+                  inputIsWholeArchive));
         } else {
-          name = inputArtifact.getExecPathString();
+          librariesToLink.addValue(
+              new LibraryToLinkValue(inputArtifact.getExecPathString(), inputIsWholeArchive));
         }
-
-        librariesToLink.addValue(
-            artifactCategory.equals(ArtifactCategory.OBJECT_FILE)
-                ? LibraryToLinkValue.forObjectFile(name, inputIsWholeArchive)
-                : LibraryToLinkValue.forStaticLibrary(name, inputIsWholeArchive));
       }
     }
   }

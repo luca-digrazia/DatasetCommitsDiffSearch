@@ -701,8 +701,7 @@ public final class LinkCommandLine extends CommandLine {
                 CcCommon.configureFeatures(
                     ruleContext, toolchain, CcLibraryHelper.SourceCategory.CC);
           } else {
-            CcToolchainProvider ccToolchain = CppHelper.getToolchain(ruleContext, ":cc_toolchain");
-            featureConfiguration = CcCommon.configureFeatures(ruleContext, ccToolchain);
+            featureConfiguration = CcCommon.configureFeatures(ruleContext);
           }
         }
       }
