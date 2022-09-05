@@ -61,15 +61,6 @@ import javax.annotation.Nullable;
 
 /**
  * The Skyframe function that generates aspects.
- *
- * {@link AspectFunction} takes a SkyKey containing an {@link AspectKey} [a tuple of
- * (target label, configurations, aspect class and aspect parameters)],
- * loads an {@link Aspect} from aspect class and aspect parameters,
- * gets a {@link ConfiguredTarget} for label and configurations, and then creates
- * a {@link ConfiguredAspect} for a given {@link AspectKey}.
- *
- * See {@link com.google.devtools.build.lib.packages.AspectClass} documentation
- * for an overview of aspect-related classes
  */
 public final class AspectFunction implements SkyFunction {
   private final BuildViewProvider buildViewProvider;
@@ -125,7 +116,7 @@ public final class AspectFunction implements SkyFunction {
       NativeAspectClass<?> nativeAspectClass = (NativeAspectClass<?>) key.getAspectClass();
       aspectFactory =
           (ConfiguredAspectFactory) nativeAspectClass.newInstance();
-      aspect = Aspect.forNative(nativeAspectClass, key.getParameters());
+      aspect = new Aspect(nativeAspectClass, key.getParameters());
     } else if (key.getAspectClass() instanceof SkylarkAspectClass) {
       SkylarkAspectClass skylarkAspectClass = (SkylarkAspectClass) key.getAspectClass();
       SkylarkAspect skylarkAspect;
@@ -141,10 +132,7 @@ public final class AspectFunction implements SkyFunction {
       }
 
       aspectFactory = new SkylarkAspectFactory(skylarkAspect.getName(), skylarkAspect);
-      aspect = Aspect.forSkylark(
-          skylarkAspect.getAspectClass(),
-          skylarkAspect.getAspectClass().getDefinition(),
-          key.getParameters());
+      aspect = new Aspect(skylarkAspect.getAspectClass(), key.getParameters());
     } else {
       throw new IllegalStateException();
     }
