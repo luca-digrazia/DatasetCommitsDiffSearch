@@ -92,7 +92,7 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
     return builder
         .setFilesToBuild(filesToBuild)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfilesBuilder.build()))
-        .addNativeDeclaredProvider(new CcLinkParamsProvider(ccLinkParamsStore))
+        .add(CcLinkParamsProvider.class, new CcLinkParamsProvider(ccLinkParamsStore))
         .add(PythonImportsProvider.class, new PythonImportsProvider(imports))
         .build();
   }
