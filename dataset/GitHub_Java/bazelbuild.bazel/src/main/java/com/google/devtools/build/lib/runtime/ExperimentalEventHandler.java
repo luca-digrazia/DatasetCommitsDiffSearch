@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.util.io.AnsiTerminal;
 import com.google.devtools.build.lib.util.io.AnsiTerminalWriter;
-import com.google.devtools.build.lib.util.io.LineWrappingAnsiTerminalWriter;
 import com.google.devtools.build.lib.util.io.OutErr;
 
 import java.io.IOException;
@@ -190,8 +189,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
 
   private void addProgressBar() throws IOException {
     LineCountingAnsiTerminalWriter terminalWriter = new LineCountingAnsiTerminalWriter(terminal);
-    stateTracker.writeProgressBar(
-        new LineWrappingAnsiTerminalWriter(terminalWriter, terminalWidth - 1));
+    stateTracker.writeProgressBar(terminalWriter);
     terminalWriter.newline();
     numLinesProgressBar = terminalWriter.getWrittenLines();
   }
@@ -200,6 +198,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
 
     private final AnsiTerminal terminal;
     private int lineCount;
+    private int currentLineLength;
 
     LineCountingAnsiTerminalWriter(AnsiTerminal terminal) {
       this.terminal = terminal;
@@ -209,6 +208,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     @Override
     public AnsiTerminalWriter append(String text) throws IOException {
       terminal.writeString(text);
+      currentLineLength += text.length();
       return this;
     }
 
@@ -216,7 +216,11 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     public AnsiTerminalWriter newline() throws IOException {
       terminal.cr();
       terminal.writeString("\n");
-      lineCount++;
+      // Besides the line ended by the newline() command, a line-shift can also happen
+      // by a string longer than the terminal width being wrapped around; account for
+      // this as well.
+      lineCount += 1 + currentLineLength / terminalWidth;
+      currentLineLength = 0;
       return this;
     }
 
