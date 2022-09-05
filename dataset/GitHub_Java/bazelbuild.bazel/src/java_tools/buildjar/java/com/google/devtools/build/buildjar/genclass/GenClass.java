@@ -126,30 +126,17 @@ public class GenClass {
         if (!name.endsWith(".class")) {
           continue;
         }
-        String className = name.substring(0, name.length() - ".class".length());
-        if (prefixesContains(generatedPrefixes, className)) {
+        String prefix = name.substring(0, name.length() - ".class".length());
+        int idx = prefix.indexOf('$');
+        if (idx > 0) {
+          prefix = prefix.substring(0, idx);
+        }
+        if (generatedPrefixes.contains(prefix)) {
           Files.createDirectories(tempDir.resolve(name).getParent());
           Files.copy(jar.getInputStream(entry), tempDir.resolve(name));
         }
       }
     }
-  }
-
-  /**
-   * We want to include inner classes for generated source files, but a class whose name contains
-   * '$' isn't necessarily an inner class. Check whether any prefix of the class name that ends with
-   * '$' matches one of the top-level class names.
-   */
-  private static boolean prefixesContains(ImmutableSet<String> prefixes, String className) {
-    if (prefixes.contains(className)) {
-      return true;
-    }
-    for (int i = className.indexOf('$'); i != -1; i = className.indexOf('$', i + 1)) {
-      if (prefixes.contains(className.substring(0, i))) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /** Writes the generated class files to the output jar. */
