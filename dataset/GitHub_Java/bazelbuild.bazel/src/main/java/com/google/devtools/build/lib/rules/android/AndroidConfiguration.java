@@ -358,13 +358,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(name = "experimental_android_resource_shrinking",
         defaultValue = "false",
         category = "undocumented",
-        help = "Enables resource shrinking for android_binary APKs that use ProGuard.")
-    public boolean useExperimentalAndroidResourceShrinking;
-
-    @Option(name = "android_resource_shrinking",
-        defaultValue = "false",
-        category = "semantics",
-        help = "Enables resource shrinking for android_binary APKs that use ProGuard.")
+        help = "Enables resource shrinking for android_binary APKs that use proguard.")
     public boolean useAndroidResourceShrinking;
 
     @Option(name = "android_manifest_merger",
@@ -500,8 +494,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         ImmutableList.copyOf(options.nonIncrementalPerTargetDexopts);
     this.desugarJava8 = options.desugarJava8;
     this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
-    this.useAndroidResourceShrinking = options.useAndroidResourceShrinking
-        || options.useExperimentalAndroidResourceShrinking;
+    this.useAndroidResourceShrinking = options.useAndroidResourceShrinking;
     this.useParallelResourceProcessing = options.useParallelResourceProcessing;
     this.manifestMerger = options.manifestMerger;
     this.apkSigningMethod = options.apkSigningMethod;
