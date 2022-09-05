@@ -21,9 +21,11 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Ordering;
+import com.google.common.collect.Sets;
 import com.google.devtools.build.docgen.DocgenConsts.RuleType;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleClass;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -31,103 +33,131 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
  * A class to assemble documentation for the Build Encyclopedia. This class uses
  * {@link BuildDocCollector} to extract documentation fragments from rule classes.
  */
-public abstract class BuildEncyclopediaProcessor {
-  protected static final Predicate<String> RULE_WORTH_DOCUMENTING = new Predicate<String>() {
+public class BuildEncyclopediaProcessor {
+  private static final Predicate<String> RULE_WORTH_DOCUMENTING = new Predicate<String>() {
     @Override
     public boolean apply(String name) {
       return !name.contains("$");
     }
   };
 
-  /** Name of the product to insert into the documentation. */
-  protected final String productName;
-
-  /** Rule class provider from which to extract the rule class hierarchy and attributes. */
-  protected final ConfiguredRuleClassProvider ruleClassProvider;
+  private ConfiguredRuleClassProvider ruleClassProvider;
 
   /**
-   * Creates the BuildEncyclopediaProcessor instance. The ruleClassProvider parameter is used for
-   * rule class hierarchy and attribute checking.
+   * Creates the BuildEncyclopediaProcessor instance. The ruleClassProvider parameter
+   * is used for rule class hierarchy and attribute checking.
+   *
    */
-  public BuildEncyclopediaProcessor(
-      String productName, ConfiguredRuleClassProvider ruleClassProvider) {
-    this.productName = productName;
+  public BuildEncyclopediaProcessor(ConfiguredRuleClassProvider ruleClassProvider) {
     this.ruleClassProvider = Preconditions.checkNotNull(ruleClassProvider);
   }
 
   /**
-   * Collects and processes all the rule and attribute documentation in inputDirs and generates the
-   * Build Encyclopedia into the outputDir.
-   *
+   * Collects and processes all the rule and attribute documentation in inputDirs and
+   * generates the Build Encyclopedia into the outputRootDir.
+   * 
    * @param inputDirs list of directory to scan for document in the source code
    * @param outputRootDir output directory where to write the build encyclopedia
-   * @param denyList optional path to a file listing rules to not document
+   * @param blackList optional path to a file listing rules to not document
    */
-  public abstract void generateDocumentation(
-      List<String> inputDirs, String outputDir, String denyList)
-      throws BuildEncyclopediaDocException, IOException;
+  public void generateDocumentation(String[] inputDirs, String outputRootDir, String blackList)
+      throws BuildEncyclopediaDocException, IOException {
+    File buildEncyclopediaPath = setupDirectories(outputRootDir);
 
-  /**
-   * POD class for containing lists of rule families separated into language-specific and generic as
-   * returned by {@link #assembleRuleFamilies(Iterable<RuleDocumentation>) assembleRuleFamilies}.
-   */
-  protected static class RuleFamilies {
-    public List<RuleFamily> langSpecific;
-    public List<RuleFamily> generic;
-    public List<RuleFamily> all;
+    Page page = TemplateEngine.newPage(
+        "com/google/devtools/build/docgen/templates/build-encyclopedia.vm");
 
-    public RuleFamilies(List<RuleFamily> langSpecific, List<RuleFamily> generic,
-        List<RuleFamily> all) {
-      this.langSpecific = langSpecific;
-      this.generic = generic;
-      this.all = all;
-    }
+    BuildDocCollector collector = new BuildDocCollector(ruleClassProvider, false);
+    Map<String, RuleDocumentation> ruleDocEntries = collector.collect(inputDirs, blackList);
+    warnAboutUndocumentedRules(
+        Sets.difference(ruleClassProvider.getRuleClassMap().keySet(), ruleDocEntries.keySet()));
+    writeRuleClassDocs(ruleDocEntries.values(), page);
+    page.write(buildEncyclopediaPath);
   }
 
-  protected RuleFamilies assembleRuleFamilies(Iterable<RuleDocumentation> docEntries)
+
+  /**
+   * Categorizes, checks and prints all the rule-class documentations.
+   */
+  private void writeRuleClassDocs(Iterable<RuleDocumentation> docEntries, Page page)
       throws BuildEncyclopediaDocException, IOException {
+    Set<RuleDocumentation> binaryDocs = new TreeSet<>();
+    Set<RuleDocumentation> libraryDocs = new TreeSet<>();
+    Set<RuleDocumentation> testDocs = new TreeSet<>();
+    Set<RuleDocumentation> otherDocs = new TreeSet<>();
+
+    for (RuleDocumentation doc : docEntries) {
+      RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(doc.getRuleName());
+      if (!ruleClass.isDocumented()) {
+        continue;
+      }
+
+      if (doc.isLanguageSpecific()) {
+        switch(doc.getRuleType()) {
+          case BINARY:
+            binaryDocs.add(doc);
+            break;
+          case LIBRARY:
+            libraryDocs.add(doc);
+            break;
+          case TEST:
+            testDocs.add(doc);
+            break;
+          case OTHER:
+            otherDocs.add(doc);
+            break;
+        }
+      } else {
+        otherDocs.add(doc);
+      }
+    }
+
+    renderBeHeader(docEntries, page);
+
+    page.add("binaryDocs", binaryDocs);
+    page.add("libraryDocs", libraryDocs);
+    page.add("testDocs", testDocs);
+    page.add("otherDocs", otherDocs);
+  }
+
+  private void renderBeHeader(Iterable<RuleDocumentation> docEntries, Page page)
+      throws BuildEncyclopediaDocException {
     // Separate rule families into language-specific and generic ones.
-    Set<String> langSpecificRuleFamilyNames = new TreeSet<>();
-    Set<String> genericRuleFamilyNames = new TreeSet<>();
-    separateRuleFamilies(docEntries, langSpecificRuleFamilyNames, genericRuleFamilyNames);
+    Set<String> languageSpecificRuleFamilies = new TreeSet<>();
+    Set<String> genericRuleFamilies = new TreeSet<>();
+    separateRuleFamilies(docEntries, languageSpecificRuleFamilies, genericRuleFamilies);
 
     // Create a mapping of rules based on rule type and family.
     Map<String, ListMultimap<RuleType, RuleDocumentation>> ruleMapping = new HashMap<>();
     createRuleMapping(docEntries, ruleMapping);
 
-    // Create a mapping with the summary string for the individual rule families
-    Map<String, StringBuilder> familySummary = new HashMap<>();
-    createFamilySummary(docEntries, familySummary);
-
-    // Create lists of RuleFamily objects that will be used to generate the documentation.
-    // The separate language-specific and general rule families will be used to generate
-    // the Overview page while the list containing all rule families will be used to
-    // generate all other documentation.
-    List<RuleFamily> langSpecificRuleFamilies =
-        filterRuleFamilies(ruleMapping, langSpecificRuleFamilyNames, familySummary);
-    List<RuleFamily> genericRuleFamilies =
-        filterRuleFamilies(ruleMapping, genericRuleFamilyNames, familySummary);
-    List<RuleFamily> allRuleFamilies = new ArrayList<>(langSpecificRuleFamilies);
-    allRuleFamilies.addAll(genericRuleFamilies);
-    return new RuleFamilies(langSpecificRuleFamilies, genericRuleFamilies, allRuleFamilies);
-  }
-
-  private List<RuleFamily> filterRuleFamilies(
-      Map<String, ListMultimap<RuleType, RuleDocumentation>> ruleMapping,
-      Set<String> ruleFamilyNames,
-      Map<String, StringBuilder> familySummary) {
-    List<RuleFamily> ruleFamilies = new ArrayList<>(ruleFamilyNames.size());
-    for (String name : ruleFamilyNames) {
-      ListMultimap<RuleType, RuleDocumentation> ruleTypeMap = ruleMapping.get(name);
-      ruleFamilies.add(new RuleFamily(ruleTypeMap, name, familySummary.get(name).toString()));
+    List<SummaryRuleFamily> languageSpecificSummaryFamilies =
+        new ArrayList<SummaryRuleFamily>(languageSpecificRuleFamilies.size());
+    for (String ruleFamily : languageSpecificRuleFamilies) {
+      languageSpecificSummaryFamilies.add(
+          new SummaryRuleFamily(ruleMapping.get(ruleFamily), ruleFamily));
     }
-    return ruleFamilies;
+
+    List<SummaryRuleFamily> otherSummaryFamilies =
+        new ArrayList<SummaryRuleFamily>(genericRuleFamilies.size());
+    for (String ruleFamily : genericRuleFamilies) {
+      otherSummaryFamilies.add(
+          new SummaryRuleFamily(ruleMapping.get(ruleFamily), ruleFamily));
+    }
+
+    page.add("langSpecificSummaryFamilies", languageSpecificSummaryFamilies);
+    page.add("otherSummaryFamilies", otherSummaryFamilies);
+    page.add("commonAttributes", PredefinedAttributes.COMMON_ATTRIBUTES);
+    page.add("testAttributes", PredefinedAttributes.TEST_ATTRIBUTES);
+    page.add("binaryAttributes", PredefinedAttributes.BINARY_ATTRIBUTES);
+    page.add(DocgenConsts.VAR_LEFT_PANEL, generateLeftNavigationPanel(docEntries));
   }
 
   /**
@@ -153,88 +183,61 @@ public abstract class BuildEncyclopediaProcessor {
   }
 
   /**
-   * Obtain the summary string for a rule family from whatever member of the family providing it (if
-   * any; otherwise use the empty string).
-   */
-  private void createFamilySummary(
-      Iterable<RuleDocumentation> docEntries, Map<String, StringBuilder> familySummary) {
-    for (RuleDocumentation ruleDoc : docEntries) {
-      RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(ruleDoc.getRuleName());
-      if (ruleClass != null) {
-        String ruleFamily = ruleDoc.getRuleFamily();
-        familySummary.computeIfAbsent(ruleFamily, (String k) -> new StringBuilder());
-        familySummary.get(ruleFamily).append(ruleDoc.getFamilySummary());
-      }
-    }
-  }
-
-  /**
    * Separates all rule families in docEntries into language-specific rules and generic rules.
    */
   private void separateRuleFamilies(Iterable<RuleDocumentation> docEntries,
-      Set<String> langSpecific, Set<String> generic)
+      Set<String> languageSpecificRuleFamilies, Set<String> genericRuleFamilies)
       throws BuildEncyclopediaDocException {
     for (RuleDocumentation ruleDoc : docEntries) {
       if (ruleDoc.isLanguageSpecific()) {
-        if (generic.contains(ruleDoc.getRuleFamily())) {
+        if (genericRuleFamilies.contains(ruleDoc.getRuleFamily())) {
           throw ruleDoc.createException("The rule is marked as being language-specific, but other "
               + "rules of the same family have already been marked as being not.");
         }
-        langSpecific.add(ruleDoc.getRuleFamily());
+        languageSpecificRuleFamilies.add(ruleDoc.getRuleFamily());
       } else {
-        if (langSpecific.contains(ruleDoc.getRuleFamily())) {
+        if (languageSpecificRuleFamilies.contains(ruleDoc.getRuleFamily())) {
           throw ruleDoc.createException("The rule is marked as being generic, but other rules of "
               + "the same family have already been marked as being language-specific.");
         }
-        generic.add(ruleDoc.getRuleFamily());
+        genericRuleFamilies.add(ruleDoc.getRuleFamily());
       }
     }
   }
 
-  /**
-   * Helper method for displaying an warning message about undocumented rules.
-   *
-   * @param rulesWithoutDocumentation Undocumented rules to list in the warning message.
-   */
-  protected static void warnAboutUndocumentedRules(Iterable<String> rulesWithoutDocumentation) {
+  private String generateLeftNavigationPanel(Iterable<RuleDocumentation> docEntries) {
+    // Order the rules alphabetically. At this point they are ordered according to
+    // RuleDocumentation.compareTo() which is not alphabetical.
+    TreeMap<String, String> ruleNames = new TreeMap<>();
+    for (RuleDocumentation ruleDoc : docEntries) {
+      String ruleName = ruleDoc.getRuleName();
+      ruleNames.put(ruleName.toLowerCase(), ruleName);
+    }
+    StringBuilder sb = new StringBuilder();
+    for (String ruleName : ruleNames.values()) {
+      RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(ruleName);
+      Preconditions.checkNotNull(ruleClass);
+      if (ruleClass.isDocumented()) {
+        sb.append(String.format("<a href=\"#%s\">%s</a><br/>\n", ruleName, ruleName));
+      }
+    }
+    return sb.toString();
+  }
+
+  private File setupDirectories(String outputRootDir) {
+    if (outputRootDir != null) {
+      File outputRootPath = new File(outputRootDir);
+      outputRootPath.mkdirs();
+      return new File(outputRootDir + File.separator + DocgenConsts.BUILD_ENCYCLOPEDIA_NAME);
+    } else {
+      return new File(DocgenConsts.BUILD_ENCYCLOPEDIA_NAME);
+    }
+  }
+
+  private static void warnAboutUndocumentedRules(Iterable<String> rulesWithoutDocumentation) {
       Iterable<String> undocumentedRules = Iterables.filter(rulesWithoutDocumentation,
           RULE_WORTH_DOCUMENTING);
       System.err.printf("WARNING: The following rules are undocumented: [%s]\n",
           Joiner.on(", ").join(Ordering.<String>natural().immutableSortedCopy(undocumentedRules)));
-  }
-
-  /**
-   * Sets the {@link RuleLinkExpander} for the provided {@link RuleDocumentationAttributes}.
-   *
-   * <p>This method is used to set the {@link RuleLinkExpander} for common attributes, such as
-   * those defined in {@link PredefinedAttributes}, so that rule references in the docs for those
-   * attributes can be expanded.
-   *
-   * @param attributes The map containing the RuleDocumentationAttributes, keyed by attribute name.
-   * @param expander The RuleLinkExpander to set in each of the RuleDocumentationAttributes.
-   * @return A map of name to RuleDocumentationAttribute with the RuleLinkExpander set for each
-   *     attribute.
-   */
-  protected static Map<String, RuleDocumentationAttribute> expandCommonAttributes(
-      Map<String, RuleDocumentationAttribute> attributes, RuleLinkExpander expander) {
-    Map<String, RuleDocumentationAttribute> expanded = new HashMap<>(attributes.size());
-    for (Map.Entry<String, RuleDocumentationAttribute> entry : attributes.entrySet()) {
-      RuleDocumentationAttribute attribute = entry.getValue();
-      attribute.setRuleLinkExpander(expander);
-      expanded.put(entry.getKey(), attribute);
-    }
-    return expanded;
-  }
-
-  /**
-   * Writes the {@link Page} using the provided file name in the specified output directory.
-   *
-   * @param page The page to write.
-   * @param outputDir The output directory to write the file.
-   * @param fileName The name of the file to write the page to.
-   * @throws IOException
-   */
-  protected static void writePage(Page page, String outputDir, String fileName) throws IOException {
-    page.write(new File(outputDir + "/" + fileName));
   }
 }

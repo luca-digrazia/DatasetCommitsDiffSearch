@@ -122,22 +122,7 @@ public class BuildDocCollector {
     }
 
     processAttributeDocs(ruleDocEntries.values(), attributeDocEntries);
-    RuleLinkExpander expander = buildRuleLinkExpander(ruleDocEntries.values());
-    for (RuleDocumentation rule : ruleDocEntries.values()) {
-      rule.setRuleLinkExpander(expander);
-    }
     return ruleDocEntries;
-  }
-
-  /**
-   * Generates an index mapping rule name to its normalized rule family name.
-   */
-  private RuleLinkExpander buildRuleLinkExpander(Iterable<RuleDocumentation> rules) {
-    Map<String, String> index = new HashMap<>();
-    for (RuleDocumentation rule : rules) {
-      index.put(rule.getRuleName(), RuleFamily.normalize(rule.getRuleFamily()));
-    }
-    return new RuleLinkExpander(index);
   }
 
   /**
@@ -154,7 +139,7 @@ public class BuildDocCollector {
       if (ruleClass != null) {
         if (ruleClass.isDocumented()) {
           Class<? extends RuleDefinition> ruleDefinition =
-              ruleClassProvider.getRuleClassDefinition(ruleDoc.getRuleName()).getClass();
+              ruleClassProvider.getRuleClassDefinition(ruleDoc.getRuleName());
           for (Attribute attribute : ruleClass.getAttributes()) {
             String attrName = attribute.getName();
             List<RuleDocumentationAttribute> attributeDocList =
@@ -167,9 +152,7 @@ public class BuildDocCollector {
               int minLevel = Integer.MAX_VALUE;
               RuleDocumentationAttribute bestAttributeDoc = null;
               for (RuleDocumentationAttribute attributeDoc : attributeDocList) {
-                int level = attributeDoc.getDefinitionClassAncestryLevel(
-                    ruleDefinition,
-                    ruleClassProvider);
+                int level = attributeDoc.getDefinitionClassAncestryLevel(ruleDefinition);
                 if (level >= 0 && level < minLevel) {
                   bestAttributeDoc = attributeDoc;
                   minLevel = level;
