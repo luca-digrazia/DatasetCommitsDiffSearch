@@ -8,11 +8,9 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.view.View;
 import android.widget.DatePicker;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
-import android.widget.Toast;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.CalendarMode;
@@ -44,14 +42,6 @@ public class DynamicSettersActivity extends AppCompatActivity {
         currentTileSize = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
         currentTileWidth = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
         currentTileHeight = MaterialCalendarView.DEFAULT_TILE_SIZE_DP;
-
-        widget.setOnTitleClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(final View view) {
-                Toast.makeText(DynamicSettersActivity.this, "Today is the day", Toast.LENGTH_SHORT)
-                        .show();
-            }
-        });
     }
 
     @OnClick(R.id.button_other_dates)
@@ -253,20 +243,6 @@ public class DynamicSettersActivity extends AppCompatActivity {
                     }
                 })
                 .show();
-    }
-
-    @OnClick(R.id.button_change_orientation)
-    void onButtonChangeOrientation() {
-        widget.setTitleAnimationOrientation(
-                widget.getTitleAnimationOrientation() == MaterialCalendarView.VERTICAL
-                        ? MaterialCalendarView.HORIZONTAL
-                        : MaterialCalendarView.VERTICAL);
-
-        Toast.makeText(this,
-                widget.getTitleAnimationOrientation() == MaterialCalendarView.VERTICAL
-                        ? "Vertical"
-                        : "Horizontal",
-                Toast.LENGTH_SHORT).show();
     }
 
     private static final int[] DAYS_OF_WEEK = {
