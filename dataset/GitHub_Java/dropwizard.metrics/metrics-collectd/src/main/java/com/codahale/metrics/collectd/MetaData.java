@@ -1,25 +1,24 @@
 package com.codahale.metrics.collectd;
 
-final class MetaData {
+class MetaData {
 
-    private String host;
-    private String plugin;
-    private String pluginInstance;
-    private String type;
-    private String typeInstance;
-    private long timestamp;
-    private long period;
+    private final String host;
+    private final String plugin;
+    private final String pluginInstance;
+    private final String type;
+    private final String typeInstance;
+    private final long timestamp;
+    private final long period;
 
-    private MetaData() {}
-
-    private MetaData(MetaData other) {
-        this.host = other.host;
-        this.plugin = other.plugin;
-        this.pluginInstance = other.pluginInstance;
-        this.type = other.type;
-        this.typeInstance = other.typeInstance;
-        this.timestamp = other.timestamp;
-        this.period = other.period;
+    MetaData(String host, String plugin, String pluginInstance, String type, String typeInstance,
+             long timestamp, long period) {
+        this.host = host;
+        this.plugin = plugin;
+        this.pluginInstance = pluginInstance;
+        this.type = type;
+        this.typeInstance = typeInstance;
+        this.timestamp = timestamp;
+        this.period = period;
     }
 
     String getHost() {
@@ -52,36 +51,48 @@ final class MetaData {
 
     static class Builder {
 
-        private MetaData metaData = new MetaData();
+        private String host;
+        private String plugin;
+        private String pluginInstance;
+        private String type;
+        private String typeInstance;
+        private long timestamp;
+        private long period;
+        private Sanitize sanitize;
 
         Builder(String host, long timestamp, long duration) {
-            metaData.host = Sanitize.instanceName(host);
-            metaData.timestamp = timestamp;
-            metaData.period = duration;
+            this(new Sanitize(Sanitize.DEFAULT_MAX_LENGTH), host, timestamp, duration);
+        }
+
+        Builder(Sanitize sanitize, String host, long timestamp, long duration) {
+            this.sanitize = sanitize;
+            this.host = sanitize.instanceName(host);
+            this.timestamp = timestamp;
+            period = duration;
         }
 
         Builder plugin(String name) {
-            metaData.plugin = Sanitize.name(name);
+            plugin = sanitize.name(name);
             return this;
         }
 
         Builder pluginInstance(String name) {
-            metaData.pluginInstance = Sanitize.instanceName(name);
+            pluginInstance = sanitize.instanceName(name);
             return this;
         }
 
         Builder type(String name) {
-            metaData.type = Sanitize.name(name);
+            type = sanitize.name(name);
             return this;
         }
 
         Builder typeInstance(String name) {
-            metaData.typeInstance = Sanitize.instanceName(name);
+            typeInstance = sanitize.instanceName(name);
             return this;
         }
 
         MetaData get() {
-            return new MetaData(metaData);
+            return new MetaData(host, plugin, pluginInstance, type, typeInstance, timestamp, period);
         }
     }
 }
