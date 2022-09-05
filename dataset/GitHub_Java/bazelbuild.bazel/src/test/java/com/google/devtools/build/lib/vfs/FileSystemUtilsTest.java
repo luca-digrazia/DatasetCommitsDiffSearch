@@ -41,7 +41,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.ManualClock;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 
 import org.junit.Before;
@@ -757,7 +756,7 @@ public class FileSystemUtilsTest {
 
     Path linkRoot = fileSystem.getPath("/linkRoot");
     createDirectoryAndParents(linkRoot);
-    plantLinkForest(packageRootMap, linkRoot, TestConstants.PRODUCT_NAME);
+    plantLinkForest(packageRootMap, linkRoot);
 
     //dumpTree(linkRoot, System.err);
 
