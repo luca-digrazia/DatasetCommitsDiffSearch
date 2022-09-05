@@ -38,8 +38,7 @@ import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.ArtifactFile;
+import com.google.devtools.build.lib.actions.Artifact.MiddlemanExpander;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -51,7 +50,6 @@ import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
 import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.ResourceManager;
-import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.TargetOutOfDateException;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
@@ -430,17 +428,17 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     }
   }
 
-  private static class ArtifactExpanderImpl implements ArtifactExpander {
-    private final Map<Artifact, Collection<ArtifactFile>> expandedInputs;
+  private static class MiddlemanExpanderImpl implements MiddlemanExpander {
+    private final Map<Artifact, Collection<Artifact>> expandedInputMiddlemen;
 
-    private ArtifactExpanderImpl(Map<Artifact, Collection<ArtifactFile>> expandedInputMiddlemen) {
-      this.expandedInputs = expandedInputMiddlemen;
+    private MiddlemanExpanderImpl(Map<Artifact, Collection<Artifact>> expandedInputMiddlemen) {
+      this.expandedInputMiddlemen = expandedInputMiddlemen;
     }
 
     @Override
-    public void expand(Artifact artifact, Collection<? super ArtifactFile> output) {
-      Preconditions.checkState(artifact.isMiddlemanArtifact(), artifact);
-      Collection<ArtifactFile> result = expandedInputs.get(artifact);
+    public void expand(Artifact middlemanArtifact, Collection<? super Artifact> output) {
+      Preconditions.checkState(middlemanArtifact.isMiddlemanArtifact(), middlemanArtifact);
+      Collection<Artifact> result = expandedInputMiddlemen.get(middlemanArtifact);
       // Note that result may be null for non-aggregating middlemen.
       if (result != null) {
         output.addAll(result);
@@ -456,14 +454,14 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   @Override
   public ActionExecutionContext getContext(
       ActionInputFileCache graphFileCache, MetadataHandler metadataHandler,
-      Map<Artifact, Collection<ArtifactFile>> expandedInputs) {
+      Map<Artifact, Collection<Artifact>> expandedInputMiddlemen) {
     FileOutErr fileOutErr = actionLogBufferPathGenerator.generate();
     return new ActionExecutionContext(
         executorEngine,
         new DelegatingPairFileCache(graphFileCache, perBuildFileCache),
         metadataHandler,
         fileOutErr,
-        new ArtifactExpanderImpl(expandedInputs));
+        new MiddlemanExpanderImpl(expandedInputMiddlemen));
   }
 
   /**
@@ -616,9 +614,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
             "%s %s", actionExecutionContext.getMetadataHandler(), metadataHandler);
         prepareScheduleExecuteAndCompleteAction(action, actionExecutionContext, actionStartTime);
         return new ActionExecutionValue(
-            metadataHandler.getOutputArtifactFileData(),
-            ImmutableMap.<Artifact, TreeArtifactValue>of(),
-            metadataHandler.getAdditionalOutputData());
+            metadataHandler.getOutputData(), metadataHandler.getAdditionalOutputData());
       } finally {
         profiler.completeTask(ProfilerTask.ACTION);
       }
@@ -707,21 +703,20 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     postEvent(new ActionStartedEvent(action, actionStartTime));
     ResourceSet estimate = action.estimateResourceConsumption(executorEngine);
     ActionExecutionStatusReporter statusReporter = statusReporterRef.get();
-    ResourceHandle handle = null;
     try {
       if (estimate == null || estimate == ResourceSet.ZERO) {
         statusReporter.setRunningFromBuildData(action);
       } else {
         // If estimated resource consumption is null, action will manually call
         // resource manager when it knows what resources are needed.
-        handle = resourceManager.acquireResources(action, estimate);
+        resourceManager.acquireResources(action, estimate);
       }
       boolean outputDumped = executeActionTask(action, context);
       completeAction(action, context.getMetadataHandler(),
           context.getFileOutErr(), outputDumped);
     } finally {
-      if (handle != null) {
-        handle.close();
+      if (estimate != null) {
+        resourceManager.releaseResources(action, estimate);
       }
       statusReporter.remove(action);
       postEvent(new ActionCompletionEvent(actionStartTime, action));
