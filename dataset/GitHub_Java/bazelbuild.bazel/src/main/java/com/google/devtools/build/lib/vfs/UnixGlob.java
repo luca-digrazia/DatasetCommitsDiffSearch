@@ -134,6 +134,7 @@ public final class UnixGlob {
     for (int i = 0; i < pattern.length(); i++) {
       char c = pattern.charAt(i);
       switch (c) {
+        case '(': case ')':
         case '{': case '}':
         case '[': case ']':
         return "illegal character '" + c + "'";
