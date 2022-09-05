@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProviderImpl;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 
@@ -115,10 +114,5 @@ public class OutputFileConfiguredTarget extends FileConfiguredTarget
       }
     }
     return defaultValue;
-  }
-
-  @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append("<output file target " + getTarget().getLabel() + ">");
   }
 }
