@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@ package com.google.devtools.build.buildjar.javac.plugins.dependency;
 
 import static com.google.devtools.build.buildjar.javac.plugins.dependency.DependencyModule.StrictJavaDeps.ERROR;
 import static com.google.devtools.build.buildjar.javac.plugins.dependency.ImplicitDependencyExtractor.getPlatformJars;
+import static com.google.devtools.build.buildjar.javac.plugins.dependency.ImplicitDependencyExtractor.unwrapFileManager;
+import static com.google.devtools.build.buildjar.javac.plugins.dependency.ImplicitDependencyExtractor.unwrapFileObject;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.buildjar.javac.plugins.BlazeJavaCompilerPlugin;
@@ -107,7 +109,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
   public void init(Context context, Log log, JavaCompiler compiler) {
     super.init(context, log, compiler);
     errWriter = log.getWriter(WriterKind.ERROR);
-    this.fileManager = context.get(JavaFileManager.class);
+    this.fileManager = unwrapFileManager(context.get(JavaFileManager.class));
     implicitDependencyExtractor = new ImplicitDependencyExtractor(
         dependencyModule.getUsedClasspath(), dependencyModule.getImplicitDependenciesMap(),
         fileManager);
@@ -408,7 +410,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       return null;
     }
 
-    JavaFileObject classfile = classSymbol.classfile;
+    JavaFileObject classfile = unwrapFileObject(classSymbol.classfile);
 
     String name = ImplicitDependencyExtractor.getJarName(fileManager, classfile);
     if (name == null) {
