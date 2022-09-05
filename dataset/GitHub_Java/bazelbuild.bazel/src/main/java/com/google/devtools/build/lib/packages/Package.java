@@ -524,6 +524,22 @@ public class Package implements Serializable {
   }
 
   /**
+   * Returns a (read-only, unordered) iterator over the rules in this package.
+   */
+  @VisibleForTesting // Legacy.  Production code should use getTargets(Class) instead
+  Iterable<? extends Rule> getRules() {
+    return getTargets(Rule.class);
+  }
+
+  /**
+   * Returns a (read-only, unordered) iterator over the files in this package.
+   */
+  @VisibleForTesting // Legacy.  Production code should use getTargets(Class) instead
+  Iterable<? extends FileTarget> getFiles() {
+    return getTargets(FileTarget.class);
+  }
+
+  /**
    * Returns the rule that corresponds to a particular BUILD target name. Useful
    * for walking through the dependency graph of a target.
    * Fails if the target is not a Rule.
@@ -692,8 +708,7 @@ public class Package implements Serializable {
 
   @Override
   public String toString() {
-    return "Package(" + name + ")="
-        + (targets != null ? getTargets(Rule.class) : "initializing...");
+    return "Package(" + name + ")=" + (targets != null ? getRules() : "initializing...");
   }
 
   /**
