@@ -471,16 +471,17 @@ public class BuildView {
                   skylarkFunctionName));
         }
       } else {
+        @SuppressWarnings("unchecked")
         final Class<? extends ConfiguredNativeAspectFactory> aspectFactoryClass =
-            ruleClassProvider.getAspectFactoryMap().get(aspect)
-                .asSubclass(ConfiguredNativeAspectFactory.class);
+            (Class<? extends ConfiguredNativeAspectFactory>)
+                ruleClassProvider.getAspectFactoryMap().get(aspect);
         if (aspectFactoryClass != null) {
           for (ConfiguredTargetKey targetSpec : targetSpecs) {
             aspectKeys.add(
                 AspectValue.createAspectKey(
                     targetSpec.getLabel(),
                     targetSpec.getConfiguration(),
-                    new NativeAspectClass<ConfiguredNativeAspectFactory>(aspectFactoryClass)));
+                    new NativeAspectClass(aspectFactoryClass)));
           }
         } else {
           throw new ViewCreationFailedException("Aspect '" + aspect + "' is unknown");

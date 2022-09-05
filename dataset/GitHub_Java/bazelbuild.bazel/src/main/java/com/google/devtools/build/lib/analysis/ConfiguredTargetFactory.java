@@ -296,7 +296,6 @@ public final class ConfiguredTargetFactory {
       Aspect aspect,
       ListMultimap<Attribute, ConfiguredTarget> prerequisiteMap,
       Set<ConfigMatchingProvider> configConditions,
-      BuildConfiguration aspectConfiguration,
       BuildConfiguration hostConfiguration)
       throws InterruptedException {
     ConfigurationFragmentPolicy aspectPolicy =
@@ -306,7 +305,7 @@ public final class ConfiguredTargetFactory {
     RuleContext.Builder builder = new RuleContext.Builder(env,
         associatedTarget.getTarget(),
         aspect.getAspectClass().getName(),
-        aspectConfiguration,
+        associatedTarget.getConfiguration(),
         hostConfiguration,
         ruleClassProvider.getPrerequisiteValidator(),
         // TODO(mstaib): When AspectDefinition can no longer have null ConfigurationFragmentPolicy,
