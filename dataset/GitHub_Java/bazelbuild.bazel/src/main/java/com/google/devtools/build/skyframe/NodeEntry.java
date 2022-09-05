@@ -14,7 +14,6 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 
 import java.util.Collection;
@@ -285,11 +284,11 @@ public interface NodeEntry extends ThinNodeEntry {
   Collection<SkyKey> markRebuildingAndGetAllRemainingDirtyDirectDeps();
 
   /**
-   * Returns the {@link GroupedList} of direct dependencies. This may only be called while the node
-   * is being evaluated, that is, before {@link #setValue} and after {@link #markDirty}.
+   * Returns the set of direct dependencies. This may only be called while the node is being
+   * evaluated, that is, before {@link #setValue} and after {@link #markDirty}.
    */
   @ThreadSafe
-  GroupedList<SkyKey> getTemporaryDirectDeps();
+  Set<SkyKey> getTemporaryDirectDeps();
 
   @ThreadSafe
   boolean noDepsLastBuild();

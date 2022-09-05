@@ -15,12 +15,12 @@ package com.google.devtools.build.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.util.Collection;
 import java.util.List;
@@ -329,7 +329,7 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   @Override
   public synchronized boolean signalDep() {
-    return signalDep(/*childVersion=*/ IntVersion.of(Long.MAX_VALUE));
+    return signalDep(/*childVersion=*/new IntVersion(Long.MAX_VALUE));
   }
 
   @Override
