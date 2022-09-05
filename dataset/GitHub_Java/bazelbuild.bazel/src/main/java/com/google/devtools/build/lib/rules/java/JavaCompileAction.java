@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.collect.Iterables.getOnlyElement;
-import static com.google.devtools.build.lib.packages.Aspect.INJECTING_RULE_KIND_PARAMETER_KEY;
 import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
@@ -23,7 +21,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -720,11 +717,7 @@ public final class JavaCompileAction extends AbstractAction {
 
       if (owner instanceof AspectValue.AspectKey) {
         AspectValue.AspectKey aspectOwner = (AspectValue.AspectKey) owner;
-        ImmutableCollection<String> injectingRuleKind =
-            aspectOwner.getParameters().getAttribute(INJECTING_RULE_KIND_PARAMETER_KEY);
-        if (injectingRuleKind.size() == 1) {
-          result.append(' ').append(getOnlyElement(injectingRuleKind));
-        }
+        result.append(" ").append(aspectOwner.getAspectClass().getName());
       }
 
       return result.toString();
