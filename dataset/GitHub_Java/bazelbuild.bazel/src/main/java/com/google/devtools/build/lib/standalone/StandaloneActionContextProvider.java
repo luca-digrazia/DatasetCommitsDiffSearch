@@ -16,19 +16,20 @@ package com.google.devtools.build.lib.standalone;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableList.Builder;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionContextProvider;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor.ActionContext;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.exec.ActionContextProvider;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.FileWriteStrategy;
 import com.google.devtools.build.lib.exec.StandaloneTestStrategy;
 import com.google.devtools.build.lib.exec.TestStrategy;
 import com.google.devtools.build.lib.rules.cpp.IncludeScanningContext;
 import com.google.devtools.build.lib.rules.cpp.SpawnGccStrategy;
+import com.google.devtools.build.lib.rules.cpp.SpawnLinkStrategy;
 import com.google.devtools.build.lib.rules.test.ExclusiveTestStrategy;
 import com.google.devtools.build.lib.rules.test.TestActionContext;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
@@ -74,7 +75,7 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
     Path testTmpRoot = TestStrategy.getTmpRoot(env.getWorkspace(), env.getExecRoot(), options);
     TestActionContext testStrategy =
         new StandaloneTestStrategy(
-            buildRequest, env.getBlazeWorkspace().getBinTools(), testTmpRoot);
+            buildRequest, env.getBlazeWorkspace().getBinTools(), env.getClientEnv(), testTmpRoot);
 
     Builder<ActionContext> strategiesBuilder = ImmutableList.builder();
 
@@ -87,6 +88,7 @@ public class StandaloneActionContextProvider extends ActionContextProvider {
             verboseFailures,
             env.getRuntime().getProductName()),
         new DummyIncludeScanningContext(),
+        new SpawnLinkStrategy(),
         new SpawnGccStrategy(),
         testStrategy,
         new ExclusiveTestStrategy(testStrategy),
