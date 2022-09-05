@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -30,11 +29,7 @@ public class ObjcOptions implements RuleConfiguredTargetFactory {
     return new RuleConfiguredTargetBuilder(ruleContext)
         .add(RunfilesProvider.class, RunfilesProvider.EMPTY)
         .add(OptionsProvider.class,
-            new OptionsProvider.Builder()
-                .addCopts(ruleContext.getTokenizedStringListAttr("copts"))
-                .addInfoplists(
-                    ruleContext.getPrerequisiteArtifacts("infoplists", Mode.TARGET).list())
-                .build())
+            new OptionsProvider(ruleContext.getTokenizedStringListAttr("copts")))
         .build();
   }
 }
