@@ -54,7 +54,12 @@ public class TimerTest {
 
     @Test
     public void timesCallableInstances() throws Exception {
-        final String value = timer.time(() -> "one");
+        final String value = timer.time(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                return "one";
+            }
+        });
 
         assertThat(timer.getCount())
                 .isEqualTo(1);
@@ -68,7 +73,12 @@ public class TimerTest {
     @Test
     public void timesRunnableInstances() throws Exception {
         final AtomicBoolean called = new AtomicBoolean();
-        timer.time(() -> called.set(true));
+        timer.time(new Runnable() {
+            @Override
+            public void run() {
+                called.set(true);
+            }
+        });
 
         assertThat(timer.getCount())
                 .isEqualTo(1);
