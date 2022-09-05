@@ -86,7 +86,7 @@ public class PackageFunction implements SkyFunction {
 
   private final PackageFactory packageFactory;
   private final CachingPackageLocator packageLocator;
-  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>>
+  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.LegacyBuilder>>
       packageFunctionCache;
   private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache;
   private final AtomicBoolean showLoadingProgress;
@@ -103,7 +103,7 @@ public class PackageFunction implements SkyFunction {
       PackageFactory packageFactory,
       CachingPackageLocator pkgLocator,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>> packageFunctionCache,
+      Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.LegacyBuilder>> packageFunctionCache,
       Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
       AtomicInteger numPackagesLoaded,
       @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
@@ -459,7 +459,7 @@ public class PackageFunction implements SkyFunction {
     List<Statement> preludeStatements =
         astLookupValue.lookupSuccessful()
             ? astLookupValue.getAST().getStatements() : ImmutableList.<Statement>of();
-    CacheEntryWithGlobDeps<Package.Builder> packageBuilderAndGlobDeps =
+    CacheEntryWithGlobDeps<Package.LegacyBuilder> packageBuilderAndGlobDeps =
         loadPackage(
             externalPkg,
             replacementContents,
@@ -473,8 +473,8 @@ public class PackageFunction implements SkyFunction {
     if (packageBuilderAndGlobDeps == null) {
       return null;
     }
-    Package.Builder pkgBuilder = packageBuilderAndGlobDeps.value;
-    pkgBuilder.buildPartial();
+    Package.LegacyBuilder legacyPkgBuilder = packageBuilderAndGlobDeps.value;
+    legacyPkgBuilder.buildPartial();
     try {
       // Since the Skyframe dependencies we request below in
       // markDependenciesAndPropagateInconsistentFilesystemExceptions are requested independently of
@@ -483,7 +483,7 @@ public class PackageFunction implements SkyFunction {
       // bother checking for missing values and instead piggyback on the env.missingValues() call
       // for the former. This avoids a Skyframe restart.
       handleLabelsCrossingSubpackagesAndPropagateInconsistentFilesystemExceptions(
-          packageLookupValue.getRoot(), packageId, pkgBuilder, env);
+          packageLookupValue.getRoot(), packageId, legacyPkgBuilder, env);
     } catch (InternalInconsistentFilesystemException e) {
       packageFunctionCache.invalidate(packageId);
       throw new PackageFunctionException(
@@ -491,12 +491,12 @@ public class PackageFunction implements SkyFunction {
           e.isTransient() ? Transience.TRANSIENT : Transience.PERSISTENT);
     }
     Set<SkyKey> globKeys = packageBuilderAndGlobDeps.globDepKeys;
-    Map<Label, Path> subincludes = pkgBuilder.getSubincludes();
+    Map<Label, Path> subincludes = legacyPkgBuilder.getSubincludes();
     boolean packageShouldBeConsideredInError;
     try {
       packageShouldBeConsideredInError =
           markDependenciesAndPropagateInconsistentFilesystemExceptions(
-              env, globKeys, subincludes, packageId, pkgBuilder.containsErrors());
+              env, globKeys, subincludes, packageId, legacyPkgBuilder.containsErrors());
     } catch (InternalInconsistentFilesystemException e) {
       packageFunctionCache.invalidate(packageId);
       throw new PackageFunctionException(
@@ -507,12 +507,12 @@ public class PackageFunction implements SkyFunction {
       return null;
     }
 
-    Event.replayEventsOn(env.getListener(), pkgBuilder.getEvents());
+    Event.replayEventsOn(env.getListener(), legacyPkgBuilder.getEvents());
 
     if (packageShouldBeConsideredInError) {
-      pkgBuilder.setContainsErrors();
+      legacyPkgBuilder.setContainsErrors();
     }
-    Package pkg = pkgBuilder.finishBuild();
+    Package pkg = legacyPkgBuilder.finishBuild();
 
     // We know this SkyFunction will not be called again, so we can remove the cache entry.
     packageFunctionCache.invalidate(packageId);
@@ -699,7 +699,7 @@ public class PackageFunction implements SkyFunction {
   }
 
   private static void handleLabelsCrossingSubpackagesAndPropagateInconsistentFilesystemExceptions(
-      Path pkgRoot, PackageIdentifier pkgId, Package.Builder pkgBuilder, Environment env)
+      Path pkgRoot, PackageIdentifier pkgId, Package.LegacyBuilder pkgBuilder, Environment env)
           throws InternalInconsistentFilesystemException {
     Set<SkyKey> containingPkgLookupKeys = Sets.newHashSet();
     Map<Target, SkyKey> targetToKey = new HashMap<>();
@@ -778,7 +778,7 @@ public class PackageFunction implements SkyFunction {
   }
 
   private static boolean maybeAddEventAboutLabelCrossingSubpackage(
-      Package.Builder pkgBuilder, Path pkgRoot, Label label, @Nullable Location location,
+      Package.LegacyBuilder pkgBuilder, Path pkgRoot, Label label, @Nullable Location location,
       @Nullable ContainingPackageLookupValue containingPkgLookupValue) {
     if (containingPkgLookupValue == null) {
       return true;
@@ -1081,7 +1081,7 @@ public class PackageFunction implements SkyFunction {
    * preprocessing.
    */
   @Nullable
-  private CacheEntryWithGlobDeps<Package.Builder> loadPackage(
+  private CacheEntryWithGlobDeps<Package.LegacyBuilder> loadPackage(
       Package externalPkg,
       @Nullable String replacementContents,
       PackageIdentifier packageId,
@@ -1092,7 +1092,7 @@ public class PackageFunction implements SkyFunction {
       Path packageRoot,
       Environment env)
       throws InterruptedException, PackageFunctionException {
-    CacheEntryWithGlobDeps<Package.Builder> packageFunctionCacheEntry =
+    CacheEntryWithGlobDeps<Package.LegacyBuilder> packageFunctionCacheEntry =
         packageFunctionCache.getIfPresent(packageId);
     if (packageFunctionCacheEntry == null) {
       profiler.startTask(ProfilerTask.CREATE_PACKAGE, packageId.toString());
@@ -1173,7 +1173,7 @@ public class PackageFunction implements SkyFunction {
                 buildFilePath.getParentDirectory(), packageId, packageLocator);
         SkyframeHybridGlobber skyframeGlobber = new SkyframeHybridGlobber(packageId, packageRoot,
             env, legacyGlobber);
-        Package.Builder pkgBuilder = packageFactory.createPackageFromPreprocessingAst(
+        Package.LegacyBuilder pkgBuilder = packageFactory.createPackageFromPreprocessingAst(
             externalPkg, packageId, buildFilePath, astAfterPreprocessing, importResult.importMap,
             importResult.fileDependencies, defaultVisibility, skyframeGlobber);
         Set<SkyKey> globDepsRequested = ImmutableSet.<SkyKey>builder()
