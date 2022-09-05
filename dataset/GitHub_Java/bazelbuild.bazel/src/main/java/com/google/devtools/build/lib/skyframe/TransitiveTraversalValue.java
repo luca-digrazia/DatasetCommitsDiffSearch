@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.Target;
@@ -24,9 +25,15 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
 import javax.annotation.Nullable;
 
 /**
@@ -40,7 +47,7 @@ import javax.annotation.Nullable;
 @ThreadSafe
 public class TransitiveTraversalValue implements SkyValue {
   private static final TransitiveTraversalValue EMPTY_VALUE =
-      new TransitiveTraversalValue(AdvertisedProviderSet.EMPTY, null);
+      new TransitiveTraversalValue(false, ImmutableSet.<String>of(), null);
   // A quick-lookup cache that allows us to get the value for a given RuleClass, assuming no error
   // messages for the target. Only stores built-in RuleClass objects to avoid memory bloat.
   private static final ConcurrentMap<RuleClass, TransitiveTraversalValue> VALUES_BY_RULE_CLASS =
@@ -58,20 +65,23 @@ public class TransitiveTraversalValue implements SkyValue {
     VALUE_INTERNER.intern(EMPTY_VALUE);
   }
 
-  private final AdvertisedProviderSet advertisedProviders;
+  private final boolean canHaveAnyProvider;
+  private final ImmutableSet<String> providers;
   @Nullable private final String firstErrorMessage;
 
   private TransitiveTraversalValue(
-      AdvertisedProviderSet providers,
+      boolean canHaveAnyProvider,
+      ImmutableSet<String> providers,
       @Nullable String firstErrorMessage) {
-    this.advertisedProviders = Preconditions.checkNotNull(providers);
+    this.canHaveAnyProvider = canHaveAnyProvider;
+    this.providers = Preconditions.checkNotNull(providers);
     this.firstErrorMessage =
         (firstErrorMessage == null) ? null : StringCanonicalizer.intern(firstErrorMessage);
   }
 
   static TransitiveTraversalValue unsuccessfulTransitiveTraversal(String firstErrorMessage) {
     return new TransitiveTraversalValue(
-        AdvertisedProviderSet.EMPTY, Preconditions.checkNotNull(firstErrorMessage));
+        false, ImmutableSet.<String>of(), Preconditions.checkNotNull(firstErrorMessage));
   }
 
   static TransitiveTraversalValue forTarget(Target target, @Nullable String firstErrorMessage) {
@@ -83,8 +93,8 @@ public class TransitiveTraversalValue implements SkyValue {
         if (value != null) {
           return value;
         }
-        AdvertisedProviderSet providers = ruleClass.getAdvertisedProviders();
-        value = new TransitiveTraversalValue(providers, null);
+        ImmutableSet<String> providers = canonicalSet(toList(ruleClass.getAdvertisedProviders()));
+        value = new TransitiveTraversalValue(ruleClass.canHaveAnyProvider(), providers, null);
         // May already be there from another RuleClass or a concurrent put.
         value = VALUE_INTERNER.intern(value);
         // May already be there from a concurrent put.
@@ -94,23 +104,25 @@ public class TransitiveTraversalValue implements SkyValue {
         // If this is a Skylark rule, we may still get a cache hit from another RuleClass with the
         // same providers.
         return TransitiveTraversalValue.create(
-            rule.getRuleClassObject().getAdvertisedProviders(),
+            ruleClass.canHaveAnyProvider(),
+            toList(rule.getRuleClassObject().getAdvertisedProviders()),
             firstErrorMessage);
       }
     }
     if (firstErrorMessage == null) {
       return EMPTY_VALUE;
     } else {
-      return new TransitiveTraversalValue(AdvertisedProviderSet.EMPTY, firstErrorMessage);
+      return new TransitiveTraversalValue(false, ImmutableSet.<String>of(), firstErrorMessage);
     }
   }
 
   public static TransitiveTraversalValue create(
-      AdvertisedProviderSet providers,
+      boolean canHaveAnyProvider,
+      Collection<String> providers,
       @Nullable String firstErrorMessage) {
     TransitiveTraversalValue value =
         new TransitiveTraversalValue(
-            providers, firstErrorMessage);
+            canHaveAnyProvider, canonicalSet(providers), firstErrorMessage);
     if (firstErrorMessage == null) {
       TransitiveTraversalValue oldValue = VALUE_INTERNER.getCanonical(value);
       return oldValue == null ? value : oldValue;
@@ -118,19 +130,38 @@ public class TransitiveTraversalValue implements SkyValue {
     return value;
   }
 
+  private static ImmutableSet<String> canonicalSet(Iterable<String> strIterable) {
+    ImmutableSet.Builder<String> builder = new ImmutableSet.Builder<>();
+    for (String str : strIterable) {
+      builder.add(StringCanonicalizer.intern(str));
+    }
+    return builder.build();
+  }
+
+  private static List<String> toList(Collection<Class<?>> providers) {
+    if (providers == null) {
+      return ImmutableList.of();
+    }
+    List<String> strings = new ArrayList<>(providers.size());
+    for (Class<?> clazz : providers) {
+      strings.add(clazz.getName());
+    }
+    return strings;
+  }
+
   /**
    * Returns if the associated target can have any provider. True for "alias" rules.
    */
   public boolean canHaveAnyProvider() {
-    return advertisedProviders.canHaveAnyProvider();
+    return canHaveAnyProvider;
   }
 
   /**
    * Returns the set of provider names from the target, if the target is a {@link Rule}. Otherwise
    * returns the empty set.
    */
-  public AdvertisedProviderSet getProviders() {
-    return advertisedProviders;
+  public Set<String> getProviders() {
+    return providers;
   }
 
   /**
@@ -151,13 +182,14 @@ public class TransitiveTraversalValue implements SkyValue {
       return false;
     }
     TransitiveTraversalValue that = (TransitiveTraversalValue) o;
-    return Objects.equals(this.firstErrorMessage, that.firstErrorMessage)
-        && this.advertisedProviders.equals(that.advertisedProviders);
+    return this.canHaveAnyProvider == that.canHaveAnyProvider
+        && Objects.equals(this.firstErrorMessage, that.firstErrorMessage)
+        && this.providers.equals(that.providers);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(firstErrorMessage, advertisedProviders);
+    return Objects.hash(firstErrorMessage, providers, canHaveAnyProvider);
   }
 
   @ThreadSafe
