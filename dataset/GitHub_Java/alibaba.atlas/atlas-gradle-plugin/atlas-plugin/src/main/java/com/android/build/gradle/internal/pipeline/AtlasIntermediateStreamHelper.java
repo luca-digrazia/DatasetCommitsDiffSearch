@@ -2,8 +2,6 @@ package com.android.build.gradle.internal.pipeline;
 
 import com.android.build.api.transform.QualifiedContent;
 import com.android.build.api.transform.TransformInput;
-import com.android.build.api.transform.TransformInvocation;
-import com.android.build.api.transform.TransformOutputProvider;
 import com.taobao.android.builder.tools.ReflectUtils;
 import org.gradle.api.file.FileCollection;
 
@@ -24,7 +22,7 @@ public class AtlasIntermediateStreamHelper{
         this.intermediateStream = (IntermediateStream) ReflectUtils.getField(transformTask,"outputStream");
     }
 
-    public void replaceProvider(TransformInvocation transformInvocation){
+    public void replaceProvider(){
         try {
             Field field = intermediateStream.getClass().getDeclaredField("folderUtils");
             field.setAccessible(true);
@@ -33,8 +31,6 @@ public class AtlasIntermediateStreamHelper{
             Set<? super QualifiedContent.Scope> scopes = (Set<? super QualifiedContent.Scope>) ReflectUtils.getField(intermediateFolderUtils,"scopes");
             AtlasIntermediateFolderUtils atlasIntermediateFolderUtils = new AtlasIntermediateFolderUtils(intermediateFolderUtils.getRootFolder(),types,scopes);
             field.set(intermediateStream,atlasIntermediateFolderUtils);
-            TransformOutputProvider transformOutputProvider = transformInvocation.getOutputProvider();
-            ReflectUtils.updateField(transformOutputProvider,"folderUtils",atlasIntermediateFolderUtils);
 
         }catch (Exception e){
 

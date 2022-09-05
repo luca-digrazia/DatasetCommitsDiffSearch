@@ -10,7 +10,6 @@ import org.gradle.api.logging.Logging;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -30,9 +29,7 @@ public class AtlasIntermediateFolderUtils extends IntermediateFolderUtils {
     private  Set<QualifiedContent.ContentType> types;
     private  Set<? super QualifiedContent.Scope> scopes;
     // current list of outputs.
-    private List<SubStream> subStreams = new ArrayList<>();
-
-    private List<SubStream>oldSubStreams;
+    private List<SubStream> subStreams;
     // list of outputs that were found in the list, but that are already marked as removed.
     private List<SubStream> removedSubStreams;
     private List<SubStream> outOfScopeStreams;
@@ -59,13 +56,12 @@ public class AtlasIntermediateFolderUtils extends IntermediateFolderUtils {
         checkState(!scopes.isEmpty());
 
         // search for an existing matching substream.
-        for (SubStream subStream : oldSubStreams) {
+        for (SubStream subStream : subStreams) {
             // look for an existing match. This means same name, types, scopes, and format.
             if (name.equals(subStream.getName())
                     && types.equals(subStream.getTypes())
                     && scopes.equals(subStream.getScopes())
                     && format == subStream.getFormat()) {
-                    subStreams.add(subStream);
                 return new File(rootFolder, name+"-"+subStream.getFilename());
             }
         }
@@ -101,8 +97,7 @@ public class AtlasIntermediateFolderUtils extends IntermediateFolderUtils {
             }
         }
 
-        return new ImmutableTransformInput(jarInputs, directoryInputs, rootFolder);
-    }
+        return new ImmutableTransformInput(jarInputs, directoryInputs, rootFolder);    }
 
 
     @NonNull
@@ -316,7 +311,7 @@ public class AtlasIntermediateFolderUtils extends IntermediateFolderUtils {
 
     @NonNull
     public IncrementalTransformInput computeIncrementalInputFromFolder() {
-        final IncrementalTransformInput input = new AtlasIntermediateFolderUtils.IntermediateTransformInput(rootFolder);
+        final IncrementalTransformInput input = new IntermediateFolderUtils.IntermediateTransformInput(rootFolder);
 
         for (SubStream subStream : subStreams) {
             if (subStream.getFormat() == Format.DIRECTORY) {
@@ -361,7 +356,7 @@ public class AtlasIntermediateFolderUtils extends IntermediateFolderUtils {
 
 
     private void updateLists(@NonNull Collection<SubStream> subStreamList) {
-        oldSubStreams =
+        subStreams =
                 subStreamList.stream().filter(SubStream::isPresent).collect(Collectors.toList());
         removedSubStreams =
                 subStreamList
