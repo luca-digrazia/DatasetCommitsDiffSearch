@@ -632,13 +632,8 @@ public final class BlazeRuntime {
   }
 
   /**
-   * Splits given options into two lists - arguments matching options defined in this class and
-   * everything else, while preserving order in each list.
-   *
-   * <p>Note that this method relies on the startup options always being in the
-   * <code>--flag=ARG</code> form (instead of <code>--flag ARG</code>). This is enforced by
-   * <code>GetArgumentArray()</code> in <code>blaze.cc</code> by reconstructing the startup
-   * options from their parsed versions instead of using <code>argv</code> verbatim.
+   * Splits given arguments into two lists - arguments matching options defined in this class
+   * and everything else, while preserving order in each list.
    */
   static CommandLineOptions splitStartupOptions(
       Iterable<BlazeModule> modules, String... args) {
@@ -1090,6 +1085,11 @@ public final class BlazeRuntime {
 
       ConfiguredRuleClassProvider ruleClassProvider = ruleClassBuilder.build();
 
+      List<PackageFactory.EnvironmentExtension> extensions = new ArrayList<>();
+      for (BlazeModule module : blazeModules) {
+        extensions.add(module.getPackageEnvironmentExtension());
+      }
+
       Package.Builder.Helper packageBuilderHelper = null;
       for (BlazeModule module : blazeModules) {
         Package.Builder.Helper candidateHelper =
@@ -1109,7 +1109,7 @@ public final class BlazeRuntime {
               ruleClassProvider,
               ruleClassBuilder.getPlatformRegexps(),
               serverBuilder.getAttributeContainerFactory(),
-              serverBuilder.getEnvironmentExtensions(),
+              extensions,
               BlazeVersionInfo.instance().getVersion(),
               packageBuilderHelper);
 
