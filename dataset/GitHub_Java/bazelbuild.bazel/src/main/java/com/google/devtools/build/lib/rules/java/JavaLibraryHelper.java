@@ -93,6 +93,7 @@ public final class JavaLibraryHelper {
   private StrictDepsMode strictDepsMode = StrictDepsMode.OFF;
   private JavaClasspathMode classpathMode = JavaClasspathMode.OFF;
   private boolean emitProviders = true;
+  private boolean legacyCollectCppAndJavaLinkOptions;
 
   public JavaLibraryHelper(RuleContext ruleContext) {
     this(ruleContext, DEFAULT_SUFFIX_IS_EMPTY_STRING);
@@ -204,6 +205,16 @@ public final class JavaLibraryHelper {
    */
   public JavaLibraryHelper noProviders() {
     this.emitProviders = false;
+    return this;
+  }
+
+  /**
+   * Collects link options from both Java and C++ dependencies. This is never what you want, and
+   * only exists for backwards compatibility.
+   */
+  public JavaLibraryHelper setLegacyCollectCppAndJavaLinkOptions(
+      boolean legacyCollectCppAndJavaLinkOptions) {
+    this.legacyCollectCppAndJavaLinkOptions = legacyCollectCppAndJavaLinkOptions;
     return this;
   }
 
@@ -343,10 +354,18 @@ public final class JavaLibraryHelper {
     return new CcLinkParamsStore() {
       @Override
       protected void collect(Builder builder, boolean linkingStatically, boolean linkShared) {
-        builder.addTransitiveTargets(deps,
-            JavaCcLinkParamsProvider.TO_LINK_PARAMS,
-            CcLinkParamsProvider.TO_LINK_PARAMS,
-            CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+        if (legacyCollectCppAndJavaLinkOptions) {
+          builder.addTransitiveTargets(deps,
+              JavaCcLinkParamsProvider.TO_LINK_PARAMS);
+          builder.addTransitiveTargets(deps,
+              CcLinkParamsProvider.TO_LINK_PARAMS,
+              CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+        } else {
+          builder.addTransitiveTargets(deps,
+              JavaCcLinkParamsProvider.TO_LINK_PARAMS,
+              CcLinkParamsProvider.TO_LINK_PARAMS,
+              CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
+        }
       }
     };
   }
