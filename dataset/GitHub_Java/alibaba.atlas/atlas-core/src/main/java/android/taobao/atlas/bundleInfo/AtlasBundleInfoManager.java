@@ -217,17 +217,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.ServiceInfo;
 import android.taobao.atlas.runtime.RuntimeVariables;
-import android.taobao.atlas.util.WrapperUtil;
 import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.text.TextUtils;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.*;
 
 /**
@@ -240,6 +232,12 @@ public class AtlasBundleInfoManager {
     private static AtlasBundleInfoManager sManager;
     private BundleListing mCurrentBundleListing;
 
+    private static HashMap<String,ActivityInfo> activityInfos;
+    private static HashMap<String,ServiceInfo>  serviceInfos;
+    private static HashMap<String,ActivityInfo> receiverInfos;
+    private static HashMap<String,ProviderInfo> providerInfos;
+    private static HashMap<String,SimpleBundleInfo> bundleBaseInfos = new HashMap<String, SimpleBundleInfo>();
+
     public static synchronized AtlasBundleInfoManager instance(){
         if(sManager==null){
             sManager = new AtlasBundleInfoManager();
@@ -248,43 +246,10 @@ public class AtlasBundleInfoManager {
     }
 
     private AtlasBundleInfoManager(){
-        if(mCurrentBundleListing==null){
-            String bundleInfoStr = (String)RuntimeVariables.getFrameworkProperty("bundleInfo");
-            if(!TextUtils.isEmpty(bundleInfoStr)) {
-                int retryCount = 2;
-                Throwable e = null;
-                do {
-                    try {
-                        LinkedHashMap<String, BundleListing.BundleInfo> infos = BundleListingUtil.parseArray(bundleInfoStr);
-                        if (infos == null) {
-                            Map<String, Object> detail = new HashMap<>();
-                            detail.put("InitBundleInfoByVersionIfNeed", bundleInfoStr);
-                            AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL, detail, new RuntimeException("the infos is null!"));
-                        }
-                        BundleListing listing = new BundleListing();
-                        listing.setBundles(infos);
-                        mCurrentBundleListing = listing;
-                        updateBundleListingWithExtraInfo();
-                        break;
-                    } catch (Throwable error) {
-                        e = error;
-                        e.printStackTrace();
-                    }
-                    retryCount--;
-                }while(retryCount>0);
-                if(e!=null){
-                    Map<String, Object> detail = new HashMap<>();
-                    detail.put("InitBundleInfoByVersionIfNeed", bundleInfoStr);
-                    AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL, detail, e);
-                    throw new RuntimeException("parse bundleinfo failed");
-                }
-            }else{
-                throw new RuntimeException("read bundleInfo failed");
-            }
-        }
     }
 
     public BundleListing getBundleInfo(){
+        InitBundleInfoByVersionIfNeed();
         return mCurrentBundleListing;
     }
 
@@ -292,9 +257,17 @@ public class AtlasBundleInfoManager {
      * Get all dependent bundles for the designated bundle
      */
     public List<String> getDependencyForBundle(String bundleName){
-        if(mCurrentBundleListing==null || mCurrentBundleListing.getBundles()==null){
-            return null;
+        InitBundleInfoByVersionIfNeed();
+        if (mCurrentBundleListing == null || mCurrentBundleListing.getBundles()==null || mCurrentBundleListing.getBundles().size() ==0){
+            getBundleInfoFromManifestIfNeed();
+            SimpleBundleInfo info = bundleBaseInfos.get(bundleName);
+            if(info!=null) {
+                return info.dependency;
+            }else{
+                return null;
+            }
         }
+
         BundleListing.BundleInfo bundleInfo = mCurrentBundleListing.getBundles().get(bundleName);
         if(bundleInfo != null && bundleInfo.getDependency() != null){
             List<String> dependencies = new ArrayList<String>();
@@ -310,21 +283,34 @@ public class AtlasBundleInfoManager {
     }
 
     public boolean isInternalBundle(String bundleName){
-        if(mCurrentBundleListing==null || mCurrentBundleListing.getBundles()==null){
-            return true;
-        }
-        BundleListing.BundleInfo info = mCurrentBundleListing.getBundles().get(bundleName);
-        if(info!=null){
-            return info.isInternal();
+        InitBundleInfoByVersionIfNeed();
+        if (mCurrentBundleListing == null || mCurrentBundleListing.getBundles()==null || mCurrentBundleListing.getBundles().size() ==0){
+            getBundleInfoFromManifestIfNeed();
+            SimpleBundleInfo sinfo = bundleBaseInfos.get(bundleName);
+            if(sinfo!=null) {
+                return sinfo.isInternal;
+            }else{
+                return true;
+            }
         }else{
-            return true;
+            BundleListing.BundleInfo info = mCurrentBundleListing.getBundles().get(bundleName);
+            if(info!=null){
+                return info.isInternal();
+            }else{
+                return true;
+            }
         }
+
     }
 
     public String getBundleForComponet(String componentName){
-        if(mCurrentBundleListing==null || mCurrentBundleListing.getBundles()==null){
-            return null;
+        InitBundleInfoByVersionIfNeed();
+        if (mCurrentBundleListing == null ||
+                   mCurrentBundleListing.getBundles() == null || 
+                   mCurrentBundleListing.getBundles().size() == 0){
+            return findBundleByComponentName(componentName);
         }
+
         Iterator<Map.Entry<String, BundleListing.BundleInfo>> iterator = mCurrentBundleListing.getBundles().entrySet().iterator();
         while (iterator.hasNext()) {
             Map.Entry<String, BundleListing.BundleInfo> entry = iterator.next();
@@ -351,9 +337,17 @@ public class AtlasBundleInfoManager {
     }
 
     public BundleListing.BundleInfo getBundleInfo(String name){
-        if(mCurrentBundleListing==null || mCurrentBundleListing.getBundles()==null){
-            return null;
+        InitBundleInfoByVersionIfNeed();
+        if (mCurrentBundleListing == null || mCurrentBundleListing.getBundles()==null || mCurrentBundleListing.getBundles().size() ==0){
+            getBundleInfoFromManifestIfNeed();
+            SimpleBundleInfo sinfo = bundleBaseInfos.get(name);
+            BundleListing.BundleInfo info= new BundleListing.BundleInfo();
+            info.setDependency(sinfo!=null ? sinfo.dependency : null);
+            info.setName("动态模块");
+            info.setApplicationName(sinfo!=null ? sinfo.applicationName : "");
+            return info;
         }
+
         BundleListing.BundleInfo info = mCurrentBundleListing.getBundles().get(name);
         if(info!=null){
             return info;
@@ -362,53 +356,207 @@ public class AtlasBundleInfoManager {
         return null;
     }
 
-    private void updateBundleListingWithExtraInfo(){
-        if(mCurrentBundleListing==null || mCurrentBundleListing.getBundles()==null){
-            return;
+    /**
+     * 根据版本载入清单
+     */
+    private synchronized void InitBundleInfoByVersionIfNeed(){
+        if(mCurrentBundleListing==null){
+            String bundleInfoStr = (String)RuntimeVariables.getFrameworkProperty("bundleInfo");
+            if(!TextUtils.isEmpty(bundleInfoStr)) {
+                try {
+                    LinkedHashMap<String,BundleListing.BundleInfo> infos = BundleListingUtil.parseArray(bundleInfoStr);
+                    if (infos == null) {
+                        Map<String, Object> detail = new HashMap<>();
+                        detail.put("InitBundleInfoByVersionIfNeed",bundleInfoStr);
+                        AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL, detail, new RuntimeException("the infos is null!"));
+                    }
+                    BundleListing listing = new BundleListing();
+                    listing.setBundles(infos);
+                    mCurrentBundleListing = listing;
+                }catch(Throwable e){
+                    Map<String, Object> detail = new HashMap<>();
+                    detail.put("InitBundleInfoByVersionIfNeed",bundleInfoStr);
+                    AtlasMonitor.getInstance().report(AtlasMonitor.CONTAINER_BUNDLEINFO_PARSE_FAIL, detail, e);
+                    throw new RuntimeException("parse bundleinfo failed");
+                }
+            }else{
+                throw new RuntimeException("read bundleInfo failed");
+            }
         }
-        String fileName = String.format("%s%s.json","bundleInfo-", WrapperUtil.getPackageInfo(RuntimeVariables.androidApplication).versionName);
-        String extraInfo = getFromAssets(fileName,RuntimeVariables.androidApplication);
-        if(!TextUtils.isEmpty(extraInfo)){
-            try {
-                JSONArray array = new JSONArray(extraInfo);
-                if(array!=null){
-                    for(int x=0; x<array.length(); x++){
-                        JSONObject jb = array.getJSONObject(x);
-                        BundleListing.BundleInfo info = getBundleInfo(jb.optString("name"));
-                        info.setSize(jb.optInt("size"));
-                        info.setMd5(jb.optString("md5"));
-                        info.setUrl(jb.optString("url"));
+
+    }
+
+    private String findBundleByComponentName(String componentClassName){
+        getComponentInfoFromManifestIfNeed();
+        ComponentName componentName = new ComponentName(RuntimeVariables.androidApplication.getPackageName(),componentClassName);
+        if(activityInfos!=null){
+            ActivityInfo info = activityInfos.get(componentClassName);
+            if(info!=null){
+                if(info.metaData!=null){
+                    return info.metaData.getString("bundleLocation");
+                }else {
+                    try {
+                        ActivityInfo detailInfo = RuntimeVariables.androidApplication.getPackageManager().getActivityInfo(componentName, PackageManager.GET_META_DATA);
+                        if (detailInfo != null && detailInfo.metaData != null) {
+                            info.metaData = detailInfo.metaData;
+                            return detailInfo.metaData.getString("bundleLocation");
+                        } else {
+                            return null;
+                        }
+                    } catch (Throwable e) {
                     }
                 }
-            }catch (Throwable e){
-                e.printStackTrace();
             }
-
         }
-    }
 
-    private String getFromAssets(String fileName,Context context){
-        BufferedReader bufReader = null;
-        try {
-            InputStreamReader inputReader = new InputStreamReader(context.getResources().getAssets().open(fileName), "UTF-8");
-            bufReader = new BufferedReader(inputReader);
-            String line="";
-            String result="";
-            while((line = bufReader.readLine()) != null)
-                result += line;
-            return result;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        } finally {
-            if(bufReader!=null){
-                try {
-                    bufReader.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+        if(serviceInfos!=null){
+            ServiceInfo info = serviceInfos.get(componentClassName);
+            if(info!=null) {
+                if (info.metaData != null) {
+                    return info.metaData.getString("bundleLocation");
+                } else {
+                    try {
+                        ServiceInfo detailInfo = RuntimeVariables.androidApplication.getPackageManager().getServiceInfo(componentName, PackageManager.GET_META_DATA);
+                        if (detailInfo != null && detailInfo.metaData != null) {
+                            info = detailInfo;
+                            return detailInfo.metaData.getString("bundleLocation");
+                        } else {
+                            return null;
+                        }
+                    } catch (Throwable e) {
+                    }
                 }
             }
         }
+
+        if(receiverInfos!=null){
+            ActivityInfo info = receiverInfos.get(componentClassName);
+            if(info!=null){
+                if(info.metaData!=null){
+                    return info.metaData.getString("bundleLocation");
+                }else {
+                    try {
+                        ActivityInfo detailInfo = RuntimeVariables.androidApplication.getPackageManager().getReceiverInfo(componentName,PackageManager.GET_META_DATA);
+                        if(detailInfo!=null && detailInfo.metaData!=null){
+                            info.metaData = detailInfo.metaData;
+                            return detailInfo.metaData.getString("bundleLocation");
+                        }else{
+                            return null;
+                        }
+                    } catch (Throwable e) {}
+                }
+            }
+        }
+
+        if(providerInfos!=null){
+            ProviderInfo info = providerInfos.get(componentClassName);
+            if(info!=null){
+                if(info.metaData!=null){
+                    return info.metaData.getString("bundleLocation");
+                }else {
+                    try {
+                        ProviderInfo detailInfo = RuntimeVariables.androidApplication.getPackageManager().getProviderInfo(componentName,PackageManager.GET_META_DATA);
+                        if(detailInfo!=null && detailInfo.metaData!=null){
+                            info.metaData = detailInfo.metaData;
+                            return detailInfo.metaData.getString("bundleLocation");
+                        }else{
+                            return null;
+                        }
+                    } catch (Throwable e) {}
+                }
+            }
+        }
+
+        return null;
     }
 
+    private synchronized void getComponentInfoFromManifestIfNeed(){
+        try {
+            if(activityInfos==null) {
+                PackageInfo infos = RuntimeVariables.androidApplication.getPackageManager().getPackageInfo(RuntimeVariables.androidApplication.getPackageName(), PackageManager.GET_ACTIVITIES);
+                if(infos.activities!=null) {
+                    activityInfos = new HashMap<String, ActivityInfo>();
+                    for (ActivityInfo info : infos.activities) {
+                        activityInfos.put(info.name,info);
+                    }
+                }
+            }
+
+            if(serviceInfos==null) {
+                PackageInfo infos = RuntimeVariables.androidApplication.getPackageManager().getPackageInfo(RuntimeVariables.androidApplication.getPackageName(), PackageManager.GET_SERVICES);
+                if(infos.services!=null) {
+                    serviceInfos = new HashMap<String, ServiceInfo>();
+                    for (ServiceInfo info : infos.services) {
+                        serviceInfos.put(info.name,info);
+                    }
+                }
+            }
+
+            if(receiverInfos==null) {
+                PackageInfo infos = RuntimeVariables.androidApplication.getPackageManager().getPackageInfo(RuntimeVariables.androidApplication.getPackageName(), PackageManager.GET_RECEIVERS);
+                if(infos.receivers!=null) {
+                    receiverInfos = new HashMap<String, ActivityInfo>();
+                    for (ActivityInfo info : infos.receivers) {
+                        receiverInfos.put(info.name,info);
+                    }
+                }
+            }
+
+            if(providerInfos==null) {
+                PackageInfo infos = RuntimeVariables.androidApplication.getPackageManager().getPackageInfo(RuntimeVariables.androidApplication.getPackageName(), PackageManager.GET_PROVIDERS);
+                if(infos.providers!=null) {
+                    providerInfos = new HashMap<String, ProviderInfo>();
+                    for (ProviderInfo info : infos.providers) {
+                        providerInfos.put(info.name,info);
+                    }
+                }
+            }
+
+        }catch(Throwable e){
+
+        }
+    }
+
+    private synchronized void getBundleInfoFromManifestIfNeed(){
+        if(bundleBaseInfos.size()!=0){
+            return;
+        }
+        try{
+            try {
+                ApplicationInfo appInfo = RuntimeVariables.androidApplication.getPackageManager()
+                        .getApplicationInfo(RuntimeVariables.androidApplication.getPackageName(),PackageManager.GET_META_DATA);
+                if(appInfo.metaData!=null){
+                    Set<String> keySet = appInfo.metaData.keySet();
+                    for(String key : keySet){
+                        if(key.startsWith("bundle_")){
+                            String bundleName = key.substring(7);
+                            String value = appInfo.metaData.getString(key);
+                            String[] result = value.split(",");
+                            SimpleBundleInfo info = new SimpleBundleInfo();
+                            info.applicationName = result[0];
+                            info.isInternal = Boolean.valueOf(result[1]);
+                            if(result.length>2){
+                                String[] dependency = result[1].split("\\|");
+                                if(dependency!=null && dependency.length>0){
+                                    info.dependency = Arrays.asList(dependency);
+                                }
+                            }
+                            bundleBaseInfos.put(bundleName,info);
+                        }
+                    }
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                e.printStackTrace();
+            }
+        }catch(Throwable e){
+
+        }
+    }
+
+
+    private static class SimpleBundleInfo{
+        public String   applicationName;
+        public boolean  isInternal;
+        public List<String> dependency;
+    }
 }

@@ -210,23 +210,23 @@ package android.taobao.atlas.startup;
 
 import android.app.ActivityManager;
 import android.content.Context;
-import android.os.Build;
-import android.os.Environment;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.Process;
 import android.taobao.atlas.startup.patch.KernalConstants;
 import android.taobao.atlas.startup.patch.KernalFileLock;
 import android.text.TextUtils;
 import android.util.Log;
+import android.util.Pair;
 import java.io.*;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static android.os.Environment.MEDIA_MOUNTED;
-import static android.os.Environment.MEDIA_UNKNOWN;
 
 /**
  * Created by guanjie on 15/9/10.
@@ -239,23 +239,19 @@ public class KernalVersionManager {
     private final File  BASELINEINFO_NEW;
     private String LAST_VERSIONNAME;
     private String LAST_UPDATE_BUNDLES;
-    private String LAST_STORAGE_LOCATION;
     private String CURRENT_UPDATE_BUNDLES;
-    private String CURRENT_VERSIONAME;
-    public String CURRENT_STORAGE_LOCATION;
     private String DEXPATCH_BUNDLES;
-    public String DEXPATCH_STORAGE_LOCATION;
     private HashMap<String,String> currentUpdateBundles = new HashMap<String,String>();
-    public ConcurrentHashMap<String,Long> dexPatchBundles = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<String,Long> dexPatchBundles = new ConcurrentHashMap<>();
+    private boolean isRollback;
 
+    public String CURRENT_VERSIONAME;
     public boolean cachePreVersion = false;
-
-    private static class SingleTonHolder{
-        private final static KernalVersionManager INSTANCE = new KernalVersionManager();
-    }
-
-    public static KernalVersionManager instance(){
-        return SingleTonHolder.INSTANCE;
+    public synchronized static KernalVersionManager instance(){
+        if(sBaseInfoManager==null){
+            sBaseInfoManager = new KernalVersionManager();
+        }
+        return sBaseInfoManager;
     }
 
     @Override
@@ -266,9 +262,6 @@ public class KernalVersionManager {
     public void reset(){
         LAST_VERSIONNAME = "";
         LAST_UPDATE_BUNDLES = "";
-        LAST_STORAGE_LOCATION="";
-        CURRENT_STORAGE_LOCATION="";
-        DEXPATCH_STORAGE_LOCATION="";
         CURRENT_VERSIONAME = "";
         CURRENT_UPDATE_BUNDLES="";
         DEXPATCH_BUNDLES = "";
@@ -278,8 +271,8 @@ public class KernalVersionManager {
 
     private KernalVersionManager(){
         BASELINEINFO_DIR = new File(KernalConstants.baseContext.getFilesDir().getAbsolutePath() + File.separatorChar + "bundleBaseline");
-        BASELINEINFO     = new File(BASELINEINFO_DIR,"updateInfo");
-        BASELINEINFO_NEW = new File(BASELINEINFO_DIR,"updateInfo_new");
+        BASELINEINFO     = new File(BASELINEINFO_DIR,"baselineInfo");
+        BASELINEINFO_NEW = new File(BASELINEINFO_DIR,"baselineInfo_new");
     }
 
     public void init(){
@@ -313,9 +306,7 @@ public class KernalVersionManager {
         String updateBundles = "";
         String lastVersionName = "";
         String lastUpdateBundles="";
-        String lastStorageLocation="";
-        String currentStorageLocation="";
-        String dexpatchStorageLocation="";
+        long dexpatchVersion=0;
         String dexPatchBundles="";
         if(BASELINEINFO.exists()){
             try {
@@ -323,46 +314,25 @@ public class KernalVersionManager {
                  * 写入顺序
                  * 上一次versionname
                  * 上一次更新内容
-                 * 上一次的存储地址
                  * 本次versionname
                  * 本次更新内容
-                 * 本次存储地址
+                 * dexpatch versionname
                  * dexpatch 更新内容
-                 * dexpatch 存储地址
                  * 是否发生了回滚
                  */
                 DataInputStream input = new DataInputStream(new BufferedInputStream(new FileInputStream(BASELINEINFO)));
                 lastVersionName = input.readUTF();
                 lastUpdateBundles = input.readUTF();
-                lastStorageLocation=input.readUTF();
                 baselineVersion = input.readUTF();
                 updateBundles = input.readUTF();
-                currentStorageLocation=input.readUTF();
+                dexpatchVersion = input.readLong();
                 dexPatchBundles = input.readUTF();
-                dexpatchStorageLocation = input.readUTF();
+                isRollback = input.readBoolean();
                 cachePreVersion = input.readBoolean();
-                if(!TextUtils.isEmpty(dexPatchBundles) && !TextUtils.isEmpty(dexpatchStorageLocation)){
-                    //external dexpatch
-                    File storage = new File(dexpatchStorageLocation);
-                    if(!storage.exists() || !getStorageState(storage).equals(Environment.MEDIA_MOUNTED)){
-                        dexPatchBundles="";
-                        dexpatchStorageLocation = "";
-                    }
-                }
-
-                if(!TextUtils.isEmpty(updateBundles) && !TextUtils.isEmpty(currentStorageLocation)){
-                    //no dexpatch,but external bundle update
-                    File storage = new File(currentStorageLocation);
-                    if(!storage.exists() || !getStorageState(storage).equals(Environment.MEDIA_MOUNTED)){
-                        throw new IOException("update bundle location storage is not usable");
-                    }
-                }
-
-                try {
-                    input.close();
-                }catch(Throwable e){}
+                input.close();
             } catch (Throwable e) {
                 if(KernalConstants.PROCESS.equals(KernalConstants.baseContext.getPackageName())) {
+                    BASELINEINFO.delete();
                     rollbackHardly();
                 }
                 killChildProcesses(KernalConstants.baseContext);
@@ -374,9 +344,6 @@ public class KernalVersionManager {
         CURRENT_VERSIONAME = baselineVersion;
         CURRENT_UPDATE_BUNDLES= updateBundles;
         DEXPATCH_BUNDLES = dexPatchBundles;
-        LAST_STORAGE_LOCATION = lastStorageLocation;
-        CURRENT_STORAGE_LOCATION = currentStorageLocation;
-        DEXPATCH_STORAGE_LOCATION = dexpatchStorageLocation;
         parseUpdatedBundles();
     }
 
@@ -456,7 +423,9 @@ public class KernalVersionManager {
             if(bundles!=null && bundles.length>0){
                 for(String bundleInfo : bundles){
                     String[] infoItems = bundleInfo.split("@");
-                    currentUpdateBundles.put(infoItems[0],infoItems[1]);
+                    if(infoItems.length>2){
+                        currentUpdateBundles.put(infoItems[0],infoItems[1]+"@"+infoItems[2]);
+                    }
                 }
             }
         }
@@ -509,18 +478,16 @@ public class KernalVersionManager {
 
             out.writeUTF("");
             out.writeUTF("");
-            out.writeUTF("");
             if(cachePreVersion){
                 out.writeUTF(LAST_VERSIONNAME);
                 out.writeUTF(LAST_UPDATE_BUNDLES);
-                out.writeUTF(LAST_STORAGE_LOCATION);
             }else {
                 out.writeUTF("");
                 out.writeUTF("");
-                out.writeUTF("");
             }
+            out.writeLong(0);
             out.writeUTF("");
-            out.writeUTF("");
+            out.writeBoolean(true);
             out.writeBoolean(cachePreVersion);
             out.flush();
             out.close();
@@ -531,7 +498,7 @@ public class KernalVersionManager {
 
     }
 
-    public void saveDexPatchInfo(HashMap<String,String> infos,String storageLocation) throws IOException{
+    public void saveDexPatchInfo(HashMap<String,String> infos) throws IOException{
         for(Iterator iterator = infos.entrySet().iterator(); iterator.hasNext();)
         {
             Map.Entry entry = (java.util.Map.Entry)iterator.next();
@@ -574,20 +541,23 @@ public class KernalVersionManager {
          * 是否发生了回滚
          */
         out.writeUTF(LAST_VERSIONNAME);
-        out.writeUTF(LAST_UPDATE_BUNDLES != null ? LAST_UPDATE_BUNDLES : "");
-        out.writeUTF(LAST_STORAGE_LOCATION!=null ? LAST_STORAGE_LOCATION:"");
+        if(cachePreVersion) {
+            out.writeUTF(LAST_UPDATE_BUNDLES != null ? LAST_UPDATE_BUNDLES : "");
+        }else{
+            out.writeUTF("");
+        }
         out.writeUTF(CURRENT_VERSIONAME);
         out.writeUTF(CURRENT_UPDATE_BUNDLES);
-        out.writeUTF(CURRENT_STORAGE_LOCATION);
         //dexpatch 部分
+        out.writeLong(0);
         out.writeUTF(bundleListStr);
-        out.writeUTF(storageLocation!=null ? storageLocation : "");
+        out.writeBoolean(false);
         out.writeBoolean(cachePreVersion);
         out.flush();
         out.close();
     }
 
-    public void saveUpdateInfo(String newBaselineVersion, HashMap<String,String> infos,boolean cachePreVersion,String storageLocation) throws IOException{
+    public void saveUpdateInfo(String newBaselineVersion, HashMap<String,String> infos,boolean cachePreVersion) throws IOException{
         StringBuilder bundleList = new StringBuilder("");
         for(Iterator iterator = infos.entrySet().iterator(); iterator.hasNext();)
         {
@@ -606,34 +576,40 @@ public class KernalVersionManager {
             newBaselineInfoFile.createNewFile();
         }
         DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(new File(newBaselineInfoFile.getAbsolutePath()))));
+        PackageInfo info = null;
+        // 获取当前的版本号
+        try {
+            PackageManager packageManager = KernalConstants.baseContext.getPackageManager();
+            info = packageManager.getPackageInfo(KernalConstants.baseContext.getPackageName(), 0);
+        } catch (Exception e) {
+            // 不可能发生
+            info = new PackageInfo();
+            info.versionName = "";
+            info.versionCode = 1;
+        }
         String bundleListStr = bundleList.toString();
         /**
          * 写入顺序
          * 上一次versionname
          * 上一次更新内容
-         * 上一次的存储地址
          * 本次versionname
          * 本次更新内容
-         * 本次存储地址
+         * dexpatch versionname
          * dexpatch 更新内容
-         * dexpatch 存储地址
          * 是否发生了回滚
          */
+        out.writeUTF(!TextUtils.isEmpty(LAST_VERSIONNAME) ? LAST_VERSIONNAME : info.versionName);
         if(cachePreVersion) {
-            out.writeUTF(!TextUtils.isEmpty(CURRENT_VERSIONAME) ? CURRENT_VERSIONAME : "");
-            out.writeUTF(CURRENT_UPDATE_BUNDLES != null ? CURRENT_UPDATE_BUNDLES : "");
-            out.writeUTF(CURRENT_STORAGE_LOCATION != null ? CURRENT_STORAGE_LOCATION : "");
+            out.writeUTF(LAST_UPDATE_BUNDLES != null ? LAST_UPDATE_BUNDLES : "");
         }else{
             out.writeUTF("");
-            out.writeUTF("");
-            out.writeUTF("");
         }
-        out.writeUTF(newBaselineVersion);
+        out.writeUTF(newBaselineVersion != null ? newBaselineVersion : info.versionName);
         out.writeUTF(bundleListStr);
-        out.writeUTF(storageLocation!=null ? storageLocation : "");
         //dexpatch 部分
+        out.writeLong(0);
         out.writeUTF("");
-        out.writeUTF("");
+        out.writeBoolean(false);
         out.writeBoolean(cachePreVersion);
         out.flush();
         out.close();
@@ -666,29 +642,6 @@ public class KernalVersionManager {
         } catch (Exception e) {
 
         }
-    }
-
-    private String getStorageState(File path) {
-        if(path.getAbsolutePath().startsWith(KernalConstants.baseContext.getFilesDir().getAbsolutePath())){
-            return MEDIA_MOUNTED;
-        }
-        final int version = Build.VERSION.SDK_INT;
-        if (version >= 19) {
-            return Environment.getStorageState(path);
-        }
-
-        try {
-            final String canonicalPath = path.getCanonicalPath();
-            final String canonicalExternal = Environment.getExternalStorageDirectory()
-                    .getCanonicalPath();
-
-            if (canonicalPath.startsWith(canonicalExternal)) {
-                return Environment.getExternalStorageState();
-            }
-        } catch (IOException e) {
-        }
-
-        return MEDIA_UNKNOWN;
     }
 
 }

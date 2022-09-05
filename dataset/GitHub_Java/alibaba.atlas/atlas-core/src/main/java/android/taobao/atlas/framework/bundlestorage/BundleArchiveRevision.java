@@ -208,17 +208,20 @@
 
 package android.taobao.atlas.framework.bundlestorage;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import android.os.Build;
+import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
+import android.taobao.atlas.framework.Framework;
+import android.taobao.atlas.util.*;
+import android.taobao.atlas.util.log.impl.AtlasMonitor;
+import android.text.TextUtils;
+import android.taobao.atlas.hack.AtlasHacks;
+import android.taobao.atlas.runtime.RuntimeVariables;
+import android.util.Log;
+import dalvik.system.DexClassLoader;
+import dalvik.system.DexFile;
+
+import java.io.*;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -230,25 +233,6 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import android.app.PreVerifier;
-import android.content.Context;
-import android.os.Build;
-import android.support.multidex.MultiDex;
-import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
-import android.taobao.atlas.framework.Framework;
-import android.taobao.atlas.hack.AtlasHacks;
-import android.taobao.atlas.runtime.RuntimeVariables;
-import android.taobao.atlas.util.ApkUtils;
-import android.taobao.atlas.util.AtlasFileLock;
-import android.taobao.atlas.util.IOUtil;
-import android.taobao.atlas.util.StringUtils;
-import android.taobao.atlas.util.log.impl.AtlasMonitor;
-import android.text.TextUtils;
-import android.util.Log;
-import com.taobao.android.runtime.AndroidRuntime;
-import dalvik.system.DexClassLoader;
-import dalvik.system.DexFile;
-
 public class BundleArchiveRevision {
 
     final static String  BUNDLE_ODEX_FILE   = "bundle.dex";
@@ -256,7 +240,6 @@ public class BundleArchiveRevision {
     final static String  REFERENCE_PROTOCOL = "reference:";
     final static String  FILE_PROTOCOL      = "file:";
     final static String  BUNDLE_FILE_NAME   = "bundle.zip";
-    private DexFile patchDexFileForDebug;
     /**
      * the bundle revision file location.
      */
@@ -272,23 +255,13 @@ public class BundleArchiveRevision {
 
     //There is no DexFile on yunos 2.x, so we use DexClassLoader;
     private ClassLoader  dexClassLoader;
-    private boolean externalStorage = false;
 
     //create
     BundleArchiveRevision(String location, File revisionDir, InputStream inputStream) throws IOException{
-        if (Boolean.FALSE.booleanValue()){
-            String.valueOf(PreVerifier.class);
-        }
-
         this.revisionDir = revisionDir;
         this.location = location;
         if (!this.revisionDir.exists()) {
             this.revisionDir.mkdirs();
-        }
-        if(revisionDir.getAbsolutePath().startsWith(RuntimeVariables.androidApplication.getFilesDir().getAbsolutePath())){
-            externalStorage = false;
-        }else{
-            externalStorage = true;
         }
         this.revisionLocation = FILE_PROTOCOL;
         this.bundleFile = new File(revisionDir, BUNDLE_FILE_NAME);
@@ -304,11 +277,7 @@ public class BundleArchiveRevision {
         if (!this.revisionDir.exists()) {
             this.revisionDir.mkdirs();
         }
-        if(revisionDir.getAbsolutePath().startsWith(RuntimeVariables.androidApplication.getFilesDir().getAbsolutePath())){
-            externalStorage = false;
-        }else{
-            externalStorage = true;
-        }
+
         if(shouldCopyInstallFile(file)){
             if (isSameDriver(revisionDir, file)) {
                 this.revisionLocation = FILE_PROTOCOL;
@@ -334,11 +303,6 @@ public class BundleArchiveRevision {
     //reload
     BundleArchiveRevision(String location, File revisionDir) throws IOException{
         this.location = location;
-        if(revisionDir.getAbsolutePath().startsWith(RuntimeVariables.androidApplication.getFilesDir().getAbsolutePath())){
-            externalStorage = false;
-        }else{
-            externalStorage = true;
-        }
         File metafile = new File(revisionDir, "meta");
         if (metafile.exists()) {
             DataInputStream in = new DataInputStream(new FileInputStream(metafile));
@@ -477,20 +441,12 @@ public class BundleArchiveRevision {
             }
 
             if (dexFile == null){
-                if(!externalStorage || (externalStorage && Build.VERSION.SDK_INT>=21 && MultiDex.IS_VM_MULTIDEX_CAPABLE)) {
-                    boolean interpretOnly = externalStorage ? true : false;
-                    dexFile = AndroidRuntime.getInstance().loadDex(RuntimeVariables.androidApplication, bundleFile.getAbsolutePath(), odexFile.getAbsolutePath(), 0, interpretOnly);
-                }else{
-                    Method m=Class.forName("android.taobao.atlas.util.DexFileCompat")
-                            .getDeclaredMethod("loadDex", Context.class,String.class,String.class,int.class);
-                    dexFile= (DexFile) m.invoke(null,RuntimeVariables.androidApplication,bundleFile.getAbsolutePath(), odexFile.getAbsolutePath(), 0);
-                    //dexFile = DexFileCompat.loadDex(RuntimeVariables.androidApplication,bundleFile.getAbsolutePath(), odexFile.getAbsolutePath(), 0);
-                }
+                dexFile = com.taobao.android.runtime.RuntimeUtils.loadDex(RuntimeVariables.androidApplication, bundleFile.getAbsolutePath(), odexFile.getAbsolutePath(), 0);
             }
             //9月份版本明天发布先不集成
 //            isDexOptDone = checkDexValid(dexFile);
             isDexOptDone = true;
-        } catch (Exception e) {
+        } catch (IOException e) {
             if (odexFile.exists()) {
                 odexFile.delete();
             }
@@ -642,13 +598,8 @@ public class BundleArchiveRevision {
             }
 
             if (dexFile == null){
+//                loadDex(new File(revisionDir, BUNDLE_ODEX_FILE));
                 optDexFile();
-            }
-            if(Framework.isDeubgMode()){
-                clazz = findPatchClass(className,cl);
-                if(clazz!=null){
-                    return clazz;
-                }
             }
             clazz = dexFile.loadClass(className, cl);
             return clazz;
@@ -662,34 +613,6 @@ public class BundleArchiveRevision {
             } else {
                 Log.e("Framework","Exception while find class in archive revision: " + bundleFile.getAbsolutePath(), e);
             }
-        }
-        return null;
-    }
-
-    private Class findPatchClass(String clazz,ClassLoader cl){
-        if(patchDexFileForDebug==null){
-            File debugBundleDir = new File(RuntimeVariables.androidApplication.getExternalFilesDir("debug_storage"),location);
-            File patchFile = new File(debugBundleDir,"patch.zip");
-            if(patchFile.exists()){
-                try {
-                    patchDexFileForDebug = AndroidRuntime.getInstance().loadDex(RuntimeVariables.androidApplication,
-                            patchFile.getAbsolutePath(), new File(debugBundleDir,"patch.dex").getAbsolutePath(), 0,true);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-        if(patchDexFileForDebug!=null){
-            return patchDexFileForDebug.loadClass(clazz,cl);
-        }
-        return null;
-    }
-
-    public String getDebugPatchFilePath(){
-        File debugBundleDir = new File(RuntimeVariables.androidApplication.getExternalFilesDir("debug_storage"),location);
-        File patchFile = new File(debugBundleDir,"patch.zip");
-        if(patchFile.exists()){
-            return patchFile.getAbsolutePath();
         }
         return null;
     }

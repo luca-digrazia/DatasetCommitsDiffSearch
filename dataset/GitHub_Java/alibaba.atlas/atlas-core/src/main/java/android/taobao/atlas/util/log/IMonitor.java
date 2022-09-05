@@ -208,7 +208,10 @@
 
 package android.taobao.atlas.util.log;
 
+import java.util.Map;
+
 public interface IMonitor {
-	public void trace(String TypeID, String BundleName, String Detail, String remainedDisk);
-	public void trace(Integer TypeID, String BundleName, String Detail, String remainedDisk);
+
+	public void report(String errCode, Map<String, Object> detail, Throwable throwable);
+
 }

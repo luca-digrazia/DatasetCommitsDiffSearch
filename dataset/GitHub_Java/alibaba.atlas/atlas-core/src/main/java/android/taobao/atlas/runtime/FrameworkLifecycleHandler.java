@@ -212,9 +212,6 @@ import android.content.ComponentCallbacks;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
-import android.os.Looper;
-import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
-import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleImpl;
 import android.taobao.atlas.framework.BundleInstaller;
@@ -233,9 +230,6 @@ import android.taobao.atlas.startup.patch.KernalConstants;
 import android.taobao.atlas.util.StringUtils;
 import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
-
-import java.util.List;
-
 
 public class FrameworkLifecycleHandler implements FrameworkListener {
 
@@ -312,19 +306,6 @@ public class FrameworkLifecycleHandler implements FrameworkListener {
             }
         });
 
-        List<BundleListing.BundleInfo> allMbundleInfos = AtlasBundleInfoManager.instance().getAllMBundleInfo();
-
-        for (BundleListing.BundleInfo bundleInfo:allMbundleInfos){
-            try {
-                Application app = BundleLifecycleHandler.newApplication(bundleInfo.applicationName,
-                        Framework.getSystemClassLoader());
-                app.onCreate();
-            }catch (Exception e){
-                e.printStackTrace();
-            }
-
-        }
-
 //        try {
 //            if (RuntimeVariables.androidApplication.getPackageName().equals(RuntimeVariables.getProcessName(RuntimeVariables.androidApplication))) {
 //                SharedPreferences sharedPreferences = RuntimeVariables.androidApplication.getSharedPreferences(KernalConstants.ATLAS_MONITOR, Context.MODE_PRIVATE);
@@ -341,41 +322,36 @@ public class FrameworkLifecycleHandler implements FrameworkListener {
 //        } catch (Throwable e) {}
 
         if(RuntimeVariables.getProcessName(RuntimeVariables.androidApplication).equals(RuntimeVariables.androidApplication.getPackageName())) {
-            final String autoStartBundle = (String) RuntimeVariables.getFrameworkProperty("autoStartBundles");
+            String autoStartBundle = (String) RuntimeVariables.getFrameworkProperty("autoStartBundles");
             if (autoStartBundle != null) {
-                new android.os.Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        String[] bundles = autoStartBundle.split(",");
-                        if (bundles.length > 0) {
-                            for (int x = 0; x < bundles.length; x++) {
-                                final String bundleName = bundles[x];
-                                BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
-                                if (impl == null) {
-                                    BundleInstaller.startDelayInstall(bundleName, new BundleInstaller.InstallListener() {
-                                        @Override
-                                        public void onFinished() {
-                                            BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
-                                            if (impl != null) {
-                                                try {
-                                                    impl.start();
-                                                } catch (BundleException e) {
-                                                    e.printStackTrace();
-                                                }
-                                            }
+                String[] bundles = autoStartBundle.split(",");
+                if (bundles.length > 0) {
+                    for (int x = 0; x < bundles.length; x++) {
+                        final String bundleName = bundles[x];
+                        BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
+                        if (impl == null) {
+                            BundleInstaller.startDelayInstall(bundleName, new BundleInstaller.InstallListener() {
+                                @Override
+                                public void onFinished() {
+                                    BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(bundleName);
+                                    if (impl != null) {
+                                        try {
+                                            impl.start();
+                                        } catch (BundleException e) {
+                                            e.printStackTrace();
                                         }
-                                    });
-                                } else {
-                                    try {
-                                        impl.start();
-                                    } catch (BundleException e) {
-                                        e.printStackTrace();
                                     }
                                 }
+                            });
+                        } else {
+                            try {
+                                impl.start();
+                            } catch (BundleException e) {
+                                e.printStackTrace();
                             }
                         }
                     }
-                },4000);
+                }
             }
         }
     }

@@ -213,6 +213,8 @@ package android.taobao.atlas.startup.patch.releaser;
  */
 
 import android.app.PreVerifier;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
@@ -222,7 +224,6 @@ import dalvik.system.DexFile;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Enumeration;
 import java.util.concurrent.CountDownLatch;
@@ -420,23 +421,6 @@ public class BundleReleaser {
             }
         });
          dexFiles = new DexFile[validDexes.length];
-
-        Object runtimeInstance = null;
-        Method setVerificationEnabledMethod = null;
-        try {
-            Class AndroidRuntimeClass = Class.forName("com.taobao.android.runtime.AndroidRuntime");
-            runtimeInstance = AndroidRuntimeClass.getDeclaredMethod("getInstance").invoke(null);
-            setVerificationEnabledMethod = AndroidRuntimeClass.getDeclaredMethod("setVerificationEnabled",boolean.class);
-        } catch (Throwable e) {
-            e.printStackTrace();
-        }
-        if(setVerificationEnabledMethod!=null && runtimeInstance!=null) {
-            try {
-                setVerificationEnabledMethod.invoke(runtimeInstance, true);
-            } catch (Throwable e) {
-                e.printStackTrace();
-            }
-        }
         final CountDownLatch countDownLatch = new CountDownLatch(validDexes.length);
         for (int i = 0;i < validDexes.length;i++) {
             final int j = i;
@@ -455,6 +439,14 @@ public class BundleReleaser {
                         e.printStackTrace();
                         handler.sendMessage(handler.obtainMessage(MSG_ID_RELEASE_FAILED));
                     } finally {
+                        //后面需要loadclass,这里不能close
+//                        if (dexFile != null) {
+//                            try {
+//                                dexFile.close();
+//                            } catch (IOException e) {
+//                                e.printStackTrace();
+//                            }
+//                        }
                     }
                     Log.e(TAG, String.format("dex %s consume %d ms", validDexes[j].getAbsolutePath(),
                             System.currentTimeMillis() - startTime));
@@ -468,13 +460,7 @@ public class BundleReleaser {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        if(setVerificationEnabledMethod!=null && runtimeInstance!=null) {
-            try {
-                setVerificationEnabledMethod.invoke(runtimeInstance, false);
-            } catch (Throwable e) {
-                e.printStackTrace();
-            }
-        }        Log.e(TAG, "dex opt done");
+        Log.e(TAG, "dex opt done");
         handler.sendMessage(handler.obtainMessage(MSG_ID_DEX_OPT_DONE));
     }
 
