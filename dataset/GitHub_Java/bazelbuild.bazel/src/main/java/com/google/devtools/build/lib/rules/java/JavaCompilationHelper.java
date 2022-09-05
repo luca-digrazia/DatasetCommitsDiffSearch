@@ -65,13 +65,11 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
   private final List<Artifact> translations = new ArrayList<>();
   private boolean translationsFrozen;
   private final JavaSemantics semantics;
-  private final String implicitAttributesSuffix;
 
   public JavaCompilationHelper(RuleContext ruleContext, JavaSemantics semantics,
       ImmutableList<String> javacOpts, JavaTargetAttributes.Builder attributes,
       String implicitAttributesSuffix) {
     super(ruleContext, implicitAttributesSuffix);
-    this.implicitAttributesSuffix = implicitAttributesSuffix;
     this.attributes = attributes;
     this.customJavacOpts = javacOpts;
     this.customJavacJvmOpts = javaToolchain.getJavacJvmOptions();
@@ -136,8 +134,8 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.addClasspathResources(attributes.getClassPathResources());
     builder.setBootclasspathEntries(getBootclasspathOrDefault());
     builder.setExtdirInputs(getExtdirInputs());
-    builder.setLangtoolsJar(javaToolchain.getJavac());
-    builder.setJavaBuilderJar(javaToolchain.getJavaBuilder());
+    builder.setLangtoolsJar(getLangtoolsJar());
+    builder.setJavaBuilderJar(getJavaBuilderJar());
     builder.addTranslations(getTranslations());
     builder.setOutputJar(outputJar);
     builder.setManifestProtoOutput(manifestProtoOutput);
@@ -263,8 +261,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
                 runtimeJar.getRoot());
 
     JavaTargetAttributes attributes = getAttributes();
-    JavaHeaderCompileActionBuilder builder =
-        new JavaHeaderCompileActionBuilder(getRuleContext(), implicitAttributesSuffix);
+    JavaHeaderCompileActionBuilder builder = new JavaHeaderCompileActionBuilder(getRuleContext());
     builder.addSourceFiles(attributes.getSourceFiles());
     builder.addSourceJars(attributes.getSourceJars());
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
@@ -283,7 +280,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(attributes.getTargetLabel());
     builder.setJavaBaseInputs(getHostJavabaseInputsNonStatic(ruleContext));
-    builder.setJavacJar(javaToolchain.getJavac());
+    builder.setJavacJar(getLangtoolsJar());
     builder.build();
 
     artifactBuilder.setCompileTimeDependencies(headerDeps);
@@ -421,12 +418,12 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.addResources(attributes.getResources());
     builder.addClasspathResources(attributes.getClassPathResources());
     builder.setExtdirInputs(getExtdirInputs());
-    builder.setLangtoolsJar(javaToolchain.getJavac());
+    builder.setLangtoolsJar(getLangtoolsJar());
     builder.addTranslations(getTranslations());
     builder.setCompressJar(true);
     builder.setTempDirectory(tempDir(resourceJar));
     builder.setClassDirectory(classDir(resourceJar));
-    builder.setJavaBuilderJar(javaToolchain.getJavaBuilder());
+    builder.setJavaBuilderJar(getJavaBuilderJar());
     builder.setJavacOpts(getDefaultJavacOptsFromRule(getRuleContext()));
     builder.setJavacJvmOpts(javaToolchain.getJavacJvmOptions());
     getAnalysisEnvironment().registerAction(builder.build());

@@ -241,7 +241,7 @@ public class JavaHeaderCompileActionBuilder {
       builder.addOutput(outputDepsProto);
     }
 
-    builder.useParameterFile(ParameterFileType.UNQUOTED);
+    builder.useParameterFile(ParameterFileType.SHELL_QUOTED);
     builder.setCommandLine(buildCommandLine(ruleContext.getConfiguration().getHostPathSeparator()));
 
     builder.addTransitiveInputs(javabaseInputs);
@@ -315,8 +315,7 @@ public class JavaHeaderCompileActionBuilder {
     }
     if (targetLabel != null) {
       result.add("--target_label");
-      if (targetLabel.getPackageIdentifier().getRepository().isDefault()
-          || targetLabel.getPackageIdentifier().getRepository().isMain()) {
+      if (targetLabel.getPackageIdentifier().getRepository().isDefault()) {
         result.add(targetLabel.toString());
       } else {
         // @-prefixed strings will be assumed to be params filenames and expanded,
