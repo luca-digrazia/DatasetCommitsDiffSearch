@@ -43,5 +43,4 @@ public class QueryParamEntity extends QueryParam implements QueryEntity {
     public static QueryParamEntity single(String field, Object value) {
         return empty().where(field, value);
     }
-
 }
