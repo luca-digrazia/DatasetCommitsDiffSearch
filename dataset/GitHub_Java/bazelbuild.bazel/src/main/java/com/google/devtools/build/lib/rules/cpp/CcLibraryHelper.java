@@ -168,7 +168,7 @@ public final class CcLibraryHelper {
   private final List<PathFragment> looseIncludeDirs = new ArrayList<>();
   private final List<PathFragment> systemIncludeDirs = new ArrayList<>();
   private final List<PathFragment> includeDirs = new ArrayList<>();
-  @Nullable private Artifact dynamicLibrary;
+  @Nullable private PathFragment dynamicLibraryPath;
   private LinkTargetType linkType = LinkTargetType.STATIC_LIBRARY;
   private HeadersCheckingMode headersCheckingMode = HeadersCheckingMode.LOOSE;
   private boolean neverlink;
@@ -462,8 +462,8 @@ public final class CcLibraryHelper {
    * dynamic library is an implicit or explicit output of the rule, i.e., if it is accessible by
    * name from other rules in the same package. Set to {@code null} to use the default computation.
    */
-  public CcLibraryHelper setDynamicLibrary(@Nullable Artifact dynamicLibrary) {
-    this.dynamicLibrary = dynamicLibrary;
+  public CcLibraryHelper setDynamicLibraryPath(@Nullable PathFragment dynamicLibraryPath) {
+    this.dynamicLibraryPath = dynamicLibraryPath;
     return this;
   }
 
@@ -620,7 +620,7 @@ public final class CcLibraryHelper {
         // configurations --save_temps setting to decide whether to actually save the temps.
         .setSaveTemps(true)
         .setNoCopts(nocopts)
-        .setDynamicLibrary(dynamicLibrary)
+        .setDynamicLibraryPath(dynamicLibraryPath)
         .addLinkopts(linkopts)
         .setFeatureConfiguration(featureConfiguration);
     CppCompilationContext cppCompilationContext =
