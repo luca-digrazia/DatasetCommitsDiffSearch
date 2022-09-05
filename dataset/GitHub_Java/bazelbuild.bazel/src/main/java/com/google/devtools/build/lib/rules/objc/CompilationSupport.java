@@ -25,7 +25,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.Flag.USES_SW
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE_SYSTEM;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
@@ -45,8 +44,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -102,14 +99,6 @@ public final class CompilationSupport {
       ImmutableList.of("-fprofile-arcs", "-ftest-coverage");
 
   private static final String FRAMEWORK_SUFFIX = ".framework";
-
-  private static final Predicate<String> INCLUDE_DIR_OPTION_IN_COPTS =
-      new Predicate<String>() {
-        @Override
-        public boolean apply(String copt) {
-          return copt.startsWith("-I") && copt.length() > 2;
-        }
-      };
 
   /**
    * Iterable wrapper providing strong type safety for arguments to binary linking.
@@ -246,7 +235,6 @@ public final class CompilationSupport {
             "-iquote", ObjcCommon.userHeaderSearchPaths(ruleContext.getConfiguration()))
         .addBeforeEachExecPath("-include", compilationArtifacts.getPchFile().asSet())
         .addBeforeEachPath("-I", objcProvider.get(INCLUDE))
-        .addBeforeEachPath("-isystem", objcProvider.get(INCLUDE_SYSTEM))
         .add(otherFlags)
         .addFormatEach("-D%s", objcProvider.get(DEFINE))
         .add(coverageFlags.build())
@@ -754,30 +742,15 @@ public final class CompilationSupport {
     for (CompilationArtifacts artifacts : common.getCompilationArtifacts().asSet()) {
       xcodeProviderBuilder.setCompilationArtifacts(artifacts);
     }
-
-    // The include directory options ("-I") are parsed out of copts. The include directories are
-    // added as non-propagated header search paths local to the associated Xcode target.
-    Iterable<String> copts = Iterables.concat(
-        objcConfiguration.getCopts(), attributes.copts(), attributes.optionsCopts());
-    Iterable<String> includeDirOptions = Iterables.filter(copts, INCLUDE_DIR_OPTION_IN_COPTS);
-    Iterable<String> coptsWithoutIncludeDirs = Iterables.filter(
-        copts, Predicates.not(INCLUDE_DIR_OPTION_IN_COPTS));
-    ImmutableList.Builder<PathFragment> nonPropagatedHeaderSearchPaths =
-        new ImmutableList.Builder<>();
-    for (String includeDirOption : includeDirOptions) {
-      nonPropagatedHeaderSearchPaths.add(new PathFragment(includeDirOption.substring(2)));
-    }
-
     xcodeProviderBuilder
         .addHeaders(attributes.hdrs())
         .addUserHeaderSearchPaths(ObjcCommon.userHeaderSearchPaths(ruleContext.getConfiguration()))
         .addHeaderSearchPaths("$(WORKSPACE_ROOT)", attributes.headerSearchPaths())
         .addHeaderSearchPaths("$(SDKROOT)/usr/include", attributes.sdkIncludes())
-        .addNonPropagatedHeaderSearchPaths(
-            "$(WORKSPACE_ROOT)", nonPropagatedHeaderSearchPaths.build())
         .addCompilationModeCopts(objcConfiguration.getCoptsForCompilationMode())
-        .addCopts(coptsWithoutIncludeDirs);
-
+        .addCopts(objcConfiguration.getCopts())
+        .addCopts(attributes.copts())
+        .addCopts(attributes.optionsCopts());
     return this;
   }
 
