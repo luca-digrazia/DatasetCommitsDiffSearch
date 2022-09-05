@@ -20,6 +20,7 @@ import static com.google.devtools.build.lib.packages.Type.STRING;
 import static com.google.devtools.build.lib.packages.Type.TRISTATE;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.BaseJavaBinaryRule;
@@ -27,42 +28,27 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.Jvm;
 
 /**
  * Rule definition for the java_test rule.
  */
+@BlazeRule(name = "java_test",
+             type = RuleClassType.TEST,
+             ancestors = { BaseJavaBinaryRule.class,
+                           BaseRuleClasses.TestBaseRule.class },
+             factoryClass = BazelJavaTest.class)
 public final class BazelJavaTestRule implements RuleDefinition {
-
+  
   private static final String JUNIT4_RUNNER = "org.junit.runner.JUnitCore";
 
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-    /* <!-- #BLAZE_RULE(java_test).IMPLICIT_OUTPUTS -->
-    <ul>
-      <li><code><var>name</var>.jar</code>: A Java archive.</li>
-      <li><code><var>name</var>_deploy.jar</code>: A Java archive suitable for deployment. (Only
-        built if explicitly requested.)</li>
-    </ul>
-    <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS --> */
     return builder
-        .requiresConfigurationFragments(JavaConfiguration.class, Jvm.class)
         .setImplicitOutputsFunction(BazelJavaRuleClasses.JAVA_BINARY_IMPLICIT_OUTPUTS)
         .override(attr("main_class", STRING).value(JUNIT4_RUNNER))
         .override(attr("stamp", TRISTATE).value(TriState.NO))
         .override(attr(":java_launcher", LABEL).value(JavaSemantics.JAVA_LAUNCHER))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("java_test")
-        .type(RuleClassType.TEST)
-        .ancestors(BaseJavaBinaryRule.class, BaseRuleClasses.TestBaseRule.class)
-        .factoryClass(BazelJavaTest.class)
         .build();
   }
 }

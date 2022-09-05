@@ -14,10 +14,11 @@
 package com.google.devtools.build.lib.bazel.rules.common;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -27,6 +28,9 @@ import com.google.devtools.build.lib.rules.test.TestSuite;
 /**
  * Rule object implementing "test_suite".
  */
+@BlazeRule(name = "test_suite",
+             ancestors = { BaseRuleClasses.BaseRule.class },
+             factoryClass = TestSuite.class)
 public final class BazelTestSuiteRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -97,15 +101,6 @@ public final class BazelTestSuiteRule implements RuleDefinition {
         // tests=[] and suites=[]:
         .add(attr("$implicit_tests", LABEL_LIST)
             .nonconfigurable("Accessed in TestTargetUtils without config context"))
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("test_suite")
-        .ancestors(BaseRuleClasses.BaseRule.class)
-        .factoryClass(TestSuite.class)
         .build();
   }
 }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.bazel.rules.sh;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.sh.BazelShRuleClasses.ShRule;
@@ -24,20 +25,14 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 /**
  * Rule definition for the sh_test rule.
  */
+@BlazeRule(name = "sh_test",
+             type = RuleClassType.TEST,
+             ancestors = { ShRule.class, BaseRuleClasses.TestBaseRule.class },
+             factoryClass = ShBinary.class)
 public final class BazelShTestRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder.build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("sh_test")
-        .type(RuleClassType.TEST)
-        .ancestors(ShRule.class, BaseRuleClasses.TestBaseRule.class)
-        .factoryClass(ShBinary.class)
-        .build();
   }
 }
 
@@ -49,8 +44,7 @@ ${ATTRIBUTE_SIGNATURE}
 
 ${ATTRIBUTE_DEFINITION}
 
-<p>See the <a href="common-definitions.html#common-attributes-tests">
-attributes common to all test rules (*_test)</a>.</p>
+<p>See the <a href="#common-attributes-tests">attributes common to all test rules (*_test)</a>.</p>
 
 <h4 id="sh_test_examples">Examples</h4>
 

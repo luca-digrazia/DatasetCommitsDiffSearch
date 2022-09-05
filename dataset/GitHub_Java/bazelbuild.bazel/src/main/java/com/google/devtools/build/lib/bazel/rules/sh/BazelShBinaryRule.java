@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bazel.rules.sh;
 
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.BazelBaseRuleClasses;
@@ -23,19 +24,13 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 /**
  * Rule definition for the sh_binary rule.
  */
+@BlazeRule(name = "sh_binary",
+             ancestors = { ShRule.class, BazelBaseRuleClasses.BinaryBaseRule.class },
+             factoryClass = ShBinary.class)
 public final class BazelShBinaryRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
     return builder.build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("sh_binary")
-        .ancestors(ShRule.class, BazelBaseRuleClasses.BinaryBaseRule.class)
-        .factoryClass(ShBinary.class)
-        .build();
   }
 }
 
@@ -48,6 +43,10 @@ public final class BazelShBinaryRule implements RuleDefinition {
   We recommend that you name your <code>sh_binary()</code> rules after the name of the script minus
   the extension (e.g. <code>.sh</code>); do not give the rule and the file the same name.
 </p>
+
+${ATTRIBUTE_SIGNATURE}
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="sh_binary_examples">Example</h4>
 
