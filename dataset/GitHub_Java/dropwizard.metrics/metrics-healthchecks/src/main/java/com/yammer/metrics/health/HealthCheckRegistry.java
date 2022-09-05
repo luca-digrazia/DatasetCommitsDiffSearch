@@ -43,6 +43,30 @@ public class HealthCheckRegistry {
     }
 
     /**
+     * Returns a set of the names of all registered health checks.
+     *
+     * @return the names of all registered health checks
+     */
+    public SortedSet<String> getNames() {
+        return Collections.unmodifiableSortedSet(new TreeSet<String>(healthChecks.keySet()));
+    }
+
+    /**
+     * Runs the health check with the given name.
+     *
+     * @param name    the health check's name
+     * @return the result of the health check
+     * @throws NoSuchElementException if there is no health check with the given name
+     */
+    public HealthCheck.Result runHealthCheck(String name) throws NoSuchElementException {
+        final HealthCheck healthCheck = healthChecks.get(name);
+        if (healthCheck == null) {
+            throw new NoSuchElementException("No health check named " + name + " exists");
+        }
+        return healthCheck.execute();
+    }
+
+    /**
      * Runs the registered health checks and returns a map of the results.
      *
      * @return a map of the health check results
