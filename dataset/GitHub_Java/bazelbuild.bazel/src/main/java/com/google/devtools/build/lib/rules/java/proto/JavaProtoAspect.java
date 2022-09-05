@@ -27,6 +27,7 @@ import static com.google.devtools.build.lib.rules.java.proto.JavaProtoLibraryTra
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -36,7 +37,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -60,6 +60,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
 import com.google.devtools.build.lib.rules.proto.SupportData;
 import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /** An Aspect which JavaProtoLibrary injects to build Java SPEED protos. */
@@ -192,8 +193,9 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                   GET_PROVIDER));
     }
 
-    TransitiveInfoProviderMap createProviders() {
-      TransitiveInfoProviderMap.Builder result = TransitiveInfoProviderMap.builder();
+    Map<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> createProviders() {
+      ImmutableMap.Builder<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> result =
+          ImmutableMap.builder();
 
       // Represents the result of compiling the code generated for this proto, including all of its
       // dependencies.
@@ -216,12 +218,16 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
             NestedSetBuilder.<Artifact>stableOrder().add(sourceJar).build();
         transitiveOutputJars.add(outputJar);
 
-        result.add(
-            new JavaRuntimeJarAspectProvider(
-                new JavaRuntimeJarProvider(ImmutableList.of(outputJar))),
-            new JavaSourceJarsAspectProvider(
-                JavaSourceJarsProvider.create(
-                    NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars)));
+        result
+            .put(
+                JavaRuntimeJarAspectProvider.class,
+                new JavaRuntimeJarAspectProvider(
+                    new JavaRuntimeJarProvider(ImmutableList.of(outputJar))))
+            .put(
+                JavaSourceJarsAspectProvider.class,
+                new JavaSourceJarsAspectProvider(
+                    JavaSourceJarsProvider.create(
+                        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars)));
       } else {
         // No sources - this proto_library is an alias library, which exports its dependencies.
         // Simply propagate the compilation-args from its dependencies.
@@ -229,8 +235,11 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       }
 
       return result
-          .add(
-              new JavaProtoLibraryTransitiveFilesToBuildProvider(transitiveOutputJars.build()),
+          .put(
+              JavaProtoLibraryTransitiveFilesToBuildProvider.class,
+              new JavaProtoLibraryTransitiveFilesToBuildProvider(transitiveOutputJars.build()))
+          .put(
+              JavaCompilationArgsAspectProvider.class,
               new JavaCompilationArgsAspectProvider(generatedCompilationArgsProvider))
           .build();
     }
@@ -294,10 +303,10 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
      */
     private ImmutableList<String> constructJavacOpts() {
       JavaToolchainProvider toolchain = JavaToolchainProvider.fromRuleContext(ruleContext);
-      return ImmutableList.<String>builder()
-          .addAll(toolchain.getJavacOptions())
-          .addAll(toolchain.getCompatibleJavacOptions(JavaSemantics.JAVA7_JAVACOPTS_KEY))
-          .build();
+      ImmutableList.Builder<String> listBuilder = ImmutableList.builder();
+      listBuilder.addAll(toolchain.getJavacOptions());
+      listBuilder.addAll(toolchain.getCompatibleJavacOptions(JavaSemantics.JAVA7_JAVACOPTS_KEY));
+      return listBuilder.build();
     }
 
     private <C extends TransitiveInfoProvider> Iterable<C> getDeps(Class<C> clazz) {

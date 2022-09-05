@@ -882,10 +882,10 @@ public class ObjcRuleClasses {
           .add(attr("$dummy_lib", LABEL).value(env.getToolsLabel("//tools/objc:dummy_lib")))
           .add(
               attr(PROTO_COMPILER_ATTR, LABEL)
-                  .allowedFileTypes(FileType.of(".sh"))
+                  .allowedFileTypes(FileType.of(".py"))
                   .cfg(HOST)
                   .singleArtifact()
-                  .value(env.getToolsLabel("//tools/objc:protobuf_compiler_wrapper")))
+                  .value(env.getToolsLabel("//tools/objc:protobuf_compiler")))
           .add(
               attr(PROTO_COMPILER_SUPPORT_ATTR, LABEL)
                   .legacyAllowAnyFileType()
@@ -913,15 +913,15 @@ public class ObjcRuleClasses {
   }
 
   /**
+   * Attribute name for apple platform type (e.g. ios or watchos).
+   */
+  static final String PLATFORM_TYPE_ATTR_NAME = "platform_type";
+
+  /**
    * Common attributes for apple rules that build multi-architecture outputs for a given platform
    * type (such as ios or watchos).
    */
   public static class MultiArchPlatformRule implements RuleDefinition {
-
-    /**
-     * Attribute name for apple platform type (e.g. ios or watchos).
-     */
-    static final String PLATFORM_TYPE_ATTR_NAME = "platform_type";
 
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
