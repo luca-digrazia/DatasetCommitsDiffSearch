@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
 import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.FilesetEntry;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
@@ -138,7 +137,6 @@ public final class RuleContext extends TargetContext
   private final ImmutableSet<String> features;
   private final Map<String, Attribute> attributeMap;
   private final BuildConfiguration hostConfiguration;
-  private final ConfigurationFragmentPolicy configurationFragmentPolicy;
   private final ErrorReporter reporter;
 
   private ActionOwner actionOwner;
@@ -152,7 +150,6 @@ public final class RuleContext extends TargetContext
     super(builder.env, builder.rule, builder.configuration, builder.prerequisiteMap.get(null),
         builder.visibility);
     this.rule = builder.rule;
-    this.configurationFragmentPolicy = builder.configurationFragmentPolicy;
     this.targetMap = targetMap;
     this.filesetEntryMap = filesetEntryMap;
     this.configConditions = configConditions;
@@ -170,7 +167,7 @@ public final class RuleContext extends TargetContext
     parseFeatures(getConfiguration().getDefaultFeatures(), globallyEnabled, globallyDisabled);
     for (ImmutableMap.Entry<Class<? extends Fragment>, Fragment> entry :
         getConfiguration().getAllFragments().entrySet()) {
-      if (configurationFragmentPolicy.isLegalConfigurationFragment(entry.getKey())) {
+      if (rule.getRuleClassObject().isLegalConfigurationFragment(entry.getKey())) {
         globallyEnabled.addAll(entry.getValue().configurationEnabledFeatures(this));
       }
     }
@@ -311,13 +308,9 @@ public final class RuleContext extends TargetContext
     return getConfiguration(config).getSkylarkFragmentNames();
   }
 
-  public ConfigurationFragmentPolicy getConfigurationFragment() {
-    return configurationFragmentPolicy;
-  }
-
   public <T extends Fragment> boolean isLegalFragment(
       Class<T> fragment, ConfigurationTransition config) {
-    return configurationFragmentPolicy.isLegalConfigurationFragment(fragment, config);
+    return rule.getRuleClassObject().isLegalConfigurationFragment(fragment, config);
   }
 
   public <T extends Fragment> boolean isLegalFragment(Class<T> fragment) {
@@ -1230,7 +1223,6 @@ public final class RuleContext extends TargetContext
   public static final class Builder implements RuleErrorConsumer  {
     private final AnalysisEnvironment env;
     private final Rule rule;
-    private final ConfigurationFragmentPolicy configurationFragmentPolicy;
     private final BuildConfiguration configuration;
     private final BuildConfiguration hostConfiguration;
     private final PrerequisiteValidator prerequisiteValidator;
@@ -1244,7 +1236,6 @@ public final class RuleContext extends TargetContext
         PrerequisiteValidator prerequisiteValidator) {
       this.env = Preconditions.checkNotNull(env);
       this.rule = Preconditions.checkNotNull(rule);
-      this.configurationFragmentPolicy = rule.getRuleClassObject().getConfigurationFragmentPolicy();
       this.configuration = Preconditions.checkNotNull(configuration);
       this.hostConfiguration = Preconditions.checkNotNull(hostConfiguration);
       this.prerequisiteValidator = prerequisiteValidator;
