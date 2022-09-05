@@ -232,7 +232,7 @@ import static com.android.SdkConstants.DOT_JAR;
 import static com.android.SdkConstants.FD_AAR_LIBS;
 
 /**
- * 1. Increase localjar
+ * 1. 增加localjar
  *
  * @author wuzhong
  */
