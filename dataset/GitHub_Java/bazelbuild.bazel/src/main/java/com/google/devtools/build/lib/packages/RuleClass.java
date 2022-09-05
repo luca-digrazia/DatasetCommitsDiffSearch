@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1370,11 +1370,9 @@ public final class RuleClass {
   @SuppressWarnings("unchecked")
   Rule createRuleWithParsedAttributeValues(Label label,
       Package.Builder pkgBuilder, Location ruleLocation,
-      Map<String, ParsedAttributeValue> attributeValues, EventHandler eventHandler,
-      AttributeContainer attributeContainer)
+      Map<String, ParsedAttributeValue> attributeValues, EventHandler eventHandler)
           throws LabelSyntaxException, InterruptedException {
-    Rule rule = pkgBuilder.newRuleWithLabelAndAttrContainer(label, this, null, ruleLocation,
-        attributeContainer);
+    Rule rule = pkgBuilder.newRuleWithLabel(label, this, null, ruleLocation);
     rule.checkValidityPredicate(eventHandler);
 
     for (Attribute attribute : rule.getRuleClassObject().getAttributes()) {
@@ -1388,6 +1386,7 @@ public final class RuleClass {
       }
 
       rule.setAttributeValue(attribute, value.getValue(), value.getExplicitlySpecified());
+      rule.setAttributeLocation(attribute, value.getLocation());
       checkAllowedValues(rule, attribute, eventHandler);
 
       if (attribute.getName().equals("visibility")) {
