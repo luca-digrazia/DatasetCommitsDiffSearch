@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.actions.cache;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.cache.ActionCache.Entry;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadSafe;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.util.Clock;
@@ -64,7 +62,7 @@ public class CompactPersistentActionCache implements ActionCache {
 
   private static final int NO_INPUT_DISCOVERY_COUNT = -1;
 
-  private static final int VERSION = 12;
+  private static final int VERSION = 11;
 
   private static final Logger LOG = Logger.getLogger(CompactPersistentActionCache.class.getName());
 
@@ -154,8 +152,7 @@ public class CompactPersistentActionCache implements ActionCache {
 
   private final PersistentMap<Integer, byte[]> map;
   private final PersistentStringIndexer indexer;
-  static final ActionCache.Entry CORRUPTED =
-      new ActionCache.Entry(null, ImmutableMap.<String, String>of(), false);
+  static final ActionCache.Entry CORRUPTED = new ActionCache.Entry(null, false);
 
   public CompactPersistentActionCache(Path cacheRoot, Clock clock) throws IOException {
     Path cacheFile = cacheFile(cacheRoot);
@@ -338,11 +335,6 @@ public class CompactPersistentActionCache implements ActionCache {
     }
   }
 
-  @Override
-  public Entry newEntry(String key, Map<String, String> usedClientEnv, boolean discoversInputs) {
-    return new Entry(key, usedClientEnv, discoversInputs);
-  }
-
   /**
    * @return action data encoded as a byte[] array.
    */
@@ -359,14 +351,12 @@ public class CompactPersistentActionCache implements ActionCache {
       // + 16 bytes for the digest
       // + 5 bytes max for the file list length
       // + 5 bytes max for each file id
-      // + 16 bytes for the environment digest
       int maxSize =
           VarInt.MAX_VARINT_SIZE
               + actionKeyBytes.length
               + Md5Digest.MD5_SIZE
               + VarInt.MAX_VARINT_SIZE
-              + files.size() * VarInt.MAX_VARINT_SIZE
-              + Md5Digest.MD5_SIZE;
+              + files.size() * VarInt.MAX_VARINT_SIZE;
       ByteArrayOutputStream sink = new ByteArrayOutputStream(maxSize);
 
       VarInt.putVarInt(actionKeyBytes.length, sink);
@@ -378,9 +368,6 @@ public class CompactPersistentActionCache implements ActionCache {
       for (String file : files) {
         VarInt.putVarInt(indexer.getOrCreateIndex(file), sink);
       }
-
-      DigestUtils.write(entry.getUsedClientEnvDigest(), sink);
-
       return sink.toByteArray();
     } catch (IOException e) {
       // This Exception can never be thrown by ByteArrayOutputStream.
@@ -413,17 +400,11 @@ public class CompactPersistentActionCache implements ActionCache {
         }
         builder.add(filename);
       }
-
-      Md5Digest usedClientEnvDigest = DigestUtils.read(source);
-
       if (source.remaining() > 0) {
         throw new IOException("serialized entry data has not been fully decoded");
       }
       return new Entry(
-          actionKey,
-          usedClientEnvDigest,
-          count == NO_INPUT_DISCOVERY_COUNT ? null : builder.build(),
-          md5Digest);
+          actionKey, count == NO_INPUT_DISCOVERY_COUNT ? null : builder.build(), md5Digest);
     } catch (BufferUnderflowException e) {
       throw new IOException("encoded entry data is incomplete", e);
     }

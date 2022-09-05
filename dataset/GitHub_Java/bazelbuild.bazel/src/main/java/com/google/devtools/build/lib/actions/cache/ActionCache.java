@@ -59,13 +59,6 @@ public interface ActionCache {
   void remove(String key);
 
   /**
-   * Constructs an {@code Entry}.
-   * @return new {@code Entry} or null if the cache is disabled.
-   */
-  @Nullable
-  Entry newEntry(String key, Map<String, String> usedClientEnv, boolean discoversInputs);
-
-  /**
    * An entry in the ActionCache that contains all action input and output
    * artifact paths and their metadata plus action key itself.
    *
@@ -81,22 +74,15 @@ public interface ActionCache {
     // If null, md5Digest is non-null and the entry is immutable.
     private Map<String, Metadata> mdMap;
     private Md5Digest md5Digest;
-    private final Md5Digest usedClientEnvDigest;
 
-    public Entry(String key, Map<String, String> usedClientEnv, boolean discoversInputs) {
+    public Entry(String key, boolean discoversInputs) {
       actionKey = key;
-      this.usedClientEnvDigest = DigestUtils.fromEnv(usedClientEnv);
       files = discoversInputs ? new ArrayList<String>() : null;
       mdMap = new HashMap<>();
     }
 
-    public Entry(
-        String key,
-        Md5Digest usedClientEnvDigest,
-        @Nullable List<String> files,
-        Md5Digest md5Digest) {
+    public Entry(String key, @Nullable List<String> files, Md5Digest md5Digest) {
       actionKey = key;
-      this.usedClientEnvDigest = usedClientEnvDigest;
       this.files = files;
       this.md5Digest = md5Digest;
       mdMap = null;
@@ -123,11 +109,6 @@ public interface ActionCache {
      */
     public String getActionKey() {
       return actionKey;
-    }
-
-    /** @return the effectively used client environment */
-    public Md5Digest getUsedClientEnvDigest() {
-      return usedClientEnvDigest;
     }
 
     /**
