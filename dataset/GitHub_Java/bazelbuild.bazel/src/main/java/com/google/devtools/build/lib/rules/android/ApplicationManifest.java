@@ -324,8 +324,7 @@ public final class ApplicationManifest {
       Artifact rTxt,
       Artifact symbolsTxt,
       Artifact manifestOut,
-      Artifact mergedResources,
-      boolean alwaysExportManifest) throws InterruptedException {
+      Artifact mergedResources) throws InterruptedException {
     if (ruleContext.hasErrors()) {
       return null;
     }
@@ -344,7 +343,7 @@ public final class ApplicationManifest {
             .withROutput(rTxt)
             .withSymbolsFile(symbolsTxt)
             .useJavaPackageFromManifest(true)
-            .buildFromRule(ruleContext, null, alwaysExportManifest),
+            .buildFromRule(ruleContext, null),
         data,
         null, /* Artifact proguardCfg */
         null, /* Artifact mainDexProguardCfg */
