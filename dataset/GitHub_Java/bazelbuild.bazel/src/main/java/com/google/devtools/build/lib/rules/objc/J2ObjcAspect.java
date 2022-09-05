@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,12 +16,11 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
+import static com.google.devtools.build.lib.packages.Type.LABEL;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.Aspect;
@@ -33,19 +32,19 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.objc.J2ObjcSource.SourceType;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -60,9 +59,9 @@ public class J2ObjcAspect implements ConfiguredAspectFactory {
    * Adds the attribute aspect args to the given AspectDefinition.Builder.
    */
   protected AspectDefinition.Builder addAttributeAspects(AspectDefinition.Builder builder) {
-    return builder.attributeAspect("deps", J2ObjcAspect.class, BazelJ2ObjcProtoAspect.class)
-        .attributeAspect("exports", J2ObjcAspect.class, BazelJ2ObjcProtoAspect.class)
-        .attributeAspect("runtime_deps", J2ObjcAspect.class, BazelJ2ObjcProtoAspect.class);
+    return builder.attributeAspect("deps", J2ObjcAspect.class)
+        .attributeAspect("exports", J2ObjcAspect.class)
+        .attributeAspect("runtime_deps", J2ObjcAspect.class);
   }
 
   @Override
@@ -71,13 +70,13 @@ public class J2ObjcAspect implements ConfiguredAspectFactory {
         .requireProvider(JavaSourceInfoProvider.class)
         .requireProvider(JavaCompilationArgsProvider.class)
         .add(attr("$j2objc", LABEL).cfg(HOST).exec()
-            .value(parseLabel(Constants.TOOLS_REPOSITORY + "//tools/j2objc:j2objc_deploy.jar")))
+            .value(parseLabel("//tools/j2objc:j2objc_deploy.jar")))
         .add(attr("$j2objc_wrapper", LABEL)
             .allowedFileTypes(FileType.of(".py"))
             .cfg(HOST)
             .exec()
             .singleArtifact()
-            .value(parseLabel(Constants.TOOLS_REPOSITORY + "//tools/j2objc:j2objc_wrapper")))
+            .value(parseLabel("//tools/j2objc:j2objc_wrapper")))
         .build();
   }
 
@@ -245,7 +244,7 @@ public class J2ObjcAspect implements ConfiguredAspectFactory {
   private static void addJ2ObjCMappingsForAttribute(
       ImmutableList.Builder<J2ObjcMappingFileProvider> builder, RuleContext context,
       String attributeName) {
-    if (context.attributes().has(attributeName, BuildType.LABEL_LIST)) {
+    if (context.attributes().has(attributeName, Type.LABEL_LIST)) {
       for (TransitiveInfoCollection dependencyInfoDatum :
           context.getPrerequisites(attributeName, Mode.TARGET)) {
         J2ObjcMappingFileProvider provider =
