@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -40,9 +39,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
 import java.util.Map;
-import java.util.Set;
-
-import javax.annotation.Nullable;
 
 /**
  * A Skyframe function to look up and import a single Skylark extension.
@@ -61,17 +57,6 @@ public class SkylarkImportLookupFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException,
       InterruptedException {
-    return computeInternal(skyKey, env, null);
-  }
-
-  SkyValue computeWithInlineCalls(SkyKey skyKey, Environment env, Set<SkyKey> visitedKeysForCycle)
-      throws SkyFunctionException, InterruptedException {
-    return computeInternal(skyKey, env, Preconditions.checkNotNull(visitedKeysForCycle, skyKey));
-  }
-
-  SkyValue computeInternal(SkyKey skyKey, Environment env,
-      @Nullable Set<SkyKey> visitedKeysForCycle)
-      throws SkyFunctionException, InterruptedException {
     PackageIdentifier arg = (PackageIdentifier) skyKey.argument();
     PathFragment file = arg.getPackageFragment();
     ASTFileLookupValue astLookupValue = null;
@@ -99,12 +84,6 @@ public class SkylarkImportLookupFunction implements SkyFunction {
           SkylarkImportFailedException.skylarkErrors(file));
     }
 
-    Label label = pathFragmentToLabel(arg.getRepository(), file, env);
-    if (label == null) {
-      Preconditions.checkState(env.valuesMissing(), "null label with no missing %s", file);
-      return null;
-    }
-
     Map<Location, PathFragment> astImports = ast.getImports();
     Map<PathFragment, Extension> importMap = Maps.newHashMapWithExpectedSize(astImports.size());
     ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
@@ -118,47 +97,12 @@ public class SkylarkImportLookupFunction implements SkyFunction {
         throw new SkylarkImportLookupFunctionException(e, Transience.PERSISTENT);
       }
     }
+    Map<SkyKey, SkyValue> skylarkImportMap = env.getValues(skylarkImports.keySet());
 
-    Map<SkyKey, SkyValue> skylarkImportMap;
-    boolean valuesMissing = false;
-    if (visitedKeysForCycle == null) {
-      // Not inlining.
-      skylarkImportMap = env.getValues(skylarkImports.keySet());
-      valuesMissing = env.valuesMissing();
-    } else {
-      // inlining calls to SkylarkImportLookupFunction.
-      if (!visitedKeysForCycle.add(skyKey)) {
-        ImmutableList<SkyKey> cycle =
-            CycleUtils.splitIntoPathAndChain(Predicates.equalTo(skyKey), visitedKeysForCycle)
-                .second;
-        if (env.getValue(SkylarkImportUniqueCycleValue.key(cycle)) == null) {
-          return null;
-        }
-        throw new SkylarkImportLookupFunctionException(
-            new SkylarkImportFailedException("Skylark import cycle"));
-      }
-      skylarkImportMap = Maps.newHashMapWithExpectedSize(astImports.size());
-      for (SkyKey skylarkImport : skylarkImports.keySet()) {
-        SkyValue skyValue = this.computeWithInlineCalls(skylarkImport, env, visitedKeysForCycle);
-        if (skyValue == null) {
-          Preconditions.checkState(
-              env.valuesMissing(), "no skylark import value for %s", skylarkImport);
-          // Don't give up on computing. This is against the Skyframe contract, but we don't want to
-          // pay the price of serializing all these calls, since they are fundamentally independent.
-          valuesMissing = true;
-        } else {
-          skylarkImportMap.put(skylarkImport, skyValue);
-        }
-      }
-      // All imports traversed, this key can no longer be part of a cycle.
-      visitedKeysForCycle.remove(skyKey);
-    }
-
-    if (valuesMissing) {
+    if (env.valuesMissing()) {
       // This means some imports are unavailable.
       return null;
     }
-
     for (Map.Entry<SkyKey, SkyValue> entry : skylarkImportMap.entrySet()) {
       SkylarkImportLookupValue importLookupValue = (SkylarkImportLookupValue) entry.getValue();
       importMap.put(
@@ -166,9 +110,17 @@ public class SkylarkImportLookupFunction implements SkyFunction {
       fileDependencies.add(importLookupValue.getDependency());
     }
 
+    Label label = pathFragmentToLabel(arg.getRepository(), file, env);
+
+    if (label == null) {
+      Preconditions.checkState(env.valuesMissing(), "label null but no missing for %s", file);
+      return null;
+    }
+
     // Skylark UserDefinedFunction-s in that file will share this function definition Environment,
     // which will be frozen by the time it is returned by createExtension.
-    Extension extension = createExtension(ast, file, importMap, env);
+    Extension extension =
+        createExtension(ast, file, importMap, env);
 
     return new SkylarkImportLookupValue(
         extension, new SkylarkFileDependency(label, fileDependencies.build()));
@@ -183,7 +135,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
       throws SkylarkImportLookupFunctionException {
     ContainingPackageLookupValue containingPackageLookupValue = null;
     try {
-      PackageIdentifier newPkgId = PackageIdentifier.create(repo, file.getParentDirectory());
+      PackageIdentifier newPkgId = new PackageIdentifier(repo, file.getParentDirectory());
       containingPackageLookupValue = (ContainingPackageLookupValue) env.getValueOrThrow(
           ContainingPackageLookupValue.key(newPkgId),
           BuildFileNotFoundException.class, InconsistentFilesystemException.class);
