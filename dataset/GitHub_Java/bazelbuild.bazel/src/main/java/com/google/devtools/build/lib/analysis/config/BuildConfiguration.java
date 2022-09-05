@@ -599,9 +599,6 @@ public final class BuildConfiguration {
     )
     public List<Map.Entry<String, String>> testEnvironment;
 
-    // TODO(bazel-team): The set of available variables from the client environment for actions
-    // is computed independently in CommandEnvironment to inject a more restricted client
-    // environment to skyframe.
     @Option(
       name = "action_env",
       converter = Converters.OptionalAssignmentConverter.class,
@@ -2332,6 +2329,22 @@ public final class BuildConfiguration {
    */
   public BuildOptions getOptions() {
     return buildOptions;
+  }
+
+  /**
+   * Returns all the roots for this configuration.
+   */
+  public List<Root> getRoots() {
+    List<Root> roots = new ArrayList<>();
+
+    // Configuration-specific roots.
+    roots.add(getBinDirectory());
+    roots.add(getGenfilesDirectory());
+    roots.add(getIncludeDirectory(RepositoryName.MAIN));
+    roots.add(getMiddlemanDirectory(RepositoryName.MAIN));
+    roots.add(getTestLogsDirectory(RepositoryName.MAIN));
+
+    return ImmutableList.copyOf(roots);
   }
 
   public ListMultimap<String, Label> getAllLabels() {

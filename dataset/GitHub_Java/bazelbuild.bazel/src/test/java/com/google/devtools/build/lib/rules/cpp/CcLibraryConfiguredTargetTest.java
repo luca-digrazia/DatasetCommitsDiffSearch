@@ -920,13 +920,12 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         scratchConfiguredTarget(
             "foo",
             "x",
-            "cc_binary(name = 'x', deps = [':y', ':z'])",
-            "cc_library(name = 'y', hdrs = ['y.h'])",
-            "cc_library(name = 'z', srcs = ['z.cc'])");
-    String hiddenTopLevel =
-        ActionsTestUtil.baseNamesOf(getOutputGroup(x, OutputGroupProvider.HIDDEN_TOP_LEVEL));
-    assertThat(hiddenTopLevel).contains("y.h.processed");
-    assertThat(hiddenTopLevel).doesNotContain("z.pic.o");
+            "cc_binary(name = 'x', deps = [':y'])",
+            "cc_library(name = 'y', hdrs = ['y.h'])");
+    assertThat(
+            ActionsTestUtil.baseArtifactNames(
+                getOutputGroup(x, OutputGroupProvider.HIDDEN_TOP_LEVEL)))
+        .contains("y.h.processed");
   }
 
   @Test

@@ -13,7 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.CompileOnlyTestCase;
@@ -50,11 +51,11 @@ public class CcCompileOnlyTest extends CompileOnlyTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//package:foo");
 
-    assertThat(getArtifactByExecPathSuffix(target, "/foo.pic.o")).isNotNull();
-    assertThat(getArtifactByExecPathSuffix(target, "/bar.pic.o")).isNotNull();
+    assertNotNull(getArtifactByExecPathSuffix(target, "/foo.pic.o"));
+    assertNotNull(getArtifactByExecPathSuffix(target, "/bar.pic.o"));
     // Check that deps are not built
-    assertThat(getArtifactByExecPathSuffix(target, "/foolib.pic.o")).isNull();
+    assertNull(getArtifactByExecPathSuffix(target, "/foolib.pic.o"));
     // Check that linking is not executed
-    assertThat(getArtifactByExecPathSuffix(target, "/foo")).isNull();
+    assertNull(getArtifactByExecPathSuffix(target, "/foo"));
   }
 }
