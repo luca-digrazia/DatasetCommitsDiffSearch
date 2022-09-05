@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.testutil.TestMode;
 
 import org.junit.Before;
@@ -132,6 +131,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     }
   }
 
+  @SkylarkModule(name = "MockClassObject", doc = "", documented = false)
   static final class MockClassObject implements ClassObject {
     @Override
     public Object getValue(String name) {
@@ -835,19 +835,11 @@ public class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
-  public void testDictAssignmentAsLValueNoSideEffects() throws Exception {
+  public void testDictAssignmentAsLValueSideEffects() throws Exception {
     new SkylarkTest().setUp("def func(d):",
         "  d['b'] = 2",
         "d = {'a' : 1}",
-        "func(d)").testLookup("d", ImmutableMap.of("a", 1));
-  }
-
-  @Test
-  public void testAssignmentToListInDictSideEffect() throws Exception {
-    new SkylarkTest().setUp(
-        "l = [1, 2]",
-        "d = {0: l}",
-        "d[0].append(3)").testLookup("l", MutableList.of(null, 1, 2, 3));
+        "func(d)").testLookup("d", SkylarkDict.of(null, "a", 1, "b", 2));
   }
 
   @Test

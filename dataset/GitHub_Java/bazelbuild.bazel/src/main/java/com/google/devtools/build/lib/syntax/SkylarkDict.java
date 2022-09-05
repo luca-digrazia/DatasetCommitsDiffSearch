@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkMutable.MutableMap;
@@ -61,7 +62,7 @@ public final class SkylarkDict<K, V>
 
   /** @return a dict mutable in given environment only */
   public static <K, V> SkylarkDict<K, V> of(@Nullable Environment env) {
-    return new SkylarkDict<>(env);
+    return new SkylarkDict<K, V>(env);
   }
 
   /** @return a dict mutable in given environment only, with given initial key and value */
@@ -125,6 +126,32 @@ public final class SkylarkDict<K, V>
   }
 
   /**
+   * Cast a {@code SkylarkDict<?>} to a {@code SkylarkDict<K, V>}
+   * after checking its current contents.
+   * @param dict the SkylarkDict to cast
+   * @param keyType the expected class of keys
+   * @param valueType the expected class of values
+   * @param description a description of the argument being converted, or null, for debugging
+   */
+  @SuppressWarnings("unchecked")
+  public static <KeyType, ValueType> SkylarkDict<KeyType, ValueType> castDict(
+      SkylarkDict<?, ?> dict,
+      Class<KeyType> keyType,
+      Class<ValueType> valueType,
+      @Nullable String description)
+      throws EvalException {
+    Object keyDescription = description == null
+        ? null : Printer.formattable("'%s' key", description);
+    Object valueDescription = description == null
+        ? null : Printer.formattable("'%s' value", description);
+    for (Map.Entry<?, ?> e : dict.entrySet()) {
+      SkylarkType.checkType(e.getKey(), keyType, keyDescription);
+      SkylarkType.checkType(e.getValue(), valueType, valueDescription);
+    }
+    return (SkylarkDict<KeyType, ValueType>) dict;
+  }
+
+  /**
    * Cast a SkylarkDict to a {@code Map<K, V>} after checking its current contents.
    * Treat None as meaning the empty ImmutableMap.
    * @param obj the Object to cast. null and None are treated as an empty list.
@@ -132,11 +159,11 @@ public final class SkylarkDict<K, V>
    * @param valueType the expected class of values
    * @param description a description of the argument being converted, or null, for debugging
    */
-  public static <K, V> SkylarkDict<K, V> castSkylarkDictOrNoneToDict(
+  public static <K, V> Map<K, V> castSkylarkDictOrNoneToMap(
       Object obj, Class<K> keyType, Class<V> valueType, @Nullable String description)
       throws EvalException {
     if (EvalUtils.isNullOrNone(obj)) {
-      return empty();
+      return ImmutableMap.of();
     }
     if (obj instanceof SkylarkDict) {
       return ((SkylarkDict<?, ?>) obj).getContents(keyType, valueType, description);
@@ -147,26 +174,16 @@ public final class SkylarkDict<K, V>
   }
 
   /**
-   * Cast a SkylarkDict to a {@code SkylarkDict<K, V>} after checking its current contents.
+   * Cast a SkylarkDict to a {@code Map<K, V>} after checking its current contents.
    * @param keyType the expected class of keys
    * @param valueType the expected class of values
    * @param description a description of the argument being converted, or null, for debugging
    */
-  @SuppressWarnings("unchecked")
-  public <KeyType, ValueType> SkylarkDict<KeyType, ValueType> getContents(
+  public <KeyType, ValueType> Map<KeyType, ValueType> getContents(
       Class<KeyType> keyType, Class<ValueType> valueType, @Nullable String description)
       throws EvalException {
-    Object keyDescription = description == null
-        ? null : Printer.formattable("'%s' key", description);
-    Object valueDescription = description == null
-        ? null : Printer.formattable("'%s' value", description);
-    for (Map.Entry<?, ?> e : this.entrySet()) {
-      SkylarkType.checkType(e.getKey(), keyType, keyDescription);
-      SkylarkType.checkType(e.getValue(), valueType, valueDescription);
-    }
-    return (SkylarkDict<KeyType, ValueType>) this;
+    return castDict(this, keyType, valueType, description);
   }
-
 
   public static <K, V> SkylarkDict<K, V> plus(
       SkylarkDict<? extends K, ? extends V> left,
