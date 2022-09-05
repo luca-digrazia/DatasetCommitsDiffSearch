@@ -18,7 +18,7 @@
 
 package org.hswebframework.web.oauth2;
 
-import org.hswebframework.web.authorization.oauth2.server.client.OAuth2ClientService;
+import org.hswebframework.web.authorization.oauth2.server.client.OAuth2ClientConfigRepository;
 import org.hswebframework.web.authorization.oauth2.server.support.AbstractAuthorizationService;
 import org.hswebframework.web.authorization.oauth2.server.support.DefaultOAuth2Granter;
 import org.hswebframework.web.authorization.oauth2.server.support.client.ClientCredentialGranter;
@@ -31,7 +31,10 @@ import org.hswebframework.web.authorization.oauth2.server.support.implicit.Impli
 import org.hswebframework.web.authorization.oauth2.server.support.password.DefaultPasswordGranter;
 import org.hswebframework.web.authorization.oauth2.server.support.password.PasswordGranter;
 import org.hswebframework.web.authorization.oauth2.server.support.password.PasswordService;
+import org.hswebframework.web.authorization.oauth2.server.support.refresh.DefaultRefreshTokenGranter;
+import org.hswebframework.web.authorization.oauth2.server.support.refresh.RefreshTokenGranter;
 import org.hswebframework.web.authorization.oauth2.server.token.AccessTokenService;
+import org.hswebframework.web.authorization.token.UserTokenManager;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.dao.oauth2.AuthorizationCodeDao;
 import org.hswebframework.web.dao.oauth2.OAuth2AccessDao;
@@ -41,15 +44,15 @@ import org.hswebframework.web.service.oauth2.server.simple.*;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 
 
 /**
- * TODO 完成注释
- *
  * @author zhouhao
  */
 @Configuration
@@ -63,11 +66,6 @@ public class OAuth2GranterAutoConfiguration {
     @Autowired(required = false)
     private TokenGenerator tokenGenerator;
 
-    @Bean
-    public OAuth2ServerErrorControllerAdvice oAuth2ServerErrorControllerAdvice() {
-        return new OAuth2ServerErrorControllerAdvice();
-    }
-
     @ConditionalOnMissingBean(AuthorizationCodeService.class)
     @Bean
     public SimpleAuthorizationCodeService simpleAuthorizationCodeService(AuthorizationCodeDao authorizationCodeDao,
@@ -76,10 +74,10 @@ public class OAuth2GranterAutoConfiguration {
                 .setCodeGenerator(codeGenerator);
     }
 
-    @ConditionalOnMissingBean(OAuth2ClientService.class)
+    @ConditionalOnMissingBean(OAuth2ClientConfigRepository.class)
     @Bean
-    public SimpleClientService simpleClientService(OAuth2ClientDao oAuth2ClientDao) {
-        return new SimpleClientService(oAuth2ClientDao);
+    public SimpleClientConfigRepository simpleClientService(OAuth2ClientDao oAuth2ClientDao) {
+        return new SimpleClientConfigRepository(oAuth2ClientDao);
     }
 
     @ConditionalOnMissingBean(PasswordService.class)
@@ -95,20 +93,26 @@ public class OAuth2GranterAutoConfiguration {
                 .setTokenGenerator(tokenGenerator);
     }
 
+    @Bean
+    @ConditionalOnBean(UserTokenManager.class)
+    public OAuth2GrantEventListener oAuth2GrantEventListener(UserTokenManager userTokenManager) {
+        return new OAuth2GrantEventListener(userTokenManager);
+    }
+
     @Configuration
     public static class OAuth2GranterConfiguration {
         @Autowired
-        private AuthorizationCodeService authorizationCodeService;
+        private AuthorizationCodeService     authorizationCodeService;
         @Autowired
-        private OAuth2ClientService      oAuth2ClientService;
+        private OAuth2ClientConfigRepository oAuth2ClientConfigRepository;
         @Autowired
-        private AccessTokenService       accessTokenService;
+        private AccessTokenService           accessTokenService;
         @Autowired
-        private PasswordService          passwordService;
+        private PasswordService              passwordService;
 
         private <T extends AbstractAuthorizationService> T setProperty(T abstractAuthorizationService) {
             abstractAuthorizationService.setAccessTokenService(accessTokenService);
-            abstractAuthorizationService.setClientService(oAuth2ClientService);
+            abstractAuthorizationService.setRepository(oAuth2ClientConfigRepository);
             return abstractAuthorizationService;
         }
 
@@ -136,6 +140,12 @@ public class OAuth2GranterAutoConfiguration {
             return setProperty(new DefaultImplicitGranter());
         }
 
+        @Bean
+        @ConditionalOnMissingBean(RefreshTokenGranter.class)
+        @ConfigurationProperties(prefix = "hsweb.oauth2.server")
+        public RefreshTokenGranter refreshTokenGranter() {
+            return setProperty(new DefaultRefreshTokenGranter());
+        }
     }
 
     @Bean
@@ -157,6 +167,9 @@ public class OAuth2GranterAutoConfiguration {
             }
             if (bean instanceof ImplicitGranter) {
                 addImplicitSupport(((ImplicitGranter) bean));
+            }
+            if (bean instanceof RefreshTokenGranter) {
+                addRefreshTokenSupport(((RefreshTokenGranter) bean));
             }
             return bean;
         }
