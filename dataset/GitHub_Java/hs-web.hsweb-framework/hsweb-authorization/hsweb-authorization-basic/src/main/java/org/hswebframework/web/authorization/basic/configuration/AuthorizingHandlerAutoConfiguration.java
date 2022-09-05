@@ -1,28 +1,24 @@
 package org.hswebframework.web.authorization.basic.configuration;
 
 import org.hswebframework.web.authorization.AuthenticationManager;
-import org.hswebframework.web.authorization.ReactiveAuthenticationManagerProvider;
 import org.hswebframework.web.authorization.access.DataAccessController;
 import org.hswebframework.web.authorization.access.DataAccessHandler;
 import org.hswebframework.web.authorization.basic.aop.AopMethodAuthorizeDefinitionParser;
-import org.hswebframework.web.authorization.basic.embed.EmbedAuthenticationProperties;
-import org.hswebframework.web.authorization.basic.embed.EmbedReactiveAuthenticationManager;
+import org.hswebframework.web.authorization.basic.embed.EmbedAuthenticationManager;
 import org.hswebframework.web.authorization.basic.handler.DefaultAuthorizingHandler;
 import org.hswebframework.web.authorization.basic.handler.UserAllowPermissionHandler;
 import org.hswebframework.web.authorization.basic.handler.access.DefaultDataAccessController;
-import org.hswebframework.web.authorization.basic.twofactor.TwoFactorHandlerInterceptorAdapter;
 import org.hswebframework.web.authorization.basic.web.*;
+import org.hswebframework.web.authorization.basic.web.session.UserTokenAutoExpiredListener;
 import org.hswebframework.web.authorization.token.UserTokenManager;
-import org.hswebframework.web.authorization.twofactor.TwoFactorValidatorManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
@@ -36,7 +32,6 @@ import java.util.List;
  * @since 3.0
  */
 @Configuration
-@EnableConfigurationProperties(EmbedAuthenticationProperties.class)
 public class AuthorizingHandlerAutoConfiguration {
 
     @Bean
@@ -51,82 +46,56 @@ public class AuthorizingHandlerAutoConfiguration {
 
 
     @Bean
-    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
-    public UserTokenWebFilter userTokenWebFilter() {
-        return new UserTokenWebFilter();
-    }
-
-
-    @Configuration
-    @ConditionalOnClass(name = "org.springframework.web.servlet.config.annotation.WebMvcConfigurer")
-    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    static class WebMvcAuthorizingConfiguration {
-        @Bean
-        @Order(Ordered.HIGHEST_PRECEDENCE)
-        public WebMvcConfigurer webUserTokenInterceptorConfigurer(UserTokenManager userTokenManager,
-                                                                  AopMethodAuthorizeDefinitionParser parser,
-                                                                  List<UserTokenParser> userTokenParser) {
-
-            return new WebMvcConfigurer() {
-                @Override
-                public void addInterceptors(InterceptorRegistry registry) {
-                    registry.addInterceptor(new WebUserTokenInterceptor(userTokenManager, userTokenParser, parser));
-                }
-            };
-        }
-
-        @Bean
-        public UserOnSignIn userOnSignIn(UserTokenManager userTokenManager) {
-            return new UserOnSignIn(userTokenManager);
-        }
-
-        @Bean
-        public UserOnSignOut userOnSignOut(UserTokenManager userTokenManager) {
-            return new UserOnSignOut(userTokenManager);
-        }
-
-
-        @Bean
-        @ConditionalOnMissingBean(UserTokenParser.class)
-        public UserTokenParser userTokenParser() {
-            return new SessionIdUserTokenParser();
-        }
-
-        @Bean
-        public SessionIdUserTokenGenerator sessionIdUserTokenGenerator() {
-            return new SessionIdUserTokenGenerator();
-        }
-
-        @Bean
-        @ConditionalOnProperty(prefix = "hsweb.authorize.two-factor", name = "enable", havingValue = "true")
-        @Order(100)
-        public WebMvcConfigurer twoFactorHandlerConfigurer(TwoFactorValidatorManager manager) {
-            return new WebMvcConfigurerAdapter() {
-                @Override
-                public void addInterceptors(InterceptorRegistry registry) {
-                    registry.addInterceptor(new TwoFactorHandlerInterceptorAdapter(manager));
-                    super.addInterceptors(registry);
-                }
-            };
-        }
-
+    @ConditionalOnMissingBean(UserTokenParser.class)
+    public UserTokenParser userTokenParser() {
+        return new SessionIdUserTokenParser();
     }
 
     @Bean
-    public ReactiveAuthenticationManagerProvider embedAuthenticationManager(EmbedAuthenticationProperties properties) {
-        return new EmbedReactiveAuthenticationManager(properties);
+    public SessionIdUserTokenGenerator sessionIdUserTokenGenerator() {
+        return new SessionIdUserTokenGenerator();
+    }
+
+
+    @Bean
+    public WebMvcConfigurer webUserTokenInterceptorConfigurer(UserTokenManager userTokenManager,
+                                                              AopMethodAuthorizeDefinitionParser parser,
+                                                              List<UserTokenParser> userTokenParser) {
+
+        return new WebMvcConfigurerAdapter() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(new WebUserTokenInterceptor(userTokenManager, userTokenParser, parser));
+                super.addInterceptors(registry);
+            }
+        };
     }
 
     @Bean
+    @ConditionalOnMissingBean(AuthenticationManager.class)
+    public AuthenticationManager embedAuthenticationManager() {
+        return new EmbedAuthenticationManager();
+    }
+
+    @Bean
+    @ConditionalOnProperty("hsweb.authorize.allows")
     public UserAllowPermissionHandler userAllowPermissionHandler() {
         return new UserAllowPermissionHandler();
     }
 
     @Bean
-    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
-    @ConfigurationProperties(prefix = "hsweb.authorize.token.default")
-    public DefaultUserTokenGenPar defaultUserTokenGenPar() {
-        return new DefaultUserTokenGenPar();
+    public UserOnSignIn userOnSignIn(UserTokenManager userTokenManager) {
+        return new UserOnSignIn(userTokenManager);
+    }
+
+    @Bean
+    public UserOnSignOut userOnSignOut(UserTokenManager userTokenManager) {
+        return new UserOnSignOut(userTokenManager);
+    }
+
+    @Bean
+    public UserTokenAutoExpiredListener userTokenAutoExpiredListener(UserTokenManager userTokenManager) {
+        return new UserTokenAutoExpiredListener(userTokenManager);
     }
 
     @Bean
@@ -135,9 +104,8 @@ public class AuthorizingHandlerAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
-    public ReactiveUserTokenController userTokenController() {
-        return new ReactiveUserTokenController();
+    public UserTokenController userTokenController() {
+        return new UserTokenController();
     }
 
     @Configuration
@@ -160,11 +128,9 @@ public class AuthorizingHandlerAutoConfiguration {
         }
     }
 
-
     @Configuration
     @ConditionalOnProperty(prefix = "hsweb.authorize", name = "basic-authorization", havingValue = "true")
     @ConditionalOnClass(UserTokenForTypeParser.class)
-    @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
     public static class BasicAuthorizationConfiguration {
         @Bean
         public BasicAuthorizationTokenParser basicAuthorizationTokenParser(AuthenticationManager authenticationManager,
