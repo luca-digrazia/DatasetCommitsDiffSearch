@@ -42,8 +42,6 @@ public class ResponseMessage<T> implements Serializable {
 
     private Long timestamp;
 
-    private String code;
-
     @ApiModelProperty("调用结果消息")
     public String getMessage() {
         return message;
@@ -62,11 +60,6 @@ public class ResponseMessage<T> implements Serializable {
     @ApiModelProperty(value = "时间戳", required = true, dataType = "Long")
     public Long getTimestamp() {
         return timestamp;
-    }
-
-    @ApiModelProperty(value = "业务代码")
-    public String getCode() {
-        return code;
     }
 
     public static <T> ResponseMessage<T> error(String message) {
