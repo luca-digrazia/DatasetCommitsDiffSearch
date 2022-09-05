@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProviderImpl;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
@@ -175,7 +174,7 @@ public final class CcCommon {
 
     deps.addAll(ruleContext.getPrerequisites("deps", Mode.TARGET));
 
-    if (ruleContext.attributes().has("malloc", BuildType.LABEL)) {
+    if (ruleContext.attributes().has("malloc", Type.LABEL)) {
       deps.add(CppHelper.mallocForTarget(ruleContext));
     }
 
@@ -212,7 +211,7 @@ public final class CcCommon {
     // TODO(bazel-team): Move header processing logic down in the stack (to CcLibraryHelper or
     // such).
     boolean processHeaders = shouldProcessHeaders();
-    if (processHeaders && hasAttribute("hdrs", BuildType.LABEL_LIST)) {
+    if (processHeaders && hasAttribute("hdrs", Type.LABEL_LIST)) {
       providers = Iterables.concat(providers,
           ruleContext.getPrerequisites("hdrs", Mode.TARGET, FileProvider.class));
     }
@@ -377,7 +376,7 @@ public final class CcCommon {
     result.add(rulePackage);
 
     // Gather up all the dirs from the rule's srcs as well as any of the srcs outputs.
-    if (hasAttribute("srcs", BuildType.LABEL_LIST)) {
+    if (hasAttribute("srcs", Type.LABEL_LIST)) {
       for (FileProvider src :
           ruleContext.getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
         PathFragment packageDir = src.getLabel().getPackageIdentifier().getPathFragment();
@@ -444,7 +443,7 @@ public final class CcCommon {
       RuleContext ruleContext, CppCompilationContext context) {
     // TODO(bazel-team): Use context.getCompilationPrerequisites() instead.
     NestedSetBuilder<Artifact> prerequisites = NestedSetBuilder.stableOrder();
-    if (ruleContext.attributes().has("srcs", BuildType.LABEL_LIST)) {
+    if (ruleContext.attributes().has("srcs", Type.LABEL_LIST)) {
       for (FileProvider provider : ruleContext
           .getPrerequisites("srcs", Mode.TARGET, FileProvider.class)) {
         prerequisites.addAll(FileType.filter(provider.getFilesToBuild(), SOURCE_TYPES));
@@ -532,6 +531,26 @@ public final class CcCommon {
       }
     }
     requestedFeatures.addAll(ruleSpecificRequestedFeatures);
+
+    // Enable FDO related features requested by options.
+    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
+    FdoSupport fdoSupport = cppConfiguration.getFdoSupport();
+    if (fdoSupport.getFdoInstrument() != null) {
+      requestedFeatures.add(CppRuleClasses.FDO_INSTRUMENT);
+    }
+    if (fdoSupport.getFdoOptimizeProfile() != null
+        && !fdoSupport.isAutoFdoEnabled()) {
+      requestedFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
+    }
+    if (fdoSupport.isAutoFdoEnabled()) {
+      requestedFeatures.add(CppRuleClasses.AUTOFDO);
+    }
+    if (cppConfiguration.isLipoOptimizationOrInstrumentation()) {
+      requestedFeatures.add(CppRuleClasses.LIPO);
+    }
+    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
+      requestedFeatures.add(CppRuleClasses.COVERAGE);
+    }
 
     FeatureConfiguration configuration =
         toolchain.getFeatures().getFeatureConfiguration(requestedFeatures.build());

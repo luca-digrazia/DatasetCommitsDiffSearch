@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,12 +29,12 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.IncludeResolver;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -248,16 +248,8 @@ public class CppCompileActionBuilder {
     // Configuration can be null in tests.
     NestedSetBuilder<Artifact> realMandatoryInputsBuilder = NestedSetBuilder.compileOrder();
     realMandatoryInputsBuilder.addTransitive(mandatoryInputsBuilder.build());
-    String filename = sourceFile.getFilename();
-    // Assembler without C preprocessing can use the '.include' pseudo-op which is not
-    // understood by the include scanner, so we'll disable scanning, and instead require
-    // the declared sources to state (possibly overapproximate) the dependencies.
-    // Assembler with preprocessing can also use '.include', but supporting both kinds
-    // of inclusion for that use-case is ridiculous.
-    boolean shouldScanIncludes = !CppFileTypes.ASSEMBLER.matches(filename)
-        && configuration != null
-        && configuration.getFragment(CppConfiguration.class).shouldScanIncludes();
-    if (tempOutputFile == null && !shouldScanIncludes) {
+    if (tempOutputFile == null && configuration != null
+        && !configuration.getFragment(CppConfiguration.class).shouldScanIncludes()) {
       realMandatoryInputsBuilder.addTransitive(context.getDeclaredIncludeSrcs());
     }
     realMandatoryInputsBuilder.addTransitive(context.getAdditionalInputs());
@@ -268,8 +260,7 @@ public class CppCompileActionBuilder {
     // Copying the collections is needed to make the builder reusable.
     if (fake) {
       return new FakeCppCompileAction(owner, ImmutableList.copyOf(features), featureConfiguration,
-          variables, sourceFile, shouldScanIncludes, sourceLabel,
-          realMandatoryInputsBuilder.build(), outputFile,
+          variables, sourceFile, sourceLabel, realMandatoryInputsBuilder.build(), outputFile,
           tempOutputFile, dotdFile, configuration, cppConfiguration, context, actionContext,
           ImmutableList.copyOf(copts), ImmutableList.copyOf(pluginOpts),
           getNocoptPredicate(nocopts), extraSystemIncludePrefixes, fdoBuildStamp, ruleContext,
@@ -278,8 +269,8 @@ public class CppCompileActionBuilder {
       NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
 
       return new CppCompileAction(owner, ImmutableList.copyOf(features), featureConfiguration,
-          variables, sourceFile, shouldScanIncludes, sourceLabel, realMandatoryInputs,
-          outputFile, dotdFile, gcnoFile, getDwoFile(ruleContext, outputFile, cppConfiguration),
+          variables, sourceFile, sourceLabel, realMandatoryInputs, outputFile, dotdFile,
+          gcnoFile, getDwoFile(ruleContext, outputFile, cppConfiguration),
           optionalSourceFile, configuration, cppConfiguration, context,
           actionContext, ImmutableList.copyOf(copts),
           ImmutableList.copyOf(pluginOpts),

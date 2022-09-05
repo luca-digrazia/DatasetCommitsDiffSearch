@@ -15,13 +15,11 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
-import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.common.options.OptionsClassProvider;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -40,9 +38,6 @@ public class LocalGccStrategy implements CppCompileActionContext {
     }
   };
 
-  public LocalGccStrategy(OptionsClassProvider options) {
-  }
-
   @Override
   public String strategyLocality() {
     return "local";
@@ -51,7 +46,11 @@ public class LocalGccStrategy implements CppCompileActionContext {
   public static void updateEnv(CppCompileAction action, Map<String, String> env) {
     // We cannot locally execute an action that does not expect to output a .d file, since we would
     // have no way to tell what files that it included were used during compilation.
-    env.put("INTERCEPT_LOCALLY_EXECUTABLE", action.getDotdFile().artifact() == null ? "0" : "1");
+    // The exception to this is that if no .d file can be produced (as indicated by
+    // dotdfile == null), then the assumption is that there are truly no depencies,
+    // and therefore we don't care whether the step executes locally or remotely.
+    env.put("INTERCEPT_LOCALLY_EXECUTABLE",
+        (action.getDotdFile() != null && action.getDotdFile().artifact() == null) ? "0" : "1");
   }
 
   @Override
@@ -60,9 +59,9 @@ public class LocalGccStrategy implements CppCompileActionContext {
   }
 
   @Override
-  public Collection<? extends ActionInput> findAdditionalInputs(CppCompileAction action,
+  public Collection<Artifact> findAdditionalInputs(CppCompileAction action,
       ActionExecutionContext actionExecutionContext) throws ExecException, InterruptedException {
-    return ImmutableList.of();
+    return null;
   }
 
   @Override
