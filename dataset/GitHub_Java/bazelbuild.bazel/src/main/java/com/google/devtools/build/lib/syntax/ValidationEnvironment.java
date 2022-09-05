@@ -90,10 +90,7 @@ public final class ValidationEnvironment {
 
   private void checkReadonly(String varname, Location location) throws EvalException {
     if (readOnlyVariables.contains(varname)) {
-      throw new EvalException(
-          location,
-          String.format("Variable %s is read only", varname),
-          "https://bazel.build/versions/master/docs/skylark/errors/read-only-variable.html");
+      throw new EvalException(location, String.format("Variable %s is read only", varname));
     }
   }
 
@@ -103,16 +100,6 @@ public final class ValidationEnvironment {
   public boolean hasSymbolInEnvironment(String varname) {
     return variables.contains(varname)
         || (parent != null && topLevel().variables.contains(varname));
-  }
-
-  /** Returns the set of all accessible symbols (both local and global) */
-  public Set<String> getAllSymbols() {
-    Set<String> all = new HashSet<>();
-    all.addAll(variables);
-    if (parent != null) {
-      all.addAll(parent.getAllSymbols());
-    }
-    return all;
   }
 
   private ValidationEnvironment topLevel() {

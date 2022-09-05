@@ -35,7 +35,7 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testAssignmentNotValidLValue() {
-    checkError("cannot assign to ''a''", "'a' = 1");
+    checkError("can only assign to variables and tuples, not to ''a''", "'a' = 1");
   }
 
   @Test
