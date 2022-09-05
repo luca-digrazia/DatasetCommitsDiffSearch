@@ -241,7 +241,6 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
-import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.ProjectDependency;
 import org.gradle.api.artifacts.ResolvedArtifact;
@@ -359,14 +358,11 @@ public class AtlasDepTreeParser {
             if (Type.AWB == DependencyConvertUtils.Type.getType(dependencyInfo.getType())) {
 
                 AwbBundle bundle = DependencyConvertUtils.toBundle(dependencyInfo, project);
-                if (apDependencies != null) {
-                    Map<ModuleIdentifier, String> awbDependencies = apDependencies.getAwbDependencies(
-                        dependencyInfo.getGroup(), dependencyInfo.getName());
-                    bundle.setBaseAwbDependencies(awbDependencies);
-                }
+
                 atlasDependencyTree.getAwbBundles().add(bundle);
 
                 collect(dependencyInfo, bundle);
+
             } else {
 
                 collect(dependencyInfo, atlasDependencyTree.getMainBundle());
@@ -441,6 +437,7 @@ public class AtlasDepTreeParser {
             logger.warning(JSON.toJSONString(atlasDependencyTree.getDependencyJson(), true));
             throw new GradleException("decency冲突 : " + StringUtils.join(warnings, "\r\n"));
         }
+
     }
 
     private void addValuetoList(Map<String, List<String>> dependeys, String gav, String key) {
@@ -451,4 +448,5 @@ public class AtlasDepTreeParser {
         }
         value.add(gav);
     }
+
 }
