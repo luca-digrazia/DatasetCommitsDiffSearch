@@ -100,11 +100,6 @@ public class NotifyingHelper {
         throws InterruptedException {
       return notifyingHelper.wrapEntry(key, delegate.get(requestor, reason, key));
     }
-
-    @Override
-    public Iterable<SkyKey> getCurrentlyAvailableNodes(Iterable<SkyKey> keys, Reason reason) {
-      return delegate.getCurrentlyAvailableNodes(keys, reason);
-    }
   }
 
   static class NotifyingProcessableGraph
@@ -306,7 +301,7 @@ public class NotifyingHelper {
     }
 
     @Override
-    public Iterable<SkyKey> getAllDirectDepsForIncompleteNode() throws InterruptedException {
+    public Iterable<SkyKey> getAllDirectDepsForIncompleteNode() {
       graphListener.accept(
           myKey, EventType.GET_ALL_DIRECT_DEPS_FOR_INCOMPLETE_NODE, Order.BEFORE, this);
       return super.getAllDirectDepsForIncompleteNode();
