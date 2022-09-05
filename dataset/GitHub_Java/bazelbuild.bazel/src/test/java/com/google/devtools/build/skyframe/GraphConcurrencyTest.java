@@ -72,7 +72,7 @@ public abstract class GraphConcurrencyTest {
   }
 
   protected SkyKey key(String name) {
-    return SkyKey.create(SKY_FUNCTION_NAME, name);
+    return new SkyKey(SKY_FUNCTION_NAME, name);
   }
 
   @Test
@@ -170,7 +170,7 @@ public abstract class GraphConcurrencyTest {
     // Mark the node as dirty again and check that the reverse deps have been preserved.
     sameEntry.markDirty(true);
     startEvaluation(sameEntry);
-    sameEntry.markRebuilding();
+    sameEntry.markRebuildingAndGetAllRemainingDirtyDirectDeps();
     sameEntry.setValue(new StringValue("foo2"), getNextVersion(startingVersion));
     assertEquals(new StringValue("foo2"), graph.get(key).getValue());
     assertEquals(numKeys + 1, Iterables.size(graph.get(key).getReverseDeps()));
@@ -288,7 +288,7 @@ public abstract class GraphConcurrencyTest {
               entry.markDirty(true);
               // Make some changes, like adding a dep and rdep.
               entry.addReverseDepAndCheckIfDone(key("rdep"));
-              entry.markRebuilding();
+              entry.markRebuildingAndGetAllRemainingDirtyDirectDeps();
               addTemporaryDirectDep(entry, key("dep"));
               entry.signalDep();
               // Move node from dirty back to done.
