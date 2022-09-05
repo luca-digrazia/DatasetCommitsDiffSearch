@@ -824,8 +824,9 @@ public final class Command {
     log.finer(status.toString());
 
     try {
-      if (Thread.currentThread().isInterrupted()) {
+      if (Thread.interrupted()) {
         outErr.cancel();
+        Thread.currentThread().interrupt();
       } else {
         outErr.waitForCompletion();
       }
