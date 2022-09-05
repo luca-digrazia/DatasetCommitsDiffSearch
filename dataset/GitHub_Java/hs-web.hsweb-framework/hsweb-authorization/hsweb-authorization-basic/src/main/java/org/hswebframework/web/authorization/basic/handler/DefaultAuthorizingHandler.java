@@ -126,12 +126,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         // 控制权限
         if (!definition.getPermissions().isEmpty()) {
             if (logger.isInfoEnabled()) {
-                logger.info("do permission access handle : permissions{}({}),actions{} ,definition:{}.{} ({})",
-                        definition.getPermissionDescription(),
-                        permissionsDef, actionsDef
-                        ,definition.getPermissions(),
-                        definition.getActions(),
-                        definition.getLogical());
+                logger.info("do permission access handle : permissions{},actions{} ", permissionsDef, actionsDef);
             }
             List<Permission> permissions = authentication.getPermissions().stream()
                     .filter(permission -> {
@@ -164,7 +159,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         //控制角色
         if (!rolesDef.isEmpty()) {
             if (logger.isInfoEnabled()) {
-                logger.info("do role access handle : roles{} , definition:{}", rolesDef,definition.getRoles());
+                logger.info("do role access handle : roles{} ", rolesDef);
             }
             Function<Predicate<Role>, Boolean> func = logicalIsOr
                     ? authentication.getRoles().stream()::anyMatch
@@ -174,7 +169,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
         //控制用户
         if (!usersDef.isEmpty()) {
             if (logger.isInfoEnabled()) {
-                logger.info("do user access handle : users{} , definition:{} ", usersDef,definition.getUser());
+                logger.info("do user access handle : users{} ", usersDef);
             }
             Function<Predicate<String>, Boolean> func = logicalIsOr
                     ? usersDef.stream()::anyMatch

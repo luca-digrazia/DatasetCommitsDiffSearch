@@ -52,10 +52,10 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
         CacheKey key = buildCacheKey(target, method);
 
         AuthorizeDefinition definition = cache.get(key);
-        if (definition instanceof EmptyAuthorizeDefinition) {
+        if ((definition instanceof EmptyAuthorizeDefinition)) {
             return null;
         }
-        if (null != definition) {
+        if(null!=definition){
             return definition;
         }
         //使用自定义
@@ -64,9 +64,10 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
                     .map(customer -> customer.parse(target, method, context))
                     .filter(Objects::nonNull)
                     .findAny().orElse(null);
-            if (definition != null && !(definition instanceof EmptyAuthorizeDefinition)) {
-                return definition;
+            if (definition == null || definition instanceof EmptyAuthorizeDefinition) {
+                return null;
             }
+
         }
         Authorize classAuth = AopUtils.findAnnotation(target, Authorize.class);
         Authorize methodAuth = AopUtils.findMethodAnnotation(target, method, Authorize.class);
@@ -87,8 +88,7 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
             return null;
         }
         DefaultBasicAuthorizeDefinition authorizeDefinition = new DefaultBasicAuthorizeDefinition();
-        authorizeDefinition.setTargetClass(target);
-        authorizeDefinition.setTargetMethod(method);
+
         if (methodAuth == null || methodAuth.merge()) {
             authorizeDefinition.put(classAuth);
         }
@@ -137,7 +137,7 @@ public class DefaultAopMethodAuthorizeDefinitionParser implements AopMethodAutho
     }
 
     class CacheKey {
-        private Class  type;
+        private Class type;
         private Method method;
 
         public CacheKey(Class type, Method method) {
