@@ -35,9 +35,8 @@ public class HttpReporter {
 	private class ServerThread implements Runnable {
 		@Override
 		public void run() {
-			while (serverSocket.isBound()) {
-				try {
-
+			try {
+				while (serverSocket.isBound()) {
 					final Socket client = serverSocket.accept();
 					final BufferedReader reader = new BufferedReader(new InputStreamReader(client.getInputStream()));
 					while (!reader.readLine().equals("")) { /* I don't care */ }
@@ -57,9 +56,9 @@ public class HttpReporter {
 					json.writeEndObject();
 					json.close();
 					client.close();
-				} catch (IOException ignored) {
-	//					ignored.printStackTrace();
 				}
+			} catch (IOException ignored) {
+//					ignored.printStackTrace();
 			}
 		}
 	}
