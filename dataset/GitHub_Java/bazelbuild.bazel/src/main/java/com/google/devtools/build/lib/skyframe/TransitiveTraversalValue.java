@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,21 +14,14 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.util.StringCanonicalizer;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
-import java.util.Collection;
 import java.util.Objects;
-import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -42,53 +35,20 @@ public class TransitiveTraversalValue implements SkyValue {
 
   @Nullable
   private final NoSuchTargetException errorLoadingTarget;
-  @Nullable
-  private final ImmutableSet<String> providers;
 
-  private TransitiveTraversalValue(@Nullable Iterable<String> providers,
-      @Nullable NoSuchTargetException errorLoadingTarget) {
-    this.errorLoadingTarget = errorLoadingTarget;
-    this.providers = (providers == null) ? null : canonicalSet(providers);
-  }
+  // Note that this value does not guarantee singleton-like reference equality for successful
+  // {@link TransitiveTraversalValue}s because we use Java deserialization. Java deserialization can
+  // create other instances.
+  public static final TransitiveTraversalValue SUCCESSFUL_TRANSITIVE_TRAVERSAL_VALUE =
+      new TransitiveTraversalValue(null);
 
   public static TransitiveTraversalValue unsuccessfulTransitiveTraversal(
       NoSuchTargetException errorLoadingTarget) {
-    return new TransitiveTraversalValue(null, Preconditions.checkNotNull(errorLoadingTarget));
+    return new TransitiveTraversalValue(Preconditions.checkNotNull(errorLoadingTarget));
   }
 
-  public static TransitiveTraversalValue forTarget(Target target) {
-    if (target instanceof Rule) {
-      Rule rule = (Rule) target;
-      return new TransitiveTraversalValue(
-          toStringSet(rule.getRuleClassObject().getAdvertisedProviders()), null);
-    }
-    return new TransitiveTraversalValue(ImmutableList.<String>of(), null);
-  }
-
-  public static TransitiveTraversalValue withProviders(Collection<String> vals) {
-    return new TransitiveTraversalValue(ImmutableSet.copyOf(vals), null);
-  }
-
-  private static ImmutableSet<String> canonicalSet(Iterable<String> strIterable) {
-    ImmutableSet.Builder<String> builder = new ImmutableSet.Builder<>();
-    for (String str : strIterable) {
-      builder.add(StringCanonicalizer.intern(str));
-    }
-    return builder.build();
-  }
-
-  private static ImmutableSet<String> toStringSet(Iterable<Class<?>> providers) {
-    ImmutableSet.Builder<String> pBuilder = new ImmutableSet.Builder<>();
-    if (providers != null) {
-      for (Class<?> clazz : providers) {
-        pBuilder.add(StringCanonicalizer.intern(clazz.getName()));
-      }
-    }
-    return pBuilder.build();
-  }
-
-  public Set<String> getProviders() {
-    return providers;
+  private TransitiveTraversalValue(@Nullable NoSuchTargetException errorLoadingTarget) {
+    this.errorLoadingTarget = errorLoadingTarget;
   }
 
   /** Returns the error, if any, from loading the target. */
@@ -106,13 +66,12 @@ public class TransitiveTraversalValue implements SkyValue {
       return false;
     }
     TransitiveTraversalValue that = (TransitiveTraversalValue) o;
-    return Objects.equals(this.errorLoadingTarget, that.errorLoadingTarget)
-        && Objects.equals(this.providers, that.providers);
+    return Objects.equals(this.errorLoadingTarget, that.errorLoadingTarget);
   }
 
   @Override
   public int hashCode() {
-    return 31 * Objects.hashCode(errorLoadingTarget) + Objects.hashCode(providers);
+    return Objects.hashCode(errorLoadingTarget);
   }
 
   @ThreadSafe
