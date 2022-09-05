@@ -946,8 +946,7 @@ public class MethodLibrary {
         @Param(name = "order", type = String.class, defaultValue = "\"stable\"",
             doc = "The ordering strategy for the set if it's nested, "
             + "possible values are: <code>stable</code> (default), <code>compile</code>, "
-            + "<code>link</code> or <code>naive_link</code>. An explanation of the " 
-            + "values can be found <a href=\"#modules.set\">here</a>.")},
+            + "<code>link</code> or <code>naive_link</code>.")},
       useLocation = true)
   private static final BuiltinFunction set = new BuiltinFunction("set") {
     public SkylarkNestedSet invoke(Object items, String order,

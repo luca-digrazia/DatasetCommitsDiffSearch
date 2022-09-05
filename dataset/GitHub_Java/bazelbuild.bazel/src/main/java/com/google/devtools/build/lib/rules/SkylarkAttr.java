@@ -44,9 +44,10 @@ import java.util.Map;
 /**
  * A helper class to provide Attr module in Skylark.
  *
- * <p>It exposes functions (e.g. 'attr.string', 'attr.label_list', etc.) to Skylark
+ * It exposes functions (e.g. 'attr.string', 'attr.label_list', etc.) to Skylark
  * users. The functions are executed through reflection. As everywhere in Skylark,
  * arguments are type-checked with the signature and cannot be null.
+ *
  */
 @SkylarkModule(
   name = "attr",
@@ -54,7 +55,7 @@ import java.util.Map;
   onlyLoadingPhase = true,
   doc =
       "Module for creating new attributes. "
-          + "They are only for use with the <a href=\"globals.html#rule\">rule</a> function."
+          + "They are only for use with the <a href=\"#modules._top_level.rule\">rule</a> function."
 )
 public final class SkylarkAttr {
 
@@ -226,7 +227,6 @@ public final class SkylarkAttr {
             Environment env)
             throws EvalException {
           // TODO(bazel-team): Replace literal strings with constants.
-          env.checkLoadingPhase("attr.int", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG, defaultInt, MANDATORY_ARG, mandatory, VALUES_ARG, values),
@@ -270,7 +270,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.string", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG, defaultString, MANDATORY_ARG, mandatory, VALUES_ARG, values),
@@ -358,7 +357,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.label", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG,
@@ -413,7 +411,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.string_list", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG, defaultList, MANDATORY_ARG, mandatory, NON_EMPTY_ARG, nonEmpty),
@@ -453,7 +450,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.int_list", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG, defaultList, MANDATORY_ARG, mandatory, NON_EMPTY_ARG, nonEmpty),
@@ -467,7 +463,7 @@ public final class SkylarkAttr {
     name = "label_list",
     doc =
         "Creates an attribute of type list of labels. "
-            + "See <a href=\"attr.html#label\">label</a> for more information.",
+            + "See <a href=\"#modules.attr.label\">label</a> for more information.",
     objectType = SkylarkAttr.class,
     returnType = Attribute.Builder.class,
     optionalNamedOnly = {
@@ -538,7 +534,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.label_list", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG,
@@ -581,7 +576,6 @@ public final class SkylarkAttr {
         public Attribute.Builder<?> invoke(
             Boolean defaultO, Boolean mandatory, FuncallExpression ast, Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.bool", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               Type.BOOLEAN,
@@ -617,7 +611,6 @@ public final class SkylarkAttr {
         public Attribute.Builder<?> invoke(
             Object defaultO, Boolean mandatory, FuncallExpression ast, Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.output", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               Type.OUTPUT,
@@ -630,7 +623,7 @@ public final class SkylarkAttr {
     name = "output_list",
     doc =
         "Creates an attribute of type list of outputs. Its default value is <code>[]</code>. "
-            + "See <a href=\"attr.html#output\">output</a> above for more information.",
+            + "See <a href=\"#modules.attr.output\">output</a> above for more information.",
     objectType = SkylarkAttr.class,
     returnType = Attribute.Builder.class,
     optionalNamedOnly = {
@@ -658,7 +651,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.output_list", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG, defaultList, MANDATORY_ARG, mandatory, NON_EMPTY_ARG, nonEmpty),
@@ -694,7 +686,6 @@ public final class SkylarkAttr {
             FuncallExpression ast,
             Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.string_dict", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(
                   DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory, NON_EMPTY_ARG, nonEmpty),
@@ -724,7 +715,6 @@ public final class SkylarkAttr {
         public Attribute.Builder<?> invoke(
             Object defaultO, Boolean mandatory, FuncallExpression ast, Environment env)
             throws EvalException {
-          env.checkLoadingPhase("attr.license", ast.getLocation());
           return createAttribute(
               EvalUtils.optionMap(DEFAULT_ARG, defaultO, MANDATORY_ARG, mandatory),
               Type.LICENSE,

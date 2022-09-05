@@ -33,9 +33,9 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.OutputFile;
@@ -94,8 +94,6 @@ public final class SkylarkRuleContext {
     });
 
   private final RuleContext ruleContext;
-  
-  private final FragmentCollection fragments;
 
   // TODO(bazel-team): support configurable attributes.
   private final SkylarkClassObject attrObject;
@@ -131,7 +129,6 @@ public final class SkylarkRuleContext {
    */
   public SkylarkRuleContext(RuleContext ruleContext) throws EvalException {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
-    fragments = new FragmentCollection(ruleContext);
 
     HashMap<String, Object> outputsBuilder = new HashMap<>();
     if (ruleContext.getRule().getRuleClassObject().outputsDefaultExecutable()) {
@@ -322,12 +319,6 @@ public final class SkylarkRuleContext {
     return ruleContext.getLabel();
   }
 
-  @SkylarkCallable(
-      name = "fragments", structField = true, doc = "Allows access to configuration fragments.")
-  public FragmentCollection getFragments() {
-    return fragments;
-  }
-
   @SkylarkCallable(name = "configuration", structField = true,
       doc = "Returns the default configuration. See the <a href=\"#modules.configuration\">"
           + "configuration</a> type for more details.")
@@ -340,6 +331,13 @@ public final class SkylarkRuleContext {
           + "configuration</a> type for more details.")
   public BuildConfiguration getHostConfiguration() {
     return ruleContext.getHostConfiguration();
+  }
+
+  @SkylarkCallable(name = "data_configuration", structField = true,
+      doc = "Returns the data configuration. See the <a href=\"#modules.configuration\">"
+          + "configuration</a> type for more details.")
+  public BuildConfiguration getDataConfiguration() {
+    return ruleContext.getConfiguration().getConfiguration(ConfigurationTransition.DATA);
   }
 
   @SkylarkCallable(structField = true,
@@ -400,13 +398,22 @@ public final class SkylarkRuleContext {
 
   @SkylarkCallable(doc = "Creates a file object with the given filename. " + DOC_NEW_FILE_TAIL)
   public Artifact newFile(String filename) {
-    return newFile(ruleContext.getBinOrGenfilesDirectory(), filename);
+    PathFragment fragment = ruleContext.getLabel().getPackageFragment();
+    for (String pathFragmentString : filename.split("/")) {
+      fragment = fragment.getRelative(pathFragmentString);
+    }
+    Root root = ruleContext.getBinOrGenfilesDirectory();
+    return ruleContext.getAnalysisEnvironment().getDerivedArtifact(fragment, root);
   }
 
   // Kept for compatibility with old code.
   @SkylarkCallable(documented = false)
   public Artifact newFile(Root root, String filename) {
-    return ruleContext.getPackageRelativeArtifact(filename, root);
+    PathFragment fragment = ruleContext.getLabel().getPackageFragment();
+    for (String pathFragmentString : filename.split("/")) {
+      fragment = fragment.getRelative(pathFragmentString);
+    }
+    return ruleContext.getAnalysisEnvironment().getDerivedArtifact(fragment, root);
   }
 
   @SkylarkCallable(doc =
@@ -422,7 +429,7 @@ public final class SkylarkRuleContext {
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(original.getBaseName() + suffix);
     Root root = ruleContext.getBinOrGenfilesDirectory();
-    return ruleContext.getDerivedArtifact(fragment, root);
+    return ruleContext.getAnalysisEnvironment().getDerivedArtifact(fragment, root);
   }
 
   // Kept for compatibility with old code.
@@ -430,7 +437,7 @@ public final class SkylarkRuleContext {
   public Artifact newFile(Root root, Artifact baseArtifact, String suffix) {
     PathFragment original = baseArtifact.getRootRelativePath();
     PathFragment fragment = original.replaceName(original.getBaseName() + suffix);
-    return ruleContext.getDerivedArtifact(fragment, root);
+    return ruleContext.getAnalysisEnvironment().getDerivedArtifact(fragment, root);
   }
 
   @SkylarkCallable(documented = false)
