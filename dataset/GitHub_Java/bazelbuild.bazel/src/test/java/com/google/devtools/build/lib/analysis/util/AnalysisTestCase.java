@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.InputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
@@ -89,8 +90,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
   private static final int LOADING_PHASE_THREADS = 20;
 
   /** All the flags that can be passed to {@link BuildView#update}. */
-  public enum Flag {
-    KEEP_GOING
+  public static enum Flag {
+    KEEP_GOING,
+    ANALYSIS_WARNINGS_AS_ERRORS,
   }
 
   /** Helper class to make it easy to enable and disable flags. */
@@ -138,7 +140,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     mockToolsConfig = new MockToolsConfig(rootDirectory);
     mock.setupMockClient(mockToolsConfig);
-    mock.setupMockWorkspaceFiles(directories.getEmbeddedBinariesRoot());
     configurationFactory = mock.createConfigurationFactory();
 
     useRuleClassProvider(TestRuleClassProvider.getRuleClassProvider());
@@ -173,7 +174,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     );
     skyframeExecutor.preparePackageLoading(pkgLocator,
         Options.getDefaults(PackageCacheOptions.class).defaultVisibility, true,
-        3, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
+        ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
     packageManager = skyframeExecutor.getPackageManager();
     loadingPhaseRunner = new LoadingPhaseRunner(packageManager, pkgFactory.getRuleClassNames());
     buildView = new BuildView(directories, skyframeExecutor.getPackageManager(), ruleClassProvider,
@@ -237,6 +238,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     BuildView.Options viewOptions = optionsParser.getOptions(BuildView.Options.class);
     viewOptions.keepGoing = flags.contains(Flag.KEEP_GOING);
+    viewOptions.analysisWarningsAsErrors = flags.contains(Flag.ANALYSIS_WARNINGS_AS_ERRORS);
 
     BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
     PackageCacheOptions packageCacheOptions = optionsParser.getOptions(PackageCacheOptions.class);
@@ -245,7 +247,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     skyframeExecutor.preparePackageLoading(pathPackageLocator,
         packageCacheOptions.defaultVisibility, true,
-        7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
+        ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
     skyframeExecutor.invalidateFilesUnderPathForTesting(ModifiedFileSet.EVERYTHING_MODIFIED,
         rootDirectory);
 
@@ -256,8 +258,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
     BuildRequestOptions requestOptions = optionsParser.getOptions(BuildRequestOptions.class);
     ImmutableSortedSet<String> multiCpu = ImmutableSortedSet.copyOf(requestOptions.multiCpus);
-    masterConfig = skyframeExecutor.createConfigurations(
-        configurationFactory, buildOptions, directories, multiCpu, false);
+    BuildConfigurationKey configurationKey = new BuildConfigurationKey(
+        buildOptions, directories, multiCpu);
+    masterConfig = skyframeExecutor.createConfigurations(configurationFactory, configurationKey);
     analysisResult = buildView.update(loadingResult, masterConfig, viewOptions,
         AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT, reporter, eventBus);
   }

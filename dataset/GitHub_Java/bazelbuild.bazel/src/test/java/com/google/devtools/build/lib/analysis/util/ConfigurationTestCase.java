@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
@@ -105,7 +106,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
 
     skyframeExecutor.preparePackageLoading(pkgLocator,
         Options.getDefaults(PackageCacheOptions.class).defaultVisibility, true,
-        7, ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
+        ruleClassProvider.getDefaultsPackageContent(), UUID.randomUUID());
 
     AnalysisMock analysisMock = getAnalysisMock();
     analysisMock.setupMockClient(new MockToolsConfig(rootDirectory));
@@ -147,8 +148,9 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     configurationFactory.forbidSanityCheck();
     BuildOptions buildOptions = BuildOptions.of(buildOptionClasses, parser);
     BuildConfigurationCollection collection = skyframeExecutor.createConfigurations(
-        configurationFactory, buildOptions, new BlazeDirectories(outputBase, outputBase, workspace),
-        multiCpu, false);
+        configurationFactory,
+        new BuildConfigurationKey(buildOptions,
+        new BlazeDirectories(outputBase, outputBase, workspace), multiCpu));
     return collection;
   }
 

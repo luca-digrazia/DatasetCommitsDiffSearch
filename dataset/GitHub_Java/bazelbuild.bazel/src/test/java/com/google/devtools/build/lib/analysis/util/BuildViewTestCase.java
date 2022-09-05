@@ -67,6 +67,7 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
@@ -251,9 +252,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       configurationFactory.forbidSanityCheck();
       BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);
       ensureTargetsVisited(buildOptions.getAllLabels().values());
+      BuildConfigurationKey key = new BuildConfigurationKey(buildOptions, directories);
       skyframeExecutor.invalidateConfigurationCollection();
-      return skyframeExecutor.createConfigurations(configurationFactory, buildOptions, directories,
-          ImmutableSet.<String>of(), false);
+      return skyframeExecutor.createConfigurations(configurationFactory, key);
     } catch (InvalidConfigurationException | OptionsParsingException e) {
       throw new IllegalArgumentException(e);
     }
@@ -611,7 +612,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected Rule scratchRule(String packageName, String ruleName, String... lines)
       throws Exception {
-    scratch.file(packageName + "/BUILD", lines);
+    scratchFile(packageName + "/BUILD", lines);
     return (Rule) getTarget("//" + packageName + ":" + ruleName);
   }
 

@@ -22,7 +22,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
@@ -233,6 +233,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private MutableSupplier<ImmutableList<ConfigurationFragmentFactory>> configurationFragments =
       new MutableSupplier<>();
   private MutableSupplier<Set<Package>> configurationPackages = new MutableSupplier<>();
+  private SkyKey configurationSkyKey = null;
 
   private static final Logger LOG = Logger.getLogger(SkyframeExecutor.class.getName());
 
@@ -797,6 +798,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    */
   public void setSkyframeBuildView(SkyframeBuildView skyframeBuildView) {
     this.skyframeBuildView = skyframeBuildView;
+    setConfigurationSkyKey(configurationSkyKey);
     this.artifactFactory.set(skyframeBuildView.getArtifactFactory());
     if (skyframeBuildView.getWarningListener() != null) {
       setErrorEventListener(skyframeBuildView.getWarningListener());
@@ -826,32 +828,50 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.skyframeActionExecutor.setActionLogBufferPathGenerator(actionLogBufferPathGenerator);
   }
 
+  private void setConfigurationSkyKey(SkyKey skyKey) {
+    this.configurationSkyKey = skyKey;
+    if (skyframeBuildView != null) {
+      skyframeBuildView.setConfigurationSkyKey(skyKey);
+    }
+  }
+
   @VisibleForTesting
-  public void setConfigurationDataForTesting(BlazeDirectories directories,
-      ConfigurationFactory configurationFactory) {
+  public void setConfigurationDataForTesting(BuildOptions options,
+      BlazeDirectories directories, ConfigurationFactory configurationFactory) {
+    SkyKey skyKey = ConfigurationCollectionValue.key(options, ImmutableSet.<String>of());
+    setConfigurationSkyKey(skyKey);
     PrecomputedValue.BLAZE_DIRECTORIES.set(injectable(), directories);
     this.configurationFactory.set(configurationFactory);
     this.configurationFragments.set(ImmutableList.copyOf(configurationFactory.getFactories()));
     this.configurationPackages.set(Sets.<Package>newConcurrentHashSet());
   }
 
-  /**
-   * Asks the Skyframe evaluator to build the value for BuildConfigurationCollection and returns the
-   * result. Also invalidates {@link PrecomputedValue#BLAZE_DIRECTORIES} if it has changed.
-   */
+  @VisibleForTesting
   public BuildConfigurationCollection createConfigurations(
-      ConfigurationFactory configurationFactory, BuildOptions buildOptions,
-      BlazeDirectories directories, Set<String> multiCpu, boolean keepGoing)
+      ConfigurationFactory configurationFactory, BuildConfigurationKey configurationKey)
       throws InvalidConfigurationException, InterruptedException {
+    return createConfigurations(false, configurationFactory, configurationKey);
+  }
+
+  /**
+   * Asks the Skyframe evaluator to build the value for BuildConfigurationCollection and
+   * returns result. Also invalidates {@link PrecomputedValue#TEST_ENVIRONMENT_VARIABLES} and
+   * {@link PrecomputedValue#BLAZE_DIRECTORIES} if they have changed.
+   */
+  public BuildConfigurationCollection createConfigurations(boolean keepGoing,
+      ConfigurationFactory configurationFactory, BuildConfigurationKey configurationKey)
+      throws InvalidConfigurationException, InterruptedException {
+
     this.configurationPackages.set(Sets.<Package>newConcurrentHashSet());
     this.configurationFactory.set(configurationFactory);
     this.configurationFragments.set(ImmutableList.copyOf(configurationFactory.getFactories()));
     // TODO(bazel-team): find a way to use only BuildConfigurationKey instead of
     // BlazeDirectories.
-    PrecomputedValue.BLAZE_DIRECTORIES.set(injectable(), directories);
+    PrecomputedValue.BLAZE_DIRECTORIES.set(injectable(), configurationKey.getDirectories());
 
-    SkyKey skyKey = ConfigurationCollectionValue.key(
-        buildOptions, ImmutableSortedSet.copyOf(multiCpu));
+    SkyKey skyKey = ConfigurationCollectionValue.key(configurationKey.getBuildOptions(),
+        configurationKey.getMultiCpu());
+    setConfigurationSkyKey(skyKey);
     EvaluationResult<ConfigurationCollectionValue> result = buildDriver.evaluate(
             Arrays.asList(skyKey), keepGoing, DEFAULT_THREAD_COUNT, errorEventListener);
     if (result.hasError()) {

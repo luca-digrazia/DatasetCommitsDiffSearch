@@ -41,7 +41,7 @@ public interface ConfigurationCollectionFactory {
    * @throws InvalidConfigurationException
    */
   @Nullable
-  BuildConfiguration createConfigurations(
+  public BuildConfiguration createConfigurations(
       ConfigurationFactory configurationFactory,
       PackageProviderForConfigurations loadedPackageProvider,
       BuildOptions buildOptions,

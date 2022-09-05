@@ -14,14 +14,12 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.syntax.Label;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -32,7 +30,6 @@ public final class BuildConfigurationKey {
 
   private final BuildOptions buildOptions;
   private final BlazeDirectories directories;
-  private final Map<String, String> clientEnv;
   private final ImmutableSortedSet<String> multiCpu;
 
   /**
@@ -40,17 +37,15 @@ public final class BuildConfigurationKey {
    *
    * Note that the BuildConfiguration.Options instance must not contain unresolved relative paths.
    */
-  public BuildConfigurationKey(BuildOptions buildOptions, BlazeDirectories directories,
-      Map<String, String> clientEnv, Set<String> multiCpu) {
+  public BuildConfigurationKey(
+      BuildOptions buildOptions, BlazeDirectories directories, Set<String> multiCpu) {
     this.buildOptions = Preconditions.checkNotNull(buildOptions);
     this.directories = Preconditions.checkNotNull(directories);
-    this.clientEnv = ImmutableMap.copyOf(clientEnv);
     this.multiCpu = ImmutableSortedSet.copyOf(multiCpu);
   }
 
-  public BuildConfigurationKey(BuildOptions buildOptions, BlazeDirectories directories,
-      Map<String, String> clientEnv) {
-    this(buildOptions, directories, clientEnv, ImmutableSet.<String>of());
+  public BuildConfigurationKey(BuildOptions buildOptions, BlazeDirectories directories) {
+    this(buildOptions, directories, ImmutableSet.<String>of());
   }
 
   public BuildOptions getBuildOptions() {
@@ -59,10 +54,6 @@ public final class BuildConfigurationKey {
 
   public BlazeDirectories getDirectories() {
     return directories;
-  }
-
-  public Map<String, String> getClientEnv() {
-    return clientEnv;
   }
 
   public ImmutableSortedSet<String> getMultiCpu() {
@@ -81,12 +72,11 @@ public final class BuildConfigurationKey {
     BuildConfigurationKey k = (BuildConfigurationKey) o;
     return buildOptions.equals(k.buildOptions)
         && directories.equals(k.directories)
-        && clientEnv.equals(k.clientEnv)
         && multiCpu.equals(k.multiCpu);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(buildOptions, directories, clientEnv, multiCpu);
+    return Objects.hash(buildOptions, directories, multiCpu);
   }
 }

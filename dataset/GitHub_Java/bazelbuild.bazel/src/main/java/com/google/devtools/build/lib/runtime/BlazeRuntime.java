@@ -24,6 +24,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
@@ -44,6 +45,7 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
@@ -79,6 +81,7 @@ import com.google.devtools.build.lib.runtime.commands.ProfileCommand;
 import com.google.devtools.build.lib.runtime.commands.QueryCommand;
 import com.google.devtools.build.lib.runtime.commands.RunCommand;
 import com.google.devtools.build.lib.runtime.commands.ShutdownCommand;
+import com.google.devtools.build.lib.runtime.commands.SkylarkCommand;
 import com.google.devtools.build.lib.runtime.commands.TestCommand;
 import com.google.devtools.build.lib.runtime.commands.VersionCommand;
 import com.google.devtools.build.lib.server.RPCServer;
@@ -804,9 +807,6 @@ public final class BlazeRuntime {
         throw new IllegalStateException(e);
       }
     }
-    for (BlazeModule module : blazeModules) {
-      module.handleOptions(optionsParser);
-    }
 
     eventBus.post(new CommandStartEvent(command.name(), commandId, clientEnv, workingDirectory));
     // Initialize exit code to dummy value for afterCommand.
@@ -982,23 +982,32 @@ public final class BlazeRuntime {
   }
 
   /**
+   * Constructs a build configuration key for the given options.
+   */
+  public BuildConfigurationKey getBuildConfigurationKey(BuildOptions buildOptions,
+      ImmutableSortedSet<String> multiCpu) {
+    return new BuildConfigurationKey(buildOptions, directories, multiCpu);
+  }
+
+  /**
    * This method only exists for the benefit of InfoCommand, which needs to construct a {@link
    * BuildConfigurationCollection} without running a full loading phase. Don't add any more clients;
    * instead, we should change info so that it doesn't need the configuration.
    */
   public BuildConfigurationCollection getConfigurations(OptionsProvider optionsProvider)
       throws InvalidConfigurationException, InterruptedException {
-    BuildOptions buildOptions = createBuildOptions(optionsProvider);
+    BuildConfigurationKey configurationKey = getBuildConfigurationKey(
+        createBuildOptions(optionsProvider), ImmutableSortedSet.<String>of());
     boolean keepGoing = optionsProvider.getOptions(BuildView.Options.class).keepGoing;
     LoadedPackageProvider loadedPackageProvider =
         loadingPhaseRunner.loadForConfigurations(reporter,
-            ImmutableSet.copyOf(buildOptions.getAllLabels().values()),
+            ImmutableSet.copyOf(configurationKey.getLabelsToLoadUnconditionally().values()),
             keepGoing);
     if (loadedPackageProvider == null) {
       throw new InvalidConfigurationException("Configuration creation failed");
     }
-    return skyframeExecutor.createConfigurations(configurationFactory,
-        buildOptions, directories, ImmutableSet.<String>of(), keepGoing);
+    return skyframeExecutor.createConfigurations(keepGoing, configurationFactory,
+        configurationKey);
   }
 
   /**
@@ -1573,6 +1582,7 @@ public final class BlazeRuntime {
         new CanonicalizeCommand(),
         new CleanCommand(),
         new HelpCommand(),
+        new SkylarkCommand(),
         new InfoCommand(),
         new ProfileCommand(),
         new QueryCommand(),
