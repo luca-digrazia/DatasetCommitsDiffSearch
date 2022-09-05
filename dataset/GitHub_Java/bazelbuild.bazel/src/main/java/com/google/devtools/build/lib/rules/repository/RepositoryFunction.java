@@ -46,6 +46,7 @@ import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.Map;
@@ -141,29 +142,12 @@ public abstract class RepositoryFunction {
    *     function would be restarted <b>after</b> that SkyFunction has been run, and it would wipe
    *     the output directory clean.
    * </ul>
-   *
-   * <p>The {@code markerData} argument can be mutated to augment the data to write to the
-   * repository marker file. If any data in the {@code markerData} change between 2 execute of
-   * the {@link RepositoryDelegatorFunction} then this should be a reason to invalidate the
-   * repository. The {@link #verifyMarkerData(Map<String, String>)} method is responsible for
-   * checking the value added to that map when checking the content of a marker file.
    */
   @ThreadSafe
   @Nullable
-  public abstract RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
-      BlazeDirectories directories, Environment env, Map<String, String> markerData)
+  public abstract SkyValue fetch(
+      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
       throws SkyFunctionException, InterruptedException;
-
-  /**
-   * Verify the data provided by the marker file to check if a refetch is needed. Returns true if
-   * the data is up to date and no refetch is needed and false if the data is obsolete and a refetch
-   * is needed.
-   */
-  @Nullable
-  public boolean verifyMarkerData(Rule rule, Map<String, String> markerData, Environment env)
-      throws InterruptedException {
-    return true;
-  }
 
   /**
    * Whether fetching is done using local operations only.
@@ -211,7 +195,7 @@ public abstract class RepositoryFunction {
     }
   }
 
-  protected static RepositoryDirectoryValue.Builder writeBuildFile(
+  protected static RepositoryDirectoryValue writeBuildFile(
       Path repositoryDirectory, String contents) throws RepositoryFunctionException {
     Path buildFilePath = repositoryDirectory.getRelative("BUILD.bazel");
     try {
@@ -226,7 +210,7 @@ public abstract class RepositoryFunction {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
-    return RepositoryDirectoryValue.builder().setPath(repositoryDirectory);
+    return RepositoryDirectoryValue.create(repositoryDirectory);
   }
 
   @VisibleForTesting
