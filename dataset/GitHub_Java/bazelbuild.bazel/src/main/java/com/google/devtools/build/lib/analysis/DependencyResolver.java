@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
-import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectFactory;
 import com.google.devtools.build.lib.packages.AspectParameters;
@@ -561,7 +560,7 @@ public abstract class DependencyResolver {
     ImmutableSet.Builder<AspectWithParameters> result = ImmutableSet.builder();
     for (AspectWithParameters candidateClass : aspectCandidates) {
       ConfiguredAspectFactory candidate =
-          (ConfiguredAspectFactory) AspectFactory.Util.create(candidateClass.getAspectClass());
+          (ConfiguredAspectFactory) AspectFactory.Util.create(candidateClass.getAspectFactory());
       if (Sets.difference(
           candidate.getDefinition().getRequiredProviders(),
           ruleClass.getAdvertisedProviders()).isEmpty()) {
@@ -579,14 +578,18 @@ public abstract class DependencyResolver {
     // turn influences which aspect takes precedence if two emit the same provider (maybe this
     // should be an error)
     Set<AspectWithParameters> aspectCandidates = new LinkedHashSet<>();
-    for (Map.Entry<AspectClass, AspectParameters> aspectWithParameters :
-        attribute.getAspectsWithParameters(originalRule).entrySet()) {
-      aspectCandidates.add(
-          new AspectWithParameters(aspectWithParameters.getKey(), aspectWithParameters.getValue()));
+    for (Map.Entry<Class<? extends AspectFactory<?, ?, ?>>, AspectParameters> aspectWithParameters :
+      attribute.getAspectsWithParameters(originalRule).entrySet()) {
+      aspectCandidates.add(new AspectWithParameters(
+          aspectWithParameters.getKey().asSubclass(ConfiguredAspectFactory.class),
+          aspectWithParameters.getValue()));
     }
     if (aspectDefinition != null) {
-      for (AspectClass aspect : aspectDefinition.getAttributeAspects().get(attribute.getName())) {
-        aspectCandidates.add(new AspectWithParameters(aspect, aspectParameters));
+      for (Class<? extends AspectFactory<?, ?, ?>> aspect :
+          aspectDefinition.getAttributeAspects().get(attribute.getName())) {
+        aspectCandidates.add(new AspectWithParameters(
+            aspect.asSubclass(ConfiguredAspectFactory.class),
+            aspectParameters));
       }
     }
     return aspectCandidates;
