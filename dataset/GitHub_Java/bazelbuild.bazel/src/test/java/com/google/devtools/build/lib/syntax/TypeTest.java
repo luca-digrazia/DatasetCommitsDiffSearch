@@ -27,8 +27,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
-import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 
@@ -294,13 +292,14 @@ public class TypeTest {
 
   @Test
   public void testStringDictBadElements() throws Exception {
-    Object input = ImmutableMap.of("foo", MutableList.of(null, "bar", "baz"), "wiz", "bang");
+    Object input = ImmutableMap.of("foo", Arrays.asList("bar", "baz"),
+        "wiz", "bang");
     try {
       Type.STRING_DICT.convert(input, null);
       fail();
     } catch (Type.ConversionException e) {
       assertThat(e).hasMessage("expected value of type 'string' for dict value element, "
-          + "but got [\"bar\", \"baz\"] (list)");
+          + "but got [\"bar\", \"baz\"] (List)");
     }
   }
 
@@ -490,13 +489,14 @@ public class TypeTest {
 
   @Test
   public void testStringListDictBadElements1() throws Exception {
-    Object input = ImmutableMap.of(Tuple.of("foo"), Tuple.of("bang"), "wiz", Tuple.of("bang"));
+    Object input = ImmutableMap.of(Arrays.asList("foo"), Arrays.asList("bang"),
+                                   "wiz", Arrays.asList("bang"));
     try {
       Type.STRING_LIST_DICT.convert(input, null);
       fail();
     } catch (Type.ConversionException e) {
       assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
-          + "(\"foo\",) (tuple)");
+          + "[\"foo\"] (List)");
     }
   }
 
@@ -529,25 +529,28 @@ public class TypeTest {
 
   @Test
   public void testStringDictUnaryBadSecondElement() throws Exception {
-    Object input = ImmutableMap.of("foo", "bar", "wiz", MutableList.of(null, "bang"));
+    Object input = ImmutableMap.of("foo", "bar",
+                                   "wiz", Arrays.asList("bang"));
     try {
       Type.STRING_DICT_UNARY.convert(input, null, currentRule);
       fail();
     } catch (Type.ConversionException e) {
       assertThat(e).hasMessage("expected value of type 'string' for dict value element, but got "
-          + "[\"bang\"] (list)");
+          + "[\"bang\"] (List)");
     }
   }
 
   @Test
   public void testStringDictUnaryBadElements1() throws Exception {
-    Object input = ImmutableMap.of("foo", "bar", Tuple.of("foo", "bar"), Tuple.of("wiz", "bang"));
+    Object input = ImmutableMap.of("foo", "bar",
+                                   Arrays.asList("foo", "bar"),
+                                   Arrays.<Object>asList("wiz", "bang"));
     try {
       Type.STRING_DICT_UNARY.convert(input, null);
       fail();
     } catch (Type.ConversionException e) {
       assertThat(e).hasMessage("expected value of type 'string' for dict key element, but got "
-          + "(\"foo\", \"bar\") (tuple)");
+          + "[\"foo\", \"bar\"] (List)");
     }
   }
 
