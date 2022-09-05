@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -329,21 +328,16 @@ public class SkyframeBuilder implements Builder {
     }
 
     @Override
-    public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
-        EvaluationState state) {
+    public void evaluated(SkyKey skyKey, SkyValue node, EvaluationState state) {
       SkyFunctionName type = skyKey.functionName();
-      if (type.equals(SkyFunctions.TARGET_COMPLETION)) {
-        TargetCompletionValue value = (TargetCompletionValue) skyValueSupplier.get();
-        if (value != null) {
-          ConfiguredTarget target = value.getConfiguredTarget();
-          builtTargets.add(target);
-          eventBus.post(TargetCompleteEvent.createSuccessful(target));
-        }
-      } else if (type.equals(SkyFunctions.ASPECT_COMPLETION)) {
-        AspectCompletionValue value = (AspectCompletionValue) skyValueSupplier.get();
-        if (value != null) {
-          eventBus.post(AspectCompleteEvent.createSuccessful(value.getAspectValue()));
-        }
+      if (type.equals(SkyFunctions.TARGET_COMPLETION) && node != null) {
+        TargetCompletionValue val = (TargetCompletionValue) node;
+        ConfiguredTarget target = val.getConfiguredTarget();
+        builtTargets.add(target);
+        eventBus.post(TargetCompleteEvent.createSuccessful(target));
+      } else if (type.equals(SkyFunctions.ASPECT_COMPLETION) && node != null) {
+        AspectCompletionValue val = (AspectCompletionValue) node;
+        eventBus.post(AspectCompleteEvent.createSuccessful(val.getAspectValue()));
       } else if (type.equals(SkyFunctions.ACTION_EXECUTION)) {
         // Remember all completed actions, even those in error, regardless of having been cached or
         // really executed.
