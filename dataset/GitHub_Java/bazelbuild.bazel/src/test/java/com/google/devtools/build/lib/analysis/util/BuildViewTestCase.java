@@ -20,7 +20,6 @@ import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -63,8 +62,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.SourceManifestAction;
-import com.google.devtools.build.lib.analysis.SymlinkTreeAction;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -110,7 +107,6 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -143,7 +139,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -191,21 +186,18 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         new AnalysisTestUtil.DummyWorkspaceStatusActionFactory(directories);
     mutableActionGraph = new MapBasedActionGraph();
     ruleClassProvider = getRuleClassProvider();
-    skyframeExecutor =
-        SequencedSkyframeExecutor.create(
-            reporter,
-            new PackageFactory(ruleClassProvider, getEnvironmentExtensions()),
-            new TimestampGranularityMonitor(BlazeClock.instance()),
-            directories,
-            workspaceStatusActionFactory,
-            ruleClassProvider.getBuildInfoFactories(),
-            ImmutableSet.<Path>of(),
-            ImmutableList.<DiffAwareness.Factory>of(),
-            Predicates.<PathFragment>alwaysFalse(),
-            getPreprocessorFactorySupplier(),
-            ImmutableMap.<SkyFunctionName, SkyFunction>of(),
-            getPrecomputedValues(),
-            ImmutableList.<SkyValueDirtinessChecker>of());
+    skyframeExecutor = SequencedSkyframeExecutor.create(reporter,
+        new PackageFactory(ruleClassProvider, getEnvironmentExtensions()),
+        new TimestampGranularityMonitor(BlazeClock.instance()), directories,
+        workspaceStatusActionFactory,
+        ruleClassProvider.getBuildInfoFactories(),
+        ImmutableSet.<Path>of(),
+        ImmutableList.<DiffAwareness.Factory>of(),
+        Predicates.<PathFragment>alwaysFalse(),
+        getPreprocessorFactorySupplier(),
+        ImmutableMap.<SkyFunctionName, SkyFunction>of(),
+        getPrecomputedValues()
+    );
     skyframeExecutor.preparePackageLoading(
         new PathPackageLocator(rootDirectory), ConstantRuleVisibility.PUBLIC, true, 7, "",
         UUID.randomUUID());
@@ -1513,29 +1505,5 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   private String convertLabelToPath(String label) {
     return label.replace(':', '/').substring(1);
-  }
-
-  protected Map<String, String> getSymlinkTreeManifest(Artifact outputManifest) throws Exception {
-    SymlinkTreeAction symlinkTreeAction = (SymlinkTreeAction) getGeneratingAction(outputManifest);
-    Artifact inputManifest = Iterables.getOnlyElement(symlinkTreeAction.getInputs());
-    SourceManifestAction inputManifestAction =
-        (SourceManifestAction) getGeneratingAction(inputManifest);
-        // Ask the manifest to write itself to a byte array so that we can
-    // read its contents.
-    ByteArrayOutputStream stream = new ByteArrayOutputStream();
-    inputManifestAction.writeOutputFile(stream, reporter);
-    String contents = stream.toString();
-
-    // Get the file names from the manifest output.
-    ImmutableMap.Builder<String, String> result = ImmutableMap.builder();
-    for (String line : Splitter.on('\n').split(contents)) {
-      int space = line.indexOf(' ');
-      if (space < 0) {
-        continue;
-      }
-      result.put(line.substring(0, space), line.substring(space + 1));
-    }
-
-    return result.build();
   }
 }
