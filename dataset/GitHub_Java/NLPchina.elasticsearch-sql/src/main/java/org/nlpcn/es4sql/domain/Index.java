@@ -1,5 +1,6 @@
 package org.nlpcn.es4sql.domain;
 
+import org.elasticsearch.common.netty.util.internal.StringUtil;
 
 public class Index {
 	private String index;

@@ -1,13 +1,19 @@
 package org.nlpcn.es4sql.query;
 
+import java.lang.reflect.Method;
+import java.util.Arrays;
+
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.client.Client;
+import org.nlpcn.es4sql.domain.MethodField;
 import org.nlpcn.es4sql.domain.Select;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 /**
- * Abstract class. used to transform Select object (Represents SQL query) to
- * SearchRequestBuilder (Represents ES query)
+ * 查询封装类
+ * 
+ * @author ansj
+ *
  */
 public abstract class Query {
 
@@ -23,11 +29,11 @@ public abstract class Query {
 	}
 
 	/**
-	 * Prepere the search, and return ES query represention.
-	 * @return SearchRequestBuilder (ES query)
+	 * 将select 解析成es的query
+	 * 
 	 * @throws SqlParseException
 	 */
-	public SearchRequestBuilder explain() throws SqlParseException {
+	public SearchRequestBuilder explan() throws SqlParseException {
 		// set index
 		request = client.prepareSearch(select.getIndexArr());
 
@@ -37,14 +43,14 @@ public abstract class Query {
 			request.setTypes(typeArr);
 		}
 
-		return _explain();
+		return _explan();
 	}
 
 	/**
-	 * Make the actual Select to ES query transofrmation.
-	 * @return ES query.
+	 * 针对不同类型的query进行不同类型的解析 fuck
+	 * 
 	 * @throws SqlParseException
 	 */
-	protected abstract SearchRequestBuilder _explain() throws SqlParseException;
+	protected abstract SearchRequestBuilder _explan() throws SqlParseException;
 
 }
