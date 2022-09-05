@@ -152,12 +152,12 @@ public class MetricsServletTest extends AbstractServletTest {
 
     @Test
     public void constructorWithRegistryAsArgumentIsUsedInPreferenceOverServletConfig() throws Exception {
-        final MetricRegistry metricRegistry = mock(MetricRegistry.class);
-        final ServletContext servletContext = mock(ServletContext.class);
-        final ServletConfig servletConfig = mock(ServletConfig.class);
+        MetricRegistry metricRegistry = mock(MetricRegistry.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
 
-        final MetricsServlet metricsServlet = new MetricsServlet(metricRegistry);
+        MetricsServlet metricsServlet = new MetricsServlet(metricRegistry);
         metricsServlet.init(servletConfig);
  
         verify(servletConfig, times(3)).getServletContext();
@@ -166,14 +166,14 @@ public class MetricsServletTest extends AbstractServletTest {
 
     @Test
     public void constructorWithRegistryAsArgumentUsesServletConfigWhenNull() throws Exception {
-        final MetricRegistry metricRegistry = mock(MetricRegistry.class);
-        final ServletContext servletContext = mock(ServletContext.class);
-        final ServletConfig servletConfig = mock(ServletConfig.class);
+        MetricRegistry metricRegistry = mock(MetricRegistry.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
         when(servletContext.getAttribute(eq(MetricsServlet.METRICS_REGISTRY)))
             .thenReturn(metricRegistry);
 
-        final MetricsServlet metricsServlet = new MetricsServlet(null);
+        MetricsServlet metricsServlet = new MetricsServlet(null);
         metricsServlet.init(servletConfig);
 
         verify(servletConfig, times(4)).getServletContext();
@@ -182,13 +182,13 @@ public class MetricsServletTest extends AbstractServletTest {
 
     @Test(expected = ServletException.class)
     public void constructorWithRegistryAsArgumentUsesServletConfigWhenNullButWrongTypeInContext() throws Exception {
-        final ServletContext servletContext = mock(ServletContext.class);
-        final ServletConfig servletConfig = mock(ServletConfig.class);
+        ServletContext servletContext = mock(ServletContext.class);
+        ServletConfig servletConfig = mock(ServletConfig.class);
         when(servletConfig.getServletContext()).thenReturn(servletContext);
         when(servletContext.getAttribute(eq(MetricsServlet.METRICS_REGISTRY)))
             .thenReturn("IRELLEVANT_STRING");
 
-        final MetricsServlet metricsServlet = new MetricsServlet(null);
+        MetricsServlet metricsServlet = new MetricsServlet(null);
         metricsServlet.init(servletConfig);
     }
 }
