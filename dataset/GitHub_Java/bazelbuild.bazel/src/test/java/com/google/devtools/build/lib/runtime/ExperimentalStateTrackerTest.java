@@ -27,12 +27,9 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
-import com.google.devtools.build.lib.skyframe.PackageProgressReceiver;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.LoggingTerminalWriter;
 import com.google.devtools.build.lib.testutil.ManualClock;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
@@ -67,35 +64,6 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
       maxLength = Math.max(maxLength, line.length());
     }
     return maxLength;
-  }
-
-  @Test
-  public void testLoadingActivity() throws IOException {
-    // During loading phase, state and activity, as reported by the PackageProgressReceiver,
-    // should be visible in the progress bar.
-    String state = "42 packages loaded";
-    String activity = "currently loading //src/foo/bar and 17 more";
-    PackageProgressReceiver progress = Mockito.mock(PackageProgressReceiver.class);
-    when(progress.progressState()).thenReturn(new Pair<String, String>(state, activity));
-
-    ManualClock clock = new ManualClock();
-    ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
-
-    stateTracker.loadingStarted(new LoadingPhaseStartedEvent(progress));
-
-    LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
-    stateTracker.writeProgressBar(terminalWriter);
-    String output = terminalWriter.getTranscript();
-
-    assertTrue(
-        "Output should indicate that we are in the loading phase, but was:\n" + output,
-        output.contains("Loading"));
-    assertTrue(
-        "Output should contain loading state '" + state + "', but was:\n" + output,
-        output.contains(state));
-    assertTrue(
-        "Output should contain loading state '" + activity + "', but was:\n" + output,
-        output.contains(activity));
   }
 
   @Test
@@ -287,7 +255,7 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
 
   @Test
   public void testPassedVisible() throws Exception {
-    // The last test should still be visible in the long status bar, and colored as ok if it passed.
+    // The last test that passed should still be visible in the long status bar.
     ManualClock clock = new ManualClock();
     ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
     TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
@@ -303,43 +271,13 @@ public class ExperimentalStateTrackerTest extends FoundationTestCase {
     stateTracker.testFilteringComplete(filteringComplete);
     stateTracker.testSummary(testSummary);
 
-    LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter();
+    LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter(/*discardHighlight=*/ true);
     stateTracker.writeProgressBar(terminalWriter);
     String output = terminalWriter.getTranscript();
 
-    String expected = LoggingTerminalWriter.OK + labelA;
     assertTrue(
-        "Sequence '" + expected + "' should be present in colored progress bar: " + output,
-        output.contains(expected));
-  }
-
-  @Test
-  public void testFailedVisible() throws Exception {
-    // The last test should still be visible in the long status bar, and colored as fail if it
-    // did not pass.
-    ManualClock clock = new ManualClock();
-    ExperimentalStateTracker stateTracker = new ExperimentalStateTracker(clock);
-    TestFilteringCompleteEvent filteringComplete = Mockito.mock(TestFilteringCompleteEvent.class);
-    Label labelA = Label.parseAbsolute("//foo/bar:baz");
-    ConfiguredTarget targetA = Mockito.mock(ConfiguredTarget.class);
-    when(targetA.getLabel()).thenReturn(labelA);
-    ConfiguredTarget targetB = Mockito.mock(ConfiguredTarget.class);
-    when(filteringComplete.getTestTargets()).thenReturn(ImmutableSet.of(targetA, targetB));
-    TestSummary testSummary = Mockito.mock(TestSummary.class);
-    when(testSummary.getStatus()).thenReturn(BlazeTestStatus.FAILED);
-    when(testSummary.getTarget()).thenReturn(targetA);
-
-    stateTracker.testFilteringComplete(filteringComplete);
-    stateTracker.testSummary(testSummary);
-
-    LoggingTerminalWriter terminalWriter = new LoggingTerminalWriter();
-    stateTracker.writeProgressBar(terminalWriter);
-    String output = terminalWriter.getTranscript();
-
-    String expected = LoggingTerminalWriter.FAIL + labelA;
-    assertTrue(
-        "Sequence '" + expected + "' should be present in colored progress bar: " + output,
-        output.contains(expected));
+        "Label " + labelA.toString() + " should be present in progress bar: " + output,
+        output.contains(labelA.toString()));
   }
 
   @Test
