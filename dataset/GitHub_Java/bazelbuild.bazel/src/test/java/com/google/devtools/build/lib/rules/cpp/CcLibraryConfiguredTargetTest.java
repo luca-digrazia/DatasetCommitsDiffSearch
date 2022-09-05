@@ -114,15 +114,6 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testFilesToBuildWithoutDSO() throws Exception {
-    // This is like the preceding test, but with a toolchain that can't build '.so' files
-    useConfiguration("--compiler=compiler_no_dyn_linker");
-    ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
-    Artifact archive = getBinArtifact("libhello.a", hello);
-    assertThat(getFilesToBuild(hello)).containsExactly(archive);
-  }
-
-  @Test
   public void testFilesToBuildWithInterfaceSharedObjects() throws Exception {
     useConfiguration("--interface_shared_objects");
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
@@ -731,24 +722,6 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             "cc_library(name = 'y', hdrs = ['y.h'])");
     assertThat(ActionsTestUtil.baseNamesOf(getOutputGroup(x, OutputGroupProvider.HIDDEN_TOP_LEVEL)))
         .isEqualTo("y.h.processed");
-  }
-
-  @Test
-  public void testProcessHeadersInDependenciesOfBinaries() throws Exception {
-    AnalysisMock.get()
-        .ccSupport()
-        .setupCrosstool(mockToolsConfig, MockCcSupport.HEADER_PROCESSING_FEATURE_CONFIGURATION);
-    useConfiguration("--features=parse_headers", "--process_headers_in_dependencies");
-    ConfiguredTarget x =
-        scratchConfiguredTarget(
-            "foo",
-            "x",
-            "cc_binary(name = 'x', deps = [':y'])",
-            "cc_library(name = 'y', hdrs = ['y.h'])");
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                getOutputGroup(x, OutputGroupProvider.HIDDEN_TOP_LEVEL)))
-        .contains("y.h.processed");
   }
 
   @Test

@@ -75,8 +75,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       CcLinkingOutputs ccLinkingOutputs,
       boolean neverLink, boolean addDynamicRuntimeInputArtifactsToRunfiles,
       boolean linkingStatically) {
-    Runfiles.Builder builder = new Runfiles.Builder(
-        context.getWorkspaceName(), context.getConfiguration().legacyExternalRunfiles());
+    Runfiles.Builder builder = new Runfiles.Builder(context.getWorkspaceName());
 
     // neverlink= true creates a library that will never be linked into any binary that depends on
     // it, but instead be loaded as an extension. So we need the dynamic library for this in the
@@ -139,10 +138,8 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     }
 
     Artifact soImplArtifact = null;
-    boolean supportsDynamicLinker =
-        ruleContext.getFragment(CppConfiguration.class).supportsDynamicLinker();
     boolean createDynamicLibrary =
-        !linkStatic && appearsToHaveObjectFiles(ruleContext.attributes()) && supportsDynamicLinker;
+        !linkStatic && appearsToHaveObjectFiles(ruleContext.attributes());
     if (ruleContext.getRule().isAttrDefined("outs", Type.STRING_LIST)) {
       List<String> outs = ruleContext.attributes().get("outs", Type.STRING_LIST);
       if (outs.size() > 1) {
@@ -181,21 +178,13 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     helper.setCreateDynamicLibrary(createDynamicLibrary);
     helper.setDynamicLibrary(soImplArtifact);
 
-    // If the reason we're not creating a dynamic library is that the toolchain
-    // doesn't support it, then register an action which complains when triggered,
-    // which only happens when some rule explicitly depends on the dynamic library.
-    if (!createDynamicLibrary && !supportsDynamicLinker) {
-      Artifact solibArtifact = CppHelper.getLinkedArtifact(
-          ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
-      ruleContext.registerAction(new FailAction(ruleContext.getActionOwner(),
-          ImmutableList.of(solibArtifact), "Toolchain does not support dynamic linking"));
-    } else if (!createDynamicLibrary
-        && ruleContext.attributes().isConfigurable("srcs", BuildType.LABEL_LIST)) {
     // If "srcs" is configurable, the .so output is always declared because the logic that
     // determines implicit outs doesn't know which value of "srcs" will ultimately get chosen. Here,
     // where we *do* have the correct value, it may not contain any source files to generate an
     // .so with. If that's the case, register a fake generating action to prevent a "no generating
     // action for this artifact" error.
+    if (!createDynamicLibrary
+        && ruleContext.attributes().isConfigurable("srcs", BuildType.LABEL_LIST)) {
       Artifact solibArtifact = CppHelper.getLinkedArtifact(
           ruleContext, LinkTargetType.DYNAMIC_LIBRARY);
       ruleContext.registerAction(new FailAction(ruleContext.getActionOwner(),
