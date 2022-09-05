@@ -18,6 +18,7 @@ import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -27,6 +28,9 @@ import com.google.devtools.build.lib.rules.extra.ActionListener;
 /**
  * Rule definition for action_listener rule.
  */
+@BlazeRule(name = "action_listener",
+             ancestors = { BaseRuleClasses.RuleBase.class },
+             factoryClass = ActionListener.class)
 public final class BazelActionListenerRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
@@ -53,15 +57,6 @@ public final class BazelActionListenerRule implements RuleDefinition {
         .removeAttribute("deps")
         .removeAttribute("data")
         .removeAttribute(":action_listener")
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name("action_listener")
-        .ancestors(BaseRuleClasses.RuleBase.class)
-        .factoryClass(ActionListener.class)
         .build();
   }
 }
@@ -99,27 +94,18 @@ ${ATTRIBUTE_DEFINITION}
 
 <h4 id="action_listener_example">Example</h4>
 <pre>
-action_listener(
-    name = "index_all_languages",
-    mnemonics = [
-        "Javac",
-        "CppCompile",
-    ],
-    extra_actions = [":indexer"],
-)
+    action_listener(name = "index_all_languages",
+                    mnemonics = [ "Javac", "CppCompile" ],
+                    extra_actions = [ ":indexer" ])
 
-action_listener(
-    name = "index_java",
-    mnemonics = ["Javac"],
-    extra_actions = [":indexer"],
-)
+    action_listener(name = "index_java",
+                    mnemonics = [ "Javac" ],
+                    extra_actions = [ ":indexer" ])
 
-extra_action(
-    name = "indexer",
-    tools = ["//my/tools:indexer"],
-    cmd = "$(location //my/tools:indexer)" +
-          "--extra_action_file=$(EXTRA_ACTION_FILE)",
-)
+    extra_action(name = "indexer",
+                 tools = [ "//my/tools:indexer" ],
+                 cmd = "$(location //my/tools:indexer)" +
+                       "--extra_action_file=$(EXTRA_ACTION_FILE)")
 </pre>
 
 <!-- #END_BLAZE_RULE -->*/
