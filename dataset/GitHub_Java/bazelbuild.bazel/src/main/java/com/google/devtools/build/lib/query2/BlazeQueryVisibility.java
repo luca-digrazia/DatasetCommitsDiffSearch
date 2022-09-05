@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,26 +14,26 @@
 
 package com.google.devtools.build.lib.query2;
 
-import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
+import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.engine.QueryVisibility;
 
-/** An adapter from {@link PackageGroupContents} to a {@link QueryVisibility}. */
+/** An adapter from a {@link PackageSpecification} to a {@link QueryVisibility}. */
 public class BlazeQueryVisibility extends QueryVisibility<Target> {
 
-  private final PackageGroupContents packageSpecifications;
+  private final PackageSpecification packageSpecification;
 
-  public BlazeQueryVisibility(PackageGroupContents packageSpecifications) {
-    this.packageSpecifications = packageSpecifications;
+  public BlazeQueryVisibility(PackageSpecification packageSpecification) {
+    this.packageSpecification = packageSpecification;
   }
 
   @Override
   public boolean contains(Target target) {
-    return packageSpecifications.containsPackage(target.getLabel().getPackageIdentifier());
+    return packageSpecification.containsPackage(target.getPackage().getNameFragment());
   }
 
   @Override
   public String toString() {
-    return packageSpecifications.toString();
+    return packageSpecification.toString();
   }
 }
