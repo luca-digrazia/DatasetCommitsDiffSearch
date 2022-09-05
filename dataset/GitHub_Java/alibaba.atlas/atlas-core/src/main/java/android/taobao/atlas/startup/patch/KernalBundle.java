@@ -217,7 +217,6 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -229,11 +228,9 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.taobao.atlas.framework.Atlas;
-import android.taobao.atlas.framework.FrameworkProperties;
 import android.taobao.atlas.startup.AtlasBridgeApplication;
 import android.taobao.atlas.startup.KernalVersionManager;
 import android.taobao.atlas.startup.NClassLoader;
-import android.taobao.atlas.startup.patch.releaser.PatchDexProfile;
 import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Toast;
@@ -257,11 +254,6 @@ public class KernalBundle {
     private NClassLoader replaceClassLoader;
 
     public static boolean nativeLibPatched;
-
-    static List <String>blackList = Arrays.asList(
-            "/Plugin/",
-            "/virtual/");
-
     public static String KERNAL_BUNDLE_NAME = "com.taobao.maindex";
 
     public static KernalBundle kernalBundle = null;
@@ -286,12 +278,8 @@ public class KernalBundle {
         if (kernalUpdateDir.exists() || kernalDexPatchDir.exists()) {
             try {
                 kernalBundle = new KernalBundle(kernalUpdateDir, kernalDexPatchDir, KernalVersionManager.instance().getBaseBundleVersion(KERNAL_BUNDLE_NAME), currentProcessName);
-                if (isInBlackList(kernalBundle)){
-                    throw new IOException(kernalBundle.getArchive().getArchiveFile().getAbsolutePath());
-                }
                 kernalBundle.patchKernalDex(application);
                 kernalBundle.patchKernalResource(application);
-
                 return true;
             } catch (Throwable e) {
                 e.printStackTrace();
@@ -304,18 +292,6 @@ public class KernalBundle {
             }
         }
         return false;
-    }
-
-    private static boolean isInBlackList(KernalBundle kernalBundle) {
-        if (kernalBundle!= null && kernalBundle.getArchive()!= null && kernalBundle.getArchive().getArchiveFile()!= null){
-            for (String s:blackList) {
-                if (kernalBundle.getArchive().getArchiveFile().getAbsolutePath().contains(s)){
-                    return true;
-                }
-            }
-        }
-        return false;
-
     }
 
     public static boolean checkLoadKernalDebugPatch(Application application) {
@@ -444,14 +420,14 @@ public class KernalBundle {
         return appVersion + "_" + maindexTag;
     }
 
-    public void  patchKernalDex(Application application) throws Exception {
+    public void patchKernalDex(Application application) throws Exception {
         DexFile[] dexFile = archive.getOdexFile();
         if ((dexFile != null && dexFile.length > 0) || archive.getLibraryDirectory().exists()) {
             boolean needReplaceClassLoader = needReplaceClassLoader(application);
             boolean dexPatch = dexFile[dexFile.length - 1].getName().contains(KernalBundleArchive.DEXPATCH_DIR);
             int newFrameworkPropertiesDexIndex;
             if (dexPatch) {
-                    newFrameworkPropertiesDexIndex = 0;
+                newFrameworkPropertiesDexIndex = dexFile.length > 1 ? dexFile.length - 2 : dexFile.length - 1;
             } else {
                 newFrameworkPropertiesDexIndex = dexFile.length - 1;
             }
@@ -459,40 +435,14 @@ public class KernalBundle {
             patchWithApk = dexPatch &&
                     (TextUtils.isEmpty(KernalVersionManager.instance().currentVersionName()) || KernalVersionManager.instance().currentVersionName().equals(KernalConstants.INSTALLED_VERSIONNAME));
             if (!needReplaceClassLoader) {
-                Log.e("KernalBundle","no need replace Classloader!");
                 FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", application.getClassLoader());
             } else if (patchWithApk) {
-                Log.e("KernalBundle","need replace Classloader && patchWithApk!");
+                FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", application.getClassLoader());
                 replaceClassLoader = new NClassLoader(".", KernalBundle.class.getClassLoader().getParent());
-                if (needReplaceClassLoader) {
-                    try {
-                        NClassLoader.replacePathClassLoader(KernalConstants.baseContext, KernalBundle.class.getClassLoader(), replaceClassLoader);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-                FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", replaceClassLoader);
-
             } else {
-                Log.e("KernalBundle","need replace Classloader && load FrameworkPropertiesClazz to NclassLoader!");
                 replaceClassLoader = new NClassLoader(".", KernalBundle.class.getClassLoader().getParent());
-                if (needReplaceClassLoader) {
-                    try {
-                        NClassLoader.replacePathClassLoader(KernalConstants.baseContext, KernalBundle.class.getClassLoader(), replaceClassLoader);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
                 FrameworkPropertiesClazz = archive.getOdexFile()[newFrameworkPropertiesDexIndex].loadClass("android.taobao.atlas.framework.FrameworkProperties", replaceClassLoader);
             }
-
-
-            //for mini sdk 21
-            if (FrameworkPropertiesClazz == null){
-                Log.e("KernalBundle","FrameworkPropertiesClazz is null, load from source apk");
-                FrameworkPropertiesClazz = Class.forName("android.taobao.atlas.framework.FrameworkProperties");
-            }
-
             if (FrameworkPropertiesClazz == null && isDeubgMode()) {
                 Log.e("KernalBundle", "main dex is not match, library awo test?");
                 return;
@@ -504,27 +454,20 @@ public class KernalBundle {
                 if (isDeubgMode()) {
                     Log.e("KernalBundle", "main dex is not match, awo test?");
                 } else {
-                    throw new RuntimeException(String.format("maindex version is not mismatch %s vs %s!",KernalVersionManager.instance().currentVersionName(),version));
+                    throw new RuntimeException("maindex version is not mismatch");
                 }
             }
-
+            if (needReplaceClassLoader) {
+                try {
+                    NClassLoader.replacePathClassLoader(KernalConstants.baseContext, KernalBundle.class.getClassLoader(), replaceClassLoader);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }
             installKernalBundle(KernalConstants.baseContext.getClassLoader(), archive.getArchiveFile(), archive.getOdexFile(), archive.getLibraryDirectory());
 
             prepareRuntimeVariables(application);
-
-            prepareKernalConstant(application);
         }
-    }
-
-    private void prepareKernalConstant(Application application) {
-        try {
-            Class kernalConstantClass = application.getClassLoader().loadClass("android.taobao.atlas.startup.patch.KernalConstants");
-            kernalConstantClass.getDeclaredField("APK_PATH").set(null,application.getApplicationInfo().sourceDir);
-            kernalConstantClass.getDeclaredField("baseContext").set(null,application.getBaseContext());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-
     }
 
     public boolean needReplaceClassLoader(Application application) {
@@ -555,7 +498,6 @@ public class KernalBundle {
             RuntimeVariablesClass.getDeclaredField("sCurrentProcessName").set(RuntimeVariablesClass, KernalConstants.PROCESS);
             RuntimeVariablesClass.getDeclaredField("androidApplication").set(RuntimeVariablesClass, application);
             RuntimeVariablesClass.getDeclaredField("delegateResources").set(RuntimeVariablesClass, KernalConstants.baseContext.getResources());
-
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
@@ -668,7 +610,7 @@ public class KernalBundle {
         original.add(0, extraElement);
     }
 
-    private static boolean replaceElement(Object instance, String fieldName, Object[] replaceElement) throws NoSuchFieldException, IllegalArgumentException,
+    private static boolean replaceElement(Object instance, String fieldName, Object replaceElement) throws NoSuchFieldException, IllegalArgumentException,
             IllegalAccessException {
         boolean replaceSuccess = false;
         Field jlrField = findField(instance, fieldName);
@@ -737,14 +679,14 @@ public class KernalBundle {
                 }
 
                 //增加kernal bundle
-               expandFieldArray(dexPathList, "dexElements", element);
+                expandFieldArray(dexPathList, "dexElements", element);
 //                if (Build.VERSION.SDK_INT > 20 && !vmSafeMode) {
-//                     success = removeOrignalElement(dexPathList, "dexElements");
+//                     success = replaceElement(dexPathList, "dexElements", element[0]);
 //                    if(!success){
 //                        throw new IOException("replaceElement failed");
 //                    }
 //                } else {
-////                    expandFieldArray(dexPathList, "dexElements", element);
+//                    expandFieldArray(dexPathList, "dexElements", element);
 //                }
             }
             //增加kernal bundle library
@@ -756,24 +698,6 @@ public class KernalBundle {
             throw new IOException("install kernal fail", e);
         }
 
-    }
-
-    private boolean removeOrignalElement(Object instance, String fieldName) throws NoSuchFieldException, IllegalAccessException {
-        Field jlrField = findField(instance, fieldName);
-        Object[] original = (Object[]) jlrField.get(instance);
-        for (int x = 0; x < original.length; x++) {
-            Object element = original[x];
-            Field dexFileField = element.getClass().getDeclaredField("dexFile");
-            dexFileField.setAccessible(true);
-            File apkFile = findDexRawFile(element);
-            if (apkFile != null) {
-                if (apkFile.getAbsolutePath() != null && apkFile.getAbsolutePath().contains(KernalConstants.baseContext.getPackageName())) {
-                    dexFileField.set(element,null);
-                    break;
-                }
-            }
-        }
-        return true;
     }
 
     private static void patchLibrary(Object dexPathList, File libraryDirectory) throws NoSuchFieldException, IllegalAccessException, IOException {
