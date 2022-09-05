@@ -44,19 +44,14 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
         assertNotNull(parentId);
         E old = selectByPk(parentId);
         assertNotNull(old);
-        return createQuery()
-                .where()
-                .like$(TreeSupportEntity.path, old.getPath())
-                .listNoPaging();
+        return createQuery().where().like$(TreeSupportEntity.path, old.getPath()).noPaging().list();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<E> selectChildNode(PK parentId) {
         assertNotNull(parentId);
-        return createQuery()
-                .where(TreeSupportEntity.parentId, parentId)
-                .listNoPaging();
+        return createQuery().where(TreeSupportEntity.parentId, parentId).noPaging().list();
     }
 
     //当父节点不存在时,创建parentId
@@ -91,7 +86,7 @@ public abstract class AbstractTreeSortService<E extends TreeSortSupportEntity<PK
             if (entity.getSortIndex() == null && parent.getSortIndex() != null)
                 entity.setSortIndex(parent.getSortIndex() * 10);
             entity.setPath(parent.getPath() + "-" + RandomUtil.randomChar(4));
-            entity.setLevel(entity.getPath().split("[-]").length);
+            entity.setLevel(entity.getPath().split("-").length);
         }
     }
 
