@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 // final as well as intermediate artifacts.
 public final class IntermediateArtifacts {
   static final String LINKMAP_SUFFIX = ".linkmap";
+  static final String BREAKPAD_SUFFIX = ".breakpad";
 
   /**
    * Extension used for the zip archive containing dsym files and their associated plist. Note that
@@ -229,12 +230,7 @@ public final class IntermediateArtifacts {
    * artifact.
    */
   public Artifact objFile(Artifact source) {
-    if (source.isTreeArtifact()) {
-      PathFragment rootRelativePath = source.getRootRelativePath().replaceName("obj_files");
-      return ruleContext.getTreeArtifact(rootRelativePath, ruleContext.getBinOrGenfilesDirectory());
-    } else {
-      return inUniqueObjsDir(source, ".o");
-    }
+     return inUniqueObjsDir(source, ".o");
   }
 
   /**
@@ -357,6 +353,20 @@ public final class IntermediateArtifacts {
    */
   private Artifact architectureRepresentation(String arch, String suffix) {
     return appendExtension(String.format("_%s%s", arch, suffix));
+  }
+
+  /**
+   * Breakpad debug symbol representation.
+   */
+  public Artifact breakpadSym() {
+    return appendExtension(BREAKPAD_SUFFIX);
+  }
+
+  /**
+   * Breakpad debug symbol representation for a specific architecture.
+   */
+  public Artifact breakpadSym(String arch) {
+    return architectureRepresentation(arch, BREAKPAD_SUFFIX);
   }
 
   /**
