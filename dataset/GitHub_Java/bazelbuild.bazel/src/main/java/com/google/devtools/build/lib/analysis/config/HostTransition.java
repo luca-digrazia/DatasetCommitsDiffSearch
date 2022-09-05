@@ -40,12 +40,10 @@ public final class HostTransition implements PatchTransition {
       // and practical fix.
       return options.clone();
     } else {
-      return options.createHostOptions();
+      return options.createHostOptions(false);
     }
   }
 
   @Override
-  public boolean defaultsToSelf() {
-    return false;
-  }
+  public boolean defaultsToSelf() { return false; }
 }
