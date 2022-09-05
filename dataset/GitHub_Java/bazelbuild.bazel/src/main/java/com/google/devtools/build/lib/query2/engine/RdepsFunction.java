@@ -54,7 +54,7 @@ final class RdepsFunction extends AllRdepsFunction {
    */
   @Override
   public <T> Set<T> eval(QueryEnvironment<T> env, QueryExpression expression, List<Argument> args)
-      throws QueryException, InterruptedException {
+      throws QueryException {
     Set<T> universeValue = args.get(0).getExpression().eval(env);
     env.buildTransitiveClosure(expression, universeValue, Integer.MAX_VALUE);
 
