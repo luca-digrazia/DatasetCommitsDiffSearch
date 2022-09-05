@@ -13,8 +13,11 @@
 
 package org.hswebframework.web.workflow.web.diagram;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
@@ -22,8 +25,6 @@ import org.activiti.engine.HistoryService;
 import org.activiti.engine.RepositoryService;
 import org.activiti.engine.RuntimeService;
 import org.activiti.engine.history.HistoricActivityInstance;
-import org.activiti.engine.history.HistoricActivityInstanceQuery;
-import org.activiti.engine.history.HistoricProcessInstance;
 import org.activiti.engine.impl.persistence.entity.ProcessDefinitionEntity;
 import org.activiti.engine.impl.pvm.PvmTransition;
 import org.activiti.engine.impl.pvm.process.ActivityImpl;
@@ -59,24 +60,12 @@ public class ProcessInstanceHighlightsResource {
         JSONArray activitiesArray = new JSONArray();
         JSONArray flowsArray = new JSONArray();
 
-        HistoricProcessInstance processInstance = historyService.createHistoricProcessInstanceQuery()
-                .processInstanceId(processInstanceId)
-                .singleResult();
-        ProcessDefinitionEntity processDefinition = (ProcessDefinitionEntity) repositoryService
-                .getProcessDefinition(processInstance.getProcessDefinitionId());
+        ProcessInstance processInstance = runtimeService.createProcessInstanceQuery().processInstanceId(processInstanceId).singleResult();
+        ProcessDefinitionEntity processDefinition = (ProcessDefinitionEntity) repositoryService.getProcessDefinition(processInstance.getProcessDefinitionId());
 
         responseJSON.put("processDefinitionId", processInstance.getProcessDefinitionId());
-        List<String> highLightedActivities;
-        if (processInstance.getEndTime() != null) {
-            highLightedActivities = historyService
-                    .createHistoricActivityInstanceQuery()
-                    .processInstanceId(processInstanceId)
-                    .activityType("endEvent")
-                    .list().stream().map(HistoricActivityInstance::getActivityId)
-                    .collect(Collectors.toList());
-        } else {
-            highLightedActivities = runtimeService.getActiveActivityIds(processInstanceId);
-        }
+
+        List<String> highLightedActivities = runtimeService.getActiveActivityIds(processInstanceId);
         List<String> highLightedFlows = getHighLightedFlows(processDefinition, processInstanceId);
 
         activitiesArray.addAll(highLightedActivities);
