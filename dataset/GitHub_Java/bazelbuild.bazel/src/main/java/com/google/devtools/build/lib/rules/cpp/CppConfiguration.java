@@ -261,7 +261,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   private final String targetCpu;
   private final String targetSystemName;
   private final String targetLibc;
-  private final String targetOS;
   private final LipoMode lipoMode;
   private final PathFragment crosstoolTopPathFragment;
 
@@ -353,7 +352,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     this.lipoMode = cppOptions.getLipoMode();
     this.targetSystemName = toolchain.getTargetSystemName();
     this.targetLibc = toolchain.getTargetLibc();
-    this.targetOS = toolchain.getCcTargetOs();
     this.crosstoolTop = params.crosstoolTop;
     this.ccToolchainLabel = params.ccToolchainLabel;
     this.compilationMode = params.commonOptions.compilationMode;
@@ -829,7 +827,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                   + "    action: 'c++-compile'"
                   + "    action: 'assemble'"
                   + "    action: 'preprocess-assemble'"
-                  + "    action: 'lto-backend'"
                   + "    expand_if_all_available: 'per_object_debug_info_file'"
                   + "    flag_group {"
                   + "      flag: '-gsplit-dwarf'"
@@ -1178,11 +1175,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   @SkylarkCallable(name = "cpu", structField = true, doc = "Target CPU of the C++ toolchain.")
   public String getTargetCpu() {
     return targetCpu;
-  }
-
-  /** Unused, for compatibility with things internal to Google. */
-  public String getTargetOS() {
-    return targetOS;
   }
 
   /**
