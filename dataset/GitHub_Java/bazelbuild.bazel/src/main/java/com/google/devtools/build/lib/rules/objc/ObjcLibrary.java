@@ -106,13 +106,12 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
             xcodeProviderBuilder, new Attribute("non_propagated_deps", Mode.TARGET))
         .registerActions(xcodeProviderBuilder.build());
 
-    return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
-        .addProvider(ObjcProvider.class, common.getObjcProvider())
-        .addProvider(J2ObjcSrcsProvider.class, ObjcRuleClasses.j2ObjcSrcsProvider(ruleContext))
-        .addProvider(
-            J2ObjcMappingFileProvider.class, ObjcRuleClasses.j2ObjcMappingFileProvider(ruleContext))
-        .build();
+    return common.configuredTarget(
+        filesToBuild.build(),
+        Optional.of(xcodeProviderBuilder.build()),
+        Optional.of(common.getObjcProvider()),
+        Optional.<XcTestAppProvider>absent(),
+        Optional.of(ObjcRuleClasses.j2ObjcSrcsProvider(ruleContext)));
   }
 
   private OptionsProvider optionsProvider(RuleContext ruleContext) {

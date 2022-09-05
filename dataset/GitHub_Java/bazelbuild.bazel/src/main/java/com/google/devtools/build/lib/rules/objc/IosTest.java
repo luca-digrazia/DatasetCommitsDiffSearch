@@ -29,7 +29,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
+import com.google.devtools.build.lib.rules.objc.ObjcActionsBuilder.ExtraLinkArgs;
+import com.google.devtools.build.lib.rules.objc.ObjcActionsBuilder.ExtraLinkInputs;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 
 import java.util.ArrayList;
@@ -85,11 +86,11 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
 
     XcodeProductType productType;
     ExtraLinkArgs extraLinkArgs;
-    Iterable<Artifact> extraLinkInputs;
+    ExtraLinkInputs extraLinkInputs;
     if (!isXcTest(ruleContext)) {
       productType = XcodeProductType.APPLICATION;
       extraLinkArgs = new ExtraLinkArgs();
-      extraLinkInputs = ImmutableList.of();
+      extraLinkInputs = new ExtraLinkInputs();
     } else {
       productType = XcodeProductType.UNIT_TEST;
       XcodeProvider appIpaXcodeProvider =
@@ -110,13 +111,18 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
           "-bundle",
           "-bundle_loader", bundleLoader.getExecPathString());
 
-      extraLinkInputs = ImmutableList.of(bundleLoader);
+      extraLinkInputs = new ExtraLinkInputs(bundleLoader);
 
       filesToBuild.add(testApp.getIpa());
     }
 
+    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
+      extraLinkArgs = extraLinkArgs.appendedWith(CompilationSupport.LINKER_COVERAGE_FLAGS);
+    }
+
     new CompilationSupport(ruleContext)
-        .registerLinkActions(common.getObjcProvider(), extraLinkArgs, extraLinkInputs)
+        .registerLinkActions(
+            common.getObjcProvider(), extraLinkArgs, extraLinkInputs)
         .registerJ2ObjcCompileAndArchiveActions(optionsProvider, common.getObjcProvider())
         .registerCompileAndArchiveActions(common, optionsProvider)
         .addXcodeSettings(xcodeProviderBuilder, common, optionsProvider)
