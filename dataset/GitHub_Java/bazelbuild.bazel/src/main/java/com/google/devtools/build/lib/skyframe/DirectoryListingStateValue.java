@@ -13,8 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.Dirent.Type;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -57,7 +57,7 @@ public final class DirectoryListingStateValue implements SkyValue {
 
   @ThreadSafe
   public static SkyKey key(RootedPath rootedPath) {
-    return SkyKey.create(SkyFunctions.DIRECTORY_LISTING_STATE, rootedPath);
+    return new SkyKey(SkyFunctions.DIRECTORY_LISTING_STATE, rootedPath);
   }
 
   /**
@@ -107,7 +107,7 @@ public final class DirectoryListingStateValue implements SkyValue {
           new Comparator<Integer>() {
             @Override
             public int compare(Integer o1, Integer o2) {
-              return direntArray[o1].compareTo(direntArray[o2]);
+              return direntArray[o1].getName().compareTo(direntArray[o2].getName());
             }
           });
       String[] names = new String[dirents.size()];
