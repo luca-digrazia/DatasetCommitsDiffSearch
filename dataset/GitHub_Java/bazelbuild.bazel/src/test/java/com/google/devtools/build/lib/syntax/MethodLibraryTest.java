@@ -20,13 +20,14 @@ import static org.junit.Assert.assertEquals;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
 
 /**
  * Tests for MethodLibrary.
@@ -914,9 +915,9 @@ public class MethodLibraryTest extends EvaluationTestCase {
 
   @Test
   public void testEnumerateBadArg() throws Exception {
+    // TODO(bazel-team): unify BUILD List and Skylark list, and get rid of this ugly message.
     new BothModesTest().testIfErrorContains(
-        "Method enumerate(list: sequence) is not applicable for arguments (string): "
-        + "'list' is string, but should be sequence",
+        "expected List or sequence for 'list' while calling enumerate but got string instead: a",
         "enumerate('a')");
   }
 
@@ -924,18 +925,18 @@ public class MethodLibraryTest extends EvaluationTestCase {
   public void testPyListAppend() throws Exception {
     new BuildTest()
         .setUp("FOO = ['a', 'b']", "FOO.append('c')")
-        .testLookup("FOO", MutableList.of(env, "a", "b", "c"))
+        .testLookup("FOO", Arrays.asList("a", "b", "c"))
         .testIfErrorContains(
-            "function append is not defined on object of type 'tuple'", "(1, 2).append(3)");
+            "function 'append' is not defined on object of type 'Tuple'", "(1, 2).append(3)");
   }
 
   @Test
   public void testPyListExtend() throws Exception {
     new BuildTest()
         .setUp("FOO = ['a', 'b']", "FOO.extend(['c', 'd'])")
-        .testLookup("FOO", MutableList.of(env, "a", "b", "c", "d"))
+        .testLookup("FOO", Arrays.asList("a", "b", "c", "d"))
         .testIfErrorContains(
-            "function extend is not defined on object of type 'tuple'", "(1, 2).extend([3, 4])");
+            "function 'extend' is not defined on object of type 'Tuple'", "(1, 2).extend([3, 4])");
   }
 
   @Test
@@ -943,7 +944,7 @@ public class MethodLibraryTest extends EvaluationTestCase {
     new BuildTest()
         .setUp("cc_binary = (['hello.cc'])")
         .testIfErrorContains(
-            "'list' object is not callable",
+            "'List' object is not callable",
             "cc_binary(name = 'hello', srcs=['hello.cc'], malloc = '//base:system_malloc')");
   }
 
