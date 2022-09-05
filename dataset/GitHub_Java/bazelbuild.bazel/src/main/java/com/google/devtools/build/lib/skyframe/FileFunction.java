@@ -157,8 +157,7 @@ public class FileFunction implements SkyFunction {
       realRootedPath = RootedPath.toRootedPath(parentRealRootedPath.getRoot(),
           parentRealRootedPath.getRelativePath().getRelative(baseName));
       if (!parentFileValue.exists()) {
-        return Pair.<RootedPath, FileStateValue>of(
-            realRootedPath, FileStateValue.NONEXISTENT_FILE_STATE_NODE);
+        return Pair.of(realRootedPath, FileStateValue.NONEXISTENT_FILE_STATE_NODE);
       }
     }
     FileStateValue realFileStateValue =
