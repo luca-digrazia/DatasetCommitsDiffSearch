@@ -24,7 +24,7 @@ import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 
@@ -38,8 +38,10 @@ import com.google.devtools.build.skyframe.SkyFunction;
  * names of any implementation of this class.
  */
 public interface AnalysisEnvironment extends ActionRegistry {
-  /** Returns a callback to be used in this build for reporting analysis errors. */
-  ExtendedEventHandler getEventHandler();
+  /**
+   * Returns a callback to be used in this build for reporting analysis errors.
+   */
+  EventHandler getEventHandler();
 
   /**
    * Returns whether any errors were reported to this instance.
@@ -89,6 +91,11 @@ public interface AnalysisEnvironment extends ActionRegistry {
   Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root);
 
   /**
+   * Returns the artifact for the specified tool.
+   */
+  Artifact getEmbeddedToolArtifact(String embeddedPath);
+
+  /**
    * Returns the middleman factory associated with the build.
    */
   // TODO(bazel-team): remove this method and replace it with delegate methods.
@@ -120,13 +127,13 @@ public interface AnalysisEnvironment extends ActionRegistry {
    * Returns the Artifact that is used to hold the non-volatile workspace status for the current
    * build request.
    */
-  Artifact getStableWorkspaceStatusArtifact() throws InterruptedException;
+  Artifact getStableWorkspaceStatusArtifact();
 
   /**
-   * Returns the Artifact that is used to hold the volatile workspace status (e.g. build changelist)
-   * for the current build request.
+   * Returns the Artifact that is used to hold the volatile workspace status (e.g. build
+   * changelist) for the current build request.
    */
-  Artifact getVolatileWorkspaceStatusArtifact() throws InterruptedException;
+  Artifact getVolatileWorkspaceStatusArtifact();
 
   /**
    * Returns the Artifacts that contain the workspace status for the current build request.
@@ -135,8 +142,7 @@ public interface AnalysisEnvironment extends ActionRegistry {
    * @param config the current build configuration.
    */
   ImmutableList<Artifact> getBuildInfo(
-      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config)
-      throws InterruptedException;
+      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config);
 
   /**
    * Returns the set of orphan Artifacts (i.e. Artifacts without generating action). Should only be

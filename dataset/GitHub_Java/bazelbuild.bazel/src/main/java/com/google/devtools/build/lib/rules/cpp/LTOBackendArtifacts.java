@@ -19,10 +19,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.LTOBackendAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -106,8 +105,7 @@ public final class LTOBackendArtifacts {
     commandLine = cmdLine;
   }
 
-  public void scheduleLTOBackendAction(
-      RuleContext ruleContext, FeatureConfiguration featureConfiguration, boolean usePic) {
+  public void scheduleLTOBackendAction(RuleContext ruleContext, boolean usePic) {
     LTOBackendAction.Builder builder = new LTOBackendAction.Builder();
     builder.addImportsInfo(bitcodeFiles, imports);
 
@@ -127,17 +125,14 @@ public final class LTOBackendArtifacts {
     PathFragment compiler = cppConfiguration.getCppExecutable();
 
     builder.setExecutable(compiler);
-    Variables.Builder buildVariablesBuilder = new Variables.Builder();
-    buildVariablesBuilder.addVariable("thinlto_index", index.getExecPath().toString());
-    // The output from the LTO backend step is a native object file.
-    buildVariablesBuilder.addVariable(
-        "thinlto_output_object_file", objectFile.getExecPath().toString());
-    // The input to the LTO backend step is the bitcode file.
-    buildVariablesBuilder.addVariable(
-        "thinlto_input_bitcode_file", bitcodeFile.getExecPath().toString());
-    Variables buildVariables = buildVariablesBuilder.build();
     List<String> execArgs = new ArrayList<>();
-    execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));
+    execArgs.add("-c");
+    execArgs.add("-fthinlto-index=" + index.getExecPath());
+    execArgs.add("-o");
+    execArgs.add(objectFile.getExecPath().getPathString());
+    execArgs.add("-x");
+    execArgs.add("ir");
+    execArgs.add(bitcodeFile.getExecPath().getPathString());
     if (usePic) {
       execArgs.add("-fPIC");
     }

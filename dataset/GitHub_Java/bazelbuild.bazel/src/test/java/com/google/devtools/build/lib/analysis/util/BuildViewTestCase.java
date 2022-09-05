@@ -126,6 +126,7 @@ import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -143,6 +144,7 @@ import org.junit.Before;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -241,12 +243,18 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected AnalysisMock getAnalysisMock() {
-    return AnalysisMock.get();
+    try {
+      Class<?> providerClass = Class.forName(TestConstants.TEST_ANALYSIS_MOCK);
+      Field instanceField = providerClass.getField("INSTANCE");
+      return (AnalysisMock) instanceField.get(null);
+    } catch (Exception e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   /** Creates or retrieves the rule class provider used in this test. */
   protected ConfiguredRuleClassProvider getRuleClassProvider() {
-    return getAnalysisMock().createRuleClassProvider();
+    return TestRuleClassProvider.getRuleClassProvider();
   }
 
   protected PackageFactory getPackageFactory() {
@@ -287,7 +295,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     optionsParser.parse(args);
 
     InvocationPolicyEnforcer optionsPolicyEnforcer =
-        getAnalysisMock().getInvocationPolicyEnforcer();
+          new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
     optionsPolicyEnforcer.enforce(optionsParser);
 
     BuildOptions buildOptions = ruleClassProvider.createBuildOptions(optionsParser);

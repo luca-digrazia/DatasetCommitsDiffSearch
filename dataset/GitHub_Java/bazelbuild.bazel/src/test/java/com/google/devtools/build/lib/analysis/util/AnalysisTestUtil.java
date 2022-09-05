@@ -45,13 +45,13 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -164,19 +164,18 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact getStableWorkspaceStatusArtifact() throws InterruptedException {
+    public Artifact getStableWorkspaceStatusArtifact() {
       return original.getStableWorkspaceStatusArtifact();
     }
 
     @Override
-    public Artifact getVolatileWorkspaceStatusArtifact() throws InterruptedException {
+    public Artifact getVolatileWorkspaceStatusArtifact() {
       return original.getVolatileWorkspaceStatusArtifact();
     }
 
     @Override
-    public ImmutableList<Artifact> getBuildInfo(
-        RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config)
-        throws InterruptedException {
+    public ImmutableList<Artifact> getBuildInfo(RuleContext ruleContext, BuildInfoKey key,
+        BuildConfiguration config) {
       return original.getBuildInfo(ruleContext, key, config);
     }
 
@@ -286,14 +285,13 @@ public final class AnalysisTestUtil {
 
     @Override
     public WorkspaceStatusAction createWorkspaceStatusAction(
-        ArtifactFactory artifactFactory, ArtifactOwner artifactOwner, Supplier<UUID> buildId,
-        String workspaceName) {
+        ArtifactFactory artifactFactory, ArtifactOwner artifactOwner, Supplier<UUID> buildId) {
       Artifact stableStatus = artifactFactory.getDerivedArtifact(
           new PathFragment("build-info.txt"),
-          directories.getBuildDataDirectory(workspaceName), artifactOwner);
+          directories.getBuildDataDirectory(), artifactOwner);
       Artifact volatileStatus = artifactFactory.getConstantMetadataArtifact(
           new PathFragment("build-changelist.txt"),
-          directories.getBuildDataDirectory(workspaceName), artifactOwner);
+          directories.getBuildDataDirectory(), artifactOwner);
       return new DummyWorkspaceStatusAction(key, stableStatus, volatileStatus);
     }
 
@@ -410,26 +408,14 @@ public final class AnalysisTestUtil {
     Map<String, String> rootMap = new HashMap<>();
     BuildConfiguration targetConfiguration =
         Iterables.getOnlyElement(configurations.getTargetConfigurations());
-    rootMap.put(
-        targetConfiguration.getBinDirectory(RepositoryName.MAIN).getPath().toString(),
-        "bin");
-    rootMap.put(
-        targetConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString(),
-        "genfiles");
-    rootMap.put(
-        targetConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getPath().toString(),
-        "internal");
+    rootMap.put(targetConfiguration.getBinDirectory().getPath().toString(), "bin");
+    rootMap.put(targetConfiguration.getGenfilesDirectory().getPath().toString(), "genfiles");
+    rootMap.put(targetConfiguration.getMiddlemanDirectory().getPath().toString(), "internal");
 
     BuildConfiguration hostConfiguration = configurations.getHostConfiguration();
-    rootMap.put(
-        hostConfiguration.getBinDirectory(RepositoryName.MAIN).getPath().toString(),
-        "bin(host)");
-    rootMap.put(
-        hostConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString(),
-        "genfiles(host)");
-    rootMap.put(
-        hostConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getPath().toString(),
-        "internal(host)");
+    rootMap.put(hostConfiguration.getBinDirectory().getPath().toString(), "bin(host)");
+    rootMap.put(hostConfiguration.getGenfilesDirectory().getPath().toString(), "genfiles(host)");
+    rootMap.put(hostConfiguration.getMiddlemanDirectory().getPath().toString(), "internal(host)");
 
     if (targetConfiguration.useDynamicConfigurations()) {
       // With dynamic configurations, the output paths that bin, genfiles, etc. refer to may

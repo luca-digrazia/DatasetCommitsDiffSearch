@@ -26,8 +26,9 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildInfoKey;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.BuildInfoCollectionValue;
@@ -36,6 +37,7 @@ import com.google.devtools.build.lib.skyframe.WorkspaceStatusValue;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
+
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.ArrayList;
@@ -47,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+
 import javax.annotation.Nullable;
 
 /**
@@ -78,9 +81,10 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
 
   private boolean enabled = true;
   private MiddlemanFactory middlemanFactory;
-  private ExtendedEventHandler errorEventListener;
+  private EventHandler errorEventListener;
   private SkyFunction.Environment skyframeEnv;
   private Map<Artifact, String> artifacts;
+  private final BinTools binTools;
 
   /**
    * The list of actions registered by the configured target this analysis environment is
@@ -88,14 +92,10 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
    */
   final List<ActionAnalysisMetadata> actions = new ArrayList<>();
 
-  public CachingAnalysisEnvironment(
-      ArtifactFactory artifactFactory,
-      ArtifactOwner owner,
-      boolean isSystemEnv,
-      boolean extendedSanityChecks,
-      ExtendedEventHandler errorEventListener,
-      SkyFunction.Environment env,
-      boolean allowRegisteringActions) {
+  public CachingAnalysisEnvironment(ArtifactFactory artifactFactory,
+      ArtifactOwner owner, boolean isSystemEnv, boolean extendedSanityChecks,
+      EventHandler errorEventListener, SkyFunction.Environment env, boolean allowRegisteringActions,
+      BinTools binTools) {
     this.artifactFactory = artifactFactory;
     this.owner = Preconditions.checkNotNull(owner);
     this.isSystemEnv = isSystemEnv;
@@ -103,6 +103,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
     this.errorEventListener = errorEventListener;
     this.skyframeEnv = env;
     this.allowRegisteringActions = allowRegisteringActions;
+    this.binTools = Preconditions.checkNotNull(binTools);
     middlemanFactory = new MiddlemanFactory(artifactFactory, this);
     artifacts = new HashMap<>();
   }
@@ -185,7 +186,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public ExtendedEventHandler getEventHandler() {
+  public EventHandler getEventHandler() {
     return errorEventListener;
   }
 
@@ -251,6 +252,12 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
+  public Artifact getEmbeddedToolArtifact(String embeddedPath) {
+    Preconditions.checkState(enabled);
+    return binTools.getEmbeddedArtifact(embeddedPath, artifactFactory);
+  }
+
+  @Override
   public void registerAction(ActionAnalysisMetadata... actions) {
     Preconditions.checkState(enabled);
     if (allowRegisteringActions) {
@@ -280,21 +287,21 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
   }
 
   @Override
-  public Artifact getStableWorkspaceStatusArtifact() throws InterruptedException {
+  public Artifact getStableWorkspaceStatusArtifact() {
     return ((WorkspaceStatusValue) skyframeEnv.getValue(WorkspaceStatusValue.SKY_KEY))
             .getStableArtifact();
   }
 
   @Override
-  public Artifact getVolatileWorkspaceStatusArtifact() throws InterruptedException {
+  public Artifact getVolatileWorkspaceStatusArtifact() {
     return ((WorkspaceStatusValue) skyframeEnv.getValue(WorkspaceStatusValue.SKY_KEY))
             .getVolatileArtifact();
   }
 
   // See SkyframeBuildView#getWorkspaceStatusValues for the code that this method is attempting to
   // verify.
-  private NullPointerException collectDebugInfoAndCrash(BuildInfoKey key, BuildConfiguration config)
-      throws InterruptedException {
+  private NullPointerException collectDebugInfoAndCrash(
+      BuildInfoKey key, BuildConfiguration config) {
     String debugInfo = key + " " + config;
     Preconditions.checkState(skyframeEnv.valuesMissing(), debugInfo);
     Map<BuildInfoKey, BuildInfoFactory> buildInfoFactories = Preconditions.checkNotNull(
@@ -307,8 +314,7 @@ public class CachingAnalysisEnvironment implements AnalysisEnvironment {
 
   @Override
   public ImmutableList<Artifact> getBuildInfo(
-      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config)
-      throws InterruptedException {
+      RuleContext ruleContext, BuildInfoKey key, BuildConfiguration config) {
     boolean stamp = AnalysisUtils.isStampingEnabled(ruleContext, config);
     BuildInfoCollectionValue collectionValue =
         (BuildInfoCollectionValue) skyframeEnv.getValue(BuildInfoCollectionValue.key(
