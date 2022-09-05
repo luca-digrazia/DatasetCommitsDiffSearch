@@ -16,6 +16,7 @@
  */
 package org.hswebframework.web.service.organizational.simple;
 
+import com.alibaba.fastjson.JSON;
 import org.hswebframework.web.commons.entity.TreeSupportEntity;
 import org.hswebframework.web.dao.dynamic.QueryByEntityDao;
 import org.hswebframework.web.dao.organizational.*;
@@ -27,13 +28,9 @@ import org.hswebframework.web.organizational.authorization.TreeNode;
 import org.hswebframework.web.organizational.authorization.simple.SimplePersonnel;
 import org.hswebframework.web.organizational.authorization.simple.SimplePersonnelAuthorization;
 import org.hswebframework.web.service.DefaultDSLQueryService;
-import org.hswebframework.web.service.EnableCacheGernericEntityService;
 import org.hswebframework.web.service.GenericEntityService;
 import org.hswebframework.web.service.organizational.PersonService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheConfig;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
@@ -51,8 +48,7 @@ import java.util.stream.Collectors;
  * @author hsweb-generator-online
  */
 @Service("personService")
-@CacheConfig(cacheNames = "person")
-public class SimplePersonService extends EnableCacheGernericEntityService<PersonEntity, String>
+public class SimplePersonService extends GenericEntityService<PersonEntity, String>
         implements PersonService, PersonnelAuthorizationManager {
     @Autowired
     private PersonDao personDao;
@@ -81,40 +77,10 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
 
     @Override
     public String insert(PersonEntity entity) {
-        String id = super.insert(entity);
-        if (entity.getPositionIds() != null) {
-            syncPositionInfo(id, entity.getPositionIds());
-        }
-        return id;
-    }
-
-    protected void syncPositionInfo(String personId, Set<String> positionIds) {
-        for (String positionId : positionIds) {
-            PersonPositionEntity positionEntity = entityFactory.newInstance(PersonPositionEntity.class);
-            positionEntity.setPersonId(personId);
-            positionEntity.setPositionId(positionId);
-            this.personPositionDao.insert(positionEntity);
-        }
+        return super.insert(entity);
     }
 
     @Override
-    protected int updateByPk(PersonEntity entity) {
-        int size = super.updateByPk(entity);
-        if (entity.getPositionIds() != null) {
-            personPositionDao.deleteByPersonId(entity.getId());
-            syncPositionInfo(entity.getId(), entity.getPositionIds());
-        }
-        return size;
-    }
-
-    @Override
-    public int deleteByPk(String id) {
-        personPositionDao.deleteByPersonId(id);
-        return super.deleteByPk(id);
-    }
-
-    @Override
-    @Cacheable(key = "'auth:persion-id'+#personId")
     public PersonnelAuthorization getPersonnelAuthorizationByPersonId(String personId) {
         SimplePersonnelAuthorization authorization = new SimplePersonnelAuthorization();
         PersonEntity entity = selectByPk(personId);
@@ -146,7 +112,6 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
                         List<OrganizationalEntity> orgEntities = getAllChildrenAndReturnRootNode(organizationalDao, orgIds, OrganizationalEntity::setChildren, rootOrgList -> {
                             //根据机构获取地区
                             // TODO: 17-5-25
-
                         });
                         authorization.setOrgIds(transformationTreeNode(null, orgEntities));
                     }
@@ -214,7 +179,6 @@ public class SimplePersonService extends EnableCacheGernericEntityService<Person
     }
 
     @Override
-    @Cacheable(cacheNames = "person", key = "'auth:user-id'+#userId")
     public PersonnelAuthorization getPersonnelAuthorizationByUserId(String userId) {
         PersonEntity entity = createQuery().where(PersonEntity.userId, userId).single();
         assertNotNull(entity);
