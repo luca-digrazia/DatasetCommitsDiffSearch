@@ -19,8 +19,6 @@ import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicates;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -28,9 +26,12 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
+import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ParameterFile;
@@ -58,10 +59,11 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -155,6 +157,11 @@ public class JavaCompileAction extends AbstractAction {
   private final ImmutableList<Artifact> compileTimeDependencyArtifacts;
 
   /**
+   * The java semantics to get the list of action outputs.
+   */
+  private final JavaSemantics semantics;
+
+  /**
    * Constructs an action to compile a set of Java source files to class files.
    *
    * @param owner the action owner, typically a java_* RuleConfiguredTarget.
@@ -188,7 +195,8 @@ public class JavaCompileAction extends AbstractAction {
                             List<String> javacOpts,
                             Collection<Artifact> directJars,
                             BuildConfiguration.StrictDepsMode strictJavaDeps,
-                            Collection<Artifact> compileTimeDependencyArtifacts) {
+                            Collection<Artifact> compileTimeDependencyArtifacts,
+                            JavaSemantics semantics) {
     super(owner, NestedSetBuilder.<Artifact>stableOrder()
             .addTransitive(classpathEntries)
             .addAll(processorPath)
@@ -222,6 +230,7 @@ public class JavaCompileAction extends AbstractAction {
     this.directJars = ImmutableList.copyOf(directJars);
     this.strictJavaDeps = strictJavaDeps;
     this.compileTimeDependencyArtifacts = ImmutableList.copyOf(compileTimeDependencyArtifacts);
+    this.semantics = semantics;
   }
 
   /**
@@ -344,8 +353,31 @@ public class JavaCompileAction extends AbstractAction {
       throws ActionExecutionException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
     try {
+      List<ActionInput> outputs = new ArrayList<>();
+      outputs.addAll(getOutputs());
+      // Add a few useful side-effect output files to the list to retrieve.
+      // TODO(bazel-team): Just make these Artifacts.
+      PathFragment classDirectory = getClassDirectory();
+      outputs.addAll(semantics.getExtraJavaCompileOutputs(classDirectory));
+      outputs.add(ActionInputHelper.fromPath(classDirectory.getChild("srclist").getPathString()));
+
+      try {
+        // Make sure the directories exist, else the distributor will bomb.
+        Path classDirectoryPath = executor.getExecRoot().getRelative(getClassDirectory());
+        FileSystemUtils.createDirectoryAndParents(classDirectoryPath);
+      } catch (IOException e) {
+        throw new EnvironmentalExecException(e.getMessage());
+      }
+
+      final ImmutableList<ActionInput> finalOutputs = ImmutableList.copyOf(outputs);
       Spawn spawn = new BaseSpawn(getCommand(), ImmutableMap.<String, String>of(),
-          ImmutableMap.<String, String>of(), this, LOCAL_RESOURCES);
+          ImmutableMap.<String, String>of(), this, LOCAL_RESOURCES) {
+        @Override
+        public Collection<? extends ActionInput> getOutputFiles() {
+          return finalOutputs;
+        }
+      };
+
       getContext(executor).exec(spawn, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException("Java compilation in rule '" + getOwner().getLabel() + "'",
@@ -456,7 +488,6 @@ public class JavaCompileAction extends AbstractAction {
       PathFragment tempDirectory,
       Artifact outputJar,
       Artifact gensrcOutputJar,
-      Artifact manifestProto,
       boolean compressJar,
       Artifact outputDepsProto,
       final NestedSet<Artifact> classpath,
@@ -487,16 +518,9 @@ public class JavaCompileAction extends AbstractAction {
       result.addExecPath("--output", outputJar);
     }
 
-    if (sourceGenDirectory != null) {
-      result.add("--sourcegendir").addPath(sourceGenDirectory);
-    }
-
     if (gensrcOutputJar != null) {
+      result.add("--sourcegendir").addPath(sourceGenDirectory);
       result.addExecPath("--generated_sources_output", gensrcOutputJar);
-    }
-
-    if (manifestProto != null) {
-      result.addExecPath("--output_manifest_proto", manifestProto);
     }
 
     if (compressJar) {
@@ -706,7 +730,6 @@ public class JavaCompileAction extends AbstractAction {
     private List<Artifact> javabaseInputs = ImmutableList.of();
     private Artifact outputJar;
     private Artifact gensrcOutputJar;
-    private Artifact manifestProtoOutput;
     private Artifact outputDepsProto;
     private Artifact paramFile;
     private Artifact metadata;
@@ -729,6 +752,7 @@ public class JavaCompileAction extends AbstractAction {
     private Artifact javaBuilderJar;
     private Artifact langtoolsJar;
     private ImmutableList<Artifact> instrumentationJars = ImmutableList.of();
+    private PathFragment classDirectory;
     private PathFragment sourceGenDirectory;
     private PathFragment tempDirectory;
     private final List<Artifact> processorPath = new ArrayList<>();
@@ -805,14 +829,19 @@ public class JavaCompileAction extends AbstractAction {
       Preconditions.checkState(javaExecutable.isAbsolute() ^ !javabaseInputs.isEmpty(),
           javaExecutable);
 
-      ArrayList<Artifact> outputs = new ArrayList<>(Collections2.filter(Arrays.asList(
-          outputJar,
-          metadata,
-          gensrcOutputJar,
-          manifestProtoOutput,
-          outputDepsProto), Predicates.notNull()));
-      PathFragment classDirectory =
-          configuration.getBinFragment().getRelative(workDir(outputJar, "_files"));
+      Collection<Artifact> outputs;
+      ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.builder();
+      outputsBuilder.add(outputJar);
+      if (metadata != null) {
+        outputsBuilder.add(metadata);
+      }
+      if (gensrcOutputJar != null) {
+        outputsBuilder.add(gensrcOutputJar);
+      }
+      if (outputDepsProto != null) {
+        outputsBuilder.add(outputDepsProto);
+      }
+      outputs = outputsBuilder.build();
 
       CustomCommandLine.Builder paramFileContentsBuilder = javaCompileCommandLine(
           semantics,
@@ -822,7 +851,6 @@ public class JavaCompileAction extends AbstractAction {
           tempDirectory,
           outputJar,
           gensrcOutputJar,
-          manifestProtoOutput,
           compressJar,
           outputDepsProto,
           classpathEntries,
@@ -878,18 +906,8 @@ public class JavaCompileAction extends AbstractAction {
           internedJcopts,
           directJars,
           strictJavaDeps,
-          compileTimeDependencyArtifacts);
-    }
-
-    /**
-     * For an output jar and a suffix, produces a derived directory under
-     * {@code bin} directory with a given suffix.
-     */
-    private PathFragment workDir(Artifact outputJar, String suffix) {
-      PathFragment path = outputJar.getRootRelativePath();
-      String basename = FileSystemUtils.removeExtension(path.getBaseName()) + suffix;
-      path = path.replaceName(basename);
-      return path;
+          compileTimeDependencyArtifacts,
+          semantics);
     }
 
     public Builder setParameterFile(Artifact paramFile) {
@@ -914,11 +932,6 @@ public class JavaCompileAction extends AbstractAction {
 
     public Builder setGensrcOutputJar(Artifact gensrcOutputJar) {
       this.gensrcOutputJar = gensrcOutputJar;
-      return this;
-    }
-
-    public Builder setManifestProtoOutput(Artifact manifestProtoOutput) {
-      this.manifestProtoOutput = manifestProtoOutput;
       return this;
     }
 
@@ -1011,6 +1024,11 @@ public class JavaCompileAction extends AbstractAction {
 
     public Builder setExtdirInputs(Iterable<Artifact> extdirEntries) {
       this.extdirInputs = ImmutableList.copyOf(extdirEntries);
+      return this;
+    }
+
+    public Builder setClassDirectory(PathFragment classDirectory) {
+      this.classDirectory = classDirectory;
       return this;
     }
 
