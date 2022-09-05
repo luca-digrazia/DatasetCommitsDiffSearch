@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrappe
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.AutoProfiler.ElapsedTimeReceiver;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker.DirtyResult;
+import com.google.devtools.build.lib.skyframe.TreeArtifactValue.TreeArtifactException;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -44,6 +45,7 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.WalkableGraph;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import javax.annotation.Nullable;
 
 /**
@@ -120,9 +123,9 @@ public class FilesystemValueChecker {
         dirtinessChecker, /*checkMissingValues=*/true);
   }
 
-  private interface ValueFetcher {
+  private static interface ValueFetcher {
     @Nullable
-    SkyValue get(SkyKey key) throws InterruptedException;
+    SkyValue get(SkyKey key);
   }
 
   private static class WalkableGraphBackedValueFetcher implements ValueFetcher {
@@ -134,7 +137,7 @@ public class FilesystemValueChecker {
 
     @Override
     @Nullable
-    public SkyValue get(SkyKey key) throws InterruptedException {
+    public SkyValue get(SkyKey key) {
       return walkableGraph.exists(key) ? walkableGraph.getValue(key) : null;
     }
   }
@@ -375,7 +378,7 @@ public class FilesystemValueChecker {
       Set<PathFragment> currentDirectoryValue = TreeArtifactValue.explodeDirectory(artifact);
       Set<PathFragment> valuePaths = value.getChildPaths();
       return !currentDirectoryValue.equals(valuePaths);
-    } catch (IOException e) {
+    } catch (IOException | TreeArtifactException e) {
       return true;
     }
   }
