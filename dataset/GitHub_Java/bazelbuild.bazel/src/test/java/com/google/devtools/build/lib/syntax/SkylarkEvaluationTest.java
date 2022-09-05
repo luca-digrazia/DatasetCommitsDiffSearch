@@ -124,32 +124,11 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           defaultValue = "False",
           positional = false,
           named = true
-        ),
-        @Param(
-          name = "nonNoneable",
-          type = Object.class,
-          defaultValue = "\"a\"",
-          positional = false,
-          named = true
-        ),
-        @Param(
-          name = "noneable",
-          type = Object.class,
-          defaultValue = "None",
-          noneable = true,
-          positional = false,
-          named = true
-        ),
+        )
       }
     )
     public String withParams(
-        Integer pos1,
-        boolean pos2,
-        boolean posOrNamed,
-        boolean named,
-        boolean optionalNamed,
-        Object nonNoneable,
-        Object noneable) {
+        Integer pos1, boolean pos2, boolean posOrNamed, boolean named, boolean optionalNamed) {
       return "with_params("
           + pos1
           + ", "
@@ -160,8 +139,6 @@ public class SkylarkEvaluationTest extends EvaluationTest {
           + named
           + ", "
           + optionalNamed
-          + ", "
-          + nonNoneable.toString()
           + ")";
     }
 
@@ -670,7 +647,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params(1, True, named=True)")
-        .testLookup("b", "with_params(1, true, false, true, false, a)");
+        .testLookup("b", "with_params(1, true, false, true, false)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
@@ -685,28 +662,21 @@ public class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params(1, True, True, named=True)")
-        .testLookup("b", "with_params(1, true, true, true, false, a)");
+        .testLookup("b", "with_params(1, true, true, true, false)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params(1, True, named=True, posOrNamed=True)")
-        .testLookup("b", "with_params(1, true, true, true, false, a)");
+        .testLookup("b", "with_params(1, true, true, true, false)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params(1, True, named=True, posOrNamed=True, optionalNamed=True)")
-        .testLookup("b", "with_params(1, true, true, true, true, a)");
+        .testLookup("b", "with_params(1, true, true, true, true)");
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("")
         .testIfExactError(
             "Type Mock has no function with_params(int, bool, bool named, bool posOrNamed, int n)",
             "mock.with_params(1, True, named=True, posOrNamed=True, n=2)");
-    new SkylarkTest()
-        .update("mock", new Mock())
-        .setUp("")
-        .testIfExactError(
-            "Type Mock has no function with_params(int, bool, bool, bool named, bool optionalNamed,"
-                + " NoneType nonNoneable)",
-            "mock.with_params(1, True, True, named=True, optionalNamed=False, nonNoneable=None)");
   }
 
   @Test
