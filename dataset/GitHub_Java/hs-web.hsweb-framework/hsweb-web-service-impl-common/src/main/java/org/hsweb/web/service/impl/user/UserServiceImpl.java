@@ -16,7 +16,7 @@ import org.hsweb.web.service.user.UserService;
 import org.hsweb.web.core.utils.RandomUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
-import org.hsweb.commons.MD5;
+import org.webbuilder.utils.common.MD5;
 
 import javax.annotation.Resource;
 import java.util.*;
@@ -43,12 +43,12 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
         return this.userMapper;
     }
 
-    public User selectByUserName(String username)  {
+    public User selectByUserName(String username) throws Exception {
         return this.getMapper().selectByUserName(username);
     }
 
     @Override
-    public String insert(User data)  {
+    public String insert(User data) throws Exception {
         tryValidPo(data);
         Assert.isNull(selectByUserName(data.getUsername()), "用户已存在!");
         data.setId(RandomUtil.randomChar(6));
@@ -70,12 +70,12 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     }
 
     @Override
-    public List<String> batchInsert(List<User> data, boolean skipFail)  {
+    public List<String> batchInsert(List<User> data, boolean skipFail) throws Exception {
         throw new UnsupportedOperationException("不支持此操作");
     }
 
     @Override
-    public int update(User data)  {
+    public int update(User data) throws Exception {
         tryValidPo(data);
         User old = this.selectByUserName(data.getUsername());
         if (old != null && !old.getId().equals(data.getId())) {
@@ -100,7 +100,7 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     }
 
     @Override
-    public void initAdminUser(User user)  {
+    public void initAdminUser(User user) throws Exception {
         QueryParam queryParam = new QueryParam().noPaging();
         queryParam.orderBy("sortIndex");
         List<Module> modules = moduleService.select(queryParam);
@@ -112,14 +112,14 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     }
 
     @Override
-    public void initGuestUser(User user)  {
+    public void initGuestUser(User user) throws Exception {
         List<UserRole> userRoles = userRoleMapper.select(new QueryParam().where("roleId", "guest").noPaging());
         user.setUserRoles(userRoles);
         user.initRoleInfo();
     }
 
     @Override
-    public void enableUser(String id)  {
+    public void enableUser(String id) throws Exception {
         User user = selectByPk(id);
         if (user == null) throw new NotFoundException("用户不存在!");
         user.setStatus(1);
@@ -127,7 +127,7 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     }
 
     @Override
-    public void disableUser(String id)  {
+    public void disableUser(String id) throws Exception {
         User user = selectByPk(id);
         if (user == null) throw new NotFoundException("用户不存在!");
         user.setStatus(-1);
@@ -135,7 +135,7 @@ public class UserServiceImpl extends AbstractServiceImpl<User, String> implement
     }
 
     @Override
-    public int delete(String s)  {
+    public int delete(String s) throws Exception {
         throw new BusinessException("服务不支持", 500);
     }
 }

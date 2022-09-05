@@ -18,19 +18,20 @@ public interface GenericService<Po, Pk> {
      *
      * @param param 查询参数
      * @return 分页结果
-     * @ 查询异常
+     * @throws Exception 查询异常
      */
-    PagerResult<Po> selectPager(QueryParam param);
+    PagerResult<Po> selectPager(QueryParam param) throws Exception;
 
     /**
      * 添加一条数据
      *
      * @param data 要添加的数据
      * @return 添加后生成的主键
+     * @throws Exception 异常信息
      */
-    Pk insert(Po data);
+    Pk insert(Po data) throws Exception;
 
-    default List<Pk> batchInsert(List<Po> data) {
+    default List<Pk> batchInsert(List<Po> data) throws Exception {
         return batchInsert(data, false);
     }
 
@@ -40,34 +41,36 @@ public interface GenericService<Po, Pk> {
      * @param data     数据集合
      * @param skipFail 是否跳过验证失败的的数据
      * @return 添加后产生的主键集合
+     * @throws Exception 异常信息
      */
-    List<Pk> batchInsert(List<Po> data, boolean skipFail);
+    List<Pk> batchInsert(List<Po> data, boolean skipFail) throws Exception;
 
     /**
      * 根据主键删除记录
      *
      * @param pk 主键
      * @return 影响记录数
+     * @throws Exception 异常信息
      */
-    int delete(Pk pk);
+    int delete(Pk pk) throws Exception;
 
     /**
      * 修改记录信息
      *
      * @param data 要修改的对象
      * @return 影响记录数
+     * @throws Exception 异常信息
      */
-    int update(Po data);
+    int update(Po data) throws Exception;
 
     /**
      * 批量修改记录
      *
      * @param data 要修改的记录集合
      * @return 影响记录数
+     * @throws Exception 异常信息
      */
-    int update(List<Po> data);
-
-    int saveOrUpdate(Po po);
+    int update(List<Po> data) throws Exception;
 
     /**
      * 根据条件集合查询记录，支持分页，排序。
@@ -85,33 +88,36 @@ public interface GenericService<Po, Pk> {
      *
      * @param param 查询参数
      * @return 查询结果
+     * @throws Exception 异常信息
      */
-    List<Po> select(QueryParam param);
+    List<Po> select(QueryParam param) throws Exception;
 
     /**
      * 查询记录总数，用于分页等操作。查询条件同 {@link GenericService#select}
      *
      * @param param 查询参数
      * @return 查询结果，实现mapper中的sql应指定默认值，否则可能抛出异常
+     * @throws Exception 异常信息
      */
-    int total(QueryParam param);
+    int total(QueryParam param) throws Exception;
 
     /**
      * 根据主键查询记录
      *
      * @param pk 主键
      * @return 查询结果
+     * @throws Exception 异常信息
      */
-    Po selectByPk(Pk pk);
+    Po selectByPk(Pk pk) throws Exception;
 
     /**
      * 查询只返回单个结果
      *
      * @param param 查询条件
      * @return 单个结果
-     * @
+     * @throws Exception
      */
-    default Po selectSingle(QueryParam param) {
+    default Po selectSingle(QueryParam param) throws Exception {
         param.doPaging(0, 1);
         List<Po> list = this.select(param);
         if (list.size() == 0) return null;
