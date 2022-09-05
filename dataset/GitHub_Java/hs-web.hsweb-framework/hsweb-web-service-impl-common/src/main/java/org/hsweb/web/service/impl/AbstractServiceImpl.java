@@ -3,9 +3,6 @@ package org.hsweb.web.service.impl;
 import org.hsweb.web.bean.common.*;
 import org.hsweb.web.bean.po.GenericPo;
 import org.hsweb.web.bean.valid.ValidResults;
-import org.hsweb.web.core.exception.NotFoundException;
-import org.hsweb.web.core.exception.ValidationException;
-import org.hsweb.web.core.utils.RandomUtil;
 import org.hsweb.web.dao.GenericMapper;
 import org.hsweb.web.service.GenericService;
 import org.slf4j.Logger;
@@ -14,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.validation.ConstraintViolation;
+import javax.validation.ValidationException;
 import javax.validation.Validator;
 import java.util.List;
 import java.util.Set;
@@ -45,15 +43,12 @@ public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, 
 
     @Override
     public PK insert(Po data) throws Exception {
-        PK primaryKey = null;
-        if (data instanceof GenericPo) {
-            if (((GenericPo) data).getId() == null)
-                ((GenericPo) data).setId(GenericPo.createUID());
-            primaryKey = (PK) ((GenericPo) data).getId();
-        }
         tryValidPo(data);
         getMapper().insert(new InsertParam<>(data));
-        return primaryKey;
+        if (data instanceof GenericPo) {
+            return (PK) ((GenericPo) data).getU_id();
+        }
+        return null;
     }
 
     @Override
@@ -83,7 +78,7 @@ public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, 
 
     @Transactional(readOnly = true)
     public List<Po> select() throws Exception {
-        return this.getMapper().select(new QueryParam().noPaging());
+        return this.getMapper().select(new QueryParam());
     }
 
     @Override
@@ -98,10 +93,6 @@ public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, 
         return this.getMapper().selectByPk(pk);
     }
 
-    protected void assertNotNull(Object po, String message) {
-        if (po == null) throw new NotFoundException(message);
-    }
-
     protected void tryValidPo(Po data) {
         Set<ConstraintViolation<Object>> set = validator.validate(data);
         ValidResults results = new ValidResults();
@@ -111,6 +102,6 @@ public abstract class AbstractServiceImpl<Po, PK> implements GenericService<Po, 
             }
         }
         if (!results.isSuccess())
-            throw new ValidationException(results);
+            throw new ValidationException(results.toString());
     }
 }
