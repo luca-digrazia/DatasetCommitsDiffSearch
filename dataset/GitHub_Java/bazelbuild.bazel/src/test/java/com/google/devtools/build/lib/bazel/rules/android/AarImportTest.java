@@ -203,10 +203,15 @@ public class AarImportTest extends BuildViewTestCase {
     JavaCompilationArgsProvider provider = aarImportTarget
         .getProvider(JavaCompilationArgsProvider.class);
     assertThat(provider).isNotNull();
-    assertThat(artifactsToStrings(provider.getJavaCompilationArgs().getRuntimeJars()))
+
+    FileConfiguredTarget appTarget = getFileConfiguredTarget("//java:app.apk");
+    Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(appTarget.getArtifact());
+    assertThat(provider.getJavaCompilationArgs().getRuntimeJars())
         .containsExactly(
-            "bin a/_aar/bar/classes_and_libs_merged.jar",
-            "bin a/_aar/foo/classes_and_libs_merged.jar",
-            "src java/baz.jar");
+            ActionsTestUtil.getFirstArtifactEndingWith(artifacts, "baz.jar"),
+            ActionsTestUtil.getFirstArtifactEndingWith(
+                artifacts, "foo/classes_and_libs_merged.jar"),
+            ActionsTestUtil.getFirstArtifactEndingWith(
+                artifacts, "bar/classes_and_libs_merged.jar"));
   }
 }
