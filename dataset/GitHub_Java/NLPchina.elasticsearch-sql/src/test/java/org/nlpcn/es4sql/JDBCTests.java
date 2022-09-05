@@ -33,8 +33,9 @@ public class JDBCTests {
         connection.close();
         dds.close();
 
-        Assert.assertTrue(result.size()==1);
+        Assert.assertTrue(result.size()==2);
         Assert.assertTrue(result.get(0).equals("Heath,39,F"));
+        Assert.assertTrue(result.get(1).equals("Heath,39,F"));
     }
 
 }

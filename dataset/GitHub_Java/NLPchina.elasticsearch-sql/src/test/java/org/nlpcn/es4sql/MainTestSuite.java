@@ -11,13 +11,13 @@ import java.net.UnknownHostException;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.deletebyquery.DeleteByQueryAction;
+import org.elasticsearch.action.deletebyquery.DeleteByQueryRequestBuilder;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.InetSocketTransportAddress;
 import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.index.reindex.DeleteByQueryAction;
-import org.elasticsearch.index.reindex.DeleteByQueryRequestBuilder;
-import org.elasticsearch.transport.client.PreBuiltTransportClient;
+import org.elasticsearch.plugin.deletebyquery.DeleteByQueryPlugin;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
@@ -39,9 +39,7 @@ import com.google.common.io.ByteStreams;
         CSVResultsExtractorTests.class,
         SourceFieldTest.class,
 		SQLFunctionsTest.class,
-		JDBCTests.class,
-        UtilTests.class,
-        MultiQueryTests.class
+		JDBCTests.class
 })
 public class MainTestSuite {
 
@@ -53,9 +51,8 @@ public class MainTestSuite {
 	public static void setUp() throws Exception {
 
 		Settings settings = Settings.builder().put("client.transport.ignore_cluster_name",true).build();
-
-		client = new PreBuiltTransportClient(settings).
-				addTransportAddress(getTransportAddress());
+		client = TransportClient.builder().addPlugin(DeleteByQueryPlugin.class).settings(settings).
+				build().addTransportAddress(getTransportAddress());
 
 
         NodesInfoResponse nodeInfos = client.admin().cluster().prepareNodesInfo().get();
@@ -66,15 +63,13 @@ public class MainTestSuite {
         if(client.admin().indices().prepareExists(TEST_INDEX).execute().actionGet().isExists()){
             client.admin().indices().prepareDelete(TEST_INDEX).get();
         }
-		loadBulk("src/test/resources/online.json");
-        prepareAccountsIndex();
 		loadBulk("src/test/resources/accounts.json");
+		loadBulk("src/test/resources/online.json");
         preparePhrasesIndex();
         loadBulk("src/test/resources/phrases.json");
         loadBulk("src/test/resources/dogs.json");
         loadBulk("src/test/resources/peoples.json");
         loadBulk("src/test/resources/game_of_thrones_complex.json");
-        loadBulk("src/test/resources/systems.json");
 
         prepareOdbcIndex();
         loadBulk("src/test/resources/odbc-date-formats.json");
@@ -100,19 +95,6 @@ public class MainTestSuite {
 
 		System.out.println("Finished the setup process...");
 	}
-
-    private static void prepareAccountsIndex() {
-        String dataMapping = "{  \"account\": {" +
-                " \"properties\": {\n" +
-                "          \"gender\": {\n" +
-                "            \"type\": \"string\",\n" +
-                "            \"fielddata\": true\n" +
-                "          }" +
-                "       }"+
-                "   }" +
-                "}";
-        client.admin().indices().preparePutMapping(TEST_INDEX).setType("account").setSource(dataMapping).execute().actionGet();
-    }
 
     private static void preparePhrasesIndex() {
         String dataMapping = "{  \"phrase\": {" +
@@ -240,13 +222,18 @@ public class MainTestSuite {
 	 */
 	public static void deleteQuery(String indexName, String typeName) {
 
-        DeleteByQueryRequestBuilder deleteQueryBuilder = new DeleteByQueryRequestBuilder(client, DeleteByQueryAction.INSTANCE);
-        deleteQueryBuilder.request().indices(indexName);
-        deleteQueryBuilder.filter(QueryBuilders.matchAllQuery());
-        deleteQueryBuilder.get();
-        System.out.println(String.format("Deleted index %s and type %s", indexName, typeName));
+			DeleteByQueryRequestBuilder deleteQuery = new DeleteByQueryRequestBuilder(client, DeleteByQueryAction.INSTANCE);
+			deleteQuery.setIndices(indexName);
+			if (typeName != null) {
+				deleteQuery.setTypes(typeName);
+			}
+			deleteQuery.setQuery(QueryBuilders.matchAllQuery());
 
-    }
+			deleteQuery.get();
+			System.out.println(String.format("Deleted index %s and type %s", indexName, typeName));
+
+
+	}
 
 
 	/**
@@ -277,7 +264,10 @@ public class MainTestSuite {
                 "\t\t\t\t\"precision\": \"10km\"\n" +
                 "\t\t\t},\n" +
                 "\t\t\t\"center\":{\n" +
-                "\t\t\t\t\"type\":\"geo_point\"\n" +
+                "\t\t\t\t\"type\":\"geo_point\",\n" +
+                "\t\t\t\t\"geohash\":true,\n" +
+                "\t\t\t\t\"geohash_prefix\":true,\n" +
+                "\t\t\t\t\"geohash_precision\":17\n" +
                 "\t\t\t},\n" +
                 "\t\t\t\"description\":{\n" +
                 "\t\t\t\t\"type\":\"string\"\n" +
