@@ -1,11 +1,7 @@
 package com.codahale.metrics.jetty9;
 
-import com.codahale.metrics.Counter;
-import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
+import com.codahale.metrics.*;
 import org.eclipse.jetty.http.HttpMethod;
-import org.eclipse.jetty.server.AsyncContextState;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpChannelState;
 import org.eclipse.jetty.server.Request;
@@ -136,10 +132,10 @@ public class InstrumentedHandler extends HandlerWrapper {
 
             @Override
             public void onComplete(AsyncEvent event) throws IOException {
-                final AsyncContextState state = (AsyncContextState) event.getAsyncContext();
-                final Request request = (Request) state.getRequest();
+                final HttpChannelState state = (HttpChannelState) event.getAsyncContext();
+                final Request request = state.getBaseRequest();
                 updateResponses(request);
-                if (!state.getHttpChannelState().isDispatched()) {
+                if (!state.isDispatched()) {
                     activeSuspended.dec();
                 }
             }
