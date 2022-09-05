@@ -1,24 +1,15 @@
 package com.codahale.metrics.servlets;
 
 import com.codahale.metrics.*;
-import com.codahale.metrics.health.HealthCheckRegistry;
-
-import org.eclipse.jetty.testing.ServletTester;
+import org.eclipse.jetty.http.HttpHeader;
+import org.eclipse.jetty.servlet.ServletTester;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
-import javax.servlet.ServletException;
-
 import static org.fest.assertions.api.Assertions.assertThat;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class MetricsServletTest extends AbstractServletTest {
@@ -28,7 +19,8 @@ public class MetricsServletTest extends AbstractServletTest {
     @Override
     protected void setUp(ServletTester tester) {
         tester.setAttribute("com.codahale.metrics.servlets.MetricsServlet.registry", registry);
-        tester.addServlet(MetricsServlet.class, "/metrics");
+        tester.addServlet(MetricsServlet.class, "/metrics")
+                    .setInitParameter("com.codahale.metrics.servlets.MetricsServlet.allowedOrigin", "*");
     }
 
     @Before
@@ -58,6 +50,8 @@ public class MetricsServletTest extends AbstractServletTest {
 
         assertThat(response.getStatus())
                 .isEqualTo(200);
+        assertThat(response.get("Access-Control-Allow-Origin"))
+                .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo("{" +
                                    "\"version\":\"3.0.0\"," +
@@ -74,7 +68,7 @@ public class MetricsServletTest extends AbstractServletTest {
                                        "\"m\":{\"count\":1,\"m15_rate\":0.0,\"m1_rate\":0.0,\"m5_rate\":0.0,\"mean_rate\":3333333.3333333335,\"units\":\"events/second\"}},\"timers\":{\"t\":{\"count\":1,\"max\":1.0,\"mean\":1.0,\"min\":1.0,\"p50\":1.0,\"p75\":1.0,\"p95\":1.0,\"p98\":1.0,\"p99\":1.0,\"p999\":1.0,\"stddev\":0.0,\"m15_rate\":0.0,\"m1_rate\":0.0,\"m5_rate\":0.0,\"mean_rate\":1.0E7,\"duration_units\":\"seconds\",\"rate_units\":\"calls/second\"}" +
                                    "}" +
                                "}");
-        assertThat(response.getContentType())
+        assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
     }
 
@@ -86,6 +80,8 @@ public class MetricsServletTest extends AbstractServletTest {
 
         assertThat(response.getStatus())
                 .isEqualTo(200);
+        assertThat(response.get("Access-Control-Allow-Origin"))
+                .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo(String.format("{%n" +
                                                  "  \"version\" : \"3.0.0\",%n" +
@@ -146,49 +142,7 @@ public class MetricsServletTest extends AbstractServletTest {
                                                  "    }%n" +
                                                  "  }%n" +
                                                  "}"));
-        assertThat(response.getContentType())
+        assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("application/json");
-    }
-
-    @Test
-    public void constructorWithRegistryAsArgumentIsUsedInPreferenceOverServletConfig() throws Exception {
-        MetricRegistry metricRegistry = mock(MetricRegistry.class);
-        ServletContext servletContext = mock(ServletContext.class);
-        ServletConfig servletConfig = mock(ServletConfig.class);
-        when(servletConfig.getServletContext()).thenReturn(servletContext);
-
-        MetricsServlet metricsServlet = new MetricsServlet(metricRegistry);
-        metricsServlet.init(servletConfig);
- 
-        verify(servletConfig, times(3)).getServletContext();
-        verify(servletContext, never()).getAttribute(eq(MetricsServlet.METRICS_REGISTRY));
-    }
-
-    @Test
-    public void constructorWithRegistryAsArgumentUsesServletConfigWhenNull() throws Exception {
-        MetricRegistry metricRegistry = mock(MetricRegistry.class);
-        ServletContext servletContext = mock(ServletContext.class);
-        ServletConfig servletConfig = mock(ServletConfig.class);
-        when(servletConfig.getServletContext()).thenReturn(servletContext);
-        when(servletContext.getAttribute(eq(MetricsServlet.METRICS_REGISTRY)))
-            .thenReturn(metricRegistry);
-
-        MetricsServlet metricsServlet = new MetricsServlet(null);
-        metricsServlet.init(servletConfig);
-
-        verify(servletConfig, times(4)).getServletContext();
-        verify(servletContext, times(1)).getAttribute(eq(MetricsServlet.METRICS_REGISTRY));
-    }
-
-    @Test(expected = ServletException.class)
-    public void constructorWithRegistryAsArgumentUsesServletConfigWhenNullButWrongTypeInContext() throws Exception {
-        ServletContext servletContext = mock(ServletContext.class);
-        ServletConfig servletConfig = mock(ServletConfig.class);
-        when(servletConfig.getServletContext()).thenReturn(servletContext);
-        when(servletContext.getAttribute(eq(MetricsServlet.METRICS_REGISTRY)))
-            .thenReturn("IRELLEVANT_STRING");
-
-        MetricsServlet metricsServlet = new MetricsServlet(null);
-        metricsServlet.init(servletConfig);
     }
 }
