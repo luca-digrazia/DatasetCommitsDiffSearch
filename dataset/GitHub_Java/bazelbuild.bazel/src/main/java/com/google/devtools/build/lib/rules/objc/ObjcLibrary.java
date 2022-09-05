@@ -143,6 +143,8 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
         .addProvider(
             CcLinkParamsProvider.class,
             new CcLinkParamsProvider(new ObjcLibraryCcLinkParamsStore(common)))
+        .addSkylarkTransitiveInfo(
+            ObjcProvider.OBJC_SKYLARK_PROVIDER_NAME, common.getObjcProvider().toSkylarkProvider())
         .build();
   }
 }

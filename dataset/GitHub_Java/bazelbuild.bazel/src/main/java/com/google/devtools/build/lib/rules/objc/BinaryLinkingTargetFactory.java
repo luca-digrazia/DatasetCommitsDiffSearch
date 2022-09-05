@@ -224,8 +224,7 @@ abstract class BinaryLinkingTargetFactory implements RuleConfiguredTargetFactory
 
     builder.addDepObjcProviders(createSkylarkObjcProviders(ruleContext));
     
-    if (ObjcRuleClasses.objcConfiguration(ruleContext).generateDebugSymbols()
-        || ObjcRuleClasses.objcConfiguration(ruleContext).generateDsym()) {
+    if (ObjcRuleClasses.objcConfiguration(ruleContext).generateDebugSymbols()) {
       builder.addDebugArtifacts(DsymOutputType.APP);
     }
 
