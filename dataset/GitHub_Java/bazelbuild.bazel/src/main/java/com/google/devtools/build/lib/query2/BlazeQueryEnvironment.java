@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.query2.engine.DigraphQueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
-import com.google.devtools.build.lib.query2.engine.QueryExpressionEvalListener;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AbstractUniquifier;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllCallback;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
@@ -97,10 +96,8 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       Predicate<Label> labelFilter,
       EventHandler eventHandler,
       Set<Setting> settings,
-      Iterable<QueryFunction> extraFunctions,
-      QueryExpressionEvalListener<Target> evalListener) {
-    super(
-        keepGoing, strictScope, labelFilter, eventHandler, settings, extraFunctions, evalListener);
+      Iterable<QueryFunction> extraFunctions) {
+    super(keepGoing, strictScope, labelFilter, eventHandler, settings, extraFunctions);
     this.targetPatternEvaluator = targetPatternEvaluator;
     this.transitivePackageLoader = transitivePackageLoader;
     this.targetProvider = packageProvider;
