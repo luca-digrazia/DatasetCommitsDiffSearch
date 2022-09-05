@@ -44,7 +44,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
   private final ExperimentalStateTracker stateTracker;
   private int numLinesProgressBar;
   private boolean buildComplete;
-  private boolean progressBarNeedsRefresh;
 
   public final int terminalWidth;
 
@@ -171,19 +170,11 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     refresh();
   }
 
-  private void refresh() {
-    progressBarNeedsRefresh = true;
-    doRefresh();
-  }
-
-  private synchronized void doRefresh() {
+  private synchronized void refresh() {
     try {
-      if (progressBarNeedsRefresh) {
-        progressBarNeedsRefresh = false;
-        clearProgressBar();
-        addProgressBar();
-        terminal.flush();
-      }
+      clearProgressBar();
+      addProgressBar();
+      terminal.flush();
     } catch (IOException e) {
       LOG.warning("IO Error writing to output stream: " + e);
     }
