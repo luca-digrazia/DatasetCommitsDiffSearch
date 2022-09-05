@@ -54,6 +54,8 @@ public final class BazelShLibraryRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = sh_library, TYPE = LIBRARY, FAMILY = Shell) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
   The main use for this rule is to aggregate together a logical
   "library" consisting of related scripts&mdash;programs in an
@@ -79,6 +81,8 @@ public final class BazelShLibraryRule implements RuleDefinition {
   All three attributes accept rules, source files and generated files.
   It is however good practice to use the attributes for their usual purpose (as with other rules).
 </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="sh_library_examples">Examples</h4>
 

@@ -86,6 +86,8 @@ public final class BazelFilegroupRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = filegroup, TYPE = BINARY, FAMILY = General)[GENERIC_RULE] -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>
   Use <code>filegroup</code> to give a convenient name to a collection of targets.
   These can then be referenced from other rules.
@@ -98,6 +100,8 @@ public final class BazelFilegroupRule implements RuleDefinition {
   <a href="functions.html#glob">glob</a>, <code>filegroup</code> can ensure that all files are
   explicitly known to the build system.
 </p>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="filegroup_example">Examples</h4>
 

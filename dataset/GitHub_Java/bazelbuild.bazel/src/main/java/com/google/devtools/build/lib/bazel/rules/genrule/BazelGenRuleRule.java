@@ -31,8 +31,6 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeConfigRule;
 
 /**
  * Rule definition for the genrule rule.
@@ -49,7 +47,6 @@ public final class BazelGenRuleRule implements RuleDefinition {
     <code>srcs</code> attribute.
     <!-- #END_BLAZE_RULE.NAME --> */
     return builder
-        .requiresConfigurationFragments(AppleConfiguration.class)
         .setOutputToGenfiles()
         /* <!-- #BLAZE_RULE(genrule).ATTRIBUTE(srcs) -->
         A list of inputs for this rule, such as source files to process.
@@ -218,13 +215,15 @@ public final class BazelGenRuleRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("genrule")
-        .ancestors(BaseRuleClasses.RuleBase.class, RequiresXcodeConfigRule.class)
+        .ancestors(BaseRuleClasses.RuleBase.class)
         .factoryClass(GenRule.class)
         .build();
   }
 }
 
 /*<!-- #BLAZE_RULE (NAME = genrule, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
+
+${ATTRIBUTE_SIGNATURE}
 
 <p>A <code>genrule</code> generates one or more files using a user-defined Bash command.</p>
 
@@ -335,6 +334,8 @@ public final class BazelGenRuleRule implements RuleDefinition {
     unintentionally picking up other outputs of the genrule, but can be tedious if the genrule
     produces many outputs.</li>
 </ul>
+
+${ATTRIBUTE_DEFINITION}
 
 <h4 id="genrule_examples">Examples</h4>
 
