@@ -2,17 +2,28 @@ package org.hswebframework.web.authorization.simple;
 
 import org.hswebframework.web.authorization.access.FieldFilterDataAccessConfig;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 
+import static org.hswebframework.web.authorization.access.DataAccessConfig.DefaultType.DENY_FIELDS;
+
 /**
- * TODO 完成注释
+ * 默认配置实现
  *
  * @author zhouhao
+ * @see FieldFilterDataAccessConfig
+ * @since 3.0
  */
 public class SimpleFieldFilterDataAccessConfig extends AbstractDataAccessConfig implements FieldFilterDataAccessConfig {
     private Set<String> fields;
 
-    private String type;
+    public SimpleFieldFilterDataAccessConfig() {
+    }
+
+    public SimpleFieldFilterDataAccessConfig(String... fields) {
+        this.fields = new HashSet<>(Arrays.asList(fields));
+    }
 
     @Override
     public Set<String> getFields() {
@@ -25,10 +36,6 @@ public class SimpleFieldFilterDataAccessConfig extends AbstractDataAccessConfig 
 
     @Override
     public String getType() {
-        return type;
-    }
-
-    public void setType(String type) {
-        this.type = type;
+        return DENY_FIELDS;
     }
 }
