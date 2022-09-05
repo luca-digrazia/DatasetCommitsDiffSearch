@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -41,6 +40,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
@@ -55,7 +55,6 @@ import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.output.OutputFormatter;
 import com.google.devtools.build.lib.query2.output.QueryOptions;
-import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.output.QueryOutputUtils;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.skyframe.PackageValue;
@@ -95,7 +94,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       new Precomputed<>(new SkyKey(SkyFunctions.PRECOMPUTED, "query_output_formatters"));
 
   @Override
-  @Nullable
   public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
     Artifact outputArtifact = ruleContext.createOutputArtifact();
 
@@ -121,20 +119,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       ruleContext.attributeError("opts", "option --universe_scope is not allowed");
       return null;
     }
-    if (optionsParser.containsExplicitOption("order_results")) {
-      ruleContext.attributeError("opts", "option --order_results is not allowed");
-      return null;
-    }
-    if (optionsParser.containsExplicitOption("noorder_results")) {
-      ruleContext.attributeError("opts", "option --noorder_results is not allowed");
-      return null;
-    }
-    if (optionsParser.containsExplicitOption("order_output")) {
-      ruleContext.attributeError("opts", "option --order_output is not allowed");
-      return null;
-    }
-    // Force results to be deterministic.
-    queryOptions.orderOutput = OrderOutput.FULL;
 
     // force relative_locations to true so it has a deterministic output across machines.
     queryOptions.relativeLocations = true;
@@ -177,18 +161,15 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
   // The transitive closure of these targets is an upper estimate on the labels
   // the query will touch
-  @Nullable
   private Set<Target> getScope(RuleContext context) {
     List<Label> scopeLabels = context.attributes().get("scope", Type.LABEL_LIST);
     Set<Target> scope = Sets.newHashSetWithExpectedSize(scopeLabels.size());
     for (Label scopePart : scopeLabels) {
       try {
         SkyFunction.Environment env = context.getAnalysisEnvironment().getSkyframeEnv();
-        PackageValue packageNode =  (PackageValue) env.getValue(
-            PackageValue.key(scopePart.getPackageFragment()));
-        if (packageNode == null) {
-          return null;
-        }
+        PackageValue packageNode = Preconditions.checkNotNull(
+            (PackageValue) env.getValue(PackageValue.key(scopePart.getPackageFragment())));
+
         scope.add(packageNode.getPackage().getTarget(scopePart.getName()));
       } catch (NoSuchTargetException e) {
         throw new IllegalStateException(e);
@@ -206,7 +187,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     return ruleContext.getAnalysisEnvironment().getEventHandler();
   }
 
-  @Nullable
   private Pair<ImmutableMap<PackageIdentifier, Package>, Set<Label>> constructPackageMap(
       SkyFunction.Environment env, Collection<Target> scope) {
     // It is not necessary for correctness to construct intermediate NestedSets; we could iterate
@@ -217,9 +197,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     for (Target target : scope) {
       SkyKey key = TransitiveTargetValue.key(target.getLabel());
       TransitiveTargetValue transNode = (TransitiveTargetValue) env.getValue(key);
-      if (transNode == null) {
-        return null;
-      }
+      Preconditions.checkState(transNode != null, "%s not preloaded", key);
       validTargets.addTransitive(transNode.getTransitiveTargets());
       packageNames.addTransitive(transNode.getTransitiveSuccessfulPackages());
     }
@@ -237,15 +215,9 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   private byte[] executeQuery(RuleContext ruleContext, QueryOptions queryOptions,
       Set<Target> scope, String query) throws InterruptedException {
 
-    if (scope == null) {
-      return null;
-    }
     SkyFunction.Environment env = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
     Pair<ImmutableMap<PackageIdentifier, Package>, Set<Label>> closureInfo =
         constructPackageMap(env, scope);
-    if (closureInfo == null) {
-      return null;
-    }
     ImmutableMap<PackageIdentifier, Package> packageMap = closureInfo.first;
     Set<Label> validTargets = closureInfo.second;
     PackageProvider packageProvider = new PreloadedMapPackageProvider(packageMap, validTargets);
@@ -255,7 +227,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     return doQuery(queryOptions, packageProvider, labelFilter, evaluator, query, ruleContext);
   }
 
-  @Nullable
   private byte[] doQuery(QueryOptions queryOptions, PackageProvider packageProvider,
                          Predicate<Label> labelFilter, TargetPatternEvaluator evaluator,
                          String query, RuleContext ruleContext)

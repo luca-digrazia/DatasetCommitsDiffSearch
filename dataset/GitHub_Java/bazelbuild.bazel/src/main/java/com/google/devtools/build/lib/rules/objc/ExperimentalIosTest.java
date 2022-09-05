@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
-import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 
 /**
  * Implementation for {@code experimental_ios_test} rule in Bazel.
@@ -44,11 +43,10 @@ public final class ExperimentalIosTest extends IosTest {
     NestedSetBuilder<Artifact> filesToBuildBuilder = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(filesToBuild);
 
-    TestSupport testSupport =
-        new TestSupport(ruleContext)
-            .registerTestRunnerActions()
-            .addRunfiles(runfilesBuilder)
-            .addFilesToBuild(filesToBuildBuilder);
+    TestSupport testSupport = new TestSupport(ruleContext)
+        .registerTestRunnerActions()
+        .addRunfiles(runfilesBuilder, common.getObjcProvider())
+        .addFilesToBuild(filesToBuildBuilder);
 
     Artifact executable = testSupport.generatedTestScript();
 
@@ -60,13 +58,9 @@ public final class ExperimentalIosTest extends IosTest {
         .setFilesToBuild(filesToBuildBuilder.build())
         .add(XcodeProvider.class, xcodeProvider)
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .add(
-            ExecutionInfoProvider.class,
+        .add(ExecutionInfoProvider.class,
             new ExecutionInfoProvider(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, "")))
-        .addProvider(
-            InstrumentedFilesProvider.class,
-            new CompilationSupport(ruleContext).getInstrumentedFilesProvider(common))
-        .addProviders(testSupport.getExtraProviders())
+        .addProviders(testSupport.getExtraProviders(common.getObjcProvider()))
         .setRunfilesSupport(runfilesSupport, executable)
         .build();
   }

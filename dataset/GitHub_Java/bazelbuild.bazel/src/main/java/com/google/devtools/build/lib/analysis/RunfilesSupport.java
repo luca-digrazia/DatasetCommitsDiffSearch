@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -22,8 +23,8 @@ import com.google.devtools.build.lib.analysis.SourceManifestAction.ManifestType;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
+import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -111,11 +112,9 @@ public class RunfilesSupport {
       throw new IllegalStateException("main program " + executable + " not included in runfiles");
     }
 
-    Artifact artifactsMiddleman = createArtifactsMiddleman(ruleContext, runfiles.getAllArtifacts());
     runfilesInputManifest = createRunfilesInputManifestArtifact(ruleContext);
     this.runfilesManifest = createRunfilesAction(ruleContext, runfiles);
-    this.runfilesMiddleman = createRunfilesMiddleman(
-        ruleContext, artifactsMiddleman, runfilesManifest);
+    this.runfilesMiddleman = createRunfilesMiddleman(ruleContext, runfiles.getAllArtifacts());
     sourcesManifest = createSourceManifest(ruleContext, runfiles);
 
     args = ImmutableList.<String>builder()
@@ -248,19 +247,15 @@ public class RunfilesSupport {
     return sourcesManifest;
   }
 
-  private Artifact createArtifactsMiddleman(ActionConstructionContext context,
-      Iterable<Artifact> allRunfilesArtifacts) {
-    return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
-        context.getActionOwner(), owningExecutable, allRunfilesArtifacts,
-        context.getConfiguration().getMiddlemanDirectory(), "runfiles_artifacts");
-  }
-
   private Artifact createRunfilesMiddleman(ActionConstructionContext context,
-      Artifact artifactsMiddleman, Artifact outputManifest) {
+      Iterable<Artifact> allRunfilesArtifacts) {
+    Iterable<Artifact> inputs = IterablesChain.<Artifact>builder()
+        .add(allRunfilesArtifacts)
+        .addElement(runfilesManifest)
+        .build();
     return context.getAnalysisEnvironment().getMiddlemanFactory().createRunfilesMiddleman(
-        context.getActionOwner(), owningExecutable,
-        ImmutableList.of(artifactsMiddleman, outputManifest),
-        context.getConfiguration().getMiddlemanDirectory(), "runfiles");
+        context.getActionOwner(), owningExecutable, inputs,
+        context.getConfiguration().getMiddlemanDirectory());
   }
 
   /**

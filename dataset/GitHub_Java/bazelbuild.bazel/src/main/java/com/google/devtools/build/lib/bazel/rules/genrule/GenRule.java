@@ -37,9 +37,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.List;
@@ -87,9 +87,8 @@ public class GenRule implements RuleConfiguredTargetFactory {
       labelMap.put(dep.getLabel(), files);
     }
 
-    CommandHelper commandHelper =
-        new CommandHelper(
-            ruleContext, ruleContext.getPrerequisites("tools", Mode.HOST), labelMap.build());
+    CommandHelper commandHelper = new CommandHelper(ruleContext, ruleContext
+        .getPrerequisites("tools", Mode.HOST, FilesToRunProvider.class), labelMap.build());
 
     if (ruleContext.hasErrors()) {
       return null;

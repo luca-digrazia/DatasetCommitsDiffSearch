@@ -543,7 +543,7 @@ public final class Runfiles {
 
 
     /**
-     * @deprecated Use {@link #addTransitiveArtifacts} instead, to prevent increased memory use.
+     * Use {@link #addTransitiveArtifacts} instead, to prevent increased memory use.
      */
     @Deprecated
     public Builder addArtifacts(NestedSet<Artifact> artifacts) {
@@ -553,7 +553,6 @@ public final class Runfiles {
       addArtifacts(it);
       return this;
     }
-
     /**
      * Adds a nested set to the internal collection.
      */

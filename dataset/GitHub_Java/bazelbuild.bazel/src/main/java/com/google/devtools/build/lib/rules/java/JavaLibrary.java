@@ -51,14 +51,13 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
   }
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
+  public ConfiguredTarget create(RuleContext ruleContext) {
     JavaCommon common = new JavaCommon(ruleContext, semantics);
     RuleConfiguredTargetBuilder builder = init(ruleContext, common);
     return builder != null ? builder.build() : null;
   }
 
-  public RuleConfiguredTargetBuilder init(RuleContext ruleContext, final JavaCommon common)
-      throws InterruptedException {
+  public RuleConfiguredTargetBuilder init(RuleContext ruleContext, final JavaCommon common) {
     common.initializeJavacOpts();
     JavaTargetAttributes.Builder attributesBuilder = common.initCommon();
 
@@ -215,10 +214,6 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
     semantics.addProviders(
         ruleContext, common, ImmutableList.<String>of(), classJar, srcJar, genClassJar, gensrcJar,
         ImmutableMap.<Artifact, Artifact>of(), helper, filesBuilder, builder);
-
-    builder.add(
-        JavaRuleOutputJarsProvider.class,
-        new JavaRuleOutputJarsProvider(classJar, srcJar, genClassJar, gensrcJar));
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
     common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
