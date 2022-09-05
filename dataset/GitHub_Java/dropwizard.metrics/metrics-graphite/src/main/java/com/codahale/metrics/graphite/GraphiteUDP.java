@@ -16,9 +16,7 @@ public class GraphiteUDP implements GraphiteSender {
 
     private static final Charset UTF_8 = Charset.forName("UTF-8");
 
-    private final String hostname;
-    private final int port;
-    private InetSocketAddress address;
+    private final InetSocketAddress address;
 
     private DatagramChannel datagramChannel = null;
     private int failures;
@@ -30,9 +28,7 @@ public class GraphiteUDP implements GraphiteSender {
      * @param port The port of the Carbon server
      */
     public GraphiteUDP(String hostname, int port) {
-        this.hostname = hostname;
-        this.port = port;
-        this.address = null;
+        this(new InetSocketAddress(hostname, port));
     }
 
     /**
@@ -41,8 +37,6 @@ public class GraphiteUDP implements GraphiteSender {
      * @param address the address of the Carbon server
      */
     public GraphiteUDP(InetSocketAddress address) {
-        this.hostname = null;
-        this.port = -1;
         this.address = address;
     }
 
@@ -55,11 +49,6 @@ public class GraphiteUDP implements GraphiteSender {
 
         if (datagramChannel != null) {
             datagramChannel.close();
-        }
-
-        // Resolve hostname
-        if (hostname != null) {
-            address = new InetSocketAddress(hostname, port);
         }
 
         datagramChannel = DatagramChannel.open();
