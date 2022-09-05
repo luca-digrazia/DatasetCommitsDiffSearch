@@ -45,7 +45,7 @@ import javax.annotation.Nullable;
  */
 public class GraphTester {
 
-  public static final SkyFunctionName NODE_TYPE = SkyFunctionName.FOR_TESTING;
+  public static final SkyFunctionName NODE_TYPE = SkyFunctionName.create("Type");
 
   private final Map<SkyKey, TestFunction> values = new HashMap<>();
   private final Set<SkyKey> modifiedValues = new LinkedHashSet<>();
