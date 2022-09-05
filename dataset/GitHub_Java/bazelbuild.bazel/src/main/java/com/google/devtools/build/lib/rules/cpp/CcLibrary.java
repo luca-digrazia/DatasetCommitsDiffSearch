@@ -42,6 +42,7 @@ import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -229,9 +230,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         new Function<Artifact, LibraryToLink>() {
       @Override
       public LibraryToLink apply(Artifact library) {
-        return LinkerInputs.solibLibraryToLink(
-            common.getDynamicLibrarySymlink(library, true), library,
-            CcLinkingOutputs.libraryIdentifierOf(library));
+        return common.getDynamicLibrarySymlink(library, true);
       }
     }));
     CcLibraryHelper.Info info = helper.build();
