@@ -50,7 +50,8 @@ public final class ProguardLibraryRule implements RuleDefinition {
               @Override
               public Object getDefault(AttributeMap rule) {
                 return rule.isAttributeValueExplicitlySpecified("proguard_specs")
-                    ? environment.getToolsLabel("//tools/jdk:proguard_whitelister")
+                    ? environment.getLabel(
+                        environment.getToolsRepository() + "//tools/jdk:proguard_whitelister")
                     : null;
               }
             }))

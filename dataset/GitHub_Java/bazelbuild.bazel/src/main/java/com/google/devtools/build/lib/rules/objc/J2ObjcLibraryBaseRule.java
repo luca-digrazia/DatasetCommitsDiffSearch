@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
@@ -43,6 +44,12 @@ public class J2ObjcLibraryBaseRule implements RuleDefinition {
           Unused classes will then be removed from the final ObjC app bundle.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("entry_classes", STRING_LIST))
+        .add(attr("$jre_emul_lib", LABEL)
+            .value(env.getLabel(
+                env.getToolsRepository() + "//third_party/java/j2objc:jre_emul_lib")))
+        .add(attr("$protobuf_lib", LABEL)
+            .value(env.getLabel(
+                env.getToolsRepository() + "//third_party/java/j2objc:proto_runtime")))
         .build();
   }
 
@@ -66,9 +73,9 @@ J2ObjC site</a>
 <p>Custom J2ObjC transpilation flags can be specified using the build flag
 <code>--j2objc_translation_flags</code> in the command line.
 </p>
-<p>Please note that the translated files included in a j2objc_library target will be
-compiled using the default compilation configuration, same configuration as for the sources of an
-objc_library rule with no compilation options specified in attributes.
+<p>Please note that currently the translated files included in a j2objc_library target will be
+compiled using the same compilation configuration as the top level objc_binary target that depends
+on the j2objc_library target.
 </p>
 <p>Plus, generated code is de-duplicated at target level, not source level. If you have two
 different Java targets that include the same Java source files, you may see a duplicate symbol error
