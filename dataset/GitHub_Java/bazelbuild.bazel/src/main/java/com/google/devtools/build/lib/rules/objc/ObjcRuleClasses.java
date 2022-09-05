@@ -66,6 +66,7 @@ public class ObjcRuleClasses {
   static final PathFragment LIBTOOL = new PathFragment(BIN_DIR + "/libtool");
   static final PathFragment DSYMUTIL = new PathFragment(BIN_DIR + "/dsymutil");
   static final PathFragment LIPO = new PathFragment(BIN_DIR + "/lipo");
+  static final PathFragment IBTOOL = new PathFragment(IosSdkCommands.IBTOOL_PATH);
   static final PathFragment SWIFT_STDLIB_TOOL = new PathFragment(BIN_DIR + "/swift-stdlib-tool");
   static final PathFragment STRIP = new PathFragment(BIN_DIR + "/strip");
 
@@ -327,14 +328,11 @@ public class ObjcRuleClasses {
    */
   static final FileType CPP_SOURCES = FileType.of(".cc", ".cpp", ".mm", ".cxx", ".C");
 
-  private static final FileType NON_CPP_SOURCES = FileType.of(".m", ".c", ".s", ".asm");
-
-  static final FileType PREPROCESSED_ASSEMBLY_SOURCES = FileType.of(".S");
-  
   static final FileType SWIFT_SOURCES = FileType.of(".swift");
 
-  static final FileTypeSet SRCS_TYPE = FileTypeSet.of(NON_CPP_SOURCES, CPP_SOURCES,
-      PREPROCESSED_ASSEMBLY_SOURCES, SWIFT_SOURCES);
+  private static final FileType NON_CPP_SOURCES = FileType.of(".m", ".c");
+
+  static final FileTypeSet SRCS_TYPE = FileTypeSet.of(NON_CPP_SOURCES, CPP_SOURCES, SWIFT_SOURCES);
 
   static final FileTypeSet NON_ARC_SRCS_TYPE = FileTypeSet.of(FileType.of(".m", ".mm"));
 
@@ -474,12 +472,8 @@ public class ObjcRuleClasses {
               .value(env.getLabel("//tools/objc:plmerge")))
           .add(attr("$actoolzip_deploy", LABEL).cfg(HOST)
               .value(env.getLabel("//tools/objc:actoolzip_deploy.jar")))
-          .add(attr("$ibtoolwrapper", LABEL).cfg(HOST).exec()
-              .value(env.getLabel("//tools/objc:ibtoolwrapper")))
-          // TODO(dmaclach): Adding realpath here should not be required once
-          // https://github.com/google/bazel/issues/285 is fixed.
-          .add(attr("$realpath", LABEL).cfg(HOST).exec()
-              .value(env.getLabel("//tools/objc:realpath")))
+          .add(attr("$ibtoolzip_deploy", LABEL).cfg(HOST)
+              .value(env.getLabel("//tools/objc:ibtoolzip_deploy.jar")))
           .add(attr("$swiftstdlibtoolzip_deploy", LABEL).cfg(HOST)
               .value(env.getLabel("//tools/objc:swiftstdlibtoolzip_deploy.jar")))
           .build();
