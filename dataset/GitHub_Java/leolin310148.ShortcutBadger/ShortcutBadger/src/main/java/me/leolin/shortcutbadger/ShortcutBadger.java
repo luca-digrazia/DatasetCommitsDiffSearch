@@ -7,7 +7,6 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.util.Log;
-
 import me.leolin.shortcutbadger.impl.*;
 
 import java.lang.reflect.Constructor;
@@ -34,7 +33,7 @@ public final class ShortcutBadger {
         BADGERS.add(AsusHomeLauncher.class);
         BADGERS.add(HuaweiHomeBadger.class);
 //        BADGERS.add(LGHomeBadger.class);
-        BADGERS.add(SamsungHomeBadger.class);
+//        BADGERS.add(SamsungHomeBadger.class);
     }
 
     private static Badger sShortcutBadger;
@@ -42,8 +41,7 @@ public final class ShortcutBadger {
 
     /**
      * Tries to update the notification count
-     *
-     * @param context    Caller context
+     * @param context Caller context
      * @param badgeCount Desired badge count
      * @return true in case of success, false otherwise
      */
@@ -59,8 +57,7 @@ public final class ShortcutBadger {
 
     /**
      * Tries to update the notification count, throw a {@link ShortcutBadgeException} if it fails
-     *
-     * @param context    Caller context
+     * @param context Caller context
      * @param badgeCount Desired badge count
      */
     public static void applyCountOrThrow(Context context, int badgeCount) throws ShortcutBadgeException {
@@ -80,7 +77,6 @@ public final class ShortcutBadger {
 
     /**
      * Tries to remove the notification count
-     *
      * @param context Caller context
      * @return true in case of success, false otherwise
      */
@@ -90,7 +86,6 @@ public final class ShortcutBadger {
 
     /**
      * Tries to remove the notification count, throw a {@link ShortcutBadgeException} if it fails
-     *
      * @param context Caller context
      */
     public static void removeCountOrThrow(Context context) throws ShortcutBadgeException {
@@ -113,12 +108,8 @@ public final class ShortcutBadger {
         String currentHomePackage = resolveInfo.activityInfo.packageName;
 
         for (Class<? extends Badger> badger : BADGERS) {
-            Badger shortcutBadger = null;
-            try {
-                shortcutBadger = badger.newInstance();
-            } catch (Exception e) {
-            }
-            if (shortcutBadger != null && shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
+            Badger shortcutBadger = badger.newInstance();
+            if (shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
                 sShortcutBadger = shortcutBadger;
                 break;
             }
