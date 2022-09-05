@@ -182,7 +182,7 @@ public class AggregationTest {
 		Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/account GROUP BY gender", TEST_INDEX));
 		Terms gender = result.get("gender");
 		for(Terms.Bucket bucket : gender.getBuckets()) {
-			String key = bucket.getKey().toString();
+			String key = bucket.getKey();
 			long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
 			if(key.equalsIgnoreCase("m")) {
 				Assert.assertEquals(507, count);
@@ -205,11 +205,11 @@ public class AggregationTest {
 		Aggregations result = query(String.format("SELECT COUNT(*) FROM %s/account GROUP BY gender, age", TEST_INDEX));
 		Terms gender = result.get("gender");
 		for(Terms.Bucket genderBucket : gender.getBuckets()) {
-			String genderKey = genderBucket.getKey().toString();
+			String genderKey = genderBucket.getKey();
 			buckets.put(genderKey, new HashSet<Integer>());
 			Terms ageBuckets = (Terms) genderBucket.getAggregations().get("age");
 			for(Terms.Bucket ageBucket : ageBuckets.getBuckets()) {
-				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey().toString()));
+				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey()));
 			}
 		}
 
@@ -346,11 +346,11 @@ public class AggregationTest {
 
 		Terms gender = result.get("gender");
 		for(Terms.Bucket genderBucket : gender.getBuckets()) {
-			String genderKey = genderBucket.getKey().toString();
+			String genderKey = genderBucket.getKey();
 			buckets.put(genderKey, new HashSet<Integer>());
 			Terms ageBuckets = (Terms) genderBucket.getAggregations().get("age");
 			for(Terms.Bucket ageBucket : ageBuckets.getBuckets()) {
-				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey().toString()));
+				buckets.get(genderKey).add(Integer.parseInt(ageBucket.getKey()));
 			}
 		}
 
@@ -360,7 +360,7 @@ public class AggregationTest {
 
 		Terms state = result.get("state");
 		for(Terms.Bucket stateBucket : state.getBuckets()) {
-			if(stateBucket.getKey().toString().equalsIgnoreCase("ak")) {
+			if(stateBucket.getKey().equalsIgnoreCase("ak")) {
 				Assert.assertTrue("There are 22 entries for state ak", stateBucket.getDocCount() == 22);
 			}
 		}
@@ -380,7 +380,7 @@ public class AggregationTest {
 
 		Terms gender = result.get("gender");
 		for(Terms.Bucket genderBucket : gender.getBuckets()) {
-			String genderKey = genderBucket.getKey().toString();
+			String genderKey = genderBucket.getKey();
 			Assert.assertTrue("Gender should be m or f", genderKey.equals("m") || genderKey.equals("f"));
 		}
 
@@ -388,7 +388,7 @@ public class AggregationTest {
 
 		Terms state = result.get("state");
 		for(Terms.Bucket stateBucket : state.getBuckets()) {
-			if(stateBucket.getKey().toString().equalsIgnoreCase("ak")) {
+			if(stateBucket.getKey().equalsIgnoreCase("ak")) {
 				Assert.assertTrue("There are 22 entries for state ak", stateBucket.getDocCount() == 22);
 			}
 		}
@@ -403,7 +403,7 @@ public class AggregationTest {
         InternalGeoHashGrid grid = result.get("geohash_grid(field=center,precision=5)");
         Collection<GeoHashGrid.Bucket> buckets = grid.getBuckets();
         for (GeoHashGrid.Bucket bucket : buckets) {
-            Assert.assertTrue(bucket.getKey().toString().equals("[4.98779296875, 105.00732421875]") || bucket.getKey().toString().equals("[0.50537109375, 100.48095703125]") );
+            Assert.assertTrue(bucket.getKey().equals("w2fsm") || bucket.getKey().equals("w0p6y") );
             Assert.assertEquals(1,bucket.getDocCount());
         }
     }
@@ -415,7 +415,7 @@ public class AggregationTest {
         Terms infos = nested.getAggregations().get("message.info");
         Assert.assertEquals(3,infos.getBuckets().size());
         for(Terms.Bucket bucket : infos.getBuckets()) {
-            String key = bucket.getKey().toString();
+            String key = bucket.getKey();
             long count = ((ValueCount) bucket.getAggregations().get("COUNT(*)")).getValue();
             if(key.equalsIgnoreCase("a")) {
                 Assert.assertEquals(2, count);

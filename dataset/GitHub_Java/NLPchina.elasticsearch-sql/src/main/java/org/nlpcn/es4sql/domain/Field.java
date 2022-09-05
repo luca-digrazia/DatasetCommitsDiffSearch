@@ -1,36 +1,24 @@
 package org.nlpcn.es4sql.domain;
 
-import org.nlpcn.es4sql.parse.ChildrenType;
-import org.nlpcn.es4sql.parse.NestedType;
-
 /**
  * 搜索域
  * 
  * @author ansj
  *
  */
-public class Field implements Cloneable{
+public class Field implements  Cloneable{
 
 	protected String name;
 	private String alias;
-    private NestedType nested;
-    private ChildrenType children;
+    private boolean isNested;
+    private String nestedPath;
 
 	public Field(String name, String alias) {
 		this.name = name;
 		this.alias = alias;
-        this.nested = null;
-        this.children = null;
 	}
 
-    public Field(String name, String alias, NestedType nested, ChildrenType children) {
-        this.name = name;
-        this.alias = alias;
-        this.nested = nested;
-        this.children = children;
-    }
-
-    public String getName() {
+	public String getName() {
 		return name;
 	}
 
@@ -47,33 +35,19 @@ public class Field implements Cloneable{
 	}
 
     public boolean isNested() {
-        return this.nested != null;
+        return isNested;
     }
 
-    public boolean isReverseNested() {
-        return this.nested != null && this.nested.isReverse();
-    }
-
-    public void setNested(NestedType nested){
-        this.nested = nested;
+    public void setNested(boolean isNested) {
+        this.isNested = isNested;
     }
 
     public String getNestedPath() {
-        if(this.nested == null ) return null;
-        return this.nested.path;
+        return nestedPath;
     }
 
-    public boolean isChildren() {
-        return this.children != null;
-    }
-
-    public void setChildren(ChildrenType children){
-        this.children = children;
-    }
-
-    public String getChildType() {
-        if(this.children == null ) return null;
-        return this.children.childType;
+    public void setNestedPath(String nestedPath) {
+        this.nestedPath = nestedPath;
     }
 
     @Override
@@ -95,6 +69,6 @@ public class Field implements Cloneable{
 
     @Override
     protected Object clone() throws CloneNotSupportedException {
-        return new Field(new String(this.name), new String(this.alias));
+        return new Field(new String(this.name),new String(this.alias));
     }
 }

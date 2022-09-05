@@ -18,7 +18,6 @@ import java.io.IOException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX;
 
@@ -579,117 +578,6 @@ public class SqlParserTests {
         Assert.assertTrue("condition should be nested",field.isNested());
         Assert.assertEquals("message",field.getNestedPath());
         Assert.assertEquals("message.name",field.getName());
-    }
-
-    @Test
-    public void filterAggTestNoAlias() throws SqlParseException {
-        String query = "select * from myIndex group by a , filter(  a > 3 AND b='3' )";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<List<Field>> groupBys = select.getGroupBys();
-        Assert.assertEquals(1,groupBys.size());
-        Field aAgg = groupBys.get(0).get(0);
-        Assert.assertEquals("a",aAgg.getName());
-        Field field = groupBys.get(0).get(1);
-        Assert.assertTrue("filter field should be method field",field instanceof MethodField);
-        MethodField filterAgg = (MethodField) field;
-        Assert.assertEquals("filter", filterAgg.getName());
-        Map<String, Object> params = filterAgg.getParamsAsMap();
-        Assert.assertEquals(2, params.size());
-        Object alias = params.get("alias");
-        Assert.assertEquals("filter(a > 3 AND b = '3')@FILTER",alias);
-
-        Assert.assertTrue(params.get("where") instanceof Where);
-        Where where  = (Where) params.get("where");
-        Assert.assertEquals(2,where.getWheres().size());
-    }
-
-    @Test
-    public void filterAggTestWithAlias() throws SqlParseException {
-        String query = "select * from myIndex group by a , filter(myFilter, a > 3 AND b='3' )";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<List<Field>> groupBys = select.getGroupBys();
-        Assert.assertEquals(1,groupBys.size());
-        Field aAgg = groupBys.get(0).get(0);
-        Assert.assertEquals("a",aAgg.getName());
-        Field field = groupBys.get(0).get(1);
-        Assert.assertTrue("filter field should be method field",field instanceof MethodField);
-        MethodField filterAgg = (MethodField) field;
-        Assert.assertEquals("filter", filterAgg.getName());
-        Map<String, Object> params = filterAgg.getParamsAsMap();
-        Assert.assertEquals(2, params.size());
-        Object alias = params.get("alias");
-        Assert.assertEquals("myFilter@FILTER",alias);
-
-        Assert.assertTrue(params.get("where") instanceof Where);
-        Where where  = (Where) params.get("where");
-        Assert.assertEquals(2,where.getWheres().size());
-    }
-
-
-    @Test
-    public void filterAggTestWithAliasAsString() throws SqlParseException {
-        String query = "select * from myIndex group by a , filter('my filter', a > 3 AND b='3' )";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<List<Field>> groupBys = select.getGroupBys();
-        Assert.assertEquals(1,groupBys.size());
-        Field aAgg = groupBys.get(0).get(0);
-        Assert.assertEquals("a",aAgg.getName());
-        Field field = groupBys.get(0).get(1);
-        Assert.assertTrue("filter field should be method field",field instanceof MethodField);
-        MethodField filterAgg = (MethodField) field;
-        Assert.assertEquals("filter", filterAgg.getName());
-        Map<String, Object> params = filterAgg.getParamsAsMap();
-        Assert.assertEquals(2, params.size());
-        Object alias = params.get("alias");
-        Assert.assertEquals("my filter@FILTER",alias);
-
-        Assert.assertTrue(params.get("where") instanceof Where);
-        Where where  = (Where) params.get("where");
-        Assert.assertEquals(2,where.getWheres().size());
-    }
-    @Test
-    public void doubleOrderByTest() throws SqlParseException {
-        String query = "select * from indexName order by a asc, b desc";
-        SQLExpr sqlExpr = queryToExpr(query);
-        Select select = parser.parseSelect((SQLQueryExpr) sqlExpr);
-        List<Order> orderBys = select.getOrderBys();
-        Assert.assertEquals(2,orderBys.size());
-        Assert.assertEquals("a",orderBys.get(0).getName());
-        Assert.assertEquals("ASC",orderBys.get(0).getType());
-
-        Assert.assertEquals("b",orderBys.get(1).getName());
-        Assert.assertEquals("DESC",orderBys.get(1).getType());
-    }
-
-    @Test
-    public void parseJoinWithOneTableOrderByAttachToCorrectTable() throws SqlParseException {
-        String query = String.format("select c.name.firstname , d.words from %s/gotCharacters c " +
-                "JOIN %s/gotHouses d on d.name = c.house " +
-                "order by c.name.firstname"
-                ,  TEST_INDEX, TEST_INDEX);
-
-        JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
-        Assert.assertTrue("first table should be ordered",joinSelect.getFirstTable().isOrderdSelect());
-        Assert.assertFalse("second table should not be ordered", joinSelect.getSecondTable().isOrderdSelect());
-
-    }
-
-    @Test
-    public void parseJoinWithOneTableOrderByRemoveAlias() throws SqlParseException {
-        String query = String.format("select c.name.firstname , d.words from %s/gotCharacters c " +
-                "JOIN %s/gotHouses d on d.name = c.house " +
-                "order by c.name.firstname"
-                ,  TEST_INDEX, TEST_INDEX);
-
-        JoinSelect joinSelect = parser.parseJoinSelect((SQLQueryExpr) queryToExpr(query));
-        List<Order> orderBys = joinSelect.getFirstTable().getOrderBys();
-        Assert.assertEquals(1,orderBys.size());
-        Order order = orderBys.get(0);
-        Assert.assertEquals("name.firstname", order.getName());
-
     }
 
 
