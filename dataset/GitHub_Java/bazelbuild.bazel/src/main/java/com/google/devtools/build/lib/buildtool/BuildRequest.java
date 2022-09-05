@@ -26,7 +26,7 @@ import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
-import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.runtime.BlazeCommandEventHandler;
 import com.google.devtools.build.lib.util.OptionsUtils;
@@ -268,14 +268,6 @@ public class BuildRequest implements OptionsClassProvider {
                 + "this flag to false to see the effect on incremental build times.")
     public boolean checkOutputFiles;
 
-    @Option(name = "experimental_output_tree_tracking",
-            defaultValue = "false",
-            category = "undocumented",
-            help = "If set, communicate with objsfd to track when files in the output tree have "
-                + "been modified externally (not by Blaze). This should improve incremental build "
-                + "speed.")
-    public boolean finalizeActions;
-
     @Option(
       name = "aspects",
       converter = Converters.CommaSeparatedOptionListConverter.class,
@@ -321,7 +313,7 @@ public class BuildRequest implements OptionsClassProvider {
   private static final List<Class<? extends OptionsBase>> MANDATORY_OPTIONS = ImmutableList.of(
           BuildRequestOptions.class,
           PackageCacheOptions.class,
-          LoadingOptions.class,
+          LoadingPhaseRunner.Options.class,
           BuildView.Options.class,
           ExecutionOptions.class);
 
@@ -439,8 +431,8 @@ public class BuildRequest implements OptionsClassProvider {
   /**
    * Returns the set of options related to the loading phase.
    */
-  public LoadingOptions getLoadingOptions() {
-    return getOptions(LoadingOptions.class);
+  public LoadingPhaseRunner.Options getLoadingOptions() {
+    return getOptions(LoadingPhaseRunner.Options.class);
   }
 
   /**

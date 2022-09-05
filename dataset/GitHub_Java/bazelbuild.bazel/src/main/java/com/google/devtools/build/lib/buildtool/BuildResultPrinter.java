@@ -107,7 +107,7 @@ class BuildResultPrinter {
 
     for (AspectValue aspect : aspectsToPrint) {
       Label label = aspect.getLabel();
-      String aspectName = aspect.getConfiguredAspect().getName();
+      String aspectName = aspect.getAspect().getName();
       boolean headerFlag = true;
       NestedSet<Artifact> importantArtifacts =
           TopLevelArtifactHelper.getAllArtifactsToBuild(aspect, context).getImportantArtifacts();
@@ -140,7 +140,7 @@ class BuildResultPrinter {
                 + OutputDirectoryLinksUtils.getPrettyPath(temp.getPath(),
                 runtime.getWorkspaceName(),
                 runtime.getWorkspace(),
-                request.getBuildOptions().getSymlinkPrefix()));
+                request.getSymlinkPrefix()));
           }
         }
       }
@@ -156,8 +156,7 @@ class BuildResultPrinter {
 
   private String formatArtifactForShowResults(Artifact artifact, BuildRequest request) {
     return "  " + OutputDirectoryLinksUtils.getPrettyPath(artifact.getPath(),
-        runtime.getWorkspaceName(), runtime.getWorkspace(),
-        request.getBuildOptions().getSymlinkPrefix());
+        runtime.getWorkspaceName(), runtime.getWorkspace(), request.getSymlinkPrefix());
   }
 
   /**
