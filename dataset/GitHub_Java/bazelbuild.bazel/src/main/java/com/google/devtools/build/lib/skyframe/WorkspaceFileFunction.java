@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.packages.Package.Builder;
+import com.google.devtools.build.lib.packages.ExternalPackage.Builder;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.WorkspaceFactory;
@@ -39,7 +39,7 @@ import java.io.IOException;
 public class WorkspaceFileFunction implements SkyFunction {
 
   private final PackageFactory packageFactory;
-  private final BlazeDirectories directories;
+  private final Path installDir;
   private final RuleClassProvider ruleClassProvider;
 
   public WorkspaceFileFunction(
@@ -47,7 +47,7 @@ public class WorkspaceFileFunction implements SkyFunction {
       PackageFactory packageFactory,
       BlazeDirectories directories) {
     this.packageFactory = packageFactory;
-    this.directories = directories;
+    this.installDir = directories.getEmbeddedBinariesRoot();
     this.ruleClassProvider = ruleClassProvider;
   }
 
@@ -61,18 +61,15 @@ public class WorkspaceFileFunction implements SkyFunction {
     }
 
     Path repoWorkspace = workspaceRoot.getRoot().getRelative(workspaceRoot.getRelativePath());
-    Builder builder =
-        com.google.devtools.build.lib.packages.Package.newExternalPackageBuilder(
-            repoWorkspace, packageFactory.getRuleClassProvider().getRunfilesPrefix());
+    Builder builder = new Builder(repoWorkspace,
+        packageFactory.getRuleClassProvider().getRunfilesPrefix());
     try (Mutability mutability = Mutability.create("workspace %s", repoWorkspace)) {
       WorkspaceFactory parser =
           new WorkspaceFactory(
               builder,
               packageFactory.getRuleClassProvider(),
-              packageFactory.getEnvironmentExtensions(),
               mutability,
-              directories.getEmbeddedBinariesRoot(),
-              directories.getWorkspace());
+              installDir.getPathString());
       parser.parse(
           ParserInputSource.create(
               ruleClassProvider.getDefaultWorkspaceFile(), new PathFragment("DEFAULT.WORKSPACE")));
