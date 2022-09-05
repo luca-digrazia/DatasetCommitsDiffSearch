@@ -19,6 +19,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.Constants;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.collect.CompactHashSet;
 import com.google.devtools.build.lib.events.Event;
@@ -117,7 +118,7 @@ public final class QueryCommand implements BlazeCommand {
     } else {
       env.getReporter().handle(Event.error(String.format(
           "missing query expression. Type '%s help query' for syntax and help",
-          runtime.getProductName())));
+          Constants.PRODUCT_NAME)));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
