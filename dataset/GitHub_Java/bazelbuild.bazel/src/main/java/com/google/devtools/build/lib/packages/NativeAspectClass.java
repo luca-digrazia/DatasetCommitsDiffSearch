@@ -33,6 +33,7 @@ public final class NativeAspectClass<T extends NativeAspectClass.NativeAspectFac
     return nativeClass.getSimpleName();
   }
 
+  @Override
   public AspectDefinition getDefinition(AspectParameters aspectParameters) {
     return newInstance().getDefinition(aspectParameters);
   }
