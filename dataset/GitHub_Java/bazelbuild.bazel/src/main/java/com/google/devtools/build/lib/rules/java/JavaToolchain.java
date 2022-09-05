@@ -52,13 +52,15 @@ public final class JavaToolchain implements RuleConfiguredTargetFactory {
     Artifact headerCompiler = getArtifact("header_compiler", ruleContext);
     Artifact singleJar = getArtifact("singlejar", ruleContext);
     Artifact genClass = getArtifact("genclass", ruleContext);
-    FilesToRunProvider ijar = ruleContext.getExecutablePrerequisite("ijar", Mode.HOST);
+    FilesToRunProvider ijar = getExecutable("ijar", ruleContext);
+    // TODO(cushon): clean up nulls once migration from --javac_bootclasspath and --javac_extdir
+    // is complete, and java_toolchain.{bootclasspath,extclasspath} are mandatory
     final JavaToolchainData toolchainData =
         new JavaToolchainData(
             source,
             target,
-            Artifact.toExecPaths(bootclasspath),
-            Artifact.toExecPaths(extclasspath),
+            execPathsOrNull(bootclasspath),
+            execPathsOrNull(extclasspath),
             encoding,
             xlint,
             misc,
@@ -82,6 +84,19 @@ public final class JavaToolchain implements RuleConfiguredTargetFactory {
         .add(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
 
     return builder.build();
+  }
+
+  /** Returns the exec paths of the given artifacts, or {@code null}. */
+  private Iterable<String> execPathsOrNull(NestedSet<Artifact> artifacts) {
+    return artifacts != null ? Artifact.toExecPaths(artifacts) : null;
+  }
+
+  private FilesToRunProvider getExecutable(String attributeName, RuleContext ruleContext) {
+    TransitiveInfoCollection prerequisite = ruleContext.getPrerequisite(attributeName, Mode.HOST);
+    if (prerequisite == null) {
+      return null;
+    }
+    return prerequisite.getProvider(FilesToRunProvider.class);
   }
 
   private Artifact getArtifact(String attributeName, RuleContext ruleContext) {
