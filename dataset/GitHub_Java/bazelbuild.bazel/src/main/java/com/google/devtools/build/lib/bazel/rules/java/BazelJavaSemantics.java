@@ -443,4 +443,9 @@ public class BazelJavaSemantics implements JavaSemantics {
   public String getJavaBuilderMainClass() {
     return JAVABUILDER_CLASS_NAME;
   }
+
+  @Override
+  public Artifact getProtoMapping(RuleContext ruleContext) throws InterruptedException {
+    return null;
+  }
 }

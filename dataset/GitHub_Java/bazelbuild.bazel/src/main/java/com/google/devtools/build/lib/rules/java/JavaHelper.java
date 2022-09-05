@@ -60,11 +60,6 @@ public abstract class JavaHelper {
    * or --java_launcher flag.
    */
   private static String filterLauncherForTarget(JavaSemantics semantics, RuleContext ruleContext) {
-    // create_executable=0 disables the launcher
-    if (ruleContext.getRule().isAttrDefined("create_executable", Type.BOOLEAN)
-        && !ruleContext.attributes().get("create_executable", Type.BOOLEAN)) {
-      return null;
-    }
     // BUILD rule "launcher" attribute
     if (ruleContext.getRule().isAttrDefined("launcher", BuildType.LABEL)
         && ruleContext.attributes().get("launcher", BuildType.LABEL) != null) {
