@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.syntax.Mutability.MutabilityException;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+
 import javax.annotation.Nullable;
 
 /**
@@ -816,15 +818,8 @@ public final class Environment implements Freezable {
    * variable in the Environment.
    */
   public static class NoSuchVariableException extends Exception {
-    private final String variable;
     NoSuchVariableException(String variable) {
-      super(null, null, false, false /* don't fillInStackTrace() */);
-      this.variable = variable;
-    }
-
-    @Override
-    public String getMessage() {
-      return "no such variable: " + variable;
+      super("no such variable: " + variable, null, false, false /* don't fillInStackTrace() */);
     }
   }
 
