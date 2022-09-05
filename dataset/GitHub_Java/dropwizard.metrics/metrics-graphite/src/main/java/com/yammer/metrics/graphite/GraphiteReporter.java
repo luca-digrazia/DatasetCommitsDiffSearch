@@ -1,397 +1,293 @@
 package com.yammer.metrics.graphite;
 
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.*;
-import com.yammer.metrics.reporting.AbstractPollingReporter;
-import com.yammer.metrics.reporting.MetricDispatcher;
-import com.yammer.metrics.stats.Snapshot;
-import com.yammer.metrics.core.MetricPredicate;
+import com.yammer.metrics.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
-import java.lang.Thread.State;
-import java.net.Socket;
 import java.util.Locale;
-import java.util.Map.Entry;
+import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.TimeUnit;
 
-
 /**
- * A simple reporter which sends out application metrics to a <a href="http://graphite.wikidot.com/faq">Graphite</a>
- * server periodically.
+ * A reporter which publishes metric values to a Graphite server.
+ *
+ * @see <a href="http://graphite.wikidot.com/">Graphite - Scalable Realtime Graphing</a>
  */
-public class GraphiteReporter extends AbstractPollingReporter implements MetricProcessor<Long> {
-    private static final Logger LOG = LoggerFactory.getLogger(GraphiteReporter.class);
-    protected final String prefix;
-    protected final MetricPredicate predicate;
-    protected final Locale locale = Locale.US;
-    protected final MetricDispatcher dispatcher = new MetricDispatcher();
-    protected final Clock clock;
-    protected final SocketProvider socketProvider;
-    protected final VirtualMachineMetrics vm;
-    protected Writer writer;
-    public boolean printVMMetrics = true;
-
+public class GraphiteReporter extends AbstractPollingReporter {
     /**
-     * Enables the graphite reporter to send data for the default metrics registry to graphite
-     * server with the specified period.
+     * Returns a new {@link Builder} for {@link GraphiteReporter}.
      *
-     * @param period the period between successive outputs
-     * @param unit   the time unit of {@code period}
-     * @param host   the host name of graphite server (carbon-cache agent)
-     * @param port   the port number on which the graphite server is listening
+     * @param registry the registry to report
+     * @return a {@link Builder} instance for a {@link GraphiteReporter}
      */
-    public static void enable(long period, TimeUnit unit, String host, int port) {
-        enable(Metrics.defaultRegistry(), period, unit, host, port);
+    public static Builder forRegistry(MetricRegistry registry) {
+        return new Builder(registry);
     }
 
     /**
-     * Enables the graphite reporter to send data for the given metrics registry to graphite server
-     * with the specified period.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param period          the period between successive outputs
-     * @param unit            the time unit of {@code period}
-     * @param host            the host name of graphite server (carbon-cache agent)
-     * @param port            the port number on which the graphite server is listening
+     * A builder for {@link GraphiteReporter} instances. Defaults to not using a prefix, using the
+     * default clock, converting rates to events/second, converting durations to milliseconds, and
+     * not filtering metrics.
      */
-    public static void enable(MetricsRegistry metricsRegistry, long period, TimeUnit unit, String host, int port) {
-        enable(metricsRegistry, period, unit, host, port, null);
-    }
+    public static class Builder {
+        private final MetricRegistry registry;
+        private Clock clock;
+        private String prefix;
+        private TimeUnit rateUnit;
+        private TimeUnit durationUnit;
+        private MetricFilter filter;
 
-    /**
-     * Enables the graphite reporter to send data to graphite server with the specified period.
-     *
-     * @param period the period between successive outputs
-     * @param unit   the time unit of {@code period}
-     * @param host   the host name of graphite server (carbon-cache agent)
-     * @param port   the port number on which the graphite server is listening
-     * @param prefix the string which is prepended to all metric names
-     */
-    public static void enable(long period, TimeUnit unit, String host, int port, String prefix) {
-        enable(Metrics.defaultRegistry(), period, unit, host, port, prefix);
-    }
+        private Builder(MetricRegistry registry) {
+            this.registry = registry;
+            this.clock = Clock.defaultClock();
+            this.prefix = null;
+            this.rateUnit = TimeUnit.SECONDS;
+            this.durationUnit = TimeUnit.MILLISECONDS;
+            this.filter = MetricFilter.ALL;
+        }
 
-    /**
-     * Enables the graphite reporter to send data to graphite server with the specified period.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param period          the period between successive outputs
-     * @param unit            the time unit of {@code period}
-     * @param host            the host name of graphite server (carbon-cache agent)
-     * @param port            the port number on which the graphite server is listening
-     * @param prefix          the string which is prepended to all metric names
-     */
-    public static void enable(MetricsRegistry metricsRegistry, long period, TimeUnit unit, String host, int port, String prefix) {
-        enable(metricsRegistry, period, unit, host, port, prefix, MetricPredicate.ALL);
-    }
+        /**
+         * Use the given {@link Clock} instance for the time.
+         *
+         * @param clock a {@link Clock} instance
+         * @return {@code this}
+         */
+        public Builder withClock(Clock clock) {
+            this.clock = clock;
+            return this;
+        }
 
-    /**
-     * Enables the graphite reporter to send data to graphite server with the specified period.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param period          the period between successive outputs
-     * @param unit            the time unit of {@code period}
-     * @param host            the host name of graphite server (carbon-cache agent)
-     * @param port            the port number on which the graphite server is listening
-     * @param prefix          the string which is prepended to all metric names
-     * @param predicate       filters metrics to be reported
-     */
-    public static void enable(MetricsRegistry metricsRegistry, long period, TimeUnit unit, String host, int port, String prefix, MetricPredicate predicate) {
-        try {
-            final GraphiteReporter reporter = new GraphiteReporter(metricsRegistry,
-                                                                   prefix,
-                                                                   predicate,
-                                                                   new DefaultSocketProvider(host,
-                                                                                             port),
-                                                                   Clock.defaultClock());
-            reporter.start(period, unit);
-        } catch (Exception e) {
-            LOG.error("Error creating/starting Graphite reporter:", e);
+        /**
+         * Prefix all metric names with the given string.
+         *
+         * @param prefix the prefix for all metric names
+         * @return {@code this}
+         */
+        public Builder prefixedWith(String prefix) {
+            this.prefix = prefix;
+            return this;
+        }
+
+        /**
+         * Convert rates to the given time unit.
+         *
+         * @param rateUnit a unit of time
+         * @return {@code this}
+         */
+        public Builder convertRatesTo(TimeUnit rateUnit) {
+            this.rateUnit = rateUnit;
+            return this;
+        }
+
+        /**
+         * Convert durations to the given time unit.
+         *
+         * @param durationUnit a unit of time
+         * @return {@code this}
+         */
+        public Builder convertDurationsTo(TimeUnit durationUnit) {
+            this.durationUnit = durationUnit;
+            return this;
+        }
+
+        /**
+         * Only report metrics which match the given filter.
+         *
+         * @param filter a {@link MetricFilter}
+         * @return {@code this}
+         */
+        public Builder filter(MetricFilter filter) {
+            this.filter = filter;
+            return this;
+        }
+
+        /**
+         * Builds a {@link GraphiteReporter} with the given properties, sending metrics using the
+         * given {@link Graphite} client.
+         *
+         * @param graphite a {@link Graphite} client
+         * @return a {@link GraphiteReporter}
+         */
+        public GraphiteReporter build(Graphite graphite) {
+            return new GraphiteReporter(registry,
+                                        graphite,
+                                        clock,
+                                        prefix,
+                                        rateUnit,
+                                        durationUnit,
+                                        filter);
         }
     }
 
-    /**
-     * Creates a new {@link GraphiteReporter}.
-     *
-     * @param host   is graphite server
-     * @param port   is port on which graphite server is running
-     * @param prefix is prepended to all names reported to graphite
-     * @throws IOException if there is an error connecting to the Graphite server
-     */
-    public GraphiteReporter(String host, int port, String prefix) throws IOException {
-        this(Metrics.defaultRegistry(), host, port, prefix);
-    }
+    private static final Logger LOGGER = LoggerFactory.getLogger(GraphiteReporter.class);
 
-    /**
-     * Creates a new {@link GraphiteReporter}.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param host            is graphite server
-     * @param port            is port on which graphite server is running
-     * @param prefix          is prepended to all names reported to graphite
-     * @throws IOException if there is an error connecting to the Graphite server
-     */
-    public GraphiteReporter(MetricsRegistry metricsRegistry, String host, int port, String prefix) throws IOException {
-        this(metricsRegistry,
-             prefix,
-             MetricPredicate.ALL,
-             new DefaultSocketProvider(host, port),
-             Clock.defaultClock());
-    }
+    private final Graphite graphite;
+    private final Clock clock;
+    private final String prefix;
+    private final double rateFactor;
+    private final double durationFactor;
 
-    /**
-     * Creates a new {@link GraphiteReporter}.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param prefix          is prepended to all names reported to graphite
-     * @param predicate       filters metrics to be reported
-     * @param socketProvider  a {@link SocketProvider} instance
-     * @param clock           a {@link Clock} instance
-     * @throws IOException if there is an error connecting to the Graphite server
-     */
-    public GraphiteReporter(MetricsRegistry metricsRegistry, String prefix, MetricPredicate predicate, SocketProvider socketProvider, Clock clock) throws IOException {
-        this(metricsRegistry, prefix, predicate, socketProvider, clock,
-             VirtualMachineMetrics.getInstance());
-    }
-
-    /**
-     * Creates a new {@link GraphiteReporter}.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param prefix          is prepended to all names reported to graphite
-     * @param predicate       filters metrics to be reported
-     * @param socketProvider  a {@link SocketProvider} instance
-     * @param clock           a {@link Clock} instance
-     * @param vm              a {@link VirtualMachineMetrics} instance
-     * @throws IOException if there is an error connecting to the Graphite server
-     */
-    public GraphiteReporter(MetricsRegistry metricsRegistry, String prefix, MetricPredicate predicate, SocketProvider socketProvider, Clock clock, VirtualMachineMetrics vm) throws IOException {
-        this(metricsRegistry, prefix, predicate, socketProvider, clock, vm, "graphite-reporter");
-    }
-    
-    /**
-     * Creates a new {@link GraphiteReporter}.
-     *
-     * @param metricsRegistry the metrics registry
-     * @param prefix          is prepended to all names reported to graphite
-     * @param predicate       filters metrics to be reported
-     * @param socketProvider  a {@link SocketProvider} instance
-     * @param clock           a {@link Clock} instance
-     * @param vm              a {@link VirtualMachineMetrics} instance
-     * @throws IOException if there is an error connecting to the Graphite server
-     */
-    public GraphiteReporter(MetricsRegistry metricsRegistry, String prefix, MetricPredicate predicate, SocketProvider socketProvider, Clock clock, VirtualMachineMetrics vm, String name) throws IOException {    
-        super(metricsRegistry, name);
-        this.socketProvider = socketProvider;
-        this.vm = vm;
-
+    private GraphiteReporter(MetricRegistry registry,
+                             Graphite graphite,
+                             Clock clock,
+                             String prefix,
+                             TimeUnit rateUnit,
+                             TimeUnit durationUnit,
+                             MetricFilter filter) {
+        super(registry, "graphite-reporter", filter);
+        this.graphite = graphite;
         this.clock = clock;
-
-        if (prefix != null) {
-            // Pre-append the "." so that we don't need to make anything conditional later.
-            this.prefix = prefix + ".";
-        } else {
-            this.prefix = "";
-        }
-        this.predicate = predicate;
+        this.prefix = prefix;
+        this.rateFactor = rateUnit.toSeconds(1);
+        this.durationFactor = 1.0 / durationUnit.toNanos(1);
     }
 
     @Override
-    public void run() {
-        Socket socket = null;
+    public void report(SortedMap<String, Gauge> gauges,
+                       SortedMap<String, Counter> counters,
+                       SortedMap<String, Histogram> histograms,
+                       SortedMap<String, Meter> meters,
+                       SortedMap<String, Timer> timers) {
+        final long timestamp = clock.getTime() / 1000;
+
+        // oh it'd be lovely to use Java 7 here
         try {
-            socket = this.socketProvider.get();
-            writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            graphite.connect();
 
-            final long epoch = clock.getTime() / 1000;
-            if (this.printVMMetrics) {
-                printVmMetrics(epoch);
+            for (Map.Entry<String, Gauge> entry : gauges.entrySet()) {
+                reportGauge(entry.getKey(), entry.getValue(), timestamp);
             }
-            printRegularMetrics(epoch);
-            writer.flush();
-        } catch (Exception e) {
-            if (LOG.isDebugEnabled()) {
-                LOG.debug("Error writing to Graphite", e);
-            } else {
-                LOG.warn("Error writing to Graphite: {}", e.getMessage());
-            }
-            if (writer != null) {
-                try {
-                    writer.flush();
-                } catch (IOException e1) {
-                    LOG.error("Error while flushing writer:", e1);
-                }
-            }
-        } finally {
-            if (socket != null) {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    LOG.error("Error while closing socket:", e);
-                }
-            }
-            writer = null;
-        }
-    }
 
-    protected void printRegularMetrics(final Long epoch) {
-        for (Entry<String,SortedMap<MetricName,Metric>> entry : getMetricsRegistry().getGroupedMetrics(
-                predicate).entrySet()) {
-            for (Entry<MetricName, Metric> subEntry : entry.getValue().entrySet()) {
-                final Metric metric = subEntry.getValue();
-                if (metric != null) {
-                    try {
-                        dispatcher.dispatch(subEntry.getValue(), subEntry.getKey(), this, epoch);
-                    } catch (Exception ignored) {
-                        LOG.error("Error printing regular metrics:", ignored);
-                    }
-                }
+            for (Map.Entry<String, Counter> entry : counters.entrySet()) {
+                reportCounter(entry.getKey(), entry.getValue(), timestamp);
             }
-        }
-    }
 
-    protected void sendInt(long timestamp, String name, String valueName, long value) {
-        sendToGraphite(timestamp, name, valueName + " " + String.format(locale, "%d", value));
-    }
-
-    protected void sendFloat(long timestamp, String name, String valueName, double value) {
-        sendToGraphite(timestamp, name, valueName + " " + String.format(locale, "%2.2f", value));
-    }
-
-    protected void sendObjToGraphite(long timestamp, String name, String valueName, Object value) {
-        sendToGraphite(timestamp, name, valueName + " " + String.format(locale, "%s", value));
-    }
-
-    protected void sendToGraphite(long timestamp, String name, String value) {
-        try {
-            if (!prefix.isEmpty()) {
-                writer.write(prefix);
+            for (Map.Entry<String, Histogram> entry : histograms.entrySet()) {
+                reportHistogram(entry.getKey(), entry.getValue(), timestamp);
             }
-            writer.write(sanitizeString(name));
-            writer.write('.');
-            writer.write(value);
-            writer.write(' ');
-            writer.write(Long.toString(timestamp));
-            writer.write('\n');
-            writer.flush();
+
+            for (Map.Entry<String, Meter> entry : meters.entrySet()) {
+                reportMetered(entry.getKey(), entry.getValue(), timestamp);
+            }
+
+            for (Map.Entry<String, Timer> entry : timers.entrySet()) {
+                reportTimer(entry.getKey(), entry.getValue(), timestamp);
+            }
         } catch (IOException e) {
-            LOG.error("Error sending to Graphite:", e);
+            LOGGER.warn("Unable to report to Graphite", graphite, e);
+        } finally {
+            try {
+                graphite.close();
+            } catch (IOException e) {
+                LOGGER.debug("Error disconnecting from Graphite", graphite, e);
+            }
         }
     }
 
-    protected String sanitizeName(MetricName name) {
-        final StringBuilder sb = new StringBuilder()
-                .append(name.getDomain())
-                .append('.')
-                .append(name.getType())
-                .append('.');
-        if (name.hasScope()) {
-            sb.append(name.getScope())
-              .append('.');
-        }
-        return sb.append(name.getName()).toString();
-    }
-    
-    protected String sanitizeString(String s) {
-        return s.replace(' ', '-');
-    }
+    private void reportTimer(String name, Timer timer, long timestamp) throws IOException {
+        graphite.send(prefix(name, "max"), format(timer.getMax() * durationFactor), timestamp);
+        graphite.send(prefix(name, "mean"), format(timer.getMean() * durationFactor), timestamp);
+        graphite.send(prefix(name, "min"), format(timer.getMin() * durationFactor), timestamp);
+        graphite.send(prefix(name, "stddev"),
+                      format(timer.getStdDev() * durationFactor),
+                      timestamp);
 
-    @Override
-    public void processGauge(MetricName name, Gauge<?> gauge, Long epoch) throws IOException {
-        sendObjToGraphite(epoch, sanitizeName(name), "value", gauge.getValue());
-    }
+        final Snapshot snapshot = timer.getSnapshot();
+        graphite.send(prefix(name, "p50"),
+                      format(snapshot.getMedian() * durationFactor),
+                      timestamp);
+        graphite.send(prefix(name, "p75"),
+                      format(snapshot.get75thPercentile() * durationFactor),
+                      timestamp);
+        graphite.send(prefix(name, "p95"),
+                      format(snapshot.get95thPercentile() * durationFactor),
+                      timestamp);
+        graphite.send(prefix(name, "p98"),
+                      format(snapshot.get98thPercentile() * durationFactor),
+                      timestamp);
+        graphite.send(prefix(name, "p99"),
+                      format(snapshot.get99thPercentile() * durationFactor),
+                      timestamp);
+        graphite.send(prefix(name, "p999"),
+                      format(snapshot.get999thPercentile() * durationFactor),
+                      timestamp);
 
-    @Override
-    public void processCounter(MetricName name, Counter counter, Long epoch) throws IOException {
-        sendInt(epoch, sanitizeName(name), "count", counter.getCount());
-    }
-
-    @Override
-    public void processMeter(MetricName name, Metered meter, Long epoch) throws IOException {
-        final String sanitizedName = sanitizeName(name);
-        sendInt(epoch, sanitizedName, "count", meter.getCount());
-        sendFloat(epoch, sanitizedName, "meanRate", meter.getMeanRate());
-        sendFloat(epoch, sanitizedName, "1MinuteRate", meter.getOneMinuteRate());
-        sendFloat(epoch, sanitizedName, "5MinuteRate", meter.getFiveMinuteRate());
-        sendFloat(epoch, sanitizedName, "15MinuteRate", meter.getFifteenMinuteRate());
+        reportMetered(name, timer, timestamp);
     }
 
-    @Override
-    public void processHistogram(MetricName name, Histogram histogram, Long epoch) throws IOException {
-        final String sanitizedName = sanitizeName(name);
-        sendSummarizable(epoch, sanitizedName, histogram);
-        sendSampling(epoch, sanitizedName, histogram);
+    private void reportMetered(String name, Metered meter, long timestamp) throws IOException {
+        graphite.send(prefix(name, "count"), format(meter.getCount()), timestamp);
+        graphite.send(prefix(name, "m1_rate"),
+                      format(meter.getOneMinuteRate() * rateFactor),
+                      timestamp);
+        graphite.send(prefix(name, "m5_rate"),
+                      format(meter.getFiveMinuteRate() * rateFactor),
+                      timestamp);
+        graphite.send(prefix(name, "m15_rate"),
+                      format(meter.getFifteenMinuteRate() * rateFactor),
+                      timestamp);
+        graphite.send(prefix(name, "mean_rate"),
+                      format(meter.getMeanRate() * rateFactor),
+                      timestamp);
     }
 
-    @Override
-    public void processTimer(MetricName name, Timer timer, Long epoch) throws IOException {
-        processMeter(name, timer, epoch);
-        final String sanitizedName = sanitizeName(name);
-        sendSummarizable(epoch, sanitizedName, timer);
-        sendSampling(epoch, sanitizedName, timer);
+    private void reportHistogram(String name, Histogram histogram, long timestamp) throws IOException {
+        graphite.send(prefix(name, "count"), format(histogram.getCount()), timestamp);
+        graphite.send(prefix(name, "max"), format(histogram.getMax()), timestamp);
+        graphite.send(prefix(name, "mean"), format(histogram.getMean()), timestamp);
+        graphite.send(prefix(name, "min"), format(histogram.getMin()), timestamp);
+        graphite.send(prefix(name, "stddev"), format(histogram.getStdDev()), timestamp);
+
+        final Snapshot snapshot = histogram.getSnapshot();
+        graphite.send(prefix(name, "p50"), format(snapshot.getMedian()), timestamp);
+        graphite.send(prefix(name, "p75"), format(snapshot.get75thPercentile()), timestamp);
+        graphite.send(prefix(name, "p95"), format(snapshot.get95thPercentile()), timestamp);
+        graphite.send(prefix(name, "p98"), format(snapshot.get98thPercentile()), timestamp);
+        graphite.send(prefix(name, "p99"), format(snapshot.get99thPercentile()), timestamp);
+        graphite.send(prefix(name, "p999"), format(snapshot.get999thPercentile()), timestamp);
     }
 
-    protected void sendSummarizable(long epoch, String sanitizedName, Summarizable metric) throws IOException {
-        sendFloat(epoch, sanitizedName, "min", metric.getMin());
-        sendFloat(epoch, sanitizedName, "max", metric.getMax());
-        sendFloat(epoch, sanitizedName, "mean", metric.getMean());
-        sendFloat(epoch, sanitizedName, "stddev", metric.getStdDev());
+    private void reportCounter(String name, Counter counter, long timestamp) throws IOException {
+        graphite.send(prefix(name, "count"), format(counter.getCount()), timestamp);
     }
 
-    protected void sendSampling(long epoch, String sanitizedName, Sampling metric) throws IOException {
-        final Snapshot snapshot = metric.getSnapshot();
-        sendFloat(epoch, sanitizedName, "median", snapshot.getMedian());
-        sendFloat(epoch, sanitizedName, "75percentile", snapshot.get75thPercentile());
-        sendFloat(epoch, sanitizedName, "95percentile", snapshot.get95thPercentile());
-        sendFloat(epoch, sanitizedName, "98percentile", snapshot.get98thPercentile());
-        sendFloat(epoch, sanitizedName, "99percentile", snapshot.get99thPercentile());
-        sendFloat(epoch, sanitizedName, "999percentile", snapshot.get999thPercentile());
-    }
-
-    protected void printVmMetrics(long epoch) {
-        sendFloat(epoch, "jvm.memory", "heap_usage", vm.getHeapUsage());
-        sendFloat(epoch, "jvm.memory", "non_heap_usage", vm.getNonHeapUsage());
-        for (Entry<String, Double> pool : vm.getMemoryPoolUsage().entrySet()) {
-            sendFloat(epoch, "jvm.memory.memory_pool_usages", sanitizeString(pool.getKey()), pool.getValue());
-        }
-
-        sendInt(epoch, "jvm", "daemon_thread_count", vm.getDaemonThreadCount());
-        sendInt(epoch, "jvm", "thread_count", vm.getThreadCount());
-        sendInt(epoch, "jvm", "uptime", vm.getUptime());
-        sendFloat(epoch, "jvm", "fd_usage", vm.getFileDescriptorUsage());
-
-        for (Entry<State, Double> entry : vm.getThreadStatePercentages().entrySet()) {
-            sendFloat(epoch, "jvm.thread-states", entry.getKey().toString().toLowerCase(), entry.getValue());
-        }
-
-        for (Entry<String, VirtualMachineMetrics.GarbageCollectorStats> entry : vm.getGarbageCollectors().entrySet()) {
-            final String name = "jvm.gc." + sanitizeString(entry.getKey());
-            sendInt(epoch, name, "time", entry.getValue().getTime(TimeUnit.MILLISECONDS));
-            sendInt(epoch, name, "runs", entry.getValue().getRuns());
+    private void reportGauge(String name, Gauge gauge, long timestamp) throws IOException {
+        final String value = format(gauge.getValue());
+        if (value != null) {
+            graphite.send(prefix(name), value, timestamp);
         }
     }
 
-    public static class DefaultSocketProvider implements SocketProvider {
-
-        private final String host;
-        private final int port;
-
-        public DefaultSocketProvider(String host, int port) {
-            this.host = host;
-            this.port = port;
-
+    private String format(Object o) {
+        if (o instanceof Float) {
+            return format(((Float) o).doubleValue());
+        } else if (o instanceof Double) {
+            return format(((Double) o).doubleValue());
+        } else if (o instanceof Byte) {
+            return format(((Byte) o).longValue());
+        } else if (o instanceof Short) {
+            return format(((Short) o).longValue());
+        } else if (o instanceof Integer) {
+            return format(((Integer) o).longValue());
+        } else if (o instanceof Long) {
+            return format(((Long) o).longValue());
         }
+        return null;
+    }
 
-        @Override
-        public Socket get() throws Exception {
-            return new Socket(this.host, this.port);
-        }
+    private String prefix(String... components) {
+        return MetricRegistry.name(prefix, components);
+    }
 
+    private String format(long n) {
+        return Long.toString(n);
+    }
+
+    private String format(double v) {
+        // the Carbon plaintext format is pretty underspecified, but it seems like it just wants
+        // US-formatted digits
+        return String.format(Locale.US, "%2.2f", v);
     }
 }
