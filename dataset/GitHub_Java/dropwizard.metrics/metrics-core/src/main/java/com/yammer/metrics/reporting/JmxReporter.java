@@ -60,7 +60,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public Object getValue() {
-            return metric.getValue();
+            return metric.value();
         }
     }
 
@@ -82,7 +82,7 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public long getCount() {
-            return metric.getCount();
+            return metric.count();
         }
     }
 
@@ -115,37 +115,37 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public long getCount() {
-            return metric.getCount();
+            return metric.count();
         }
 
         @Override
         public String getEventType() {
-            return metric.getEventType();
+            return metric.eventType();
         }
 
         @Override
         public TimeUnit getRateUnit() {
-            return metric.getRateUnit();
+            return metric.rateUnit();
         }
 
         @Override
         public double getMeanRate() {
-            return metric.getMeanRate();
+            return metric.meanRate();
         }
 
         @Override
         public double getOneMinuteRate() {
-            return metric.getOneMinuteRate();
+            return metric.oneMinuteRate();
         }
 
         @Override
         public double getFiveMinuteRate() {
-            return metric.getFiveMinuteRate();
+            return metric.fiveMinuteRate();
         }
 
         @Override
         public double getFifteenMinuteRate() {
-            return metric.getFifteenMinuteRate();
+            return metric.fifteenMinuteRate();
         }
     }
 
@@ -199,27 +199,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public long getCount() {
-            return metric.getCount();
+            return metric.count();
         }
 
         @Override
         public double getMin() {
-            return metric.getMin();
+            return metric.min();
         }
 
         @Override
         public double getMax() {
-            return metric.getMax();
+            return metric.max();
         }
 
         @Override
         public double getMean() {
-            return metric.getMean();
+            return metric.mean();
         }
 
         @Override
         public double getStdDev() {
-            return metric.getStdDev();
+            return metric.stdDev();
         }
 
         @Override
@@ -275,27 +275,27 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
         @Override
         public TimeUnit getLatencyUnit() {
-            return metric.getDurationUnit();
+            return metric.durationUnit();
         }
 
         @Override
         public double getMin() {
-            return metric.getMin();
+            return metric.min();
         }
 
         @Override
         public double getMax() {
-            return metric.getMax();
+            return metric.max();
         }
 
         @Override
         public double getMean() {
-            return metric.getMean();
+            return metric.mean();
         }
 
         @Override
         public double getStdDev() {
-            return metric.getStdDev();
+            return metric.stdDev();
         }
 
         @Override
@@ -339,15 +339,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     public static void startDefault(MetricsRegistry registry) {
         INSTANCE = new JmxReporter(registry);
         INSTANCE.start();
-    }
-
-    /**
-     * Returns the default instance of {@link JmxReporter} if it has been started.
-     *
-     * @return The default instance or null if the default is not used
-     */
-    public static JmxReporter getDefault() {
-        return INSTANCE;
     }
 
     /**
@@ -457,10 +448,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     private void registerBean(MetricName name, MetricMBean bean, ObjectName objectName)
             throws MBeanRegistrationException, OperationsException {
-
-        if ( server.isRegistered(objectName) ){
-            server.unregisterMBean(objectName);
-        }
         server.registerMBean(bean, objectName);
         registeredBeans.put(name, objectName);
     }
