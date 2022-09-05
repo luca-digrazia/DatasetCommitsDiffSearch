@@ -28,7 +28,7 @@ import org.codehaus.jackson.JsonGenerator;
  */
 public class HttpReporter {
 	private final JsonFactory factory = new JsonFactory();
-	private final ExecutorService serverThread = Executors.newSingleThreadExecutor(new NamedThreadFactory("metrics-http-reporter"));
+	private final ExecutorService serverThread = Executors.newSingleThreadExecutor(new NamedThreadFactory("http-metric-reporter"));
 	private final Map<MetricName, Metric> metrics;
 	private final int port;
 	private ServerSocket serverSocket;
@@ -123,8 +123,8 @@ public class HttpReporter {
 	}
 
 	private void writeMetric(JsonGenerator json, String key, Metric metric) throws IOException {
-		if (metric instanceof GaugeMetric<?>) {
-			json.writeStringField(key, ((GaugeMetric) metric).value().toString());
+		if (metric instanceof ValueMetric<?>) {
+			json.writeStringField(key, ((ValueMetric) metric).value().toString());
 		} else if (metric instanceof CounterMetric) {
 			json.writeNumberField(key, ((CounterMetric) metric).count());
 		} else if (metric instanceof MeterMetric) {
