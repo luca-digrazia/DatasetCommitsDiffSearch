@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
@@ -29,12 +28,14 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
@@ -71,7 +72,6 @@ public final class LTOBackendAction extends SpawnAction {
       ActionOwner owner,
       CommandLine argv,
       Map<String, String> environment,
-      Set<String> clientEnvironmentVariables,
       Map<String, String> executionInfo,
       String progressMessage,
       ImmutableMap<PathFragment, Artifact> inputManifests,
@@ -84,7 +84,6 @@ public final class LTOBackendAction extends SpawnAction {
         AbstractAction.DEFAULT_RESOURCE_SET,
         argv,
         ImmutableMap.copyOf(environment),
-        ImmutableSet.copyOf(clientEnvironmentVariables),
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
         ImmutableMap.copyOf(inputManifests),
@@ -235,7 +234,6 @@ public final class LTOBackendAction extends SpawnAction {
         ImmutableList<Artifact> outputs,
         CommandLine actualCommandLine,
         ImmutableMap<String, String> env,
-        ImmutableSet<String> clientEnvironmentVariables,
         ImmutableMap<String, String> executionInfo,
         String progressMessage,
         ImmutableMap<PathFragment, Artifact> inputAndToolManifests,
@@ -248,7 +246,6 @@ public final class LTOBackendAction extends SpawnAction {
           owner,
           actualCommandLine,
           env,
-          clientEnvironmentVariables,
           executionInfo,
           progressMessage,
           inputAndToolManifests,
