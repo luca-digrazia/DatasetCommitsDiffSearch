@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
@@ -185,11 +184,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     useConfiguration();
   }
 
-  /** To be overriden by sub classes if they want to disable loading. */
-  protected boolean isLoadingEnabled() {
-    return true;
-  }
-
   protected ImmutableList<PrecomputedValue.Injected> getPrecomputedValues() {
     return ImmutableList.of();
   }
@@ -223,17 +217,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   protected Action getGeneratingAction(Artifact artifact) {
     ensureUpdateWasCalled();
-    ActionAnalysisMetadata action = analysisResult.getActionGraph().getGeneratingAction(artifact);
-
-    if (action != null) {
-      Preconditions.checkState(
-          action instanceof Action,
-          "%s is not a proper Action object",
-          action.prettyPrint());
-      return (Action) action;
-    } else {
-      return null;
-    }
+    return analysisResult.getActionGraph().getGeneratingAction(artifact);
   }
 
   protected BuildConfigurationCollection getBuildConfigurationCollection() {

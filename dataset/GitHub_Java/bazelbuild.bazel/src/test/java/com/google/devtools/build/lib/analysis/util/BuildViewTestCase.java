@@ -34,7 +34,6 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -52,6 +51,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -224,11 +224,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     setUpSkyframe();
     // Also initializes ResourceManager.
     ResourceManager.instance().setAvailableResources(getStartingResources());
-  }
-
-  /** To be overriden by sub classes if they want to disable loading. */
-  protected boolean isLoadingEnabled() {
-    return true;
   }
 
   protected AnalysisMock getAnalysisMock() {
@@ -512,21 +507,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected final Action getGeneratingAction(Artifact artifact) {
     Preconditions.checkNotNull(artifact);
-    ActionAnalysisMetadata action = mutableActionGraph.getGeneratingAction(artifact);
-
-    if (action == null) {
-      action = getActionGraph().getGeneratingAction(artifact);
-    }
-
+    Action action = mutableActionGraph.getGeneratingAction(artifact);
     if (action != null) {
-      Preconditions.checkState(
-          action instanceof Action,
-          "%s is not a proper Action object",
-          action.prettyPrint());
-      return (Action) action;
-    } else {
-      return null;
+      return action;
     }
+    return getActionGraph().getGeneratingAction(artifact);
   }
 
   protected Action getGeneratingAction(ConfiguredTarget target, String outputName) {
@@ -552,7 +537,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return getGeneratingSpawnAction(
         Iterables.find(getFilesToBuild(target), artifactNamed(outputName)));
   }
-
+ 
   protected void simulateLoadingPhase() {
     try {
       ensureTargetsVisited(targetConfig.getAllLabels().values());
@@ -926,7 +911,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * is creating an Artifact.
    */
   protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner,
-      NativeAspectClass creatingAspectFactory) {
+      Class<? extends ConfiguredAspectFactory> creatingAspectFactory) {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
         owner.getConfiguration().getBinDirectory(),
@@ -935,7 +920,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
                     owner.getLabel(),
                     owner.getConfiguration(),
                     owner.getConfiguration(),
-                    creatingAspectFactory,
+                    new NativeAspectClass(creatingAspectFactory),
                     AspectParameters.EMPTY)
                 .argument());
   }
@@ -992,7 +977,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * is creating an Artifact.
    */
   protected Artifact getGenfilesArtifact(String packageRelativePath, ConfiguredTarget owner,
-      NativeAspectClass creatingAspectFactory) {
+      Class<? extends ConfiguredAspectFactory> creatingAspectFactory) {
     return getGenfilesArtifact(
         packageRelativePath, owner, creatingAspectFactory, AspectParameters.EMPTY);
   }
@@ -1000,7 +985,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected Artifact getGenfilesArtifact(
       String packageRelativePath,
       ConfiguredTarget owner,
-      NativeAspectClass creatingAspectFactory,
+      Class<? extends ConfiguredAspectFactory> creatingAspectFactory,
       AspectParameters params) {
     return getPackageRelativeDerivedArtifact(
         packageRelativePath,
@@ -1010,7 +995,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
                     owner.getLabel(),
                     owner.getConfiguration(),
                     owner.getConfiguration(),
-                    creatingAspectFactory,
+                    new NativeAspectClass(creatingAspectFactory),
                     params)
                 .argument());
   }
@@ -1507,7 +1492,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected class StubAnalysisEnvironment implements AnalysisEnvironment {
 
     @Override
-    public void registerAction(ActionAnalysisMetadata... action) {
+    public void registerAction(Action... action) {
       throw new UnsupportedOperationException();
     }
 
@@ -1547,7 +1532,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public Iterable<ActionAnalysisMetadata> getRegisteredActions() {
+    public Iterable<Action> getRegisteredActions() {
       throw new UnsupportedOperationException();
     }
 

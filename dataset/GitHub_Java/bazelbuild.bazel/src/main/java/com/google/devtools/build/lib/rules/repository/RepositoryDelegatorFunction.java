@@ -36,7 +36,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.annotation.Nullable;
@@ -62,8 +61,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
   // command is a fetch. Remote repository lookups are only allowed during fetches.
   private final AtomicBoolean isFetch;
 
-  private Map<String, String> clientEnvironment;
-
   public RepositoryDelegatorFunction(
       ImmutableMap<String, RepositoryFunction> handlers,
       @Nullable RepositoryFunction skylarkHandler,
@@ -71,10 +68,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     this.handlers = handlers;
     this.skylarkHandler = skylarkHandler;
     this.isFetch = isFetch;
-  }
-
-  public void setClientEnvironment(Map<String, String> clientEnvironment) {
-    this.clientEnvironment = clientEnvironment;
   }
 
   private void setupRepositoryRoot(Path repoRoot) throws RepositoryFunctionException {
@@ -114,7 +107,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     Path repoRoot =
         RepositoryFunction.getExternalRepositoryDirectory(directories).getRelative(rule.getName());
 
-    handler.setClientEnvironment(clientEnvironment);
     if (handler.isLocal(rule)) {
       // Local repositories are always fetched because the operation is generally fast and they do
       // not depend on non-local data, so it does not make much sense to try to catch from across
@@ -189,12 +181,6 @@ public final class RepositoryDelegatorFunction implements SkyFunction {
     return new Fingerprint()
         .addBytes(RuleSerializer.serializeRule(rule).build().toByteArray())
         .addBytes(ruleSpecificData)
-        // This is to make the fingerprint different after adding names to the generated
-        // WORKSPACE files so they will get re-created, because otherwise there are
-        // annoying warnings for all of them.
-        // TODO(bsilver16384@gmail.com): Remove this once everybody's upgraded to the
-        // new WORKSPACE files.
-        .addInt(1)
         .digestAndReset();
   }
 

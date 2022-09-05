@@ -88,20 +88,8 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create(
         "/bazel_tools_workspace/tools/jdk/BUILD",
         "package(default_visibility=['//visibility:public'])",
-        "java_toolchain(",
-        "  name = 'toolchain',",
-        "  encoding = 'UTF-8',",
-        "  source_version = '8',",
-        "  target_version = '8',",
-        "  bootclasspath = [':bootclasspath'],",
-        "  extclasspath = [':extclasspath'],",
-        "  javac = [':langtools'],",
-        "  javabuilder = ['JavaBuilder_deploy.jar'],",
-        "  header_compiler = ['turbine_deploy.jar'],",
-        "  singlejar = ['SingleJar_deploy.jar'],",
-        "  genclass = ['GenClass_deploy.jar'],",
-        "  ijar = ['ijar'],",
-        ")",
+        "java_toolchain(name = 'toolchain', encoding = 'UTF-8', source_version = '8', ",
+        "  target_version = '8')",
         "filegroup(name = 'jdk-null')",
         "filegroup(name = 'jdk-default', srcs = [':java'], path = 'jdk/jre')",
         "filegroup(name = 'jdk', srcs = [':jdk-default', ':jdk-null'])",
@@ -132,10 +120,7 @@ public final class BazelAnalysisMock extends AnalysisMock {
         "java_import(name = 'jarjar_import',",
         "            jars = [ 'jarjar.jar' ])");
 
-    config.create("/bazel_tools_workspace/tools/test/BUILD",
-        "filegroup(name = 'runtime')",
-        "filegroup(name = 'coverage_support')",
-        "filegroup(name = 'coverage_report_generator', srcs = ['coverage_report_generator.sh'])");
+    config.create("/bazel_tools_workspace/tools/test/BUILD", "filegroup(name = 'runtime')");
 
     config.create(
         "/bazel_tools_workspace/tools/python/BUILD",
@@ -164,7 +149,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         .add("sh_binary(name = 'aar_generator', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'dexbuilder', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'dexmerger', srcs = ['empty.sh'])")
-        .add("sh_binary(name = 'manifest_merger', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'resources_processor', srcs = ['empty.sh'])")
         .add("sh_binary(name = 'resource_shrinker', srcs = ['empty.sh'])")
         .add("android_library(name = 'incremental_stub_application')")
@@ -236,11 +220,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
   @Override
   public Collection<String> getOptionOverrides() {
     return ImmutableList.of();
-  }
-
-  @Override
-  public boolean isThisBazel() {
-    return true;
   }
 
   @Override

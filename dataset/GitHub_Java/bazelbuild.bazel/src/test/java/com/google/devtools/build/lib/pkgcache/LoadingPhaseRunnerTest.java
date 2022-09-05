@@ -629,8 +629,7 @@ public class LoadingPhaseRunnerTest {
       PackageCacheOptions options = Options.getDefaults(PackageCacheOptions.class);
       storedErrors = new StoredEventHandler();
       BlazeDirectories directories =
-          new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace,
-              TestConstants.PRODUCT_NAME);
+          new BlazeDirectories(fs.getPath("/install"), fs.getPath("/output"), workspace);
       skyframeExecutor = SequencedSkyframeExecutor.create(pkgFactory,
           directories,
           null,  /* binTools -- not used */
@@ -641,8 +640,7 @@ public class LoadingPhaseRunnerTest {
           Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
           AnalysisMock.get().getSkyFunctions(),
           ImmutableList.<PrecomputedValue.Injected>of(),
-          ImmutableList.<SkyValueDirtinessChecker>of(),
-          TestConstants.PRODUCT_NAME);
+          ImmutableList.<SkyValueDirtinessChecker>of());
       PathPackageLocator pkgLocator = PathPackageLocator.create(
           null, options.packagePath, storedErrors, workspace, workspace);
       skyframeExecutor.preparePackageLoading(
