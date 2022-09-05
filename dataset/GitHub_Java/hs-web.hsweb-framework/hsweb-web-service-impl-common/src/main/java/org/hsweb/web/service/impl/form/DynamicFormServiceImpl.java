@@ -1,11 +1,7 @@
 package org.hsweb.web.service.impl.form;
 
 import com.alibaba.fastjson.JSON;
-import org.hsweb.concurrent.lock.LockFactory;
-import org.hsweb.concurrent.lock.annotation.LockName;
-import org.hsweb.concurrent.lock.annotation.ReadLock;
-import org.hsweb.concurrent.lock.annotation.WriteLock;
-import org.hsweb.web.core.Install;
+import org.hsweb.web.Install;
 import org.hsweb.web.bean.common.*;
 import org.hsweb.web.bean.po.GenericPo;
 import org.hsweb.web.bean.po.form.Form;
@@ -13,37 +9,27 @@ import org.hsweb.web.bean.po.history.History;
 import org.hsweb.web.service.form.DynamicFormService;
 import org.hsweb.web.service.form.FormService;
 import org.hsweb.web.service.history.HistoryService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 import org.webbuilder.sql.*;
-import org.webbuilder.sql.param.ExecuteCondition;
 
-import javax.annotation.PostConstruct;
 import javax.annotation.Resource;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Created by zhouhao on 16-4-14.
  */
 @Service("dynamicFormService")
 public class DynamicFormServiceImpl implements DynamicFormService {
-
-    private final Logger logger = LoggerFactory.getLogger(this.getClass());
-    @Autowired
-    protected LockFactory lockFactory;
-
-    protected Lock writeLock, readLock;
+    protected ReadWriteLock lock = new ReentrantReadWriteLock();
 
     @Autowired(required = false)
-    protected FormParser formParser = new DefaultFormParser();
+    protected FormParser formParser = new CommonFormParser();
 
     @Autowired
     protected DataBase dataBase;
@@ -75,35 +61,9 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     }
 
-    @PostConstruct
-    public void init() {
-        ReadWriteLock readWriteLock = lockFactory.createReadWriteLock("dynamicForm.lock");
-        writeLock = readWriteLock.writeLock();
-        readLock = readWriteLock.readLock();
-        QueryParam param = new QueryParam();
-        param.where("using", 1);
-        try {
-            formService.select(param).forEach(form -> {
-                try {
-                    deploy(form);
-                } catch (Exception e) {
-                    logger.error("", e);
-                }
-            });
-        } catch (Exception e) {
-            logger.error("", e);
-        }
-    }
-
     @Override
-    public Object parseMeta(Form form) throws Exception {
-        return formParser.parse(form);
-    }
-
-    @Override
-    @WriteLock
-    @LockName(value = "'form.lock.'+#form.name",expression = true)
     public void deploy(Form form) throws Exception {
+        Lock writeLock = lock.writeLock();
         try {
             writeLock.lock();
             TableMetaData metaData = formParser.parse(form);
@@ -127,8 +87,8 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     }
 
     @Override
-    @WriteLock
     public void unDeploy(Form form) throws Exception {
+        Lock writeLock = lock.writeLock();
         try {
             writeLock.lock();
             dataBase.removeTable(form.getName());
@@ -146,8 +106,8 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     }
 
     @Override
-    @ReadLock
     public <T> PagerResult<T> selectPager(String name, QueryParam param) throws Exception {
+        Lock readLock = lock.readLock();
         PagerResult<T> result = new PagerResult<>();
         try {
             readLock.lock();
@@ -167,6 +127,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public <T> List<T> select(String name, QueryParam param) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -181,6 +142,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public int total(String name, QueryParam param) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -195,6 +157,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public String insert(String name, InsertParam<Map<String, Object>> param) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -212,6 +175,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public boolean deleteByPk(String name, String pk) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             String primaryKeyName = getPrimaryKeyName(name);
@@ -225,6 +189,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public int delete(String name, DeleteParam where) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -237,6 +202,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public int updateByPk(String name, String pk, UpdateParam<Map<String, Object>> param) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -251,6 +217,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public int update(String name, UpdateParam<Map<String, Object>> param) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -269,6 +236,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
 
     @Override
     public <T> T selectByPk(String name, Object pk) throws Exception {
+        Lock readLock = lock.readLock();
         try {
             readLock.lock();
             Table table = getTableByName(name);
@@ -282,18 +250,12 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     }
 
     public static class QueryParamProxy extends org.webbuilder.sql.param.query.QueryParam {
-        public QueryParamProxy orderBy(String mode, Set<String> fields) {
-            addProperty("order_by", fields);
-            addProperty("order_by_mod", mode);
-            return this;
-        }
-
         public static QueryParamProxy build(QueryParam param) {
             QueryParamProxy proxy = new QueryParamProxy();
-            proxy.setConditions(term2cdt(param.getTerms()));
+            proxy.where(param.getTerm());
             proxy.exclude(param.getExcludes());
             proxy.include(param.getIncludes());
-            proxy.orderBy(param.getSortOrder(), param.getSortField());
+            proxy.orderBy("desc".equals(param.getSortOrder()), param.getSortField());
             proxy.doPaging(param.getPageIndex(), param.getPageSize());
             proxy.setPaging(param.isPaging());
             return proxy;
@@ -303,7 +265,7 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     public static class UpdateParamProxy extends org.webbuilder.sql.param.update.UpdateParam {
         public static UpdateParamProxy build(UpdateParam<Map<String, Object>> param) {
             UpdateParamProxy proxy = new UpdateParamProxy();
-            proxy.setConditions(term2cdt(param.getTerms()));
+            proxy.where(param.getTerm());
             proxy.exclude(param.getExcludes());
             proxy.include(param.getIncludes());
             proxy.set(param.getData());
@@ -322,24 +284,8 @@ public class DynamicFormServiceImpl implements DynamicFormService {
     public static class DeleteParamProxy extends org.webbuilder.sql.param.delete.DeleteParam {
         public static DeleteParamProxy build(DeleteParam param) {
             DeleteParamProxy proxy = new DeleteParamProxy();
-            proxy.setConditions(term2cdt(param.getTerms()));
+            proxy.where(param.getTerm());
             return proxy;
         }
-    }
-
-    protected static Set<ExecuteCondition> term2cdt(List<Term> terms) {
-        Set<ExecuteCondition> set = new LinkedHashSet<>();
-        terms.forEach(term -> {
-            ExecuteCondition executeCondition = new ExecuteCondition();
-            executeCondition.setAppendType(term.getType().toString());
-            executeCondition.setField(term.getField());
-            executeCondition.setValue(term.getValue());
-            executeCondition.setQueryType(term.getTermType().toString().toUpperCase());
-            executeCondition.setSql(false);
-            if (!term.getTerms().isEmpty())
-                executeCondition.setNest(term2cdt(term.getTerms()));
-            set.add(executeCondition);
-        });
-        return set;
     }
 }
