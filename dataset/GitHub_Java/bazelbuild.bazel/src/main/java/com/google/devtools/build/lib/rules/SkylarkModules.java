@@ -17,13 +17,8 @@ package com.google.devtools.build.lib.rules;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.packages.SkylarkNativeModule;
 import com.google.devtools.build.lib.syntax.Environment;
-import com.google.devtools.build.lib.syntax.Environment.Frame;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Runtime;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 /**
  * The basis for a Skylark Environment with all build-related modules registered.
@@ -45,22 +40,15 @@ public final class SkylarkModules {
       SkylarkRuleImplementationFunctions.class);
 
   /** Global bindings for all Skylark modules */
-  private static final Map<List<Class<?>>, Frame> cache = new HashMap<>();
+  public static final Environment.Frame GLOBALS = createGlobals();
 
-  public static Environment.Frame getGlobals(List<Class<?>> modules) {
-    if (!cache.containsKey(modules)) {
-      cache.put(modules, createGlobals(modules));
-    }
-    return cache.get(modules);
-  }
-
-  private static Environment.Frame createGlobals(List<Class<?>> modules) {
+  private static Environment.Frame createGlobals() {
     try (Mutability mutability = Mutability.create("SkylarkModules")) {
       Environment env = Environment.builder(mutability)
           .setSkylark()
           .setGlobals(Environment.SKYLARK)
           .build();
-      for (Class<?> moduleClass : modules) {
+      for (Class<?> moduleClass : MODULES) {
         Runtime.registerModuleGlobals(env, moduleClass);
       }
       return env.getGlobals();
