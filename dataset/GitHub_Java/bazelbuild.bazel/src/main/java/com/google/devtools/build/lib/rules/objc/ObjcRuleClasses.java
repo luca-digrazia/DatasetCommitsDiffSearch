@@ -48,9 +48,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
-import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -67,11 +64,9 @@ public class ObjcRuleClasses {
   static final String DSYMUTIL = "dsymutil";
   static final String LIPO = "lipo";
   static final String STRIP = "strip";
+  static final PathFragment XCRUN = new PathFragment("/usr/bin/xcrun");
 
   private static final PathFragment JAVA = new PathFragment("/usr/bin/java");
-
-  private static final DottedVersion MIN_LAUNCH_STORYBOARD_OS_VERSION =
-      DottedVersion.fromString("8.0");
 
   private ObjcRuleClasses() {
     throw new UnsupportedOperationException("static-only");
@@ -161,9 +156,9 @@ public class ObjcRuleClasses {
    * Creates a new spawn action builder that requires a darwin architecture to run.
    */
   static SpawnAction.Builder spawnOnDarwinActionBuilder(RuleContext ruleContext) {
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    ObjcConfiguration objcConfiguration = objcConfiguration(ruleContext);
     return new SpawnAction.Builder()
-        .setEnvironment(appleConfiguration.getEnvironmentForIosAction())
+        .setEnvironment(objcConfiguration.getEnvironmentForDarwin())
         .setExecutionInfo(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, ""));
   }
 
@@ -211,21 +206,6 @@ public class ObjcRuleClasses {
     return new RuleConfiguredTargetBuilder(ruleContext)
         .setFilesToBuild(filesToBuild)
         .add(RunfilesProvider.class, runfilesProvider);
-  }
-
-  /**
-   * Returns {@code true} if the given rule context has a launch storyboard set and its
-   * configuration (--ios_minimum_os) supports launch storyboards.
-   */
-  static boolean useLaunchStoryboard(RuleContext ruleContext) {
-    if (!ruleContext.attributes().has("launch_storyboard", LABEL)) {
-      return false;
-    }
-    Artifact launchStoryboard =
-        ruleContext.getPrerequisiteArtifact("launch_storyboard", Mode.TARGET);
-    DottedVersion flagMinimumOs = objcConfiguration(ruleContext).getMinimumOs();
-    return launchStoryboard != null
-        && flagMinimumOs.compareTo(MIN_LAUNCH_STORYBOARD_OS_VERSION) >= 0;
   }
 
   /**
@@ -375,7 +355,7 @@ public class ObjcRuleClasses {
 
   static final FileTypeSet PLIST_TYPE = FileTypeSet.of(FileType.of(".plist"));
 
-  static final FileType STORYBOARD_TYPE = FileType.of(".storyboard");
+  static final FileTypeSet STORYBOARD_TYPE = FileTypeSet.of(FileType.of(".storyboard"));
 
   static final FileType XIB_TYPE = FileType.of(".xib");
 
@@ -501,7 +481,7 @@ public class ObjcRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$objc_resources_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(ResourceToolsRule.class, XcrunRule.class)
+          .ancestors(ResourceToolsRule.class)
           .build();
     }
   }
@@ -730,8 +710,7 @@ public class ObjcRuleClasses {
               BaseRuleClasses.RuleBase.class,
               CompileDependencyRule.class,
               OptionsRule.class,
-              CoptsRule.class,
-              XcrunRule.class)
+              CoptsRule.class)
           .build();
     }
   }
@@ -927,7 +906,7 @@ public class ObjcRuleClasses {
       return RuleDefinition.Metadata.builder()
           .name("$objc_bundling_rule")
           .type(RuleClassType.ABSTRACT)
-          .ancestors(OptionsRule.class, ResourceToolsRule.class, XcrunRule.class)
+          .ancestors(OptionsRule.class, ResourceToolsRule.class)
           .build();
     }
   }
@@ -961,30 +940,26 @@ public class ObjcRuleClasses {
 
           This is only used for non-simulator builds.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr("provisioning_profile", LABEL)
-                  .singleArtifact()
-                  .allowedFileTypes(FileType.of(".mobileprovision")))
+          .add(attr("provisioning_profile", LABEL)
+              .singleArtifact().allowedFileTypes(FileType.of(".mobileprovision")))
           // Will be used if provisioning_profile is null.
-          .add(
-              attr(":default_provisioning_profile", LABEL)
-                  .singleArtifact()
-                  .allowedFileTypes(FileType.of(".mobileprovision"))
-                  .value(
-                      new LateBoundLabel<BuildConfiguration>(ObjcConfiguration.class) {
-                        @Override
-                        public Label getDefault(Rule rule, BuildConfiguration configuration) {
-                          AppleConfiguration appleConfiguration =
-                              configuration.getFragment(AppleConfiguration.class);
-                          if (appleConfiguration.getBundlingPlatform() != Platform.IOS_DEVICE) {
-                            return null;
-                          }
-                          if (rule.isAttributeValueExplicitlySpecified("provisioning_profile")) {
-                            return null;
-                          }
-                          return appleConfiguration.getDefaultProvisioningProfileLabel();
-                        }
-                      }))
+          .add(attr(":default_provisioning_profile", LABEL)
+              .singleArtifact()
+              .allowedFileTypes(FileType.of(".mobileprovision"))
+              .value(new LateBoundLabel<BuildConfiguration>(ObjcConfiguration.class) {
+                @Override
+                public Label getDefault(Rule rule, BuildConfiguration configuration) {
+                  ObjcConfiguration objcConfiguration =
+                      configuration.getFragment(ObjcConfiguration.class);
+                  if (objcConfiguration.getBundlingPlatform() != Platform.DEVICE) {
+                    return null;
+                  }
+                  if (rule.isAttributeValueExplicitlySpecified("provisioning_profile")) {
+                    return null;
+                  }
+                  return objcConfiguration.getDefaultProvisioningProfileLabel();
+                }
+              }))
           /* <!-- #BLAZE_RULE($objc_release_bundling_rule).ATTRIBUTE(app_icon) -->
           The name of the application icon.
           ${SYNOPSIS}
@@ -1008,36 +983,8 @@ public class ObjcRuleClasses {
           If the launch image is not in an asset catalog, do not use this
           attribute. Instead, add an appropriately-named image resource to the
           bundle.
-          <p>
-          Note that this attribute will be ignored if both compiling with
-          <code>--ios_minimum_os</code> >= 8.0 and
-          <code>launch_storyboard</code> is also specified (whose value will be
-          used for the launch screen instead).
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("launch_image", STRING))
-          /* <!-- #BLAZE_RULE($objc_release_bundling_rule).ATTRIBUTE(launch_storyboard) -->
-          The location of the launch storyboard (.xib or .storyboard).
-          ${SYNOPSIS}
-
-          The provided storyboard will be compiled to the appropriate format
-          (.nib or .storyboardc respectively) and placed in the root of the
-          final package. If the storyboard's immediate containing directory is
-          named *.lproj (e.g. en.lproj, Base.lproj), it will be placed under a
-          directory of that name in the final bundle. This allows for
-          localizable UI.
-          <p>
-          The generated storyboard is registered in the final bundle's
-          <code>Info.plist</code> under the key
-          <code>UILaunchStoryboardName</code>.
-          <p>
-          Note that this attribute will be ignored if compiling with
-          <code>--ios_minimum_os</code> set to < 8.0 (generating a warning)
-          and that (if set) <code>launch_image</code> will be used instead.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr("launch_storyboard", LABEL)
-                  .direct_compile_time_input()
-                  .allowedFileTypes(FileTypeSet.of(XIB_TYPE, STORYBOARD_TYPE)))
           /* <!-- #BLAZE_RULE($objc_release_bundling_rule).ATTRIBUTE(bundle_id) -->
           The bundle ID (reverse-DNS path followed by app name) of the binary.
           ${SYNOPSIS}
@@ -1046,28 +993,20 @@ public class ObjcRuleClasses {
           no bundle ID is specified on either this attribute or in the plist file, a junk value
           will be used.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
-          .add(
-              attr("bundle_id", STRING)
-                  .value(
-                      new Attribute.ComputedDefault() {
-                        @Override
-                        public Object getDefault(AttributeMap rule) {
-                          // For tests and similar, we don't want to force people to explicitly
-                          // specify throw-away data.
-                          return "example." + rule.getName();
-                        }
-                      }))
-          .add(
-              attr("$bundlemerge", LABEL)
-                  .cfg(HOST)
-                  .exec()
-                  .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:bundlemerge")))
-          .add(
-              attr("$environment_plist_sh", LABEL)
-                  .cfg(HOST)
-                  .value(
-                      env.getLabel(
-                          Constants.TOOLS_REPOSITORY + "//tools/objc:environment_plist.sh")))
+          .add(attr("bundle_id", STRING)
+              .value(new Attribute.ComputedDefault() {
+                @Override
+                public Object getDefault(AttributeMap rule) {
+                  // For tests and similar, we don't want to force people to explicitly specify
+                  // throw-away data.
+                  return "example." + rule.getName();
+                }
+              }))
+          .add(attr("$bundlemerge", LABEL).cfg(HOST).exec()
+              .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:bundlemerge")))
+          .add(attr("$environment_plist_sh", LABEL).cfg(HOST)
+              .value(env.getLabel(
+                  Constants.TOOLS_REPOSITORY + "//tools/objc:environment_plist.sh")))
           .build();
     }
     @Override
@@ -1098,26 +1037,6 @@ public class ObjcRuleClasses {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("$objc_simulator_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
-  }
-
-  /**
-   * Common attributes for {@code objc_*} rules that need to call xcrun.
-   */
-  public static class XcrunRule implements RuleDefinition {
-    @Override
-    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
-      return builder
-          .add(attr("$xcrunwrapper", LABEL).cfg(HOST).exec()
-              .value(env.getLabel(Constants.TOOLS_REPOSITORY + "//tools/objc:xcrunwrapper")))
-          .build();
-    }
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$objc_xcrun_rule")
           .type(RuleClassType.ABSTRACT)
           .build();
     }
