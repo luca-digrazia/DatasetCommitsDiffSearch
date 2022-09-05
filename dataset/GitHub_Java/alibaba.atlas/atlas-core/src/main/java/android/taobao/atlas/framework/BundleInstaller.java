@@ -231,7 +231,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 /**
  * Created by guanjie on 16/2/22.
@@ -640,15 +639,11 @@ public class BundleInstaller implements Callable{
         if(!bundleFile.exists()){
             bundleFile = new File(RuntimeVariables.androidApplication.getApplicationInfo().nativeLibraryDir,bundleFileName);
         }
-        if(isBundleFileMatched(location,bundleFile,bundleFileName)){
+        if(isBundleFileTimeStampMatched(location,bundleFile)){
             mTmpBundleSourceFile = bundleFile;
             Log.e("BundleInstaller","find valid bundle : "+bundleFile.getAbsolutePath());
         }else{
-            try {
-                mTmpBundleSourceInputStream = RuntimeVariables.originalResources.getAssets().open(bundleFileName);
-            }catch(Throwable e){
-            }
-            if(mTmpBundleSourceInputStream==null && ApkUtils.getApk()!=null){
+            if(ApkUtils.getApk()!=null){
                 ZipEntry entry = ApkUtils.getApk().getEntry("lib/armeabi/" + bundleFileName);
                 if(entry!=null) {
                     mTmpBundleSourceInputStream = ApkUtils.getApk().getInputStream(entry);
@@ -657,28 +652,22 @@ public class BundleInstaller implements Callable{
         }
     }
 
-    private boolean isBundleFileMatched(String location,File file,String bundleFileName){
+    private boolean isBundleFileTimeStampMatched(String location,File file){
         if(!file.exists() || !AtlasBundleInfoManager.instance().isInternalBundle(location)){
             return false;
         }
-        BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(location);
-        if(info!=null && info.getSize()>0 && info.getSize()!=file.length()){
-            Log.e("BundleInstaller","wanted size: "+info.getSize()+"| realSize: "+file.length());
-            return false;
-        }
-        if(info==null && info.getSize()<=0){
-            try {
-                ZipFile apkZip = ApkUtils.getApk();
-                ZipEntry entry = apkZip.getEntry("lib/armeabi/" + bundleFileName);
-                if (entry == null) {
-                    entry = apkZip.getEntry("assets/" + bundleFileName);
-                }
-                if (entry != null && entry.getSize() != file.length()) {
-                    return false;
-                }
-            }catch(Throwable e){}
-        }
         return true;
+    }
+
+    private static long timeStampInApk = -11021836;
+    private synchronized long getTimeStampInApk(){
+        try {
+            if (timeStampInApk == -11021836) {
+                timeStampInApk = ApkUtils.getApk().getEntry("classes.dex").getTime();
+            }
+        }finally {
+            return timeStampInApk>0 ? timeStampInApk : 0;
+        }
     }
 
     private Bundle installBundleFromApk(String bundleName) throws Exception{
