@@ -21,8 +21,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 
 /**
  * A {@link TransitiveInfoProvider} for {@link Artifact}s created and used to generate the proto
@@ -30,7 +28,6 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
  * from a target, that the top most target produces a registry that is a superset of any child
  * registries.
  */
-@AutoCodec(strategy = Strategy.AUTO_VALUE_BUILDER)
 @AutoValue
 @Immutable
 public abstract class GeneratedExtensionRegistryProvider implements TransitiveInfoProvider {
