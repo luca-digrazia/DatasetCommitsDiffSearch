@@ -7,8 +7,7 @@ import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.rest.*;
 import org.nlpcn.es4sql.SearchDao;
-import org.nlpcn.es4sql.query.SqlElasticRequestBuilder;
-
+import org.nlpcn.es4sql.query.explain.ExplainManager;
 
 public class RestSqlAction extends BaseRestHandler {
 
@@ -30,12 +29,12 @@ public class RestSqlAction extends BaseRestHandler {
 		}
 
 		SearchDao searchDao = new SearchDao(client);
-        SqlElasticRequestBuilder actionRequestBuilder = searchDao.explain(sql);
-        ActionRequest actionRequest = actionRequestBuilder.request();
+		ActionRequestBuilder actionRequestBuilder = searchDao.explain(sql);
+		ActionRequest actionRequest = actionRequestBuilder.request();
 
 		// TODO add unittests to explain. (rest level?)
 		if (request.path().endsWith("/_explain")) {
-			String jsonExplanation = actionRequestBuilder.explain();
+			String jsonExplanation = ExplainManager.explain(actionRequestBuilder);
 			BytesRestResponse bytesRestResponse = new BytesRestResponse(RestStatus.OK, jsonExplanation);
 			channel.sendResponse(bytesRestResponse);
 		} else {
