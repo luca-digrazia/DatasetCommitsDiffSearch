@@ -23,13 +23,13 @@ import com.yammer.metrics.util.Utils;
 
 /**
  * A simple reporters which sends out application metrics to a
- * <a href="http://graphite.wikidot.com/faq">Graphite</a> server periodically.
+ * Graphite server periodically. http://graphite.wikidot.com/faq
  *
  * @author Mahesh Tiyyagura <tmahesh@gmail.com>
  */
 public class GraphiteReporter implements Runnable {
 	private static final ScheduledExecutorService TICK_THREAD =
-			Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("metrics-graphite-reporter"));
+			Executors.newSingleThreadScheduledExecutor(new NamedThreadFactory("metrics-Graphite-reporter"));
 	private final Writer writer;
 	
 	
