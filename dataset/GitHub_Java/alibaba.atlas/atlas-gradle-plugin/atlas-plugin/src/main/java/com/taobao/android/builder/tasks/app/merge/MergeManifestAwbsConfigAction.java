@@ -209,17 +209,14 @@
 
 package com.taobao.android.builder.tasks.app.merge;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
 import com.android.annotations.NonNull;
+import com.android.build.gradle.api.BaseVariantOutput;
+import com.android.build.gradle.internal.aapt.AaptGeneration;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
 import com.android.build.gradle.internal.scope.TaskConfigAction;
-import com.android.build.gradle.internal.scope.VariantOutputScope;
-import com.android.build.gradle.internal.variant.BaseVariantOutputData;
+import com.android.build.gradle.internal.scope.VariantScope;
+import com.android.build.gradle.options.ProjectOptions;
 import com.android.builder.core.AtlasBuilder;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
@@ -229,17 +226,33 @@ import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tasks.manager.MtlParallelTask;
 import com.taobao.android.builder.tasks.manager.TaskCreater;
 import com.taobao.android.builder.tools.VersionUtils;
+import org.apache.commons.io.FileUtils;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.OutputFile;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallelTask> {
 
-    private AppVariantContext appVariantContext;
+    private final AppVariantContext appVariantContext;
+
+    private static final String MANIFEST_TEMPLATE = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+            + "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\n"
+            + "          package=\"${packageName}\"\n"
+            + "    xmlns:tools=\"http://schemas.android.com/tools\"\n"
+            + "          android:versionCode=\"${versionCode}\"\n"
+            + "          android:versionName=\"${versionName}\">\n"
+        + "    <uses-sdk android:minSdkVersion=\"${minSdkVersion}\" android:targetSdkVersion=\"${targetSdkVersion}\" />\n"
+            + "    <application></application>\n"
+            + "</manifest>\n";
 
     public MergeManifestAwbsConfigAction(AppVariantContext appVariantContext,
-                                         BaseVariantOutputData baseVariantOutputData) {
+                                         BaseVariantOutput baseVariantOutputData) {
         super(appVariantContext, baseVariantOutputData);
         this.appVariantContext = appVariantContext;
     }
@@ -273,7 +286,7 @@ public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallel
         for (final AwbBundle awbBundle : atlasDependencyTree.getAwbBundles()) {
 
             MergeAwbManifests.ConfigAction configAction = new MergeAwbManifests.ConfigAction(
-                appVariantOutputContext.getOutputScope(),
+                appVariantOutputContext.getScope(),
                 awbBundle, appVariantOutputContext);
             MergeAwbManifests mergeAwbManifests = TaskCreater.create(appVariantContext.getProject(),
                                                                      configAction.getName(), configAction.getType());
@@ -294,6 +307,10 @@ public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallel
         @Input
         protected String versionCode;
 
+        private AppVariantOutputContext appVariantOutputContext;
+
+        private AaptGeneration aaptGeneration;
+
         @Override
         protected void doFullTaskAction() {
 
@@ -302,11 +319,43 @@ public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallel
             String versionName = awbBundle.getResolvedCoordinates().getVersion();
 
             try {
-                atlasBuilder.mergeManifestsForBunlde(getManifestOutputFile(), awbBundle.getPackageName(),
-                                                     getBundleVersion(), versionCode);
+                String packageName;
+
+                if (aaptGeneration == AaptGeneration.AAPT_V1) {
+                    packageName = awbBundle.getPackageName();
+                } else {
+                    packageName = appVariantOutputContext.getScope().getVariantConfiguration().getApplicationId();
+                }
+
+                mergeManifestsForBunlde(getManifestOutputFile(), packageName,
+                    getBundleVersion(),
+                    versionCode,
+                    appVariantOutputContext.getScope().getVariantConfiguration().getMinSdkVersion().getApiString(),
+                    appVariantOutputContext.getScope().getVariantConfiguration().getTargetSdkVersion().getApiString());
+
+                appVariantOutputContext.getScope().getOutputScope().save(VariantScope.TaskOutputType.MERGED_MANIFESTS, getManifestOutputFile().getParentFile());
+
             } catch (IOException e) {
                 throw new GradleException(e.getMessage(), e);
             }
+
+        }
+
+        public void mergeManifestsForBunlde(File outputFile, String packageName, String versionName, String versionCode,
+                                            String minSdkVersion, String targetSdkVersion)
+                throws IOException {
+
+            String xml = MANIFEST_TEMPLATE.replace("${packageName}", packageName)
+                .replace("${versionCode}", versionCode)
+                .replace("${versionName}", versionName)
+                .replace("${minSdkVersion}", minSdkVersion)
+                .replace("${targetSdkVersion}", targetSdkVersion);
+            ;
+
+            outputFile.getParentFile().mkdirs();
+            outputFile.delete();
+
+            FileUtils.write(outputFile, xml);
 
         }
 
@@ -317,13 +366,13 @@ public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallel
 
         public static class ConfigAction implements TaskConfigAction<MergeAwbManifests> {
 
-            private final VariantOutputScope scope;
+            private final VariantScope scope;
 
             private final AwbBundle awbBundle;
 
-            private AppVariantOutputContext appVariantOutputContext;
+            private final AppVariantOutputContext appVariantOutputContext;
 
-            public ConfigAction(VariantOutputScope scope,
+            public ConfigAction(VariantScope scope,
                                 AwbBundle awbBundle,
                                 AppVariantOutputContext appVariantOutputContext) {
                 this.scope = scope;
@@ -346,7 +395,7 @@ public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallel
             @Override
             public void execute(@NonNull MergeAwbManifests processManifestTask) {
 
-                String variantName = scope.getVariantScope()
+                String variantName = scope
                     .getVariantConfiguration()
                     .getFullName();
 
@@ -354,16 +403,22 @@ public class MergeManifestAwbsConfigAction extends MtlBaseTaskAction<MtlParallel
 
                 processManifestTask.awbBundle = awbBundle;
 
+                final ProjectOptions projectOptions = scope.getGlobalScope().getProjectOptions();
+
+                processManifestTask.aaptGeneration = AaptGeneration.fromProjectOptions(projectOptions);
+                processManifestTask.appVariantOutputContext = appVariantOutputContext;
+
                 processManifestTask.versionCode = String.valueOf(VersionUtils.getVersionCode(appVariantOutputContext));
 
                 File manifestOutFile = new File(scope.getGlobalScope().getIntermediatesDir(),
-                                                "/manifests-awb/full/" +
+                                                "/awb-manifests/full/" +
                                                     variantName +
                                                     "/" +
                                                     awbBundle.getName() +
                                                     "/AndroidManifest.xml");
 
                 awbBundle.setMergedManifest(manifestOutFile);
+
             }
 
         }
