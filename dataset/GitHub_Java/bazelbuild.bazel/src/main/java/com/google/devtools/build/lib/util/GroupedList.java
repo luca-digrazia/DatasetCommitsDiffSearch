@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.util;
 
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -312,7 +313,7 @@ public class GroupedList<T> implements Iterable<Collection<T>> {
   public static class GroupedListHelper<E> implements Iterable<E> {
     // Non-final only for removal.
     private List<Object> groupedList;
-    private List<E> currentGroup = null;
+    private CompactHashSet<E> currentGroup = null;
     private final CompactHashSet<E> elements;
 
     public GroupedListHelper() {
@@ -361,7 +362,7 @@ public class GroupedList<T> implements Iterable<Collection<T>> {
      */
     public void startGroup() {
       Preconditions.checkState(currentGroup == null, this);
-      currentGroup = new ArrayList<>();
+      currentGroup = CompactHashSet.create();
     }
 
     /** Ends a group started with {@link #startGroup}. */
