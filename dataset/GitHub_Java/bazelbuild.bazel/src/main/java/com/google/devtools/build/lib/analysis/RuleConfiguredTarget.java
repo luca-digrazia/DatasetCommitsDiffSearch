@@ -130,12 +130,14 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     providers.addAll(base.providers.keySet());
 
     // Merge output group providers.
-    OutputGroupProvider mergedOutputGroupProvider =
-        OutputGroupProvider.merge(getAllProviders(base, aspects, OutputGroupProvider.class));
+    List<OutputGroupProvider> outputGroupProviders =
+        getAllProviders(base, aspects, OutputGroupProvider.class);
+    OutputGroupProvider mergedOutputGroupProvider = OutputGroupProvider.merge(outputGroupProviders);
 
     // Merge Skylark providers.
-    SkylarkProviders mergedSkylarkProviders =
-        SkylarkProviders.merge(getAllProviders(base, aspects, SkylarkProviders.class));
+    List<SkylarkProviders> skylarkProviders =
+        getAllProviders(base, aspects, SkylarkProviders.class);
+    SkylarkProviders mergedSkylarkProviders = SkylarkProviders.merge(skylarkProviders);
 
     // Validate that all other providers are only provided once.
     for (Aspect aspect : aspects) {
@@ -172,7 +174,7 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
         builder.put(OutputGroupProvider.class, mergedOutputGroupProvider);
       }
       if (mergedSkylarkProviders != null) {
-        builder.put(SkylarkProviders.class, mergedSkylarkProviders);
+        builder.put(SkylarkProviders.class, skylarkProviders);
       }
       this.providers = builder.build();
     }

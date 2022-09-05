@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.syntax.EvalException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -133,9 +132,8 @@ public final class Aspect implements Iterable<TransitiveInfoProvider> {
       return this;
     }
 
-    public Builder addSkylarkTransitiveInfo(String name, Object value, Location loc)
-        throws EvalException {
-      SkylarkProviderValidationUtil.validateAndThrowEvalException(name, value, loc);
+    public Builder addSkylarkTransitiveInfo(String name, Object value, Location loc) {
+      // TODO(dslomov): add {@link RuleConfiguredTargetBuilder#checkSkylarkObjectSafe}
       skylarkProviderBuilder.put(name, value);
       return this;
     }

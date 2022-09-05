@@ -30,7 +30,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
@@ -50,6 +49,7 @@ import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.Aspect;
+import com.google.devtools.build.lib.analysis.AspectWithParameters;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.BuildView.Options;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -71,12 +71,10 @@ import com.google.devtools.build.lib.analysis.config.InvalidConfigurationExcepti
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.AspectWithParameters;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -89,19 +87,12 @@ import com.google.devtools.build.lib.packages.Preprocessor.AstAfterPreprocessing
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.LoadingCallback;
-import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
-import com.google.devtools.build.lib.pkgcache.LoadingOptions;
-import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
-import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
-import com.google.devtools.build.lib.pkgcache.TestFilter;
 import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
-import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
+import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
@@ -360,8 +351,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.TRANSITIVE_TRAVERSAL, new TransitiveTraversalFunction());
     map.put(SkyFunctions.CONFIGURED_TARGET,
         new ConfiguredTargetFunction(new BuildViewProvider(), ruleClassProvider));
-    map.put(SkyFunctions.ASPECT, new AspectFunction(new BuildViewProvider(), ruleClassProvider));
-    map.put(SkyFunctions.LOAD_SKYLARK_ASPECT, new ToplevelSkylarkAspectFunction());
+    map.put(
+        SkyFunctions.NATIVE_ASPECT,
+        AspectFunction.createNativeAspectFunction(new BuildViewProvider(), ruleClassProvider));
+    map.put(
+        SkyFunctions.SKYLARK_ASPECT,
+        AspectFunction.createSkylarkAspectFunction(new BuildViewProvider(), ruleClassProvider));
     map.put(SkyFunctions.POST_CONFIGURED_TARGET,
         new PostConfiguredTargetFunction(new BuildViewProvider(), ruleClassProvider));
     map.put(SkyFunctions.BUILD_CONFIGURATION,
@@ -761,9 +756,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected abstract void invalidate(Predicate<SkyKey> pred);
 
   private static boolean compatibleFileTypes(Dirent.Type oldType, FileStateValue.Type newType) {
-    return (oldType.equals(Dirent.Type.FILE) && newType.equals(FileStateValue.Type.REGULAR_FILE))
-        || (oldType.equals(Dirent.Type.UNKNOWN)
-            && newType.equals(FileStateValue.Type.SPECIAL_FILE))
+    return (oldType.equals(Dirent.Type.FILE) && newType.equals(FileStateValue.Type.FILE))
         || (oldType.equals(Dirent.Type.DIRECTORY) && newType.equals(FileStateValue.Type.DIRECTORY))
         || (oldType.equals(Dirent.Type.SYMLINK) && newType.equals(FileStateValue.Type.SYMLINK));
   }
@@ -1325,16 +1318,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   /** Configures a given set of configured targets. */
-  public EvaluationResult<ActionLookupValue> configureTargets(
-      EventHandler eventHandler,
-      List<ConfiguredTargetKey> values,
-      List<AspectValueKey> aspectKeys,
-      boolean keepGoing)
-      throws InterruptedException {
+  public EvaluationResult<ActionLookupValue> configureTargets(EventHandler eventHandler,
+      List<ConfiguredTargetKey> values, List<AspectKey> aspectKeys, boolean keepGoing)
+          throws InterruptedException {
     checkActive();
 
     List<SkyKey> keys = new ArrayList<>(ConfiguredTargetValue.keys(values));
-    for (AspectValueKey aspectKey : aspectKeys) {
+    for (AspectKey aspectKey : aspectKeys) {
       keys.add(AspectValue.key(aspectKey));
     }
     // Make sure to not run too many analysis threads. This can cause memory thrashing.
@@ -1687,68 +1677,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * and purged in version V+1.
    */
   public abstract void deleteOldNodes(long versionWindowForDirtyGc);
-
-  public LoadingPhaseRunner getLoadingPhaseRunner(Set<String> ruleClassNames) {
-    return new SkyframeLoadingPhaseRunner(ruleClassNames);
-  }
-
-  /**
-   * Skyframe-based implementation of {@link LoadingPhaseRunner} based on {@link
-   * TargetPatternPhaseFunction}.
-   */
-  // TODO(ulfjack): This is still incomplete.
-  final class SkyframeLoadingPhaseRunner extends LoadingPhaseRunner {
-    private final TargetPatternEvaluator targetPatternEvaluator;
-    private final Set<String> ruleClassNames;
-
-    public SkyframeLoadingPhaseRunner(Set<String> ruleClassNames) {
-      this.targetPatternEvaluator = getPackageManager().newTargetPatternEvaluator();
-      this.ruleClassNames = ruleClassNames;
-    }
-
-    @Override
-    public TargetPatternEvaluator getTargetPatternEvaluator() {
-      return targetPatternEvaluator;
-    }
-
-    @Override
-    public void updatePatternEvaluator(PathFragment relativeWorkingDirectory) {
-      if (!relativeWorkingDirectory.equals(PathFragment.EMPTY_FRAGMENT)) {
-        throw new UnsupportedOperationException();
-      }
-    }
-
-    @Override
-    public LoadingResult execute(EventHandler eventHandler, EventBus eventBus,
-        List<String> targetPatterns, LoadingOptions options,
-        ListMultimap<String, Label> labelsToLoadUnconditionally, boolean keepGoing,
-        boolean enableLoading, boolean determineTests, @Nullable LoadingCallback callback)
-        throws TargetParsingException, LoadingFailedException, InterruptedException {
-      SkyKey key = TargetPatternPhaseValue.key(ImmutableList.copyOf(targetPatterns),
-          options.compileOneDependency, options.buildTestsOnly, determineTests,
-          TestFilter.forOptions(options, eventHandler, ruleClassNames));
-      EvaluationResult<TargetPatternPhaseValue> evalResult =
-          buildDriver.evaluate(
-              ImmutableList.of(key), keepGoing, /*numThreads=*/10, eventHandler);
-      if (evalResult.hasError()) {
-        ErrorInfo errorInfo = evalResult.getError(key);
-        if (errorInfo != null && errorInfo.getException() != null) {
-          Exception e = errorInfo.getException();
-          Throwables.propagateIfInstanceOf(e, TargetParsingException.class);
-          throw new IllegalStateException("Unexpected Exception type from TargetPatternPhaseValue "
-              + "for '" + targetPatterns + "'' with root causes: "
-              + Iterables.toString(errorInfo.getRootCauses()), e);
-        }
-      }
-
-      TargetPatternPhaseValue patternParsingValue = evalResult.get(key);
-      LoadingResult result = new LoadingResult(patternParsingValue.hasError(),
-          patternParsingValue.hasPostExpansionError(),
-          patternParsingValue.getTargets(), patternParsingValue.getTestsToRun(),
-          ImmutableMap.<PackageIdentifier, Path>of());
-      return result;
-    }
-  }
 
   /**
    * A progress received to track analysis invalidation and update progress messages.

@@ -45,10 +45,13 @@ public interface AspectFactory<TConfiguredTarget, TRuleContext, TAspect> {
       // Should never be instantiated
     }
 
-    public static AspectFactory<?, ?, ?> create(AspectClass aspectClass) {
+    public static AspectFactory<?, ?, ?> create(Class<? extends AspectFactory<?, ?, ?>> clazz) {
       // TODO(bazel-team): This should be cached somehow, because this method is invoked quite often
-
-      return aspectClass.newInstance();
+      try {
+        return clazz.newInstance();
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
     }
   }
 }
