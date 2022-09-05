@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,31 +13,37 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import javax.annotation.Nullable;
 
-/** A provider for targets that produce an apk file. */
-@AutoValue
+/**
+ * A provider for targets that can build .apk files. Currently used for coverage collection.
+ */
 @Immutable
-public abstract class ApkProvider implements TransitiveInfoProvider {
+public final class ApkProvider implements TransitiveInfoProvider {
 
-  public static ApkProvider create(
-      Artifact apk, @Nullable Artifact coverageMetdata, Artifact mergedManifest) {
-    return new AutoValue_ApkProvider(apk, coverageMetdata, mergedManifest);
+  private final NestedSet<Artifact> transitiveApks;
+
+  private final NestedSet<Artifact> coverageMetadata;
+
+  public ApkProvider(NestedSet<Artifact> transitiveApks, NestedSet<Artifact> coverageMetdata) {
+    this.transitiveApks = transitiveApks;
+    this.coverageMetadata = coverageMetdata;
   }
 
-  /** Returns the APK file built in the transitive closure. */
-  public abstract Artifact getApk();
+  /**
+   * Returns the APK files generated in the transitive closure.
+   */
+  public NestedSet<Artifact> getTransitiveApks() {
+    return transitiveApks;
+  }
 
-  /** Returns the coverage metadata artifacts generated in the transitive closure. */
-  @Nullable
-  public abstract Artifact getCoverageMetadata();
-
-  /** Returns the merged manifest. */
-  public abstract Artifact getMergedManifest();
-
-  ApkProvider() {}
+  /**
+   * Returns the coverage metadata artifacts generated in the transitive closure.
+   */
+  public NestedSet<Artifact> getCoverageMetadata() {
+    return coverageMetadata;
+  }
 }

@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.devtools.build.lib.actions.ActionContext;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
+import com.google.devtools.build.lib.actions.Executor.ActionContext;
+
 import javax.annotation.Nullable;
 
 /**

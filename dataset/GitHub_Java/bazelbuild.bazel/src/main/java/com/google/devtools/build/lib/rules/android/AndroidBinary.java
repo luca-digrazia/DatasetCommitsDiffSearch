@@ -294,6 +294,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         deployJar,
         filesBuilder,
         resourceApk,
+        applicationManifest,
         ruleContext.getPrerequisiteArtifacts(PROGUARD_SPECS, Mode.TARGET).list(),
         proguardMapping,
         tools);
@@ -628,11 +629,12 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
   }
 
   /** Applies the proguard specifications, and creates a ProguardedJar. */
-  private static ProguardOutput applyProguard(RuleContext ruleContext,
+  public static ProguardOutput applyProguard(RuleContext ruleContext,
       AndroidCommon common,
       Artifact deployJarArtifact,
       NestedSetBuilder<Artifact> filesBuilder,
       ResourceApk resourceApk,
+      ApplicationManifest applicationManifest,
       ImmutableList<Artifact> proguardSpecs,
       Artifact proguardMapping,
       AndroidTools tools) {
@@ -656,9 +658,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         proguardSpecs, proguardMapping, tools.getAndroidJar(), proguardOutputJar, filesBuilder);
   }
 
-  private static ProguardOutput createProguardAction(RuleContext ruleContext, AndroidCommon common,
-      FilesToRunProvider proguard,
-      Artifact jar, ImmutableList<Artifact> proguardSpecs,
+  public static ProguardOutput createProguardAction(RuleContext ruleContext, AndroidCommon common,
+      FilesToRunProvider proguard, Artifact jar, ImmutableList<Artifact> proguardSpecs,
       Artifact proguardMapping, Artifact androidJar, Artifact proguardOutputJar,
       NestedSetBuilder<Artifact> filesBuilder) {
     Iterable<Artifact> libraryJars = NestedSetBuilder.<Artifact>naiveLinkOrder()

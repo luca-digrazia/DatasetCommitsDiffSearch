@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 public final class AndroidManifestMergeHelper {
 
@@ -27,28 +29,28 @@ public final class AndroidManifestMergeHelper {
   public static void createMergeManifestAction(RuleContext ruleContext,
       Artifact merger, Iterable<Artifact> mergees,
       Collection<String> excludePermissions, Artifact mergedManifest) {
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
-    commandLine.addPrefixedExecPath("--merger=", merger);
+    List<String> args = new ArrayList<>();
+    args.add("--merger=" + merger.getExecPathString());
+
     for (Artifact mergee : mergees) {
-      commandLine.addPrefixedExecPath("--mergee=", mergee);
+      args.add("--mergee=" + mergee.getExecPathString());
     }
 
     for (String excludePermission : excludePermissions) {
-      commandLine.addPrefixed("--exclude_permission=", excludePermission);
+      args.add("--exclude_permission=" + excludePermission);
     }
 
-    commandLine.addPrefixedExecPath("--output=", mergedManifest);
+    args.add("--output=" + mergedManifest.getExecPathString());
 
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .addInput(merger)
-            .addInputs(mergees)
-            .addOutput(mergedManifest)
-            .setExecutable(ruleContext.getPrerequisite("$android_manifest_merge_tool", Mode.HOST))
-            .setProgressMessage("Merging Android Manifests")
-            .setMnemonic("AndroidManifestMerger")
-            .setCommandLine(commandLine.build())
-            .build(ruleContext));
+    ruleContext.registerAction(new SpawnAction.Builder()
+        .addInput(merger)
+        .addInputs(mergees)
+        .addOutput(mergedManifest)
+        .setExecutable(ruleContext.getPrerequisite("$android_manifest_merge_tool", Mode.HOST))
+        .addArguments(args)
+        .setProgressMessage("Merging Android Manifests")
+        .setMnemonic("AndroidManifestMerger")
+        .build(ruleContext));
   }
 }
 

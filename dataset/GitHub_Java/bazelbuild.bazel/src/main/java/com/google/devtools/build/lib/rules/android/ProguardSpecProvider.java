@@ -15,21 +15,22 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 
 /**
- * A target that can provide a proguard obfuscation mapping to Android binaries or tests.
+ * A target that can provide proguard specifications to Android binaries.
  */
 @Immutable
-public final class ProguardMappingProvider implements TransitiveInfoProvider {
+public final class ProguardSpecProvider implements TransitiveInfoProvider {
 
-  private final Artifact proguardMapping;
+  private final NestedSet<Artifact> transitiveProguardSpecs;
 
-  public ProguardMappingProvider(Artifact proguardMapping) {
-    this.proguardMapping = proguardMapping;
+  public ProguardSpecProvider(NestedSet<Artifact> transitiveProguardSpecs) {
+    this.transitiveProguardSpecs = transitiveProguardSpecs;
   }
 
-  public Artifact getProguardMapping() {
-    return proguardMapping;
+  public NestedSet<Artifact> getTransitiveProguardSpecs() {
+    return transitiveProguardSpecs;
   }
 }

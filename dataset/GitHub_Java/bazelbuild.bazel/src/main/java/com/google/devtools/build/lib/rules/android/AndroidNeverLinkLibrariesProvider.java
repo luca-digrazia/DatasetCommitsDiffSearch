@@ -15,21 +15,30 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 
 /**
- * A target that can provide a proguard obfuscation mapping to Android binaries or tests.
+ * A target that can provide neverlink libraries for Android targets.
+ *
+ * <p>All targets implementing this interface must also implement
+ * {@link JavaCompilationArgsProvider}.
  */
 @Immutable
-public final class ProguardMappingProvider implements TransitiveInfoProvider {
+public final class AndroidNeverLinkLibrariesProvider implements TransitiveInfoProvider {
 
-  private final Artifact proguardMapping;
+  private final NestedSet<Artifact> transitiveNeverLinkLibraries;
 
-  public ProguardMappingProvider(Artifact proguardMapping) {
-    this.proguardMapping = proguardMapping;
+  public AndroidNeverLinkLibrariesProvider(
+      NestedSet<Artifact> transitiveNeverLinkLibraries) {
+    this.transitiveNeverLinkLibraries = transitiveNeverLinkLibraries;
   }
 
-  public Artifact getProguardMapping() {
-    return proguardMapping;
+  /**
+   * Returns the set of neverlink libraries in the transitive closure.
+   */
+  public NestedSet<Artifact> getTransitiveNeverLinkLibraries() {
+    return transitiveNeverLinkLibraries;
   }
 }

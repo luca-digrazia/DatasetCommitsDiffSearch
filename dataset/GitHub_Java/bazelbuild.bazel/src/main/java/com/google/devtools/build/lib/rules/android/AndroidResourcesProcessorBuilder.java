@@ -56,7 +56,6 @@ public class AndroidResourcesProcessorBuilder {
   private String versionCode;
   private String applicationId;
   private String versionName;
-  private Artifact symbolsTxt;
 
   /**
    * @param androidTools A configured AndroidTools for the AndroidResourcesProcessor action.
@@ -113,11 +112,6 @@ public class AndroidResourcesProcessorBuilder {
     return this;
   }
 
-  public AndroidResourcesProcessorBuilder setSymbolsTxt(Artifact symbolsTxt) {
-    this.symbolsTxt = symbolsTxt;
-    return this;
-  }
-
   public AndroidResourcesProcessorBuilder setApkOut(Artifact apkOut) {
     this.apkOut = apkOut;
     return this;
@@ -144,12 +138,11 @@ public class AndroidResourcesProcessorBuilder {
     inputs.add(container.getManifest());
     inputs.add(container.getRTxt());
 
-    args.add(String.format("%s:%s:%s:%s:%s",
+    args.add(String.format("%s:%s:%s:%s",
         convertRoots(container, ResourceType.RESOURCES),
         convertRoots(container, ResourceType.ASSETS),
         container.getManifest().getExecPathString(),
-        container.getRTxt() == null ? "" : container.getRTxt().getExecPath(),
-        container.getSymbolsTxt() == null ? "" : container.getSymbolsTxt().getExecPath()
+        container.getRTxt() == null ? "" : container.getRTxt().getExecPath()
     ));
   }
 
@@ -216,11 +209,6 @@ public class AndroidResourcesProcessorBuilder {
       // that it will generate the R.txt.
       args.add("--packageType");
       args.add("LIBRARY");
-    }
-    if (symbolsTxt != null) {
-      args.add("--symbolsTxtOut");
-      args.add(symbolsTxt.getExecPathString());
-      outs.add(symbolsTxt);
     }
     if (sourceJarOut != null) {
       args.add("--srcJarOutput");
@@ -309,8 +297,7 @@ public class AndroidResourcesProcessorBuilder {
         primary.getRoots(ResourceType.ASSETS),
         primary.getRoots(ResourceType.RESOURCES),
         primary.isManifestExported(),
-        rTxtOut,
-        symbolsTxt);
+        rTxtOut);
   }
 
   public AndroidResourcesProcessorBuilder setJavaPackage(String newManifestPackage) {

@@ -249,17 +249,12 @@ public class AndroidTools {
    * its executable already set to invoke the main dex list creator.
    */
   public Action[] mainDexListAction(Artifact jar, Artifact strippedJar, Artifact mainDexList) {
-    SpawnAction.Builder builder = new SpawnAction.Builder()
-        .setMnemonic("MainDexClasses")
-        .setProgressMessage("Generating main dex classes list");
-
     if (androidSdk != null) {
-      return builder
+      return new SpawnAction.Builder()
           .setExecutable(androidSdk.getMainDexListCreator())
           .addOutputArgument(mainDexList)
           .addInputArgument(strippedJar)
           .addInputArgument(jar)
-          .addArguments(ruleContext.getTokenizedStringListAttr("main_dex_list_opts"))
           .build(ruleContext);
     } else {
       StringBuilder shellCommandBuilder = new StringBuilder()
@@ -275,12 +270,14 @@ public class AndroidTools {
           .append(" ").append(jar.getExecPathString())
           .append(" >").append(mainDexList.getExecPathString());
 
-      return builder
+      return new SpawnAction.Builder()
           .addInput(strippedJar)
           .addInput(jar)
           .addInput(dxJar)
           .addTransitiveInputs(BaseJavaCompilationHelper.getHostJavabaseInputs(ruleContext))
           .addOutput(mainDexList)
+          .setProgressMessage("Generating main dex classes list")
+          .setMnemonic("MainDexClasses")
           .setShellCommand(shellCommandBuilder.toString())
           .build(ruleContext);
     }

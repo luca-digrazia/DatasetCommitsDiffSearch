@@ -13,23 +13,25 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 
 /**
- * A target that can provide a proguard obfuscation mapping to Android binaries or tests.
+ * A target that can provide native libraries (they are always dynamic ones) to
+ * Android binaries.
  */
 @Immutable
-public final class ProguardMappingProvider implements TransitiveInfoProvider {
+public final class AndroidNativeLibraryProvider implements TransitiveInfoProvider {
 
-  private final Artifact proguardMapping;
+  private final NestedSet<LinkerInput> transitiveAndroidNativeLibraries;
 
-  public ProguardMappingProvider(Artifact proguardMapping) {
-    this.proguardMapping = proguardMapping;
+  public AndroidNativeLibraryProvider(NestedSet<LinkerInput> transitiveAndroidNativeLibraries) {
+    this.transitiveAndroidNativeLibraries = transitiveAndroidNativeLibraries;
   }
 
-  public Artifact getProguardMapping() {
-    return proguardMapping;
+  public NestedSet<LinkerInput> getTransitiveAndroidNativeLibraries() {
+    return transitiveAndroidNativeLibraries;
   }
 }

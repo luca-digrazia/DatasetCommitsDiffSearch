@@ -20,7 +20,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
@@ -44,15 +44,19 @@ public class AarGeneratorBuilder {
 
   private Artifact aarOut;
 
+  private final AndroidTools androidTools;
   private final RuleContext ruleContext;
   private final SpawnAction.Builder builder;
 
   /**
    * Creates an {@link AarGeneratorBuilder}.
    *
+   * @param androidTools A configured {@link AndroidTools} to retrieve the
+   *        {@link FilesToRunProvider} for the AarGeneratorAction.
    * @param ruleContext The {@link RuleContext} that is used to register the {@link Action}.
    */
-  public AarGeneratorBuilder(RuleContext ruleContext) {
+  public AarGeneratorBuilder(AndroidTools androidTools, RuleContext ruleContext) {
+    this.androidTools = androidTools;
     this.ruleContext = ruleContext;
     this.builder = new SpawnAction.Builder();
   }
@@ -125,8 +129,7 @@ public class AarGeneratorBuilder {
         .addInputs(ImmutableList.<Artifact>copyOf(ins))
         .addOutputs(ImmutableList.<Artifact>copyOf(outs))
         .setCommandLine(CommandLine.of(args, false))
-        .setExecutable(
-            ruleContext.getExecutablePrerequisite(":android_aar_generator", Mode.HOST))
+        .setExecutable(androidTools.getAarGenerator())
         .setProgressMessage("Building AAR package")
         .setMnemonic("AARGenerator")
         .build(context));

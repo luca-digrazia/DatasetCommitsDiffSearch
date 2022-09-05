@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.FileType;
@@ -110,7 +109,7 @@ public final class AndroidRuleClasses {
   public static final SafeImplicitOutputsFunction JAVA_RESOURCES_JAR =
       fromTemplates("%{name}_files/java_resources.jar");
   public static final String MANIFEST_MERGE_TOOL_LABEL =
-      "//tools/android:merge_manifests";
+      "//tools/android/build:merge_manifests.par";
   public static final String BUILD_INCREMENTAL_DEXMANIFEST_LABEL =
       "//tools/android:build_incremental_dexmanifest";
   public static final String STUBIFY_MANIFEST_LABEL = "//tools/android:stubify_manifest";
@@ -552,11 +551,8 @@ public final class AndroidRuleClasses {
           <code>cc_library</code> wrapping or producing <code>.so</code> native libraries for the
           Android target platform.
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .override(builder.copy("deps")
-              .cfg(ANDROID_SPLIT_TRANSITION)
-              .allowedRuleClasses(ALLOWED_DEPENDENCIES)
-              .allowedFileTypes()
-              .aspect(AndroidNeverlinkAspect.class))
+          .override(builder.copy("deps").cfg(ANDROID_SPLIT_TRANSITION)
+              .allowedRuleClasses(ALLOWED_DEPENDENCIES).allowedFileTypes())
           // Proguard rule specifying master list of classes to keep during legacy multidexing.
           .add(attr("$build_incremental_dexmanifest", LABEL).cfg(HOST).exec()
               .value(env.getLabel(AndroidRuleClasses.BUILD_INCREMENTAL_DEXMANIFEST_LABEL)))
@@ -668,7 +664,6 @@ com/google/common/base/Objects.class
             </ul>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
           .add(attr("legacy_native_support", TRISTATE).value(TriState.AUTO))
-          .advertiseProvider(JavaCompilationArgsProvider.class)
           .build();
       }
 
