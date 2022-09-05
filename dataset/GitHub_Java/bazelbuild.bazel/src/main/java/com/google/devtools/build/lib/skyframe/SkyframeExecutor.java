@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.PackageRootResolutionException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.Aspect;
@@ -602,8 +601,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   // TODO(bazel-team): Make this take a PackageIdentifier.
-  public Map<PathFragment, Root> getArtifactRoots(Iterable<PathFragment> execPaths)
-      throws PackageRootResolutionException {
+  public Map<PathFragment, Root> getArtifactRoots(Iterable<PathFragment> execPaths) {
     final List<SkyKey> packageKeys = new ArrayList<>();
     for (PathFragment execPath : execPaths) {
       Preconditions.checkArgument(!execPath.isAbsolute(), execPath);
@@ -624,11 +622,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       });
     } catch (Exception e) {
       throw new IllegalStateException(e);  // Should never happen.
-    }
-
-    if (result.hasError()) {
-      throw new PackageRootResolutionException("Exception encountered determining package roots",
-          result.getError().getException());
     }
 
     Map<PathFragment, Root> roots = new HashMap<>();
