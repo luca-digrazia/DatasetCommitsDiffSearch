@@ -780,7 +780,6 @@ public class MaterialCalendarView extends FrameLayout {
         private CalendarDay selectedDate = null;
         private WeekDayFormatter weekDayFormatter = WeekDayFormatter.DEFAULT;
         private List<DayViewDecorator> decorators = null;
-        private List<DecoratorResult> decoratorResults = null;
         private int firstDayOfTheWeek = Calendar.SUNDAY;
 
 
@@ -798,16 +797,8 @@ public class MaterialCalendarView extends FrameLayout {
         }
 
         public void invalidateDecorators() {
-            decoratorResults = new ArrayList<>();
-            for(DayViewDecorator decorator : decorators) {
-                DayViewFacade facade = new DayViewFacade();
-                decorator.decorate(facade);
-                if(!facade.isReset()) {
-                    decoratorResults.add(new DecoratorResult(decorator, facade));
-                }
-            }
             for(MonthView monthView : currentViews) {
-                monthView.setDayViewDecorators(decoratorResults);
+                monthView.setDayViewDecorators(decorators);
             }
         }
 
@@ -878,7 +869,9 @@ public class MaterialCalendarView extends FrameLayout {
             container.addView(monthView);
             currentViews.add(monthView);
 
-            monthView.setDayViewDecorators(decoratorResults);
+            if(decorators != null) {
+                monthView.setDayViewDecorators(decorators);
+            }
 
             return monthView;
         }

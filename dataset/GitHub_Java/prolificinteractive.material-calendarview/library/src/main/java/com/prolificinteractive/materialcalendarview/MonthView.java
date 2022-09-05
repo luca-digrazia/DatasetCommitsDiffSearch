@@ -13,6 +13,7 @@ import java.util.List;
 
 import static java.util.Calendar.DATE;
 import static java.util.Calendar.DAY_OF_WEEK;
+import static java.util.Calendar.SUNDAY;
 
 /**
  * Display a month of {@linkplain DayView}s and
@@ -46,7 +47,7 @@ class MonthView extends LinearLayout implements View.OnClickListener {
 
     private boolean showOtherDates = false;
 
-    private final ArrayList<DecoratorResult> decoratorResults = new ArrayList<>();
+    private List<DayViewDecorator> dayViewDecorators;
 
 
     public MonthView(Context context, CalendarDay month, int firstDayOfWeek) {
@@ -88,12 +89,9 @@ class MonthView extends LinearLayout implements View.OnClickListener {
     }
 
 
-    void setDayViewDecorators(List<DecoratorResult> results) {
-        this.decoratorResults.clear();
-        if(results != null) {
-            this.decoratorResults.addAll(results);
-        }
-        invalidateDecorators();
+    public void setDayViewDecorators(List<DayViewDecorator> dayViewDecorators) {
+        this.dayViewDecorators = dayViewDecorators;
+        updateUi();
     }
 
     private static LinearLayout makeRow(LinearLayout parent) {
@@ -189,26 +187,27 @@ class MonthView extends LinearLayout implements View.OnClickListener {
         updateUi();
     }
 
-    private void updateUi() {
+    protected void updateUi() {
         int ourMonth = month.getMonth();
         for(DayView dayView : monthDayViews) {
             CalendarDay day = dayView.getDate();
+            dayView.setDay(day); //TODO remove this, currently used to reset text for decorators
             dayView.setupSelection(showOtherDates, day.isInRange(minDate, maxDate), day.getMonth() == ourMonth);
             dayView.setChecked(day.equals(selection));
+            applyDecorators(dayView, day);
         }
         postInvalidate();
     }
 
-    private void invalidateDecorators() {
-        final DayViewFacade facadeAccumulator = new DayViewFacade();
-        for(DayView dayView : monthDayViews) {
-            facadeAccumulator.reset();
-            for(DecoratorResult result : decoratorResults) {
-                if(result.decorator.shouldDecorate(dayView.getDate())) {
-                    result.result.applyTo(facadeAccumulator);
+    private void applyDecorators(DayView dayView, CalendarDay day) {
+        if(dayViewDecorators != null) {
+            DayViewFacade facade = new DayViewFacade();
+            for(DayViewDecorator decorator : dayViewDecorators){
+                if(decorator.shouldDecorate(day)){
+                    facade.setDayView(dayView);
+                    decorator.decorate(facade);
                 }
             }
-            dayView.applyFacade(facadeAccumulator);
         }
     }
 

@@ -1,39 +1,47 @@
 package com.prolificinteractive.materialcalendarview;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
-import android.util.AttributeSet;
+import android.os.Build;
 import android.view.Gravity;
 import android.widget.TextView;
 
-import java.util.Calendar;
-import java.util.Locale;
+import com.prolificinteractive.materialcalendarview.format.WeekDayFormatter;
 
-import static java.util.Calendar.DAY_OF_WEEK;
-import static java.util.Calendar.SHORT;
+import java.util.Calendar;
 
 /**
  * Display a day of the week
  */
+@SuppressLint("ViewConstructor")
 class WeekDayView extends TextView {
 
-    public WeekDayView(Context context) {
-        this(context, null);
-    }
+    private WeekDayFormatter formatter = WeekDayFormatter.DEFAULT;
+    private int dayOfWeek;
 
-    public WeekDayView(Context context, AttributeSet attrs) {
-        super(context, attrs);
+    public WeekDayView(Context context, int dayOfWeek) {
+        super(context);
 
         setGravity(Gravity.CENTER);
 
-        if(isInEditMode()) {
-            setText("Mon");
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            setTextAlignment(TEXT_ALIGNMENT_CENTER);
         }
+
+        setDayOfWeek(dayOfWeek);
+    }
+
+    public void setWeekDayFormatter(WeekDayFormatter formatter) {
+        this.formatter = formatter == null ? WeekDayFormatter.DEFAULT : formatter;
+        setDayOfWeek(dayOfWeek);
     }
 
     public void setDayOfWeek(int dayOfWeek) {
-        Calendar calendar = CalendarUtils.getInstance();
-        calendar.set(DAY_OF_WEEK, dayOfWeek);
-        String name = calendar.getDisplayName(DAY_OF_WEEK, SHORT, Locale.getDefault());
-        setText(name);
+        this.dayOfWeek = dayOfWeek;
+        setText(formatter.format(dayOfWeek));
+    }
+
+    public void setDayOfWeek(Calendar calendar) {
+        setDayOfWeek(CalendarUtils.getDayOfWeek(calendar));
     }
 }
