@@ -11,7 +11,6 @@ import org.junit.Test;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 import java.io.IOException;
-import java.sql.SQLFeatureNotSupportedException;
 import java.text.ParseException;
 import java.util.*;
 
@@ -24,20 +23,13 @@ import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX;
 public class QueryTest {
 
 	@Test
-	public void searchTypeTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+	public void searchTypeTest() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT * FROM %s/phrase LIMIT 1000", TEST_INDEX));
 		Assert.assertEquals(4, response.getTotalHits());
 	}
 
 	@Test
-	public void multipleFromTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-		SearchHits response = query(String.format("SELECT * FROM %s/phrase, %s/account LIMIT 2000", TEST_INDEX, TEST_INDEX));
-		Assert.assertEquals(1004, response.getTotalHits());
-	}
-
-
-	@Test
-	public void selectSpecificFields() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void selectSpecificFields() throws IOException, SqlParseException {
 		String[] arr = new String[] {"age", "account_number"};
 		Set expectedSource = new HashSet(Arrays.asList(arr));
 
@@ -52,7 +44,7 @@ public class QueryTest {
 	// TODO field aliases is not supported currently. it might be possible to change field names after the query already executed.
 	/*
 	@Test
-	public void selectAliases() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void selectAliases() throws IOException, SqlParseException {
 		String[] arr = new String[] {"myage", "myaccount_number"};
 		Set expectedSource = new HashSet(Arrays.asList(arr));
 
@@ -66,7 +58,7 @@ public class QueryTest {
 
 
 	@Test
-	public void equallityTest() throws SqlParseException, SQLFeatureNotSupportedException {
+	public void equallityTest() throws SqlParseException {
 		SearchHits response = query(String.format("select * from %s where city = 'Nogal' LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -79,7 +71,7 @@ public class QueryTest {
 	// TODO search 'quick fox' still matching 'quick fox brown' this is wrong behavior.
 	// in some cases, depends on the analasis, we might want choose better behavior for equallity.
 	@Test
-	public void equallityTest_phrase() throws SqlParseException, SQLFeatureNotSupportedException {
+	public void equallityTest_phrase() throws SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE phrase = 'quick fox here' LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -90,7 +82,7 @@ public class QueryTest {
 
 
 	@Test
-	public void greaterThanTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void greaterThanTest() throws IOException, SqlParseException {
 		int someAge = 25;
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age > %s LIMIT 1000", TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
@@ -102,7 +94,7 @@ public class QueryTest {
 
 
 	@Test
-	public void greaterThanOrEqualTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void greaterThanOrEqualTest() throws IOException, SqlParseException {
 		int someAge = 25;
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age >= %s LIMIT 1000", TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
@@ -121,7 +113,7 @@ public class QueryTest {
 
 
 	@Test
-	public void lessThanTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void lessThanTest() throws IOException, SqlParseException {
 		int someAge = 25;
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age < %s LIMIT 1000", TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
@@ -133,7 +125,7 @@ public class QueryTest {
 
 
 	@Test
-	public void lessThanOrEqualTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void lessThanOrEqualTest() throws IOException, SqlParseException {
 		int someAge = 25;
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age <= %s LIMIT 1000", TEST_INDEX, someAge));
 		SearchHit[] hits = response.getHits();
@@ -152,7 +144,7 @@ public class QueryTest {
 
 
 	@Test
-	public void orTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void orTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE gender='F' OR gender='M' LIMIT 1000", TEST_INDEX));
 		// Assert all documents from accounts.json is returned.
 		Assert.assertEquals(1000, response.getTotalHits());
@@ -160,7 +152,7 @@ public class QueryTest {
 
 
 	@Test
-	public void andTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void andTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age=32 AND gender='M' LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
@@ -171,7 +163,7 @@ public class QueryTest {
 
 
 	@Test
-	public void likeTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void likeTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE firstname LIKE 'amb%%' LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -182,7 +174,7 @@ public class QueryTest {
 
 
 	@Test
-	public void limitTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void limitTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT * FROM %s LIMIT 30", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -192,7 +184,7 @@ public class QueryTest {
 
 
 	@Test
-	public void betweenTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void betweenTest() throws IOException, SqlParseException {
 		int min = 27;
 		int max = 30;
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age BETWEEN %s AND %s LIMIT 1000", TEST_INDEX, min, max));
@@ -209,7 +201,7 @@ public class QueryTest {
 	 field will return as well, That may considered a Wrong behaivor.
 	 */
 	@Test
-	public void notBetweenTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void notBetweenTest() throws IOException, SqlParseException {
 		int min = 20;
 		int max = 37;
 		SearchHits response = query(String.format("SELECT * FROM %s WHERE age NOT BETWEEN %s AND %s LIMIT 1000", TEST_INDEX, min, max));
@@ -227,7 +219,7 @@ public class QueryTest {
 
 
 	@Test
-	public void inTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+	public void inTest() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT age FROM %s WHERE age IN (20, 22) LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
@@ -238,7 +230,7 @@ public class QueryTest {
 
 
 	@Test
-	public void inTestWithStrings() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+	public void inTestWithStrings() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT phrase FROM %s WHERE phrase IN ('quick fox here', 'fox brown') LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		Assert.assertEquals(2, response.getTotalHits());
@@ -253,7 +245,7 @@ public class QueryTest {
 	field will return as well, That may considered a Wrong behaivor.
 	*/
 	@Test
-	public void notInTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void notInTest() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT age FROM %s WHERE age NOT IN (20, 22) LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 		for(SearchHit hit : hits) {
@@ -269,7 +261,7 @@ public class QueryTest {
 	
 	
 	@Test
-	public void dateSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException, ParseException {
+	public void dateSearch() throws IOException, SqlParseException, ParseException {
 		DateTimeFormatter formatter = DateTimeFormat.forPattern(DATE_FORMAT);
 		DateTime dateToCompare = new DateTime(2014, 8, 18, 0, 0, 0);
 
@@ -286,7 +278,7 @@ public class QueryTest {
 
 
 	@Test
-	public void dateBetweenSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void dateBetweenSearch() throws IOException, SqlParseException {
 		DateTimeFormatter formatter = DateTimeFormat.forPattern(DATE_FORMAT);
 
 		DateTime dateLimit1 = new DateTime(2014, 8, 18, 0, 0, 0);
@@ -308,7 +300,7 @@ public class QueryTest {
 
 
 	@Test
-	public void missFilterSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+	public void missFilterSearch() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS missing", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -320,7 +312,7 @@ public class QueryTest {
 	}
 
 	@Test
-	public void notMissFilterSearch() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+	public void notMissFilterSearch() throws IOException, SqlParseException{
 		SearchHits response = query(String.format("SELECT * FROM %s/phrase WHERE insert_time IS NOT missing", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -334,7 +326,7 @@ public class QueryTest {
 
 
 	@Test
-	public void complexConditionQuery() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+	public void complexConditionQuery() throws IOException, SqlParseException{
 		String errorMessage = "Result does not exist to the condition (gender='m' AND (age> 25 OR account_number>5)) OR (gender='f' AND (age>30 OR account_number < 8)";
 
 		SearchHits response = query(String.format("SELECT * FROM %s/account WHERE (gender='m' AND (age> 25 OR account_number>5)) OR (gender='f' AND (age>30 OR account_number < 8))", TEST_INDEX));
@@ -352,7 +344,7 @@ public class QueryTest {
 
 
 	@Test
-	public void orderByAscTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void orderByAscTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT age FROM %s/account ORDER BY age ASC LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -368,7 +360,7 @@ public class QueryTest {
 
 
 	@Test
-	public void orderByDescTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException {
+	public void orderByDescTest() throws IOException, SqlParseException {
 		SearchHits response = query(String.format("SELECT age FROM %s/account ORDER BY age DESC LIMIT 1000", TEST_INDEX));
 		SearchHit[] hits = response.getHits();
 
@@ -382,9 +374,9 @@ public class QueryTest {
 		Assert.assertTrue("The list is not ordered descending", sortedAges.equals(ages));
 	}
 
-	private SearchHits query(String query) throws SqlParseException, SQLFeatureNotSupportedException, SQLFeatureNotSupportedException {
+	private SearchHits query(String query) throws SqlParseException {
 		SearchDao searchDao = MainTestSuite.getSearchDao();
-		SearchRequestBuilder select = (SearchRequestBuilder)searchDao.explain(query);
+		SearchRequestBuilder select = searchDao.explain(query);
 		return select.get().getHits();
 	}
 }
