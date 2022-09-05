@@ -40,7 +40,6 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     Artifact file =
         ActionsTestUtil.getFirstArtifactEndingWith(getFilesToBuild(target), ".proto.bin");
     assertThat(file.getRootRelativePathString()).isEqualTo("x/foo-descriptor-set.proto.bin");
-    assertThat(target.getProvider(ProtoSourcesProvider.class).descriptorSet()).isEqualTo(file);
 
     assertThat(getGeneratingSpawnAction(file).getRemainingArguments())
         .containsAllOf(
@@ -74,38 +73,6 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     ConfiguredTarget target = scratchConfiguredTarget("x", "foo", "proto_library(name='foo')");
     assertThat(ActionsTestUtil.getFirstArtifactEndingWith(getFilesToBuild(target), ".proto.bin"))
         .isNull();
-
-    assertThat(target.getProvider(ProtoSourcesProvider.class).descriptorSet()).isNull();
-  }
-
-  @Test
-  public void testDescriptorSetOutput_noSrcs_transitive() throws Exception {
-    ConfiguredTarget target =
-        scratchConfiguredTarget(
-            "x",
-            "foo",
-            "proto_library(name='foo', deps = [':dep1'])",
-            "proto_library(name='dep1', deps = [':dep2'])",
-            "proto_library(name='dep2')");
-    assertThat(ActionsTestUtil.getFirstArtifactEndingWith(getFilesToBuild(target), ".proto.bin"))
-        .isNull();
-
-    assertThat(target.getProvider(ProtoSourcesProvider.class).descriptorSet()).isNull();
-  }
-
-  @Test
-  public void testDescriptorSetOutput_srcs_transitive() throws Exception {
-    ConfiguredTarget target =
-        scratchConfiguredTarget(
-            "x",
-            "foo",
-            "proto_library(name='foo', deps = [':dep1'])",
-            "proto_library(name='dep1', deps = [':dep2'])",
-            "proto_library(name='dep2', srcs=['foo.proto'])");
-    Artifact file =
-        ActionsTestUtil.getFirstArtifactEndingWith(getFilesToBuild(target), ".proto.bin");
-    assertThat(file.getRootRelativePathString()).isEqualTo("x/foo-descriptor-set.proto.bin");
-    assertThat(target.getProvider(ProtoSourcesProvider.class).descriptorSet()).isEqualTo(file);
   }
 
   @Test
@@ -180,23 +147,6 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
         getGeneratingSpawnAction(getDescriptorOutput("//x:foo")).getRemainingArguments()) {
       assertThat(arg).doesNotContain("--direct_dependencies=");
     }
-  }
-
-  /**
-   * Assert that strict proto_library can depend on non-strict proto_library, without Bazel
-   * crashing.
-   */
-  @Test
-  public void strictCanDependOnNonStrict() throws Exception {
-    useConfiguration("--strict_proto_deps=strict");
-    scratch.file(
-        "x/BUILD",
-        "proto_library(name = 'foo', deps = [':bar'], strict_proto_deps=1)",
-        "proto_library(name = 'bar', deps = [':baz'], strict_proto_deps=0)",
-        "proto_library(name = 'baz', srcs = ['baz.proto'])");
-
-    getConfiguredTarget("//x:foo");
-    // Implicitly check that Bazel doesn't crash.
   }
 
   private Artifact getDescriptorOutput(String label) throws Exception {
