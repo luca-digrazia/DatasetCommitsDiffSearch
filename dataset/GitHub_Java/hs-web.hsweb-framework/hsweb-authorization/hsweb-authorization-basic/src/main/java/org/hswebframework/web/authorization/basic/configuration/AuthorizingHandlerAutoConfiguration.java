@@ -1,20 +1,21 @@
 package org.hswebframework.web.authorization.basic.configuration;
 
+import org.hswebframework.web.authorization.AuthenticationHolder;
 import org.hswebframework.web.authorization.AuthenticationManager;
+import org.hswebframework.web.authorization.AuthenticationSupplier;
 import org.hswebframework.web.authorization.access.DataAccessController;
 import org.hswebframework.web.authorization.access.DataAccessHandler;
-import org.hswebframework.web.authorization.basic.aop.AopMethodAuthorizeDefinitionParser;
-import org.hswebframework.web.authorization.basic.embed.EmbedAuthenticationManager;
 import org.hswebframework.web.authorization.basic.handler.DefaultAuthorizingHandler;
 import org.hswebframework.web.authorization.basic.handler.access.DefaultDataAccessController;
 import org.hswebframework.web.authorization.basic.web.*;
 import org.hswebframework.web.authorization.basic.web.session.UserTokenAutoExpiredListener;
+import org.hswebframework.web.authorization.token.DefaultUserTokenManager;
+import org.hswebframework.web.authorization.token.UserTokenAuthenticationSupplier;
 import org.hswebframework.web.authorization.token.UserTokenManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -57,22 +58,14 @@ public class AuthorizingHandlerAutoConfiguration {
 
     @Bean
     public WebMvcConfigurer webUserTokenInterceptorConfigurer(UserTokenManager userTokenManager,
-                                                              AopMethodAuthorizeDefinitionParser parser,
                                                               List<UserTokenParser> userTokenParser) {
-
         return new WebMvcConfigurerAdapter() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
-                registry.addInterceptor(new WebUserTokenInterceptor(userTokenManager, userTokenParser, parser));
+                registry.addInterceptor(new WebUserTokenInterceptor(userTokenManager, userTokenParser));
                 super.addInterceptors(registry);
             }
         };
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(AuthenticationManager.class)
-    public AuthenticationManager embedAuthenticationManager() {
-        return new EmbedAuthenticationManager();
     }
 
     @Bean
@@ -90,16 +83,6 @@ public class AuthorizingHandlerAutoConfiguration {
         return new UserTokenAutoExpiredListener(userTokenManager);
     }
 
-    @Bean
-    public AuthorizationController authorizationController() {
-        return new AuthorizationController();
-    }
-
-    @Bean
-    public UserTokenController userTokenController() {
-        return new UserTokenController();
-    }
-
     @Configuration
     public static class DataAccessHandlerProcessor implements BeanPostProcessor {
 
@@ -115,6 +98,9 @@ public class AuthorizingHandlerAutoConfiguration {
         public Object postProcessAfterInitialization(Object bean, String beanName) {
             if (bean instanceof DataAccessHandler) {
                 defaultDataAccessController.addHandler(((DataAccessHandler) bean));
+            }
+            if (bean instanceof AuthenticationSupplier) {
+                AuthenticationHolder.addSupplier(((AuthenticationSupplier) bean));
             }
             return bean;
         }
