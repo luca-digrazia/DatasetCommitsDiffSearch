@@ -28,6 +28,7 @@ public class AuthorizeCommandProcessor extends AbstractCommandProcessor {
     @Override
     public void execute(CommandRequest command) {
         String accessToken = (String) command.getParameters().get("access_token");
+        String callback = (String) command.getParameters().getOrDefault("callback", "authorize");
         boolean success = false;
 
         if (null != accessToken) {
@@ -39,7 +40,7 @@ public class AuthorizeCommandProcessor extends AbstractCommandProcessor {
                     command.getSession().getAttributes().put("user_token", accessToken);
                 }
             }
-            sendMessage(command.getSession(), new WebSocketMessage(200, token == null ? "token not exists":"", success));
+            sendMessage(command.getSession(), new WebSocketMessage(200, callback, success));
         }
     }
 }
