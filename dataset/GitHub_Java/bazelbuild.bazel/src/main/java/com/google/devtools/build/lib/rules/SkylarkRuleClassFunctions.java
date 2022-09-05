@@ -212,8 +212,7 @@ public class SkylarkRuleClassFunctions {
   private static final SkylarkFunction rule = new SkylarkFunction("rule") {
 
         @Override
-        @SuppressWarnings({"rawtypes", "unchecked"}) // castMap produces
-        // an Attribute.Builder instead of a Attribute.Builder<?> but it's OK.
+        @SuppressWarnings("rawtypes")
         public Object call(Map<String, Object> arguments, FuncallExpression ast,
             Environment funcallEnv) throws EvalException, ConversionException {
           final Location loc = ast.getLocation();
@@ -283,8 +282,6 @@ public class SkylarkRuleClassFunctions {
       this.type = type;
     }
 
-    @SuppressWarnings("unchecked") // the magic hidden $pkg_context variable is guaranteed
-    // to be a PackageContext
     @Override
     public Object call(List<Object> args, Map<String, Object> kwargs, FuncallExpression ast,
         Environment env) throws EvalException, InterruptedException {
@@ -366,9 +363,9 @@ public class SkylarkRuleClassFunctions {
     @Override
     public Object call(Map<String, Object> arguments, Location loc) throws EvalException,
         ConversionException {
-      ClassObject self = (ClassObject) arguments.get("self");
+      ClassObject object = (ClassObject) arguments.get("self");
       StringBuilder sb = new StringBuilder();
-      printTextMessage(self, sb, 0, loc);
+      printTextMessage(object, sb, 0, loc);
       return sb.toString();
     }
 

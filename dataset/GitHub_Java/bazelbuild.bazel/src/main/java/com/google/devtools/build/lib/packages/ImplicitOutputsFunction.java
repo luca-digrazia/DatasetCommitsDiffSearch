@@ -27,7 +27,6 @@ import com.google.common.escape.Escapers;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.SkylarkCallbackFunction;
@@ -91,7 +90,9 @@ public abstract class ImplicitOutputsFunction {
         // have access to configurable values (makes them too complicated?). Maybe they
         // should have *full* access (gives them the most power?).
         Object value = map.get(attrName, map.getAttributeType(attrName));
-        attrValues.put(attrName, value == null ? Environment.NONE : value);
+        if (value != null) {
+          attrValues.put(attrName, value);
+        }
       }
       ClassObject attrs = new SkylarkClassObject(attrValues, "No such attribute '%s'");
       try {
