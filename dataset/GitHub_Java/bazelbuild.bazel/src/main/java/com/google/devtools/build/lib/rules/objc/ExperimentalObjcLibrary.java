@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DEFINE;
 import static com.google.devtools.build.lib.rules.objc.XcodeProductType.LIBRARY_STATIC;
 
 import com.google.common.collect.ImmutableList;
@@ -37,7 +36,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.PrecompiledFiles;
-import com.google.devtools.build.lib.rules.objc.ObjcCommon.ResourceAttributes;
 import java.util.Collection;
 
 /** Implementation for experimental_objc_library. */
@@ -177,7 +175,6 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
             .addSources(arcSources, ImmutableMap.of("objc_arc", ""))
             .addSources(nonArcSources, ImmutableMap.of("no_objc_arc", ""))
             .addSources(privateHdrs)
-            .addDefines(common.getObjcProvider().get(DEFINE))
             .enableCompileProviders()
             .addPublicHeaders(publicHdrs)
             .addPrecompiledFiles(precompiledFiles)
@@ -220,7 +217,6 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
         .registerActions(xcodeProviderBuilder.build());
 
     return ObjcRuleClasses.ruleConfiguredTarget(ruleContext, filesToBuild.build())
-        .addProvider(ObjcProvider.class, common.getObjcProvider())
         .addProviders(info.getProviders())
         .addProvider(XcodeProvider.class, xcodeProviderBuilder.build())
         .build();
@@ -265,21 +261,14 @@ public class ExperimentalObjcLibrary implements RuleConfiguredTargetFactory {
     }
   }
 
-  /**
-   * Constructs an {@link ObjcCommon} instance based on the attributes of the given rule context.
-   */
-  private ObjcCommon common(
+  private static ObjcCommon common(
       RuleContext ruleContext,
       CompilationAttributes compilationAttributes,
       CompilationArtifacts compilationArtifacts) {
     return new ObjcCommon.Builder(ruleContext)
         .setCompilationAttributes(compilationAttributes)
-        .setResourceAttributes(new ResourceAttributes(ruleContext))
-        .addDefines(ruleContext.getTokenizedStringListAttr("defines"))
         .setCompilationArtifacts(compilationArtifacts)
-        .addDeps(ruleContext.getPrerequisites("deps", Mode.TARGET))
-        .addRuntimeDeps(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET))
-        .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
+        .addDepObjcProviders(ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProvider.class))
         .build();
   }
   
