@@ -14,14 +14,12 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.MoreObjects.ToStringHelper;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
-import com.google.devtools.build.skyframe.NodeEntry.DirtyState;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -40,11 +38,10 @@ import java.util.Set;
  * It is in a separate file solely to keep the {@link NodeEntry} class readable. In particular, the
  * caller must synchronize access to this class.
  *
- * <p>This class is public only for the benefit of alternative graph implementations outside of the
- * package.
+ * <p>This class is not intended to be used outside of Skyframe.
  */
 @ThreadCompatible
-public class BuildingState {
+final class BuildingState {
   /**
    * During its life, a node can go through states as follows:
    * <ol>
@@ -77,7 +74,7 @@ public class BuildingState {
    * depending on whether the caller specified that the node was itself changed or not. A non-null
    * {@code dirtyState} indicates that the node {@link #isDirty} in some way.
    */
-  private DirtyState dirtyState = null;
+  private NodeEntry.DirtyState dirtyState = null;
 
   /**
    * The number of dependencies that are known to be done in a {@link NodeEntry}. There is a
@@ -164,6 +161,7 @@ public class BuildingState {
    * dependency group storage.
    */
   private final GroupedList<SkyKey> lastBuildDirectDeps;
+  private final SkyValue lastBuildValue;
 
   /**
    * Which child should be re-evaluated next in the process of determining if this entry needs to
@@ -173,16 +171,18 @@ public class BuildingState {
 
   BuildingState() {
     lastBuildDirectDeps = null;
+    lastBuildValue = null;
   }
 
-  protected BuildingState(boolean isChanged, GroupedList<SkyKey> lastBuildDirectDeps) {
+  private BuildingState(boolean isChanged, GroupedList<SkyKey> lastBuildDirectDeps,
+      SkyValue lastBuildValue) {
     this.lastBuildDirectDeps = lastBuildDirectDeps;
+    this.lastBuildValue = Preconditions.checkNotNull(lastBuildValue);
     Preconditions.checkState(isChanged || !this.lastBuildDirectDeps.isEmpty(),
-        "%s is being marked dirty, not changed, but has no children that could have dirtied it",
-        this);
-    dirtyState = isChanged ? DirtyState.REBUILDING
-        : DirtyState.CHECK_DEPENDENCIES;
-    if (dirtyState == DirtyState.CHECK_DEPENDENCIES) {
+        "is being marked dirty, not changed, but has no children that could have dirtied it", this);
+    dirtyState = isChanged ? NodeEntry.DirtyState.REBUILDING
+        : NodeEntry.DirtyState.CHECK_DEPENDENCIES;
+    if (dirtyState == NodeEntry.DirtyState.CHECK_DEPENDENCIES) {
       // We need to iterate through the deps to see if they have changed. Initialize the iterator.
       dirtyDirectDepIterator = lastBuildDirectDeps.iterator();
     }
@@ -190,14 +190,14 @@ public class BuildingState {
 
   static BuildingState newDirtyState(boolean isChanged,
       GroupedList<SkyKey> lastBuildDirectDeps, SkyValue lastBuildValue) {
-    return new DirtyBuildingState(isChanged, lastBuildDirectDeps, lastBuildValue);
+    return new BuildingState(isChanged, lastBuildDirectDeps, lastBuildValue);
   }
 
   void markChanged() {
     Preconditions.checkState(isDirty(), this);
     Preconditions.checkState(!isChanged(), this);
     Preconditions.checkState(!evaluating, this);
-    dirtyState = DirtyState.REBUILDING;
+    dirtyState = NodeEntry.DirtyState.REBUILDING;
   }
 
   void forceChanged() {
@@ -205,7 +205,7 @@ public class BuildingState {
     Preconditions.checkState(!isChanged(), this);
     Preconditions.checkState(evaluating, this);
     Preconditions.checkState(isReady(), this);
-    dirtyState = DirtyState.REBUILDING;
+    dirtyState = NodeEntry.DirtyState.REBUILDING;
   }
 
   /**
@@ -233,11 +233,11 @@ public class BuildingState {
    * @see NodeEntry#isChanged()
    */
   boolean isChanged() {
-    return dirtyState == DirtyState.REBUILDING;
+    return dirtyState == NodeEntry.DirtyState.REBUILDING;
   }
 
   private boolean rebuilding() {
-    return dirtyState == DirtyState.REBUILDING;
+    return dirtyState == NodeEntry.DirtyState.REBUILDING;
   }
 
   /**
@@ -247,7 +247,7 @@ public class BuildingState {
    */
   private void checkNotProcessing() {
     Preconditions.checkState(evaluating, "not started building %s", this);
-    Preconditions.checkState(!isDirty() || dirtyState == DirtyState.VERIFIED_CLEAN
+    Preconditions.checkState(!isDirty() || dirtyState == NodeEntry.DirtyState.VERIFIED_CLEAN
         || rebuilding(), "not done building %s", this);
     Preconditions.checkState(isReady(), "not done building %s", this);
   }
@@ -268,8 +268,8 @@ public class BuildingState {
    * finished is equal to the number of known children.
    *
    * <p>If the node is dirty and checking its deps for changes, this also updates {@link
-   * #dirtyState} as needed -- {@link DirtyState#REBUILDING} if the child has changed,
-   * and {@link DirtyState#VERIFIED_CLEAN} if the child has not changed and this was the
+   * #dirtyState} as needed -- {@link NodeEntry.DirtyState#REBUILDING} if the child has changed,
+   * and {@link NodeEntry.DirtyState#VERIFIED_CLEAN} if the child has not changed and this was the
    * last child to be checked (as determined by {@link #dirtyDirectDepIterator} == null, isReady(),
    * and a flag set in {@link #getNextDirtyDirectDeps}).
    *
@@ -281,12 +281,12 @@ public class BuildingState {
       // Synchronization isn't needed here because the only caller is ValueEntry, which does it
       // through the synchronized method signalDep(long).
       if (childChanged) {
-        dirtyState = DirtyState.REBUILDING;
-      } else if (dirtyState == DirtyState.CHECK_DEPENDENCIES && isReady()
+        dirtyState = NodeEntry.DirtyState.REBUILDING;
+      } else if (dirtyState == NodeEntry.DirtyState.CHECK_DEPENDENCIES && isReady()
           && dirtyDirectDepIterator == null) {
         // No other dep already marked this as REBUILDING, no deps outstanding, and this was
         // the last block of deps to be checked.
-        dirtyState = DirtyState.VERIFIED_CLEAN;
+        dirtyState = NodeEntry.DirtyState.VERIFIED_CLEAN;
       }
     }
     return isReady();
@@ -299,26 +299,25 @@ public class BuildingState {
    */
   boolean unchangedFromLastBuild(SkyValue newValue) {
     checkNotProcessing();
-    return getLastBuildValue().equals(newValue) && lastBuildDirectDeps.equals(directDeps);
+    return lastBuildValue.equals(newValue) && lastBuildDirectDeps.equals(directDeps);
   }
 
   boolean noDepsLastBuild() {
     return lastBuildDirectDeps.isEmpty();
   }
 
-  protected SkyValue getLastBuildValue() {
-    // Default BuildingState isn't dirty.
-    throw new UnsupportedOperationException(this.toString());
+  SkyValue getLastBuildValue() {
+    return Preconditions.checkNotNull(lastBuildValue, this);
   }
 
   /**
    * Gets the current state of checking this dirty entry to see if it must be re-evaluated. Must be
    * called each time evaluation of a dirty entry starts to find the proper action to perform next,
-   * as enumerated by {@link DirtyState}.
+   * as enumerated by {@link NodeEntry.DirtyState}.
    *
    * @see NodeEntry#getDirtyState()
    */
-  DirtyState getDirtyState() {
+  NodeEntry.DirtyState getDirtyState() {
     // Entry may not be ready if being built just for its errors.
     Preconditions.checkState(isDirty(), "must be dirty to get dirty state %s", this);
     Preconditions.checkState(evaluating, "must be evaluating to get dirty state %s", this);
@@ -336,7 +335,7 @@ public class BuildingState {
    */
   Collection<SkyKey> getNextDirtyDirectDeps() {
     Preconditions.checkState(isDirty(), this);
-    Preconditions.checkState(dirtyState == DirtyState.CHECK_DEPENDENCIES, this);
+    Preconditions.checkState(dirtyState == NodeEntry.DirtyState.CHECK_DEPENDENCIES, this);
     Preconditions.checkState(evaluating, this);
     List<SkyKey> nextDeps = ImmutableList.copyOf(dirtyDirectDepIterator.next());
     if (!dirtyDirectDepIterator.hasNext()) {
@@ -364,7 +363,7 @@ public class BuildingState {
    * Returns the direct deps (in groups) found on this build. Should only be called when the node
    * is done.
    *
-   * @see InMemoryNodeEntry#setStateFinishedAndReturnReverseDeps
+   * @see NodeEntry#setStateFinishedAndReturnReverseDeps
    */
   GroupedList<SkyKey> getFinishedDirectDeps() {
     return directDeps;
@@ -407,7 +406,8 @@ public class BuildingState {
     directDeps.remove(unfinishedDeps);
   }
 
-  protected ToStringHelper getStringHelper() {
+  @Override
+  public String toString() {
     return MoreObjects.toStringHelper(this)
         .add("evaluating", evaluating)
         .add("dirtyState", dirtyState)
@@ -415,29 +415,7 @@ public class BuildingState {
         .add("directDeps", directDeps)
         .add("reverseDepsToSignal", REVERSE_DEPS_UTIL.toString(this))
         .add("lastBuildDirectDeps", lastBuildDirectDeps)
-        .add("dirtyDirectDepIterator", dirtyDirectDepIterator);
-  }
-  @Override
-  public String toString() {
-    return getStringHelper().toString();
-  }
-
-  private static class DirtyBuildingState extends BuildingState {
-    private final SkyValue lastBuildValue;
-    private DirtyBuildingState(boolean isChanged, GroupedList<SkyKey> lastBuildDirectDeps,
-        SkyValue lastBuildValue) {
-      super(isChanged, lastBuildDirectDeps);
-      this.lastBuildValue = Preconditions.checkNotNull(lastBuildValue);
-    }
-
-    @Override
-    protected SkyValue getLastBuildValue() {
-      return lastBuildValue;
-    }
-
-    @Override
-    public String toString() {
-      return getStringHelper().add("lastBuildValue", lastBuildValue).toString();
-    }
+        .add("lastBuildValue", lastBuildValue)
+        .add("dirtyDirectDepIterator", dirtyDirectDepIterator).toString();
   }
 }

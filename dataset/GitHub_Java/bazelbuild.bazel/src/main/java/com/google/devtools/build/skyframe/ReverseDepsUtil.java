@@ -32,13 +32,10 @@ import java.util.Set;
  *
  * <p>The reason of this class it to share non-trivial code between BuildingState and NodeEntry. We
  * could simply make those two classes extend this class instead, but we would be less
- * memory-efficient since object memory alignment does not cross classes (you would have two memory
+ * memory-efficient since object memory alignment does not cross classes ( you would have two memory
  * alignments, one for the base class and one for the extended one).
- *
- * <p>This class is public only for the benefit of alternative graph implementations outside of the
- * package.
  */
-public abstract class ReverseDepsUtil<T> {
+abstract class ReverseDepsUtil<T> {
 
   static final int MAYBE_CHECK_THRESHOLD = 10;
 
@@ -85,7 +82,7 @@ public abstract class ReverseDepsUtil<T> {
    * object directly instead of a wrapper list.
    */
   @SuppressWarnings("unchecked")
-  public void addReverseDeps(T container, Collection<SkyKey> newReverseDeps) {
+  void addReverseDeps(T container, Collection<SkyKey> newReverseDeps) {
     if (newReverseDeps.isEmpty()) {
       return;
     }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,15 +14,12 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoCollection;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+
 import java.util.Objects;
 
 /**
@@ -32,11 +29,8 @@ import java.util.Objects;
 public class BuildInfoCollectionValue extends ActionLookupValue {
   private final BuildInfoCollection collection;
 
-  BuildInfoCollectionValue(
-      ActionKeyContext actionKeyContext,
-      BuildInfoCollection collection,
-      boolean removeActionsAfterEvaluation) {
-    super(actionKeyContext, collection.getActions(), removeActionsAfterEvaluation);
+  BuildInfoCollectionValue(BuildInfoCollection collection) {
+    super(collection.getActions());
     this.collection = collection;
   }
 
@@ -46,15 +40,9 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
 
   @Override
   public String toString() {
-    return getStringHelper().add("collection", collection).toString();
-  }
-
-  private static final Interner<BuildInfoKeyAndConfig> keyInterner =
-      BlazeInterners.newWeakInterner();
-
-  public static BuildInfoKeyAndConfig key(
-      BuildInfoFactory.BuildInfoKey key, BuildConfiguration config) {
-    return keyInterner.intern(new BuildInfoKeyAndConfig(key, config));
+    return com.google.common.base.MoreObjects.toStringHelper(getClass())
+        .add("collection", collection)
+        .add("generatingActionMap", generatingActionMap).toString();
   }
 
   /** Key for BuildInfoCollectionValues. */
@@ -62,13 +50,13 @@ public class BuildInfoCollectionValue extends ActionLookupValue {
     private final BuildInfoFactory.BuildInfoKey infoKey;
     private final BuildConfiguration config;
 
-    private BuildInfoKeyAndConfig(BuildInfoFactory.BuildInfoKey key, BuildConfiguration config) {
+    public BuildInfoKeyAndConfig(BuildInfoFactory.BuildInfoKey key, BuildConfiguration config) {
       this.infoKey = Preconditions.checkNotNull(key, config);
       this.config = Preconditions.checkNotNull(config, key);
     }
 
     @Override
-    public SkyFunctionName functionName() {
+    SkyFunctionName getType() {
       return SkyFunctions.BUILD_INFO_COLLECTION;
     }
 
