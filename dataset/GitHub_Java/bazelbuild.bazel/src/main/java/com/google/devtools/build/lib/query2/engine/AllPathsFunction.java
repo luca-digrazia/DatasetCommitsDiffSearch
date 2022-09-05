@@ -18,6 +18,7 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
@@ -26,7 +27,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * Implementation of the <code>allpaths()</code> function.
@@ -89,7 +89,7 @@ public class AllPathsFunction implements QueryFunction {
       QueryExpression expression,
       List<Argument> args,
       ThreadSafeCallback<T> callback,
-      ForkJoinPool forkJoinPool) throws QueryException, InterruptedException {
+      ListeningExecutorService executorService) throws QueryException, InterruptedException {
     eval(env, context, expression, args, callback);
   }
 

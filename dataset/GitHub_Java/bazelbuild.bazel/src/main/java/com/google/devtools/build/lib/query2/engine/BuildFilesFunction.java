@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.query2.engine;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.devtools.build.lib.collect.CompactHashSet;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Argument;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ArgumentType;
@@ -22,7 +23,6 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunctio
 
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
 
 /**
  * A buildfiles(x) query expression, which computes the set of BUILD files and
@@ -72,7 +72,7 @@ class BuildFilesFunction implements QueryFunction {
       QueryExpression expression,
       List<Argument> args,
       ThreadSafeCallback<T> callback,
-      ForkJoinPool forkJoinPool) throws QueryException, InterruptedException {
+      ListeningExecutorService executorService) throws QueryException, InterruptedException {
     eval(env, context, expression, args, callback);
   }
 
