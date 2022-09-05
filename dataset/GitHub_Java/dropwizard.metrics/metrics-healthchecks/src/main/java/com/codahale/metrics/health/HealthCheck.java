@@ -1,8 +1,6 @@
 package com.codahale.metrics.health;
 
-import java.text.SimpleDateFormat;
 import java.util.Collections;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,7 +14,7 @@ public abstract class HealthCheck {
      * or unhealthy (with either an error message or a thrown exception and optional details).
      */
     public static class Result {
-        private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+        private static final Result HEALTHY = new Result(true, null, null);
         private static final int PRIME = 31;
 
         /**
@@ -25,7 +23,7 @@ public abstract class HealthCheck {
          * @return a healthy {@link Result} with no additional message
          */
         public static Result healthy() {
-            return new Result(true, null, null);
+            return HEALTHY;
         }
 
         /**
@@ -100,22 +98,19 @@ public abstract class HealthCheck {
         private final String message;
         private final Throwable error;
         private final Map<String, Object> details;
-        private final String timestamp;
 
         private Result(boolean isHealthy, String message, Throwable error) {
-            this(isHealthy, message, error, null);
-        }
-
-        private Result(ResultBuilder builder) {
-            this(builder.healthy, builder.message, builder.error, builder.details);
-        }
-
-        private Result(boolean isHealthy, String message, Throwable error, Map<String, Object> details) {
             this.healthy = isHealthy;
             this.message = message;
             this.error = error;
-            this.details = details == null ? null : Collections.unmodifiableMap(details);
-            timestamp = DATE_FORMAT.format(new Date());
+            this.details = null;
+        }
+
+        private Result(ResultBuilder builder) {
+            this.healthy = builder.healthy;
+            this.message = builder.message;
+            this.error = builder.error;
+            this.details = builder.details == null ? null : Collections.unmodifiableMap(builder.details);
         }
 
         /**
@@ -147,31 +142,18 @@ public abstract class HealthCheck {
             return error;
         }
 
-        /**
-         * Returns the timestamp when the result was created.
-         * @return a formatted timestamp
-         */
-        public String getTimestamp() {
-            return timestamp;
-        }
-
         public Map<String, Object> getDetails() {
             return details;
         }
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
+            if (this == o) { return true; }
+            if (o == null || getClass() != o.getClass()) { return false; }
             final Result result = (Result) o;
             return healthy == result.healthy &&
                     !(error != null ? !error.equals(result.error) : result.error != null) &&
-                    !(message != null ? !message.equals(result.message) : result.message != null) &&
-                    !(timestamp != null ? !timestamp.equals(result.timestamp) : result.timestamp != null);
+                    !(message != null ? !message.equals(result.message) : result.message != null);
         }
 
         @Override
@@ -179,7 +161,6 @@ public abstract class HealthCheck {
             int result = (healthy ? 1 : 0);
             result = PRIME * result + (message != null ? message.hashCode() : 0);
             result = PRIME * result + (error != null ? error.hashCode() : 0);
-            result = PRIME * result + (timestamp != null ? timestamp.hashCode() : 0);
             return result;
         }
 
@@ -193,14 +174,13 @@ public abstract class HealthCheck {
             if (error != null) {
                 builder.append(", error=").append(error);
             }
-            builder.append(", timestamp=").append(timestamp);
             if (details != null) {
                 Iterator<Map.Entry<String, Object>> it = details.entrySet().iterator();
                 while (it.hasNext()) {
                     Map.Entry<String, Object> e = it.next();
                     builder.append(e.getKey())
-                            .append("=")
-                            .append(e.getValue().toString());
+                        .append("=")
+                        .append(e.getValue().toString());
                 }
             }
             builder.append('}');
@@ -208,7 +188,7 @@ public abstract class HealthCheck {
         }
     }
 
-    /**
+	/**
      * This a convenient builder for an {@link HealthCheck.Result}. It can be health (with optional message and detail)
      * or unhealthy (with optional message, error and detail)
      */
@@ -223,9 +203,8 @@ public abstract class HealthCheck {
             this.details = new LinkedHashMap<String, Object>();
         }
 
-        /**
+		/**
          * Configure an healthy result
-         *
          * @return
          */
         public ResultBuilder healthy() {
@@ -233,9 +212,8 @@ public abstract class HealthCheck {
             return this;
         }
 
-        /**
+		/**
          * Configure an unhealthy result
-         *
          * @return
          */
         public ResultBuilder unhealthy() {
@@ -245,7 +223,6 @@ public abstract class HealthCheck {
 
         /**
          * Configure an unhealthy result with an {@code error}
-         *
          * @param error the error
          * @return
          */
@@ -254,7 +231,7 @@ public abstract class HealthCheck {
             return this.unhealthy().withMessage(error.getMessage());
         }
 
-        /**
+		/**
          * Set an optional message
          *
          * @param message an informative message
@@ -265,7 +242,7 @@ public abstract class HealthCheck {
             return this;
         }
 
-        /**
+		/**
          * Set an optional formatted message
          * <p/>
          * Message formatting follows the same rules as {@link String#format(String, Object...)}.
@@ -279,10 +256,10 @@ public abstract class HealthCheck {
             return withMessage(String.format(message, args));
         }
 
-        /**
+		/**
          * Add an optional detail
          *
-         * @param key  a key for this detail
+         * @param key a key for this detail
          * @param data an object representing the detail data
          * @return this builder with the given detail added
          */
