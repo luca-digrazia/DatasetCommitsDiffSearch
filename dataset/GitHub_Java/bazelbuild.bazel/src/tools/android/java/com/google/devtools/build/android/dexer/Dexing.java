@@ -15,7 +15,7 @@ package com.google.devtools.build.android.dexer;
 
 import com.android.dx.cf.direct.DirectClassFile;
 import com.android.dx.cf.direct.StdAttributeFactory;
-import com.android.dx.command.dexer.DxContext;
+import com.android.dx.command.DxConsole;
 import com.android.dx.dex.DexOptions;
 import com.android.dx.dex.cf.CfOptions;
 import com.android.dx.dex.cf.CfTranslator;
@@ -25,63 +25,45 @@ import com.android.dx.dex.file.DexFile;
 import com.android.dx.util.ByteArray;
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.io.ByteStreams;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
-import java.io.PrintStream;
 
 /**
  * Common helper class that encodes Java classes into {@link DexFile}s.
  */
 class Dexing {
 
-  static final PrintStream nullout = new PrintStream(ByteStreams.nullOutputStream());
-
   /**
    * Common command line options for use with {@link Dexing}.
    */
   public static class DexingOptions extends OptionsBase {
 
-    @Option(
-      name = "locals",
-      defaultValue = "true", // dx's default
-      category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      allowMultiple = false,
-      help = "Whether to include local variable tables (useful for debugging)."
-    )
+    @Option(name = "locals",
+        defaultValue = "true", // dx's default
+        category = "semantics",
+        allowMultiple = false,
+        help = "Whether to include local variable tables (useful for debugging).")
     public boolean localInfo;
 
-    @Option(
-      name = "optimize",
-      defaultValue = "true", // dx's default
-      category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      allowMultiple = false,
-      help = "Whether to do SSA/register optimization."
-    )
+    @Option(name = "optimize",
+        defaultValue = "true", // dx's default
+        category = "semantics",
+        allowMultiple = false,
+        help = "Whether to do SSA/register optimization.")
     public boolean optimize;
 
-    @Option(
-      name = "warning",
-      defaultValue = "true", // dx's default
-      category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      allowMultiple = false,
-      help = "Whether to print warnings."
-    )
+    @Option(name = "warning",
+        defaultValue = "true", // dx's default
+        category = "misc",
+        allowMultiple = false,
+        help = "Whether to print warnings.")
     public boolean printWarnings;
 
-    public CfOptions toCfOptions(DxContext context) {
+    public CfOptions toCfOptions() {
       CfOptions result = new CfOptions();
       result.localInfo = this.localInfo;
       result.optimize = this.optimize;
-      result.warn = printWarnings ? context.err : Dexing.nullout;
+      result.warn = printWarnings ? DxConsole.err : DxConsole.noop;
       // Use dx's defaults
       result.optimizeListFile = null;
       result.dontOptimizeListFile = null;
@@ -118,21 +100,15 @@ class Dexing {
     @SuppressWarnings("mutable") abstract byte[] classfileContent();
   }
 
-  private final DxContext context;
   private final DexOptions dexOptions;
   private final CfOptions cfOptions;
 
   public Dexing(DexingOptions options) {
-    this(new DxContext(), options);
-  }
-
-  public Dexing(DxContext context, DexingOptions options) {
-    this(context, options.toDexOptions(), options.toCfOptions(context));
+    this(options.toDexOptions(), options.toCfOptions());
   }
 
   @VisibleForTesting
-  Dexing(DxContext context, DexOptions dexOptions, CfOptions cfOptions) {
-    this.context = context;
+  Dexing(DexOptions dexOptions, CfOptions cfOptions) {
     this.dexOptions = dexOptions;
     this.cfOptions = cfOptions;
   }
@@ -150,9 +126,7 @@ class Dexing {
   }
 
   public ClassDefItem addToDexFile(DexFile dest, DirectClassFile classFile) {
-    ClassDefItem result = CfTranslator.translate(
-        context,
-        classFile,
+    ClassDefItem result = CfTranslator.translate(classFile,
         (byte[]) null /*ignored*/,
         cfOptions,
         dest.getDexOptions(),

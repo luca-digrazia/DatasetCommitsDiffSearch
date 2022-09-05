@@ -22,7 +22,7 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.buildjar.jarhelper.JarCreator;
 import com.google.devtools.build.buildjar.proto.JavaCompilation.CompilationUnit;
 import com.google.devtools.build.buildjar.proto.JavaCompilation.Manifest;
-import com.google.devtools.common.options.Options;
+import com.google.devtools.common.options.OptionsParser;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -42,30 +42,29 @@ import java.util.jar.JarFile;
 public class IdlClass {
 
   public static void main(String[] args) throws IOException {
-    Options<IdlClassOptions> options =
-        Options.parseAndExitUponError(IdlClassOptions.class, /*allowResidue=*/ true, args);
-
-    IdlClassOptions idlClassOptions = options.getOptions();
-    Preconditions.checkNotNull(idlClassOptions.manifestProto);
-    Preconditions.checkNotNull(idlClassOptions.classJar);
-    Preconditions.checkNotNull(idlClassOptions.outputClassJar);
-    Preconditions.checkNotNull(idlClassOptions.outputSourceJar);
-    Preconditions.checkNotNull(idlClassOptions.tempDir);
+    OptionsParser optionsParser = OptionsParser.newOptionsParser(IdlClassOptions.class);
+    optionsParser.parseAndExitUponError(args);
+    IdlClassOptions options = optionsParser.getOptions(IdlClassOptions.class);
+    Preconditions.checkNotNull(options.manifestProto);
+    Preconditions.checkNotNull(options.classJar);
+    Preconditions.checkNotNull(options.outputClassJar);
+    Preconditions.checkNotNull(options.outputSourceJar);
+    Preconditions.checkNotNull(options.tempDir);
 
     List<Path> idlSources = Lists.newArrayList();
-    for (String idlSource : options.getRemainingArgs()) {
+    for (String idlSource : optionsParser.getResidue()) {
       idlSources.add(Paths.get(idlSource));
     }
 
-    Manifest manifest = readManifest(idlClassOptions.manifestProto);
-    writeClassJar(idlClassOptions, idlSources, manifest);
-    writeSourceJar(idlClassOptions, idlSources, manifest);
+    Manifest manifest = readManifest(options.manifestProto);
+    writeClassJar(options, idlSources, manifest);
+    writeSourceJar(options, idlSources, manifest);
   }
 
   private static void writeClassJar(IdlClassOptions options,
       List<Path> idlSources, Manifest manifest) throws IOException {
     Path tempDir = options.tempDir.resolve("classjar");
-    Set<Path> idlSourceSet = Sets.newLinkedHashSet(idlSources);
+    Set<Path> idlSourceSet = Sets.newHashSet(idlSources);
     extractIdlClasses(options.classJar, manifest, tempDir, idlSourceSet);
     writeOutputJar(options.outputClassJar, tempDir);
   }

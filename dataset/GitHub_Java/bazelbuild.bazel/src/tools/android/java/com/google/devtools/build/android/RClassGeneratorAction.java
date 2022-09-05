@@ -27,7 +27,6 @@ import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -58,7 +57,7 @@ public class RClassGeneratorAction {
   private static final StdLogger STD_LOGGER =
       new StdLogger(StdLogger.Level.WARNING);
 
-  private static final Logger logger = Logger.getLogger(RClassGeneratorAction.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(RClassGeneratorAction.class.getName());
 
   /**
    * Flag specifications for this action.
@@ -105,7 +104,6 @@ public class RClassGeneratorAction {
   public static void main(String[] args) throws Exception {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
-    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
     if (args.length == 1 && args[0].startsWith("@")) {
       args = Files.readAllLines(Paths.get(args[0].substring(1)), StandardCharsets.UTF_8)
           .toArray(new String[0]);
@@ -120,7 +118,7 @@ public class RClassGeneratorAction {
       Path tmp = scopedTmp.getPath();
       Path classOutPath = tmp.resolve("compiled_classes");
 
-      logger.fine(String.format("Setup finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
+      LOGGER.fine(String.format("Setup finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
       List<SymbolFileProvider> libraries = new ArrayList<>();
       for (DependencySymbolFileProvider library : options.libraries) {
         libraries.add(library);
@@ -136,13 +134,13 @@ public class RClassGeneratorAction {
         Multimap<String, SymbolLoader> libSymbolMap = ArrayListMultimap.create();
         SymbolLoader fullSymbolValues = resourceProcessor.loadResourceSymbolTable(
             libraries, appPackageName, options.primaryRTxt, libSymbolMap);
-        logger.fine(
+        LOGGER.fine(
             String.format("Load symbols finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
         // For now, assuming not used for libraries and setting final access for fields.
         if (fullSymbolValues != null) {
           resourceProcessor.writePackageRClasses(libSymbolMap, fullSymbolValues, appPackageName,
               classOutPath, true /* finalFields */);
-          logger.fine(
+          LOGGER.fine(
               String.format("Finished R.class at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
         }
       } else {
@@ -150,12 +148,12 @@ public class RClassGeneratorAction {
       }
       // We write .class files to temp, then jar them up after (we create a dummy jar, even if
       // there are no class files).
-      AndroidResourceOutputs.createClassJar(classOutPath, options.classJarOutput);
-      logger.fine(
+      resourceProcessor.createClassJar(classOutPath, options.classJarOutput);
+      LOGGER.fine(
           String.format("createClassJar finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
     } finally {
       resourceProcessor.shutdown();
     }
-    logger.fine(String.format("Compile action done in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
+    LOGGER.fine(String.format("Compile action done in %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
   }
 }

@@ -156,9 +156,10 @@ public class ManifestMergerAction {
     optionsParser.parseAndExitUponError(args);
     options = optionsParser.getOptions(Options.class);
 
+    final AndroidResourceProcessor resourceProcessor = new AndroidResourceProcessor(stdLogger);
+
     try {
       Path mergedManifest;
-      AndroidManifestProcessor manifestProcessor = AndroidManifestProcessor.with(stdLogger);
       if (options.mergeType == MergeType.APPLICATION) {
         // Remove uses-permission tags from mergees before the merge.
         Path tmp = Files.createTempDirectory("manifest_merge_tmp");
@@ -171,19 +172,17 @@ public class ManifestMergerAction {
         }
 
         // Ignore custom package at the binary level.
-        mergedManifest =
-            manifestProcessor.mergeManifest(
-                options.manifest,
-                mergeeManifests.build(),
-                options.mergeType,
-                options.manifestValues,
-                options.manifestOutput,
-                options.log);
+        mergedManifest = resourceProcessor.mergeManifest(
+            options.manifest,
+            mergeeManifests.build(),
+            options.mergeType,
+            options.manifestValues,
+            options.manifestOutput,
+            options.log);
       } else {
         // Only need to stamp custom package into the library level.
-        mergedManifest =
-            manifestProcessor.writeManifestPackage(
-                options.manifest, options.customPackage, options.manifestOutput);
+        mergedManifest = resourceProcessor.writeManifestPackage(
+            options.manifest, options.customPackage, options.manifestOutput);
       }
 
       if (!mergedManifest.equals(options.manifestOutput)) {
@@ -195,6 +194,8 @@ public class ManifestMergerAction {
     } catch (IOException e) {
       logger.log(SEVERE, "Error during merging manifests", e);
       throw e;
+    } finally {
+      resourceProcessor.shutdown();
     }
   }
 }

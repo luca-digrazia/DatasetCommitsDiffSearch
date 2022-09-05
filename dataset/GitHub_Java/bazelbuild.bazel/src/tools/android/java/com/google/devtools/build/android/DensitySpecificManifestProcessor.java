@@ -101,7 +101,7 @@ public class DensitySpecificManifestProcessor {
    *
    * @throws ManifestProcessingException when the manifest cannot be properly modified.
    */
-  public Path process(Path manifest) {
+  public Path process(Path manifest) throws ManifestProcessingException {
     if (densities.isEmpty()) {
       return manifest;
     }
@@ -111,10 +111,9 @@ public class DensitySpecificManifestProcessor {
 
       NodeList manifestElements = doc.getElementsByTagName("manifest");
       if (manifestElements.getLength() != 1) {
-        throw new AndroidManifestProcessor.ManifestProcessingException(
-            String.format(
-                "Manifest %s does not contain exactly one <manifest> tag. " + "It contains %d.",
-                manifest, manifestElements.getLength()));
+        throw new ManifestProcessingException(
+            String.format("Manifest %s does not contain exactly one <manifest> tag. "
+                + "It contains %d.", manifest, manifestElements.getLength()));
       }
       Node manifestElement = manifestElements.item(0);
 
@@ -171,7 +170,7 @@ public class DensitySpecificManifestProcessor {
       return out;
 
     } catch (ParserConfigurationException | SAXException | IOException | TransformerException e) {
-      throw new AndroidManifestProcessor.ManifestProcessingException(e.getMessage());
+      throw new ManifestProcessingException(e.getMessage());
     }
   }
 }

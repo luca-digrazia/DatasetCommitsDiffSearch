@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,9 +15,7 @@
 package com.google.devtools.build.android.incrementaldeployment;
 
 import android.util.Log;
-
 import dalvik.system.BaseDexClassLoader;
-
 import java.io.File;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -30,13 +28,14 @@ import java.util.List;
 public class IncrementalClassLoader extends ClassLoader {
   private final DelegateClassLoader delegateClassLoader;
 
-  public IncrementalClassLoader(ClassLoader original, String packageName, List<String> dexes) {
+  public IncrementalClassLoader(ClassLoader original,
+      String packageName, File codeCacheDir, String nativeLibDir, List<String> dexes) {
     super(original.getParent());
 
     // TODO(bazel-team): For some mysterious reason, we need to use two class loaders so that
     // everything works correctly. Investigate why that is the case so that the code can be
     // simplified.
-    delegateClassLoader = createDelegateClassLoader(packageName, dexes, original);
+    delegateClassLoader = createDelegateClassLoader(codeCacheDir, nativeLibDir, dexes, original);
   }
 
   @Override
@@ -60,7 +59,7 @@ public class IncrementalClassLoader extends ClassLoader {
   }
 
   private static DelegateClassLoader createDelegateClassLoader(
-      String packageName, List<String> dexes, ClassLoader original) {
+      File codeCacheDir, String nativeLibDir, List<String> dexes, ClassLoader original) {
     StringBuilder pathBuilder = new StringBuilder();
     boolean first = true;
     for (String dex : dexes) {
@@ -74,14 +73,9 @@ public class IncrementalClassLoader extends ClassLoader {
     }
 
     Log.v("IncrementalClassLoader", "Incremental dex path is " + pathBuilder);
-    return new DelegateClassLoader(pathBuilder.toString(), getCodeCacheDir(packageName),
-        "/data/data/" + packageName + "/lib", original);
-  }
-
-  private static File getCodeCacheDir(String packageName) {
-    File result = new File("/data/data/" + packageName + "/code_cache");
-    boolean success = result.mkdir();
-    return result;
+    Log.v("IncrementalClassLoader", "Native lib dir is " + nativeLibDir);
+    return new DelegateClassLoader(pathBuilder.toString(), codeCacheDir,
+        nativeLibDir, original);
   }
 
   private static void setParent(ClassLoader classLoader, ClassLoader newParent) {
@@ -94,9 +88,11 @@ public class IncrementalClassLoader extends ClassLoader {
     }
   }
 
-  public static void inject(ClassLoader classLoader, String packageName, List<String> dexes) {
+  public static void inject(
+      ClassLoader classLoader, String packageName, File codeCacheDir,
+      String nativeLibDir, List<String> dexes) {
     IncrementalClassLoader incrementalClassLoader =
-        new IncrementalClassLoader(classLoader, packageName, dexes);
+        new IncrementalClassLoader(classLoader, packageName, codeCacheDir, nativeLibDir, dexes);
     setParent(classLoader, incrementalClassLoader);
   }
 }

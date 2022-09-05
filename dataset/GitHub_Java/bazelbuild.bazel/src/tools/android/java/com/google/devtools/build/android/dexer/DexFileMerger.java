@@ -151,7 +151,12 @@ class DexFileMerger {
         System.setOut(DxConsole.noop);
       }
 
-      DexConverter dexer = new DexConverter(new Dexing(dexingOptions));
+      MergingDexer dexer =
+          new MergingDexer(
+              new Dexing(dexingOptions),
+              out,
+              options.multidexMode.isMultidexAllowed(),
+              options.maxNumberOfIdxPerDex);
       if (classesInMainDex == null) {
         processClassAndDexFiles(zip, out, dexer, Predicates.<ZipEntry>alwaysTrue());
       } else {
@@ -164,6 +169,7 @@ class DexFileMerger {
         // 2. process the remaining files
         Predicate<ZipEntry> classFileFilter = ZipEntryPredicates.classFileFilter(classesInMainDex);
         processClassAndDexFiles(zip, out, dexer, classFileFilter);
+        dexer.flush(); // Add any main dex list classes we had to convert on-the-fly
         // Fail if main_dex_list is too big, following dx's example
         checkState(out.getDexFilesWritten() == 0, "Too many classes listed in main dex list file "
             + "%s, main dex capacity exceeded", options.mainDexListFile);
@@ -172,6 +178,8 @@ class DexFileMerger {
         }
         processClassAndDexFiles(zip, out, dexer, Predicates.not(classFileFilter));
       }
+      // Add any classes to output archive that we had to convert on-the-fly
+      dexer.finish();
     } finally {
       System.setOut(originalStdOut);
     }
@@ -183,7 +191,7 @@ class DexFileMerger {
   private static void processClassAndDexFiles(
       ZipFile zip,
       DexFileAggregator out,
-      DexConverter dexer,
+      MergingDexer dexer,
       Predicate<ZipEntry> extraFilter)
       throws IOException {
     @SuppressWarnings("unchecked") // Predicates.and uses varargs parameter with generics
@@ -205,8 +213,7 @@ class DexFileMerger {
           // a byte buffer before effectively calling Dex(byte[]) anyway.
           out.add(new Dex(ByteStreams.toByteArray(content)));
         } else if (filename.endsWith(".class")) {
-          // TODO(b/34949364): Remove this fallback once Blaze incrementally dexes all Jars
-          out.add(DexFiles.toDex(dexer.toDexFile(ByteStreams.toByteArray(content), filename)));
+          dexer.add(Dexing.parseClassFile(ByteStreams.toByteArray(content), filename));
         } else {
           throw new IllegalStateException("Shouldn't get here: " + filename);
         }

@@ -16,24 +16,24 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import java.util.regex.Pattern;
 
 /**
  * Implementation for the {@code android_tools_defaults_jar} rule.
  *
- * <p>This rule is a sad, sad way to let people depend on {@code android.jar} when an {@code
- * android_sdk} rule is used. In an ideal world, people would say "depend on the android_jar output
- * group of $config.android_sdk", but, alas, neither depending on labels in the configuration nor
- * depending on a specified output group works.
+ * <p>This rule is a sad, sad way to let people depend on {@code android.jar} when an
+ * {@code android_sdk} rule is used. In an ideal world, people would say "depend on
+ * the android_jar output group of $config.android_sdk", but, alas, neither depending on labels in
+ * the configuration nor depending on a specified output group works.
  *
  * <p>So all this needs to be implemented manually. This rule is injected into the defaults package
  * from {@link AndroidConfiguration.Options#getDefaultsRules()}.
@@ -47,23 +47,20 @@ public class AndroidToolsDefaultsJar implements RuleConfiguredTargetFactory {
       throws InterruptedException, RuleErrorException {
     if (!ruleContext.getLabel().getPackageName().equals("tools/defaults")) {
       // Guard against extraordinarily inquisitive individuals.
-      ruleContext.ruleError(
-          "The android_tools_defaults_jar rule should not be used in BUILD files."
-              + " It is a rule internal to the build tool.");
+      ruleContext.ruleError("The android_tools_defaults_jar rule should not be used in BUILD files."
+          + " It is a rule internal to the build tool.");
       return null;
     }
 
     TransitiveInfoCollection androidSdk = ruleContext.getPrerequisite(":android_sdk", Mode.TARGET);
-    AndroidSdkProvider sdkProvider = androidSdk.getProvider(AndroidSdkProvider.class);
-    Artifact androidJar =
-        sdkProvider != null
-            ? sdkProvider.getAndroidJar()
-            : findAndroidJar(androidSdk.getProvider(FileProvider.class).getFilesToBuild());
+    AndroidSdkProvider sdkProvider =  androidSdk.getProvider(AndroidSdkProvider.class);
+    Artifact androidJar = sdkProvider != null
+        ? sdkProvider.getAndroidJar()
+        : findAndroidJar(androidSdk.getProvider(FileProvider.class).getFilesToBuild());
 
-    NestedSet<Artifact> filesToBuild =
-        androidJar == null
-            ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
-            : NestedSetBuilder.create(Order.STABLE_ORDER, androidJar);
+    NestedSet<Artifact> filesToBuild = androidJar == null
+        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
+        : NestedSetBuilder.create(Order.STABLE_ORDER, androidJar);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .add(RunfilesProvider.class, RunfilesProvider.EMPTY)

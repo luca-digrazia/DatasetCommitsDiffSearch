@@ -49,9 +49,7 @@ public class AndroidNdkRepositoryRule implements RuleDefinition {
 
           return ImmutableMap.of(
               "android/crosstool",
-              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:" + defaultToolchainName),
-              "android_ndk_for_testing",
-              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:files"));
+              Label.parseAbsoluteUnchecked("@" + rule.getName() + "//:" + defaultToolchainName));
         }
       };
 
@@ -62,7 +60,7 @@ public class AndroidNdkRepositoryRule implements RuleDefinition {
         .setWorkspaceOnly()
         .setExternalBindingsFunction(BINDINGS_FUNCTION)
         .add(attr("path", STRING).nonconfigurable("WORKSPACE rule"))
-        .add(attr("api_level", INTEGER).nonconfigurable("WORKSPACE rule"))
+        .add(attr("api_level", INTEGER).mandatory().nonconfigurable("WORKSPACE rule"))
         .build();
   }
 
