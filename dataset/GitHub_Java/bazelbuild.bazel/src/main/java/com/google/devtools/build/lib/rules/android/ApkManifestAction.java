@@ -23,13 +23,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.android.apkmanifest.ApkManifestOuterClass;
 import com.google.devtools.build.lib.rules.android.apkmanifest.ApkManifestOuterClass.ApkManifest;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.TextFormat;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -42,8 +42,7 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
       AndroidSdkProvider sdk,
       Iterable<Artifact> jars,
       ResourceApk resourceApk,
-      NativeLibs nativeLibs,
-      Artifact debugKeystore) {
+      NativeLibs nativeLibs) {
 
     return ImmutableList.<Artifact>builder()
         .add(sdk.getAapt().getExecutable())
@@ -51,19 +50,22 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
         .add(sdk.getAidl().getExecutable())
         .add(sdk.getAndroidJar())
         .add(sdk.getAnnotationsJar())
+        .add(sdk.getApkBuilder().getExecutable())
         .add(sdk.getDx().getExecutable())
         .add(sdk.getFrameworkAidl())
+        .add(sdk.getJack().getExecutable())
+        .add(sdk.getJill().getExecutable())
         .add(sdk.getMainDexClasses())
         .add(sdk.getMainDexListCreator().getExecutable())
         .add(sdk.getProguard().getExecutable())
         .add(sdk.getResourceExtractor().getExecutable())
         .add(sdk.getShrinkedAndroidJar())
         .add(sdk.getZipalign().getExecutable())
+        
         .addAll(jars)
         .add(resourceApk.getArtifact())
         .add(resourceApk.getManifest())
         .addAll(nativeLibs.getAllNativeLibs())
-        .add(debugKeystore)
         .build();
   }
 
@@ -74,7 +76,6 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
   private final Iterable<Artifact> jars;
   private final ResourceApk resourceApk;
   private final NativeLibs nativeLibs;
-  private final Artifact debugKeystore;
 
   /**
    * @param owner The action owner.
@@ -84,7 +85,6 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
    * @param jars All the jars that would be merged and dexed and put into an APK.
    * @param resourceApk The ResourceApk for the .ap_ that contains the resources that would go into
    *     an APK.
-   * @param debugKeystore The debug keystore.
    * @param nativeLibs The natives libs that would go into an APK.
    */
   public ApkManifestAction(
@@ -94,16 +94,14 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
       AndroidSdkProvider sdk,
       Iterable<Artifact> jars,
       ResourceApk resourceApk,
-      NativeLibs nativeLibs,
-      Artifact debugKeystore) {
-    super(owner, makeInputs(sdk, jars, resourceApk, nativeLibs, debugKeystore), outputFile, false);
+      NativeLibs nativeLibs) {
+    super(owner, makeInputs(sdk, jars, resourceApk, nativeLibs), outputFile, false);
     CollectionUtils.checkImmutable(jars);
     this.textOutput = textOutput;
     this.sdk = sdk;
     this.jars = jars;
     this.resourceApk = resourceApk;
     this.nativeLibs = nativeLibs;
-    this.debugKeystore = debugKeystore;
   }
 
   @Override
@@ -184,7 +182,7 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
       manifestBuilder.setResourceApk(makeArtifactProto(resourceApk.getArtifact()));
       manifestBuilder.setAndroidManifest(makeArtifactProto(resourceApk.getManifest()));
 
-      for (Map.Entry<String, NestedSet<Artifact>> nativeLib : nativeLibs.getMap().entrySet()) {
+      for (Map.Entry<String, Iterable<Artifact>> nativeLib : nativeLibs.getMap().entrySet()) {
         if (!Iterables.isEmpty(nativeLib.getValue())) {
           manifestBuilder.addNativeLibBuilder()
               .setArch(nativeLib.getKey())
@@ -193,7 +191,6 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
       }
 
       manifestBuilder.setAndroidSdk(createAndroidSdk(sdk));
-      manifestBuilder.setDebugKeystore(makeArtifactProto(debugKeystore));
       return manifestBuilder.build();
     }
 
@@ -213,7 +210,6 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
       return ApkManifestOuterClass.Artifact.newBuilder()
           .setExecRootPath(artifact.getExecPathString())
           .setHash(ByteString.copyFrom(digest))
-          .setLabel(artifact.getOwnerLabel().toString())
           .build();
     }
 
@@ -235,8 +231,11 @@ public final class ApkManifestAction extends AbstractFileWriteAction {
       sdkProto.setAidl(getArtifactPath(sdk.getAidl()));
       sdkProto.setAndroidJar(getArtifactPath(sdk.getAndroidJar()));
       sdkProto.setAnnotationsJar(getArtifactPath(sdk.getAnnotationsJar()));
+      sdkProto.setApkbuilder(getArtifactPath(sdk.getApkBuilder()));
       sdkProto.setDx(getArtifactPath(sdk.getDx()));
       sdkProto.setFrameworkAidl(getArtifactPath(sdk.getFrameworkAidl()));
+      sdkProto.setJack(getArtifactPath(sdk.getJack()));
+      sdkProto.setJill(getArtifactPath(sdk.getJill()));
       sdkProto.setMainDexClasses(getArtifactPath(sdk.getMainDexClasses()));
       sdkProto.setMainDexListCreator(getArtifactPath(sdk.getMainDexListCreator()));
       sdkProto.setProguard(getArtifactPath(sdk.getProguard()));
