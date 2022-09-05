@@ -38,24 +38,20 @@ import javax.annotation.Nullable;
  * <p>To enable various optimizations in the argument processing routine,
  * we sort arguments according the following constraints, enabling corresponding optimizations:
  * <ol>
- * <li>The positional mandatories come just before the positional optionals,
+ * <li>the positional mandatories come just before the positional optionals,
  *   so they can be filled in one go.
- * <li>Positionals come first, so it's easy to prepend extra positional arguments such as "self"
+ * <li>the optionals are grouped together, so we can iterate over them in one go.
+ * <li>positionals come first, so it's easy to prepend extra positional arguments such as "self"
  *   to an argument list, and we optimize for the common case of no key-only mandatory parameters.
  *   key-only parameters are thus grouped together.
  *   positional mandatory and key-only mandatory parameters are separate,
  *   but there no loop over a contiguous chunk of them, anyway.
- * <li>The named are all grouped together, with star and star_star rest arguments coming last.
- * <li>Mandatory arguments in each category (positional and named-only) come before the optional
- *   arguments, for the sake of slightly better clarity to human implementers. This eschews an
- *   optimization whereby grouping optionals together allows to iterate over them in one go instead
- *   of two; however, this relatively minor optimization only matters when keyword arguments are
- *   passed, at which point it is dwarfed by the slowness of keyword processing.
+ * <li>the named are all grouped together, with star and star_star rest arguments coming last.
  * </ol>
  *
  * <p>Parameters are thus sorted in the following obvious order:
  * positional mandatory arguments (if any), positional optional arguments (if any),
- * key-only mandatory arguments (if any), key-only optional arguments (if any),
+ * key-only optional arguments (if any), key-only mandatory arguments (if any),
  * then star argument (if any), then star_star argument (if any).
  */
 public abstract class FunctionSignature implements Serializable {
@@ -142,14 +138,14 @@ public abstract class FunctionSignature implements Serializable {
   public abstract ImmutableList<String> getNames();
 
   /** append a representation of this signature to a string buffer. */
-  public StringBuilder toStringBuilder(StringBuilder sb) {
-    return WithValues.<Object, SkylarkType>create(this).toStringBuilder(sb);
+  public StringBuffer toStringBuffer(StringBuffer sb) {
+    return WithValues.<Object, SkylarkType>create(this).toStringBuffer(sb);
   }
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder();
-    toStringBuilder(sb);
+    StringBuffer sb = new StringBuffer();
+    toStringBuffer(sb);
     return sb.toString();
   }
 
@@ -232,10 +228,9 @@ public abstract class FunctionSignature implements Serializable {
       ArrayList<String> params = new ArrayList<>();
       ArrayList<V> defaults = new ArrayList<>();
       ArrayList<T> types = new ArrayList<>();
-      // optional named-only parameters are kept aside to be spliced after the mandatory ones.
-      ArrayList<String> optionalNamedOnlyParams = new ArrayList<>();
-      ArrayList<T> optionalNamedOnlyTypes = new ArrayList<>();
-      ArrayList<V> optionalNamedOnlyDefaultValues = new ArrayList<>();
+      // mandatory named-only parameters are kept aside to be spliced after the optional ones.
+      ArrayList<String> mandatoryNamedOnlyParams = new ArrayList<>();
+      ArrayList<T> mandatoryNamedOnlyTypes = new ArrayList<>();
       boolean defaultRequired = false; // true after mandatory positionals and before star.
       Set<String> paramNameSet = new HashSet<>(); // set of names, to avoid duplicates
 
@@ -266,33 +261,35 @@ public abstract class FunctionSignature implements Serializable {
             star = name;
             starType = type;
           }
-        } else if (hasStar && param.isOptional()) {
-          optionalNamedOnly++;
-          optionalNamedOnlyParams.add(name);
-          optionalNamedOnlyTypes.add(type);
-          optionalNamedOnlyDefaultValues.add(param.getDefaultValue());
+        } else if (hasStar && param.isMandatory()) {
+          // mandatory named-only, added contiguously at the end, to simplify calls
+          mandatoryNamedOnlyParams.add(name);
+          mandatoryNamedOnlyTypes.add(type);
+          mandatoryNamedOnly++;
         } else {
           params.add(name);
           types.add(type);
-          if (param.isOptional()) {
-            optionalPositionals++;
-            defaults.add(param.getDefaultValue());
-            defaultRequired = true;
-          } else if (hasStar) {
-            mandatoryNamedOnly++;
-          } else if (defaultRequired) {
+          if (param.isMandatory()) {
+            if (defaultRequired) {
               throw new SignatureException(
                   "a mandatory positional parameter must not follow an optional parameter",
                   param);
-          } else {
+            }
             mandatoryPositionals++;
+          } else { // At this point, it's an optional parameter
+            defaults.add(param.getDefaultValue());
+            if (hasStar) {
+              // named-only optional
+              optionalNamedOnly++;
+            } else {
+              optionalPositionals++;
+              defaultRequired = true;
+            }
           }
         }
       }
-      params.addAll(optionalNamedOnlyParams);
-      types.addAll(optionalNamedOnlyTypes);
-      defaults.addAll(optionalNamedOnlyDefaultValues);
-
+      params.addAll(mandatoryNamedOnlyParams);
+      types.addAll(mandatoryNamedOnlyTypes);
       if (star != null) {
         params.add(star);
         types.add(starType);
@@ -315,7 +312,7 @@ public abstract class FunctionSignature implements Serializable {
     /**
      * Append a representation of this signature to a string buffer.
      */
-    public StringBuilder toStringBuilder(final StringBuilder sb) {
+    public StringBuffer toStringBuffer(final StringBuffer sb) {
       FunctionSignature signature = getSignature();
       Shape shape = signature.getShape();
       final ImmutableList<String> names = signature.getNames();
@@ -332,7 +329,7 @@ public abstract class FunctionSignature implements Serializable {
       int namedOnly = mandatoryNamedOnly + optionalNamedOnly;
       int named = positionals + namedOnly;
       int args = named + (starArg ? 1 : 0) + (kwArg ? 1 : 0);
-      int endMandatoryNamedOnly = positionals + mandatoryNamedOnly;
+      int endOptionals = positionals + optionalNamedOnly;
       boolean hasStar = starArg || (namedOnly > 0);
       int iStarArg = named;
       int iKwArg = args - 1;
@@ -377,11 +374,11 @@ public abstract class FunctionSignature implements Serializable {
           sb.append(names.get(iStarArg));
         }
       }
-      for (; i < endMandatoryNamedOnly; i++) {
-        show.mandatory(i);
+      for (; i < endOptionals; i++) {
+        show.optional(i);
       }
       for (; i < named; i++) {
-        show.optional(i);
+        show.mandatory(i);
       }
       if (kwArg) {
         show.comma();
@@ -394,8 +391,8 @@ public abstract class FunctionSignature implements Serializable {
 
     @Override
     public String toString() {
-      StringBuilder sb = new StringBuilder();
-      toStringBuilder(sb);
+      StringBuffer sb = new StringBuffer();
+      toStringBuffer(sb);
       return sb.toString();
     }
   }

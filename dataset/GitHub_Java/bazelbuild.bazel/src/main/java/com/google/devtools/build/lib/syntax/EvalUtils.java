@@ -298,7 +298,7 @@ public abstract class EvalUtils {
 
     } else if (o instanceof Map<?, ?>) {
       Map<?, ?> dict = (Map<?, ?>) o;
-      printList(dict.entrySet(), "{", ", ", "}", null, buffer);
+      printList(dict.entrySet(), "{", ", ", "}", buffer);
 
     } else if (o instanceof Map.Entry<?, ?>) {
       Map.Entry<?, ?> entry = (Map.Entry<?, ?>) o;
@@ -309,7 +309,7 @@ public abstract class EvalUtils {
     } else if (o instanceof SkylarkNestedSet) {
       SkylarkNestedSet set = (SkylarkNestedSet) o;
       buffer.append("set(");
-      printList(set, "[", ", ", "]", null, buffer);
+      printList(set, "[", ", ", "]", buffer);
       Order order = set.getOrder();
       if (order != Order.STABLE_ORDER) {
         buffer.append(", order = \"" + SkylarkNestedSet.orderString(order) + "\"");
@@ -343,21 +343,13 @@ public abstract class EvalUtils {
   }
 
   private static void printList(Iterable<?> list,
-      String before, String separator, String after, String singletonTerminator, Appendable buffer)
-      throws IOException {
-    boolean printSeparator = false; // don't print the separator before the first element
-    int len = 0;
+      String before, String separator, String after, Appendable buffer) throws IOException {
+    String sep = "";
     buffer.append(before);
     for (Object o : list) {
-      if (printSeparator) {
-        buffer.append(separator);
-      }
+      buffer.append(sep);
       prettyPrintValue(o, buffer);
-      printSeparator = true;
-      len++;
-    }
-    if (singletonTerminator != null && len == 1) {
-      buffer.append(singletonTerminator);
+      sep = separator;
     }
     buffer.append(after);
   }
@@ -365,9 +357,9 @@ public abstract class EvalUtils {
   private static void printList(Iterable<?> list, boolean isTuple, Appendable buffer)
       throws IOException {
     if (isTuple) {
-      printList(list, "(", ", ", ")", ",", buffer);
+      printList(list, "(", ", ", ")", buffer);
     } else {
-      printList(list, "[", ", ", "]", null, buffer);
+      printList(list, "[", ", ", "]", buffer);
     }
   }
 

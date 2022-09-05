@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.MethodLibrary;
-import com.google.devtools.build.lib.packages.SkylarkNativeModule;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.Function;
 import com.google.devtools.build.lib.syntax.SkylarkBuiltin;
@@ -42,13 +41,7 @@ import java.util.Map;
 // let each extension register itself in a static { } statement.
 public class SkylarkModules {
 
-  /**
-   * The list of built in Skylark modules. Documentation is generated automatically for all these
-   * modules. They are also registered with the {@link ValidationEnvironment} and the
-   * {@link SkylarkEnvironment}. Note that only {@link SkylarkFunction}s are handled properly.
-   */
   public static final ImmutableList<Class<?>> MODULES = ImmutableList.of(
-      SkylarkNativeModule.class,
       SkylarkAttr.class,
       SkylarkCommandLine.class,
       SkylarkRuleClassFunctions.class,
@@ -130,6 +123,7 @@ public class SkylarkModules {
             SkylarkType.of(moduleClass));
       }
     }
+    global.put("native", SkylarkType.UNKNOWN);
     MethodLibrary.setupValidationEnvironment(builtIn);
     for (Class<?> module : MODULES) {
       collectSkylarkTypesFromFields(module, builtIn);

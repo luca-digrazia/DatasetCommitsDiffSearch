@@ -247,7 +247,7 @@ public final class FuncallExpression extends Expression {
 
   @Override
   public String toString() {
-    if (func.getName().equals("$slice")) {
+    if (func.getName().equals("$substring")) {
       return obj + "[" + args.get(0) + ":" + args.get(1) + "]";
     }
     if (func.getName().equals("$index")) {
