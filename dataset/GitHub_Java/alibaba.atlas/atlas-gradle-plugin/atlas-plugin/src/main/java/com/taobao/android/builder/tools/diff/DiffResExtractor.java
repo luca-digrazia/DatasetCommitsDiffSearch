@@ -221,10 +221,8 @@ import com.android.build.gradle.internal.api.AppVariantContext;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.zip.ZipUtils;
-import groovy.lang.Closure;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.TrueFileFilter;
-import org.gradle.api.file.CopySpec;
 
 /**
  * Created by wuzhong on 2016/9/30.
@@ -308,18 +306,8 @@ public class DiffResExtractor {
         File valuesDir = new File(resDir, "values");
         FileUtils.forceMkdir(valuesDir);
         if (fullValues) {
-            appVariantContext.getProject().copy(new Closure(DiffResExtractor.class) {
-                public Object doCall(CopySpec cs) {
-                    cs.from(fullResDir);
-                    cs.into(destDir);
-                    cs.include("res/values*/**");
-
-                    return cs;
-                }
-            });
-
-            // FileUtils.copyFile(new File(fullResDir, "res/values/values.xml"),
-            //                    new File(destDir, "res/values/values.xml"));
+            FileUtils.copyFile(new File(fullResDir, "res/values/values.xml"),
+                               new File(destDir, "res/values/values.xml"));
         } else {
             if (!resDir.exists()) {
                 File stringsFile = new File(valuesDir, "strings.xml");

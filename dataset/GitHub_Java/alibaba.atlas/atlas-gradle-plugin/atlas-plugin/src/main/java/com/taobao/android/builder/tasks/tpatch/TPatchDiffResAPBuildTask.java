@@ -265,7 +265,7 @@ import org.gradle.api.tasks.TaskAction;
 import static com.android.build.gradle.internal.api.ApContext.APK_FILE_LIST;
 
 /**
- * Deal with the task of diff. Ap_
+ * 处理diff.ap_的task
  * Created by wuzhong
  */
 public class TPatchDiffResAPBuildTask extends BaseTask {
@@ -410,7 +410,7 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
             }
             processDiffResources.mergeBlameLogFolder = scope.getVariantScope().getResourceBlameLogDir();
             processDiffResources.pseudoLocalesEnabled = config.getBuildType().isPseudoLocalesEnabled();
-            //Setting ap output
+            //设置ap的输出
             processDiffResources.packageOutputFile = (getAppVariantOutputContext().getDiffResourceAp());
             processDiffResources.type = (config.getType());
             processDiffResources.debuggable = (config.getBuildType().isDebuggable());
@@ -435,7 +435,7 @@ public class TPatchDiffResAPBuildTask extends BaseTask {
             ConventionMappingHelper.map(processDiffResources, "aaptOptions", new Callable<AaptOptions>() {
                 @Override
                 public AaptOptions call() throws Exception {
-                    //Set aapt parameters
+                    //设置aapt参数
                     AaptOptions aaptOptions = scope.getGlobalScope().getExtension().getAaptOptions();
                     if (null == aaptOptions.getAdditionalParameters() || !aaptOptions.getAdditionalParameters()
                         .contains("-B")) {
