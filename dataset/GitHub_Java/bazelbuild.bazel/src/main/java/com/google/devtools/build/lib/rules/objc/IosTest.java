@@ -26,9 +26,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.objc.ApplicationSupport.LinkedBinary;
 import com.google.devtools.build.lib.rules.objc.ObjcActionsBuilder.ExtraLinkArgs;
 import com.google.devtools.build.lib.rules.objc.ObjcActionsBuilder.ExtraLinkInputs;
-import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -115,10 +115,8 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
         .addXcodeSettings(xcodeProviderBuilder, common, optionsProvider)
         .validateAttributes();
 
-    ReleaseBundlingSupport releaseBundlingSupport = new ReleaseBundlingSupport(
-        ruleContext, common.getObjcProvider(), optionsProvider, LinkedBinary.LOCAL_AND_DEPENDENCIES,
-        "Payload/%s.app");
-    releaseBundlingSupport
+    new ApplicationSupport(
+        ruleContext, common.getObjcProvider(), optionsProvider, LinkedBinary.LOCAL_AND_DEPENDENCIES)
         .registerActions()
         .addXcodeSettings(xcodeProviderBuilder)
         .addFilesToBuild(filesToBuild)
@@ -131,9 +129,7 @@ public abstract class IosTest implements RuleConfiguredTargetFactory {
 
     new XcodeSupport(ruleContext)
         .addXcodeSettings(xcodeProviderBuilder, common.getObjcProvider(), productType)
-        .addDependencies(xcodeProviderBuilder, "bundles")
-        .addDependencies(xcodeProviderBuilder, "deps")
-        .addDependencies(xcodeProviderBuilder, "non_propagated_deps")
+        .addDependencies(xcodeProviderBuilder)
         .addFilesToBuild(filesToBuild)
         .registerActions(xcodeProviderBuilder.build());
 
