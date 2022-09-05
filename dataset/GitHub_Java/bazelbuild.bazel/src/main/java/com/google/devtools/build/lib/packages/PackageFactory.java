@@ -897,18 +897,17 @@ public final class PackageFactory {
    * <p>Executes {@code globber.onCompletion()} on completion and executes
    * {@code globber.onInterrupt()} on an {@link InterruptedException}.
    */
-  private Package.LegacyBuilder createPackage(ExternalPackage externalPkg,
-      PackageIdentifier packageId, Path buildFile, List<Statement> preludeStatements,
-      ParserInputSource inputSource, Map<PathFragment, SkylarkEnvironment> imports,
-      ImmutableList<Label> skylarkFileDependencies, CachingPackageLocator locator,
-      RuleVisibility defaultVisibility, Globber globber)
+  private Package.LegacyBuilder createPackage(PackageIdentifier packageId, Path buildFile,
+      List<Statement> preludeStatements, ParserInputSource inputSource,
+      Map<PathFragment, SkylarkEnvironment> imports, ImmutableList<Label> skylarkFileDependencies,
+      CachingPackageLocator locator, RuleVisibility defaultVisibility, Globber globber)
           throws InterruptedException {
     StoredEventHandler localReporter = new StoredEventHandler();
     Preprocessor.Result preprocessingResult = preprocess(packageId, buildFile, inputSource, globber,
         localReporter);
-    return createPackageFromPreprocessingResult(externalPkg, packageId, buildFile,
-        preprocessingResult, localReporter.getEvents(), preludeStatements, imports,
-        skylarkFileDependencies, locator, defaultVisibility, globber);
+    return createPackageFromPreprocessingResult(packageId, buildFile, preprocessingResult,
+        localReporter.getEvents(), preludeStatements, imports, skylarkFileDependencies, locator,
+        defaultVisibility, globber);
   }
 
   /**
@@ -919,8 +918,7 @@ public final class PackageFactory {
    * {@code globber.onInterrupt()} on an {@link InterruptedException}.
    */
   // Used outside of bazel!
-  public Package.LegacyBuilder createPackageFromPreprocessingResult(Package externalPkg,
-      PackageIdentifier packageId,
+  public Package.LegacyBuilder createPackageFromPreprocessingResult(PackageIdentifier packageId,
       Path buildFile,
       Preprocessor.Result preprocessingResult,
       Iterable<Event> preprocessingEvents,
@@ -949,7 +947,7 @@ public final class PackageFactory {
       prefetchGlobs(packageId, buildFileAST, preprocessingResult.preprocessed,
           buildFile, globber, defaultVisibility, makeEnv);
       return evaluateBuildFile(
-          externalPkg, packageId, buildFileAST, buildFile, globber,
+          packageId, buildFileAST, buildFile, globber,
           Iterables.concat(preprocessingEvents, localReporter.getEvents()),
           defaultVisibility, preprocessingResult.containsErrors,
           preprocessingResult.containsTransientErrors, makeEnv, imports, skylarkFileDependencies);
@@ -967,23 +965,24 @@ public final class PackageFactory {
    */
   @VisibleForTesting
   public Package createPackageForTesting(PackageIdentifier packageId,
-      Path buildFile, CachingPackageLocator locator, EventHandler eventHandler)
-          throws NoSuchPackageException, InterruptedException {
+      Path buildFile,
+      CachingPackageLocator locator,
+      EventHandler eventHandler) throws NoSuchPackageException, InterruptedException {
     String error = LabelValidator.validatePackageName(
         packageId.getPackageFragment().getPathString());
     if (error != null) {
-      throw new BuildFileNotFoundException(
-          packageId.toString(), "illegal package name: '" + packageId + "' (" + error + ")");
+      throw new BuildFileNotFoundException(packageId.toString(),
+          "illegal package name: '" + packageId.toString() + "' (" + error + ")");
     }
     ParserInputSource inputSource = maybeGetParserInputSource(buildFile, eventHandler);
     if (inputSource == null) {
       throw new BuildFileContainsErrorsException(packageId.toString(), "IOException occured");
     }
-
-    Package result = createPackage((new ExternalPackage.Builder(
-        buildFile.getRelative("WORKSPACE"))).build(), packageId, buildFile,
-        ImmutableList.<Statement>of(), inputSource, ImmutableMap.<PathFragment,
-        SkylarkEnvironment>of(), ImmutableList.<Label>of(), locator, ConstantRuleVisibility.PUBLIC,
+    Package result = createPackage(packageId, buildFile,
+        ImmutableList.<Statement>of(), inputSource,
+        ImmutableMap.<PathFragment, SkylarkEnvironment>of(),
+        ImmutableList.<Label>of(),
+        locator, ConstantRuleVisibility.PUBLIC,
         createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator)).build();
     Event.replayEventsOn(eventHandler, result.getEvents());
     return result;
@@ -1136,8 +1135,8 @@ public final class PackageFactory {
    * @see PackageFactory#PackageFactory
    */
   @VisibleForTesting // used by PackageFactoryApparatus
-  public Package.LegacyBuilder evaluateBuildFile(Package externalPkg,
-      PackageIdentifier packageId, BuildFileAST buildFileAST, Path buildFilePath, Globber globber,
+  public Package.LegacyBuilder evaluateBuildFile(PackageIdentifier packageId,
+      BuildFileAST buildFileAST, Path buildFilePath, Globber globber,
       Iterable<Event> pastEvents, RuleVisibility defaultVisibility, boolean containsError,
       boolean containsTransientError, MakeEnvironment.Builder pkgMakeEnv,
       Map<PathFragment, SkylarkEnvironment> imports,
@@ -1155,12 +1154,11 @@ public final class PackageFactory {
         // "defaultVisibility" comes from the command line. Let's give the BUILD file a chance to
         // set default_visibility once, be reseting the PackageBuilder.defaultVisibilitySet flag.
         .setDefaultVisibilitySet(false)
-        .setSkylarkFileDependencies(skylarkFileDependencies)
-        .setWorkspaceName(externalPkg.getWorkspaceName());
+        .setSkylarkFileDependencies(skylarkFileDependencies);
 
     Event.replayEventsOn(eventHandler, pastEvents);
 
-    // Stuff that closes over the package context:`
+    // Stuff that closes over the package context:
     PackageContext context = new PackageContext(pkgBuilder, globber, eventHandler);
     buildPkgEnv(pkgEnv, packageId.toString(), pkgMakeEnv, context, ruleFactory);
 
