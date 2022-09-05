@@ -273,14 +273,7 @@ public final class FuncallExpression extends Expression {
       sb.append(obj).append(".");
     }
     sb.append(func);
-    String backup = sb.toString();
-    try {
-      Printer.printList(sb, args, "(", ", ", ")", /* singletonTerminator */ null);
-    } catch (OutOfMemoryError ex) {
-      // export_files might lead to an OOM error (e.g. when deserializing very large packages).
-      // TODO(bazel-dev): make the Printer limit its own output.
-      return backup + "(<too long>)";
-    }
+    Printer.printList(sb, args, "(", ", ", ")", /* singletonTerminator */ null);
     return sb.toString();
   }
 
