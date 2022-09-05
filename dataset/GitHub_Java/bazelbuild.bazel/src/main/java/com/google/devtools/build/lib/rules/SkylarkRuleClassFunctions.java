@@ -78,6 +78,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * A helper class to provide an easier API for Skylark rule definitions.
+ * This is experimental code.
  */
 public class SkylarkRuleClassFunctions {
 
@@ -195,11 +196,7 @@ public class SkylarkRuleClassFunctions {
             "dictionary to declare all the attributes of the rule. It maps from an attribute name "
             + "to an attribute object (see <a href=\"#modules.attr\">attr</a> module). "
             + "Attributes starting with <code>_</code> are private, and can be used to add "
-            + "an implicit dependency on a label. The attribute <code>name</code> is implicitly "
-            + "added and must not be specified. Attributes <code>visibility</code>, "
-            + "<code>deprecation</code>, <code>tags</code>, <code>testonly</code>, and "
-            + "<code>features</code> are implicitly added and might be overriden."),
-            // TODO(bazel-team): need to give the types of these builtin attributes
+            + "an implicit dependency on a label."),
         @Param(name = "outputs", type = Map.class, callbackEnabled = true, noneable = true,
             defaultValue = "None", doc = "outputs of this rule. "
             + "It is a dictionary mapping from string to a template name. "
