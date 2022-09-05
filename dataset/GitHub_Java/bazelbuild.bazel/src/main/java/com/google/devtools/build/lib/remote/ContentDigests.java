@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.remote;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
-import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.remote.RemoteProtocol.Action;
 import com.google.devtools.build.lib.remote.RemoteProtocol.ContentDigest;
@@ -43,15 +41,17 @@ public final class ContentDigests {
   /**
    * Computes a digest of the given proto message. Currently, we simply rely on message output as
    * bytes, but this implementation relies on the stability of the proto encoding, in particular
-   * between different platforms and languages. TODO(olaola): upgrade to a better implementation!
+   * between different platforms and languages.
+   * TODO(olaola): upgrade to a better implementation!
    */
   public static ContentDigest computeDigest(Message message) {
     return computeDigest(message.toByteArray());
   }
 
   /**
-   * A special type of ContentDigest that is used only as a remote action cache key. This is a
-   * separate type in order to prevent accidentally using other ContentDigests as action keys.
+   * A special type of ContentDigest that is used only as a remote action cache key.
+   * This is a separate type in order to prevent accidentally using other ContentDigests
+   * as action keys.
    */
   public static final class ActionKey {
     private final ContentDigest digest;
@@ -68,24 +68,11 @@ public final class ContentDigests {
   public static ActionKey computeActionKey(Action action) {
     return new ActionKey(computeDigest(action));
   }
-
-  /**
-   * Assumes that the given ContentDigest is a valid digest of an Action, and creates an ActionKey
-   * wrapper. This should not be called on the client side!
-   */
-  public static ActionKey unsafeActionKeyFromDigest(ContentDigest digest) {
-    return new ActionKey(digest);
-  }
-
+  
   public static ContentDigest buildDigest(byte[] digest, long size) {
     ContentDigest.Builder b = ContentDigest.newBuilder();
     b.setDigest(ByteString.copyFrom(digest)).setSizeBytes(size);
     return b.build();
-  }
-
-  public static ContentDigest getDigestFromInputCache(ActionInput input, ActionInputFileCache cache)
-      throws IOException {
-    return buildDigest(cache.getDigest(input), cache.getSizeInBytes(input));
   }
 
   public static String toHexString(ContentDigest digest) {
