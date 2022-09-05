@@ -996,9 +996,29 @@ public final class PackageFactory {
    * <p>Executes {@code globber.onCompletion()} on completion and executes
    * {@code globber.onInterrupt()} on an {@link InterruptedException}.
    */
+  private Package.LegacyBuilder createPackage(ExternalPackage externalPkg,
+      PackageIdentifier packageId, Path buildFile, List<Statement> preludeStatements,
+      ParserInputSource inputSource, Map<PathFragment, SkylarkEnvironment> imports,
+      ImmutableList<Label> skylarkFileDependencies, CachingPackageLocator locator,
+      RuleVisibility defaultVisibility, Globber globber)
+          throws InterruptedException {
+    StoredEventHandler localReporter = new StoredEventHandler();
+    Preprocessor.Result preprocessingResult = preprocess(packageId, buildFile, inputSource, globber,
+        localReporter);
+    return createPackageFromPreprocessingResult(externalPkg, packageId, buildFile,
+        preprocessingResult, localReporter.getEvents(), preludeStatements, imports,
+        skylarkFileDependencies, locator, defaultVisibility, globber);
+  }
+
+  /**
+   * Same as {@link #createPackage}, but using a {@link Preprocessor.Result} from
+   * {@link #preprocess}.
+   *
+   * <p>Executes {@code globber.onCompletion()} on completion and executes
+   * {@code globber.onInterrupt()} on an {@link InterruptedException}.
+   */
   // Used outside of bazel!
-  public Package.LegacyBuilder createPackageFromPreprocessingResult(
-      Package externalPkg,
+  public Package.LegacyBuilder createPackageFromPreprocessingResult(Package externalPkg,
       PackageIdentifier packageId,
       Path buildFile,
       Preprocessor.Result preprocessingResult,
@@ -1052,34 +1072,18 @@ public final class PackageFactory {
         packageId.getPackageFragment().getPathString());
     if (error != null) {
       throw new BuildFileNotFoundException(
-          packageId, "illegal package name: '" + packageId + "' (" + error + ")");
+          packageId.toString(), "illegal package name: '" + packageId + "' (" + error + ")");
     }
     ParserInputSource inputSource = maybeGetParserInputSource(buildFile, eventHandler);
     if (inputSource == null) {
-      throw new BuildFileContainsErrorsException(packageId, "IOException occured");
+      throw new BuildFileContainsErrorsException(packageId.toString(), "IOException occured");
     }
 
-    StoredEventHandler localReporter = new StoredEventHandler();
-    Globber globber = createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator);
-    Preprocessor.Result preprocessingResult =
-        preprocess(packageId, buildFile, inputSource, globber, localReporter);
-    ExternalPackage externalPkg =
-        new ExternalPackage.Builder(buildFile.getRelative("WORKSPACE")).build();
-
-    Package result =
-        createPackageFromPreprocessingResult(
-                externalPkg,
-                packageId,
-                buildFile,
-                preprocessingResult,
-                localReporter.getEvents(), /* preprocessingEvents */
-                ImmutableList.<Statement>of(), /* preludeStatements */
-                ImmutableMap.<PathFragment, SkylarkEnvironment>of(), /* imports */
-                ImmutableList.<Label>of(), /* skylarkFileDependencies */
-                locator,
-                ConstantRuleVisibility.PUBLIC, /* defaultVisibility */
-                globber)
-            .build();
+    Package result = createPackage((new ExternalPackage.Builder(
+        buildFile.getRelative("WORKSPACE"))).build(), packageId, buildFile,
+        ImmutableList.<Statement>of(), inputSource, ImmutableMap.<PathFragment,
+        SkylarkEnvironment>of(), ImmutableList.<Label>of(), locator, ConstantRuleVisibility.PUBLIC,
+        createLegacyGlobber(buildFile.getParentDirectory(), packageId, locator)).build();
     Event.replayEventsOn(eventHandler, result.getEvents());
     return result;
   }

@@ -218,8 +218,7 @@ public class PackageFunction implements SkyFunction {
   private static boolean markDependenciesAndPropagateInconsistentFilesystemExceptions(
       Package pkg, Environment env, Collection<Pair<String, Boolean>> globPatterns,
       Map<Label, Path> subincludes) throws InternalInconsistentFilesystemException {
-    boolean packageWasOriginallyInError = pkg.containsErrors();
-    boolean packageShouldBeInError = packageWasOriginallyInError;
+    boolean packageShouldBeInError = pkg.containsErrors();
 
     // TODO(bazel-team): This means that many packages will have to be preprocessed twice. Ouch!
     // We need a better continuation mechanism to avoid repeating work. [skyframe-loading]
@@ -235,10 +234,10 @@ public class PackageFunction implements SkyFunction {
     }
     Pair<? extends Map<PathFragment, PackageLookupValue>, Boolean> subincludePackageLookupResult =
         getPackageLookupDepsAndPropagateInconsistentFilesystemExceptions(pkg.getName(),
-            subincludePackageLookupDepKeys, env, packageWasOriginallyInError);
+            subincludePackageLookupDepKeys, env, pkg.containsErrors());
     Map<PathFragment, PackageLookupValue> subincludePackageLookupDeps =
         subincludePackageLookupResult.getFirst();
-    packageShouldBeInError |= subincludePackageLookupResult.getSecond();
+    packageShouldBeInError = subincludePackageLookupResult.getSecond();
     List<SkyKey> subincludeFileDepKeys = Lists.newArrayList();
     for (Entry<Label, Path> subincludeEntry : subincludes.entrySet()) {
       // Ideally, we would have a direct dependency on the target with the given label, but then
@@ -274,8 +273,8 @@ public class PackageFunction implements SkyFunction {
         }
       }
     }
-    packageShouldBeInError |= markFileDepsAndPropagateInconsistentFilesystemExceptions(
-        pkg.getName(), subincludeFileDepKeys, env, packageWasOriginallyInError);
+    packageShouldBeInError = markFileDepsAndPropagateInconsistentFilesystemExceptions(
+        pkg.getName(), subincludeFileDepKeys, env, pkg.containsErrors());
 
     // TODO(bazel-team): In the long term, we want to actually resolve the glob patterns within
     // Skyframe. For now, just logging the glob requests provides correct incrementality and
@@ -294,8 +293,8 @@ public class PackageFunction implements SkyFunction {
       }
       globDepKeys.add(globSkyKey);
     }
-    packageShouldBeInError |= markGlobDepsAndPropagateInconsistentFilesystemExceptions(
-        pkg.getName(), globDepKeys, env, packageWasOriginallyInError);
+    packageShouldBeInError = markGlobDepsAndPropagateInconsistentFilesystemExceptions(
+        pkg.getName(), globDepKeys, env, pkg.containsErrors());
     return packageShouldBeInError;
   }
 
@@ -481,7 +480,7 @@ public class PackageFunction implements SkyFunction {
     Map<Label, Path> subincludes = legacyPkgBuilder.getSubincludes();
     Package pkg = legacyPkgBuilder.finishBuild();
     Event.replayEventsOn(env.getListener(), pkg.getEvents());
-    boolean packageShouldBeConsideredInError;
+    boolean packageShouldBeConsideredInError = pkg.containsErrors();
     try {
       packageShouldBeConsideredInError =
           markDependenciesAndPropagateInconsistentFilesystemExceptions(pkg, env,

@@ -1,4 +1,4 @@
-// Copyright 2006 The Bazel Authors.  All Rights Reserved.
+// Copyright 2006-2015 Google Inc.  All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class LineNumberTableTest {
   private LineNumberTable create(String buffer) {
-    return LineNumberTable.create(buffer.toCharArray(), PathFragment.create("/fake/file"));
+    return LineNumberTable.create(buffer.toCharArray(), new PathFragment("/fake/file"));
   }
 
   @Test

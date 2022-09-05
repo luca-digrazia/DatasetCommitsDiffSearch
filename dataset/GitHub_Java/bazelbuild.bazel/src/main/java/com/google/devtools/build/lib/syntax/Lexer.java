@@ -88,26 +88,20 @@ public final class Lexer {
    * Constructs a lexer which tokenizes the contents of the specified
    * InputBuffer. Any errors during lexing are reported on "handler".
    */
-  public Lexer(ParserInputSource input, EventHandler eventHandler, boolean parsePython,
-      LineNumberTable lineNumberTable) {
+  public Lexer(ParserInputSource input, EventHandler eventHandler, boolean parsePython) {
     this.buffer = input.getContent();
     this.pos = 0;
     this.parsePython = parsePython;
     this.eventHandler = eventHandler;
-    this.locationInfo = new LocationInfo(input.getPath(), lineNumberTable);
+    this.locationInfo =
+        new LocationInfo(input.getPath(), LineNumberTable.create(buffer, input.getPath()));
 
     indentStack.push(0);
     tokenize();
   }
 
   public Lexer(ParserInputSource input, EventHandler eventHandler) {
-    this(input, eventHandler, /*parsePython=*/false,
-        LineNumberTable.create(input.getContent(), input.getPath()));
-  }
-
-  public Lexer(ParserInputSource input, EventHandler eventHandler, boolean parsePython) {
-    this(input, eventHandler, parsePython,
-        LineNumberTable.create(input.getContent(), input.getPath()));
+    this(input, eventHandler, false);
   }
 
   /**
