@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.rules.java;
 
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
@@ -131,11 +130,6 @@ public final class JavaToolchainRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr("resourcejar", LABEL_LIST).cfg(HOST).allowedFileTypes(FileTypeSet.ANY_FILE).exec())
-        /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(timezone_data) -->
-        Label of a resource jar containing timezone data. If set, the timezone data is added as an
-        implicitly runtime dependency of all java_binary rules.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("timezone_data", LABEL).cfg(HOST).allowedFileTypes(FileTypeSet.ANY_FILE).exec())
         /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(ijar) -->
         Label of the ijar executable.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -150,18 +144,6 @@ public final class JavaToolchainRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(
             attr("header_compiler", LABEL_LIST)
-                .cfg(HOST)
-                .allowedFileTypes(FileTypeSet.ANY_FILE)
-                .exec())
-        /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(oneversion) -->
-        Label of the one-version enforcement binary.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("oneversion", LABEL).cfg(HOST).allowedFileTypes(FileTypeSet.ANY_FILE).exec())
-        /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(oneversion_whitelist) -->
-        Label of the one-version whitelist.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(
-            attr("oneversion_whitelist", LABEL)
                 .cfg(HOST)
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
                 .exec())

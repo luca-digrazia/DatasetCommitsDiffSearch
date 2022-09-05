@@ -50,11 +50,8 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
       @Nullable Artifact headerCompiler,
       boolean forciblyDisableHeaderCompilation,
       Artifact singleJar,
-      Artifact oneVersion,
-      Artifact oneVersionWhitelist,
       Artifact genClass,
       @Nullable Artifact resourceJarBuilder,
-      @Nullable Artifact timezoneData,
       FilesToRunProvider ijar,
       ImmutableListMultimap<String, String> compatibleJavacOptions) {
     return new AutoValue_JavaToolchainProvider(
@@ -69,11 +66,8 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
         headerCompiler,
         forciblyDisableHeaderCompilation,
         singleJar,
-        oneVersion,
-        oneVersionWhitelist,
         genClass,
         resourceJarBuilder,
-        timezoneData,
         ijar,
         compatibleJavacOptions,
         // merges the defaultJavacFlags from
@@ -122,29 +116,11 @@ public abstract class JavaToolchainProvider implements TransitiveInfoProvider {
   /** Returns the {@link Artifact} of the SingleJar deploy jar */
   public abstract Artifact getSingleJar();
 
-  /**
-   * Return the {@link Artifact} of the binary that enforces one-version compliance of java
-   * binaries.
-   */
-  @Nullable
-  public abstract Artifact getOneVersionBinary();
-
-  /** Return the {@link Artifact} of the whitelist used by the one-version compliance checker. */
-  @Nullable
-  public abstract Artifact getOneVersionWhitelist();
-
   /** Returns the {@link Artifact} of the GenClass deploy jar */
   public abstract Artifact getGenClass();
 
   @Nullable
   public abstract Artifact getResourceJarBuilder();
-
-  /**
-   * Returns the {@link Artifact} of the latest timezone data resource jar that can be loaded by
-   * Java 8 binaries.
-   */
-  @Nullable
-  public abstract Artifact getTimezoneData();
 
   /** Returns the ijar executable */
   public abstract FilesToRunProvider getIjar();
