@@ -113,7 +113,6 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
     CompilationSupport compilationSupport =
         new CompilationSupport(ruleContext)
             .registerCompileAndArchiveActions(common)
-            .registerFullyLinkAction(common.getObjcProvider())
             .addXcodeSettings(xcodeProviderBuilder, common)
             .validateAttributes();
 
