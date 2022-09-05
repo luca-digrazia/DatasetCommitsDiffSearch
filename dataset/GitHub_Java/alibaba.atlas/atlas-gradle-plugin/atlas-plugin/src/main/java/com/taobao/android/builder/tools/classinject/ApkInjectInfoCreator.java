@@ -209,30 +209,22 @@
 
 package com.taobao.android.builder.tools.classinject;
 
-import java.io.File;
-import java.io.IOException;
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import com.alibaba.fastjson.JSON;
-
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
-import com.taobao.android.builder.dependency.diff.DependencyDiff;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.tools.MD5Util;
 import com.taobao.android.builder.tools.bundleinfo.model.BasicBundleInfo;
 import com.taobao.android.builder.tools.bundleinfo.model.BundleInfo;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Created by wuzhong on 2016/12/1.
@@ -261,14 +253,9 @@ public class ApkInjectInfoCreator {
                 return o1.compareTo(o2);
             }
         });
-        String mainMd532 = MD5Util.getMD5(StringUtils.join(mainDexDependencies));
-        String md5base36 = new BigInteger(mainMd532.substring(8,24),16).toString(36);
-        injectParam.unit_tag = md5base36;
-        appVariantContext.unit_tag = md5base36;
-
-        //Depends on whether the change is sent
-        DependencyDiff dependencyDiff = appVariantContext.getDependencyDiff();
-        Map<String, String> baseTagMap = appVariantContext.getBaseUnitTagMap();
+        String mainMd5 = MD5Util.getMD5(StringUtils.join(mainDexDependencies));
+        injectParam.unit_tag = mainMd5;
+        appVariantContext.unit_tag = mainMd5;
 
         for (AwbBundle awbBundle : atlasDependencyTree.getAwbBundles()) {
 
@@ -281,19 +268,16 @@ public class ApkInjectInfoCreator {
             basicBundleInfo.setPkgName(bundleInfo.getPkgName());
 
             //set unique_tag
-            String bundleDependencyMd532 = MD5Util.getMD5(StringUtils.join(awbBundle.getAllDependencies()));
-            String bundleUnitTag = "";
-
-            if ( null != dependencyDiff && !dependencyDiff.isDiffBundle(awbBundle)){
-                bundleUnitTag = baseTagMap.get(awbBundle.getPackageName());
-            }
-            if (StringUtils.isEmpty(bundleUnitTag)){
-                String bundleMd532 = MD5Util.getMD5(mainMd532 + bundleDependencyMd532);
-                bundleUnitTag = new BigInteger(bundleMd532.substring(8,24),16).toString(36);
-            }
-
-            basicBundleInfo.setUnique_tag(bundleUnitTag);
-            bundleInfo.setUnique_tag(bundleUnitTag);
+            List<String>bundleDependencies = awbBundle.getAllDependencies();
+            Collections.sort(bundleDependencies, new Comparator<String>() {
+                @Override
+                public int compare(String o1, String o2) {
+                    return o1.compareTo(o2);
+                }
+            });
+            String bundleMd5 = MD5Util.getMD5(StringUtils.join(bundleDependencies));
+            basicBundleInfo.setUnique_tag(MD5Util.getMD5(mainMd5+bundleMd5));
+            bundleInfo.setUnique_tag(basicBundleInfo.getUnique_tag());
 
             if (!bundleInfo.getIsInternal()) {
                 basicBundleInfo.setIsInternal(false);
@@ -340,7 +324,6 @@ public class ApkInjectInfoCreator {
         mergeBundleInfos(appVariantContext, injectParam, basicBundleInfos, basicBundleInfoMap);
         return injectParam;
     }
-
 
     private void mergeBundleInfos(AppVariantContext appVariantContext, InjectParam injectParam,
                                   List<BasicBundleInfo> basicBundleInfos,
@@ -395,11 +378,4 @@ public class ApkInjectInfoCreator {
             .distinct()
             .collect(Collectors.toList());
     }
-
-
-    public void injectTpatchValuesRes(AppVariantContext appVariantContext,
-                                      File valuesXml){
-
-    }
-
 }

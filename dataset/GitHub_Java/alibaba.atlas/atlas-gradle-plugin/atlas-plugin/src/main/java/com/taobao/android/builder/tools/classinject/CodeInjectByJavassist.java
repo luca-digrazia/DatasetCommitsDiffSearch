@@ -227,8 +227,8 @@ import java.util.zip.ZipException;
 import java.util.zip.ZipOutputStream;
 
 /**
- * Code injection is done through Javassist
- * Created by shenghua.nish on 2015-10-22 Again in the afternoon.
+ * 通过Javassist进行代码注入操作
+ * Created by shenghua.nish on 2015-10-22 下午6:35.
  */
 public class CodeInjectByJavassist {
 
@@ -358,7 +358,7 @@ public class CodeInjectByJavassist {
     }
 
     /**
-     * Inject replacement operations for class files in the specified folder
+     * 对指定的folder中的class文件进行注入替换操作
      *
      * @param pool
      * @param folder
@@ -393,7 +393,7 @@ public class CodeInjectByJavassist {
     }
 
     /**
-     * The injection of code for the specified jar package
+     * 对于指定的jar包进行代码的注入
      *
      * @param inJar
      * @param outJar
