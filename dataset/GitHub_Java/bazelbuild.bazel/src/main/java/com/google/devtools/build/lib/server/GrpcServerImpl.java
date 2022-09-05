@@ -412,19 +412,25 @@ public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.Comma
     }
   }
 
+  private void restartIdleTimeout() {
+    synchronized (runningCommands) {
+      runningCommands.notify();
+    }
+  }
+
   @Override
   public void ping(PingRequest pingRequest, StreamObserver<PingResponse> streamObserver) {
     Preconditions.checkState(serving);
 
-    try (RunningCommand command = new RunningCommand()) {
-      PingResponse.Builder response = PingResponse.newBuilder();
-      if (pingRequest.getCookie().equals(requestCookie)) {
-        response.setCookie(responseCookie);
-      }
-
-      streamObserver.onNext(response.build());
-      streamObserver.onCompleted();
+    PingResponse.Builder response = PingResponse.newBuilder();
+    if (pingRequest.getCookie().equals(requestCookie)) {
+      response.setCookie(responseCookie);
     }
+
+    streamObserver.onNext(response.build());
+    streamObserver.onCompleted();
+
+    restartIdleTimeout();
   }
 
   @Override
@@ -434,18 +440,18 @@ public class GrpcServerImpl extends RPCServer implements CommandServerGrpc.Comma
       return;
     }
 
-    try (RunningCommand cancelCommand = new RunningCommand()) {
-      synchronized (runningCommands) {
-        RunningCommand pendingCommand = runningCommands.get(request.getCommandId());
-        if (pendingCommand != null) {
-          pendingCommand.thread.interrupt();
-        }
-
-        startSlowInterruptWatcher(ImmutableSet.of(request.getCommandId()));
+    synchronized (runningCommands) {
+      RunningCommand command = runningCommands.get(request.getCommandId());
+      if (command != null) {
+        command.thread.interrupt();
       }
 
-      streamObserver.onNext(CancelResponse.newBuilder().setCookie(responseCookie).build());
-      streamObserver.onCompleted();
+      startSlowInterruptWatcher(ImmutableSet.of(request.getCommandId()));
     }
+
+    streamObserver.onNext(CancelResponse.newBuilder().setCookie(responseCookie).build());
+    streamObserver.onCompleted();
+
+    restartIdleTimeout();
   }
 }
