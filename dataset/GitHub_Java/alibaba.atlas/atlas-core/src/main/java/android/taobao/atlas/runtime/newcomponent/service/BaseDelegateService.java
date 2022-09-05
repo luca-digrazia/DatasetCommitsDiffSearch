@@ -9,12 +9,10 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.ServiceInfo;
 import android.os.Binder;
 import android.os.Build;
-import android.os.Build.VERSION;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.RemoteException;
-import android.support.annotation.NonNull;
 import android.taobao.atlas.hack.AndroidHack;
 import android.taobao.atlas.hack.AtlasHacks;
 import android.taobao.atlas.hack.Hack;
@@ -23,10 +21,6 @@ import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.runtime.newcomponent.activity.ActivityBridge;
 import android.taobao.atlas.runtime.newcomponent.receiver.ReceiverBridge;
 import android.util.Log;
-
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,8 +31,7 @@ import java.util.Map;
  */
 
 public class BaseDelegateService extends Service{
-    private static final String TAG = "BaseDelegateService";
-    
+
     private ServiceDispatcherImpl dispatcher = new ServiceDispatcherImpl();
 
     @Override
@@ -97,9 +90,8 @@ public class BaseDelegateService extends Service{
                             record.activeConnections.add(conn);
                         }
                         try {
-                            /*.*/
-                            connected(conn, record.component, binder, false);
-                        } catch (/*Remote*/Exception e) {
+                            conn.connected(record.component,binder);
+                        } catch (RemoteException e) {
                             e.printStackTrace();
                         }
                     }
@@ -174,17 +166,15 @@ public class BaseDelegateService extends Service{
                 Object contextImpl = null;
                 Object activityThread = AndroidHack.getActivityThread();
                 Object loadedApk =  AndroidHack.getLoadedApk(RuntimeVariables.androidApplication,activityThread,RuntimeVariables.androidApplication.getPackageName());
-                try {
-                    Hack.HackedMethod ContextImpl_createAppContext = AtlasHacks.ContextImpl.method("createAppContext", AtlasHacks.ActivityThread.getmClass(), AtlasHacks.LoadedApk.getmClass());
-                    if (ContextImpl_createAppContext.getMethod() != null) {
-                        contextImpl = ContextImpl_createAppContext.invoke(AtlasHacks.ContextImpl.getmClass(), activityThread, loadedApk);
-                    }
-                }catch(Throwable e){
+
+                Hack.HackedMethod ContextImpl_createAppContext = AtlasHacks.ContextImpl.method("createAppContext",AtlasHacks.ActivityThread.getmClass(),AtlasHacks.LoadedApk.getmClass());
+                if(ContextImpl_createAppContext.getMethod()!=null){
+                    contextImpl = ContextImpl_createAppContext.invoke(AtlasHacks.ContextImpl.getmClass(),activityThread,loadedApk);
+                }else{
                     Hack.HackedMethod ContextImpl_init = AtlasHacks.ContextImpl.method("init",AtlasHacks.LoadedApk.getmClass(), IBinder.class,AtlasHacks.ActivityThread.getmClass());
-                    Constructor cons = AtlasHacks.ContextImpl.getmClass().getDeclaredConstructor();
-                    cons.setAccessible(true);
-                    contextImpl = cons.newInstance();
+                    contextImpl = AtlasHacks.ContextImpl.getmClass().newInstance();
                     ContextImpl_init.invoke(contextImpl, loadedApk,null,activityThread);
+
                 }
 
                 Object gDefault = null;
@@ -245,50 +235,6 @@ public class BaseDelegateService extends Service{
 
         public AdditionalServiceRecord(ComponentName componentName){
             this.component = componentName;
-        }
-    }
-
-    private static Method sConnectedMethod;
-
-    private static boolean sConnectedMethodFetched;
-
-    public static void connected(/*@NonNull*/ IServiceConnection iServiceConnection, /*@NonNull*/ ComponentName name,
-                                              IBinder service, boolean dead) {
-        fetchConnectedMethod();
-        if (sConnectedMethod != null) {
-            try {
-                if (VERSION.SDK_INT >= 26) {
-                    sConnectedMethod.invoke(iServiceConnection, name, service, dead);
-                } else {
-                    sConnectedMethod.invoke(iServiceConnection, name, service/*, dead*/);
-                }
-            } catch (IllegalAccessException e) {
-                // Do nothing
-            } catch (InvocationTargetException e) {
-                throw new RuntimeException(e.getCause());
-            }
-        }
-    }
-
-    private static void fetchConnectedMethod() {
-        if (!sConnectedMethodFetched) {
-            try {
-                if (VERSION.SDK_INT >= 26) {
-                    sConnectedMethod = IServiceConnection.class.getDeclaredMethod("connected",
-                                                                                  ComponentName.class,
-                                                                                  IBinder.class,
-                                                                                  boolean.class);
-                } else {
-                    sConnectedMethod = IServiceConnection.class.getDeclaredMethod("connected",
-                                                                                  ComponentName.class,
-                                                                                  IBinder.class);
-                }
-
-                sConnectedMethod.setAccessible(true);
-            } catch (NoSuchMethodException e) {
-                Log.i(TAG, "Failed to retrieve connected method", e);
-            }
-            sConnectedMethodFetched = true;
         }
     }
 }
