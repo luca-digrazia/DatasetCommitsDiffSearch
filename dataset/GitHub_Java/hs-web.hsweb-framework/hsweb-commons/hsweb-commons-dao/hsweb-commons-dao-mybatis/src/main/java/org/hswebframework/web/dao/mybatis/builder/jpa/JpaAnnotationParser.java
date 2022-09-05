@@ -7,8 +7,6 @@ import org.hswebframework.ezorm.rdb.meta.RDBColumnMetaData;
 import org.hswebframework.ezorm.rdb.meta.RDBTableMetaData;
 import org.hswebframework.ezorm.rdb.meta.converter.DateTimeConverter;
 import org.hswebframework.ezorm.rdb.meta.converter.NumberValueConverter;
-import org.hswebframework.utils.ClassUtils;
-import org.hswebframework.web.dict.EnumDict;
 import org.springframework.core.annotation.AnnotationUtils;
 
 import javax.persistence.Column;
@@ -25,7 +23,6 @@ import java.sql.JDBCType;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 /**
  * jpa 注解解析器
@@ -41,46 +38,15 @@ public class JpaAnnotationParser {
 
     private static final List<BiFunction<Class, PropertyDescriptor, JDBCType>> jdbcTypeConvert = new ArrayList<>();
 
-    private static final List<Class> numberType = Arrays.asList(
-            byte.class, Byte.class
-            , short.class, Short.class
-            , int.class, Integer.class
-            , float.class, Float.class
-            , double.class, Double.class
-            , long.class, Long.class
-            , BigDecimal.class, BigInteger.class
-    );
-
-    private static final List<JDBCType> numberJdbcType = Arrays.asList(
-            JDBCType.TINYINT, JDBCType.DECIMAL, JDBCType.NUMERIC,
-            JDBCType.BIGINT, JDBCType.SMALLINT, JDBCType.INTEGER,
-            JDBCType.DECIMAL, JDBCType.BIT
-    );
-
     static {
         jdbcTypeMapping.put(String.class, JDBCType.VARCHAR);
 
-        jdbcTypeMapping.put(Byte.class, JDBCType.TINYINT);
-        jdbcTypeMapping.put(byte.class, JDBCType.TINYINT);
-
-        jdbcTypeMapping.put(Short.class, JDBCType.INTEGER);
-        jdbcTypeMapping.put(short.class, JDBCType.INTEGER);
-
         jdbcTypeMapping.put(Integer.class, JDBCType.INTEGER);
         jdbcTypeMapping.put(int.class, JDBCType.INTEGER);
-
-        jdbcTypeMapping.put(Character.class, JDBCType.CHAR);
-        jdbcTypeMapping.put(char.class, JDBCType.CHAR);
-
-        jdbcTypeMapping.put(Long.class, JDBCType.BIGINT);
-        jdbcTypeMapping.put(long.class, JDBCType.BIGINT);
-
         jdbcTypeMapping.put(Double.class, JDBCType.DECIMAL);
         jdbcTypeMapping.put(double.class, JDBCType.DECIMAL);
-
         jdbcTypeMapping.put(Float.class, JDBCType.DECIMAL);
         jdbcTypeMapping.put(float.class, JDBCType.DECIMAL);
-
         jdbcTypeMapping.put(Boolean.class, JDBCType.BIT);
         jdbcTypeMapping.put(boolean.class, JDBCType.BIT);
 
@@ -93,8 +59,6 @@ public class JpaAnnotationParser {
         jdbcTypeMapping.put(java.sql.Date.class, JDBCType.TIMESTAMP);
         jdbcTypeMapping.put(java.sql.Timestamp.class, JDBCType.TIMESTAMP);
 
-        jdbcTypeMapping.put(Object.class, JDBCType.VARCHAR);
-
         jdbcTypeConvert.add((type, property) -> {
             Enumerated enumerated = getAnnotation(type, property, Enumerated.class);
             return enumerated != null ? JDBCType.VARCHAR : null;
@@ -103,28 +67,6 @@ public class JpaAnnotationParser {
             Lob enumerated = getAnnotation(type, property, Lob.class);
             return enumerated != null ? JDBCType.CLOB : null;
         });
-
-        jdbcTypeConvert.add((type, property) -> {
-            boolean isArray = type.isArray();
-            if (isArray) {
-                type = type.getComponentType();
-
-            }
-            if (type.isEnum() && EnumDict.class.isAssignableFrom(type)) {
-                Class genType = ClassUtils.getGenericType(type);
-                if (isArray) {
-                    return JDBCType.BIGINT;
-                }
-                return jdbcTypeMapping.getOrDefault(genType, JDBCType.VARCHAR);
-            }
-            return null;
-        });
-    }
-
-    public static boolean isNumberType(RDBColumnMetaData columnMetaData) {
-        return numberType.contains(columnMetaData.getJavaType())
-                || Number.class.isAssignableFrom(columnMetaData.getJavaType())
-                || numberJdbcType.contains(columnMetaData.getJdbcType());
     }
 
     public static RDBTableMetaData parseMetaDataFromEntity(Class entityClass) {
@@ -150,9 +92,7 @@ public class JpaAnnotationParser {
             columnMetaData.setPrecision(column.precision());
             columnMetaData.setJavaType(descriptor.getPropertyType());
 
-            Class propertyType = descriptor.getPropertyType();
-
-            JDBCType type = jdbcTypeMapping.get(propertyType);
+            JDBCType type = jdbcTypeMapping.get(descriptor.getPropertyType());
             if (type == null) {
                 type = jdbcTypeConvert.stream()
                         .map(func -> func.apply(entityClass, descriptor))
@@ -171,10 +111,11 @@ public class JpaAnnotationParser {
                 }
             };
 
-            if (columnMetaData.getJdbcType() == JDBCType.DATE
-                    || columnMetaData.getJdbcType() == JDBCType.TIMESTAMP) {
+            if (columnMetaData.getJdbcType() == JDBCType.DATE) {
                 columnMetaData.setValueConverter(dateConvert);
-            } else if (isNumberType(columnMetaData)) {
+            } else if (columnMetaData.getJdbcType() == JDBCType.TIMESTAMP) {
+                columnMetaData.setValueConverter(dateConvert);
+            } else if (columnMetaData.getJdbcType() == JDBCType.NUMERIC) {
                 columnMetaData.setValueConverter(new NumberValueConverter(columnMetaData.getJavaType()));
             }
 
@@ -183,7 +124,6 @@ public class JpaAnnotationParser {
         }
         return tableMetaData;
     }
-
 
     private static <T extends Annotation> T getAnnotation(Class entityClass, PropertyDescriptor descriptor, Class<T> type) {
         T ann = null;
