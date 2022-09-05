@@ -2,7 +2,6 @@ package com.prolificinteractive.materialcalendarview;
 
 import android.support.annotation.NonNull;
 
-import java.util.Calendar;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
@@ -30,21 +29,19 @@ public class WeekPagerAdapter extends CalendarPagerAdapter<WeekView> {
 
     @Override
     protected DateRangeIndex createRangeIndex(CalendarDay min, CalendarDay max) {
-        return new Weekly(min, max, getFirstDayOfWeek());
+        return new Weekly(min, max);
     }
 
-    public static class Weekly implements DateRangeIndex {
+    private static class Weekly implements DateRangeIndex {
 
         private static final int DAYS_IN_WEEK = 7;
         private final CalendarDay min;
         private final int count;
 
-        public Weekly(@NonNull CalendarDay min, @NonNull CalendarDay max, int firstDayOfWeek) {
-            Calendar calendar = Calendar.getInstance();
-            min.copyTo(calendar);
-            calendar.set(Calendar.DAY_OF_WEEK, firstDayOfWeek);
-            this.min = CalendarDay.from(calendar);
-            this.count = weekNumberDifference(min, max);
+        public Weekly(@NonNull CalendarDay min, @NonNull CalendarDay max) {
+            this.min = CalendarDay.from(min.getYear(), min.getMonth(), 1);
+            max = CalendarDay.from(max.getYear(), max.getMonth(), 1);
+            this.count = weekNumberDifference(min, max) + 1;
         }
 
         @Override

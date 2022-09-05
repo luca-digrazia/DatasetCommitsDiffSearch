@@ -33,7 +33,7 @@ class MonthPagerAdapter extends CalendarPagerAdapter<MonthView> {
         return new Monthly(min, max);
     }
 
-    public static class Monthly implements DateRangeIndex {
+    private static class Monthly implements DateRangeIndex {
 
         private final CalendarDay min;
         private final int count;

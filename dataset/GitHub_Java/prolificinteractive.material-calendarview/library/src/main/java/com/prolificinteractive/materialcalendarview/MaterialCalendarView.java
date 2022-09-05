@@ -17,7 +17,6 @@ import android.util.AttributeSet;
 import android.util.SparseArray;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.accessibility.AccessibilityEvent;
@@ -155,9 +154,10 @@ public class MaterialCalendarView extends ViewGroup {
     private final DirectionButton buttonPast;
     private final DirectionButton buttonFuture;
     private final MonthPager pager;
-    private final MonthPagerAdapter adapter;
+    private CalendarPagerAdapter<?> adapter;
     private CalendarDay currentMonth;
     private LinearLayout topbar;
+    private CalendarMode calendarMode = CalendarMode.MONTHS;
     /**
      * Used for the dynamic calendar height.
      */
@@ -418,6 +418,28 @@ public class MaterialCalendarView extends ViewGroup {
         adapter.setSelectionEnabled(selectionMode != SELECTION_MODE_NONE);
     }
 
+    public void setCalendarMode(CalendarMode mode) {
+        if (calendarMode.equals(mode)) {
+            return;
+        }
+
+        CalendarPagerAdapter<?> newAdapter;
+        switch (mode) {
+            case MONTHS:
+                newAdapter = new MonthPagerAdapter(this);
+                break;
+            case WEEKS:
+                newAdapter = new WeekPagerAdapter(this);
+                break;
+            default:
+                throw new UnsupportedOperationException("Provided calendar mode which is not yet implemented");
+        }
+        adapter = adapter.migrateStateAndReturn(newAdapter);
+        pager.setAdapter(adapter);
+        calendarMode = mode;
+        updateUi();
+    }
+
     /**
      * Get the current selection mode. The default mode is {@linkplain #SELECTION_MODE_SINGLE}
      *
@@ -471,18 +493,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @return true if there is a future month that can be shown
      */
     private boolean canGoForward() {
-        return pager.getCurrentItem() < (adapter.getCount() - 1);
-    }
-
-    /**
-     * Pass all touch events to the pager so scrolling works on the edges of the calendar view.
-     * 
-     * @param event
-     * @return
-     */
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        return pager.dispatchTouchEvent(event);
+        return pager.isPagingEnabled() && pager.getCurrentItem() < (adapter.getCount() - 1);
     }
 
     /**
@@ -491,7 +502,7 @@ public class MaterialCalendarView extends ViewGroup {
      * @return true if there is a previous month that can be shown
      */
     private boolean canGoBack() {
-        return pager.getCurrentItem() > 0;
+        return pager.isPagingEnabled() && pager.getCurrentItem() > 0;
     }
 
     /**
@@ -1054,7 +1065,7 @@ public class MaterialCalendarView extends ViewGroup {
     /**
      * By default, the calendar will take up all the space needed to show any month (6 rows).
      * By enabling dynamic height, the view will change height dependant on the visible month.
-     *
+     * <p/>
      * This means months that only need 5 or 4 rows to show the entire month will only take up
      * that many rows, and will grow and shrink as necessary.
      *

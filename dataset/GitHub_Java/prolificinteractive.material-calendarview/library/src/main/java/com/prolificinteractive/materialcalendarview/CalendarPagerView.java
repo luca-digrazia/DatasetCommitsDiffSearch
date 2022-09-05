@@ -207,8 +207,8 @@ abstract class CalendarPagerView extends ViewGroup implements View.OnClickListen
     @Override
     public void onClick(View v) {
         if (v instanceof DayView) {
-            final DayView dayView = (DayView) v;
-            mcv.onDateClicked(dayView);
+            DayView dayView = (DayView) v;
+            mcv.onDateClicked(dayView.getDate(), !dayView.isChecked());
         }
     }
 
@@ -236,7 +236,7 @@ abstract class CalendarPagerView extends ViewGroup implements View.OnClickListen
 
         //We expect to be somewhere inside a MaterialCalendarView, which should measure EXACTLY
         if (specHeightMode == MeasureSpec.UNSPECIFIED || specWidthMode == MeasureSpec.UNSPECIFIED) {
-            throw new IllegalStateException("CalendarPagerView should never be left to decide it's size");
+            throw new IllegalStateException("MonthView should never be left to decide it's size");
         }
 
         //The spec width should be a correct multiple
