@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.bazel.rules;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.PrerequisiteValidator;
@@ -50,7 +51,6 @@ import com.google.devtools.build.lib.bazel.rules.java.BazelJavaPluginRule;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaTestRule;
 import com.google.devtools.build.lib.bazel.rules.objc.BazelIosTestRule;
-import com.google.devtools.build.lib.bazel.rules.objc.BazelJ2ObjcLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPyRuleClasses;
@@ -81,24 +81,26 @@ import com.google.devtools.build.lib.rules.android.AndroidRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
 import com.google.devtools.build.lib.rules.java.J2ObjcCommandLineOptions;
 import com.google.devtools.build.lib.rules.java.J2ObjcConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaCpuSupplier;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaOptions;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
+import com.google.devtools.build.lib.rules.objc.BazelJ2ObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ExperimentalIosTestRule;
 import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionBinaryRule;
 import com.google.devtools.build.lib.rules.objc.IosExtensionRule;
-import com.google.devtools.build.lib.rules.objc.IosFrameworkBinaryRule;
-import com.google.devtools.build.lib.rules.objc.IosFrameworkRule;
 import com.google.devtools.build.lib.rules.objc.J2ObjcLibraryBaseRule;
 import com.google.devtools.build.lib.rules.objc.ObjcBinaryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcBuildInfoFactory;
@@ -117,8 +119,8 @@ import com.google.devtools.build.lib.rules.python.PythonConfigurationLoader;
 import com.google.devtools.build.lib.rules.python.PythonOptions;
 import com.google.devtools.build.lib.rules.workspace.BindRule;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.io.IOException;
 
@@ -126,7 +128,6 @@ import java.io.IOException;
  * A rule class provider implementing the rules Bazel knows.
  */
 public class BazelRuleClassProvider {
-  private static final PathFragment EXTERNAL = new PathFragment("external");
 
   /**
    * Used by the build encyclopedia generator.
@@ -156,17 +157,12 @@ public class BazelRuleClassProvider {
     private void validateDirectPrerequisiteVisibility(
         RuleContext.Builder context, ConfiguredTarget prerequisite, String attrName) {
       Rule rule = context.getRule();
-      if (rule.getLabel().getPackageFragment().equals(EXTERNAL)) {
-        // //external: labels are special. They have access to everything and visibility is checked
-        // at the edge that points to the //external: label.
-        return;
-      }
       Target prerequisiteTarget = prerequisite.getTarget();
       Label prerequisiteLabel = prerequisiteTarget.getLabel();
       // We don't check the visibility of late-bound attributes, because it would break some
       // features.
-      if (!context.getRule().getLabel().getPackageIdentifier().equals(
-              prerequisite.getTarget().getLabel().getPackageIdentifier())
+      if (!context.getRule().getLabel().getPackageName().equals(
+              prerequisite.getTarget().getLabel().getPackageName())
           && !context.isVisible(prerequisite)) {
         if (!context.getConfiguration().checkVisibility()) {
           context.ruleWarning(String.format("Target '%s' violates visibility of target "
@@ -213,14 +209,23 @@ public class BazelRuleClassProvider {
           AndroidConfiguration.Options.class
       );
 
+  /**
+   * Java objects accessible from Skylark rule implementations using this module.
+   */
+  private static final ImmutableMap<String, SkylarkType> skylarkBuiltinJavaObects =
+      ImmutableMap.of(
+          "jvm", SkylarkType.of(Jvm.class),
+          "java_configuration", SkylarkType.of(JavaConfiguration.class),
+          "cpp", SkylarkType.of(CppConfiguration.class));
+
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
     builder
         .addBuildInfoFactory(new BazelJavaBuildInfoFactory())
         .addBuildInfoFactory(new CppBuildInfo())
         .addBuildInfoFactory(new ObjcBuildInfoFactory())
         .setConfigurationCollectionFactory(new BazelConfigurationCollection())
-        .setPrelude("tools/build_rules/prelude_bazel")
-        .setPrerequisiteValidator(new BazelPrerequisiteValidator());
+        .setPrerequisiteValidator(new BazelPrerequisiteValidator())
+        .setSkylarkAccessibleJavaClasses(skylarkBuiltinJavaObects);
 
     for (Class<? extends FragmentOptions> fragmentOptions : BUILD_OPTIONS) {
       builder.addConfigurationOptions(fragmentOptions);
@@ -272,8 +277,6 @@ public class BazelRuleClassProvider {
           ResourceFileLoader.loadResource(BazelJavaRuleClasses.class, "jdk.WORKSPACE"));
       builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelAndroidSemantics.class, "android.WORKSPACE"));
-      builder.addWorkspaceFile(
-          ResourceFileLoader.loadResource(BazelJ2ObjcLibraryRule.class, "j2objc.WORKSPACE"));
     } catch (IOException e) {
       throw new IllegalStateException(e);
     }
@@ -330,8 +333,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new IosApplicationRule());
     builder.addRuleDefinition(new IosExtensionBinaryRule());
     builder.addRuleDefinition(new IosExtensionRule());
-    builder.addRuleDefinition(new IosFrameworkBinaryRule());
-    builder.addRuleDefinition(new IosFrameworkRule());
     builder.addRuleDefinition(new J2ObjcLibraryBaseRule());
     builder.addRuleDefinition(new BazelJ2ObjcLibraryRule());
 

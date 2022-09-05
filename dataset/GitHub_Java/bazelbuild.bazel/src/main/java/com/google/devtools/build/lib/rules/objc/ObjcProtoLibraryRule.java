@@ -46,7 +46,6 @@ public class ObjcProtoLibraryRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, final RuleDefinitionEnvironment env) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class)
         /* <!-- #BLAZE_RULE(objc_proto_library).ATTRIBUTE(deps) -->
         The directly depended upon proto_library rules.
         ${SYNOPSIS}
