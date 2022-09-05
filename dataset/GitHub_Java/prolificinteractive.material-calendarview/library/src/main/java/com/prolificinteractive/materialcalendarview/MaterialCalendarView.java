@@ -205,25 +205,20 @@ public class MaterialCalendarView extends FrameLayout {
     }
 
     private void setupChildren() {
-        int tileSize = (int) TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP,
-                getResources().getInteger(R.integer.mcv_default_tile_size),
-                getResources().getDisplayMetrics()
-        );
+        int tileSize = getResources().getDimensionPixelSize(R.dimen.mcv_default_tile_size);
 
         root = new LinearLayout(getContext());
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setWeightSum(8);
         root.setClipChildren(false);
         root.setClipToPadding(false);
-        LayoutParams p = new LayoutParams(
-                tileSize * MonthView.DEFAULT_DAYS_IN_WEEK,
-                tileSize * (MonthView.DEFAULT_MONTH_TILE_HEIGHT + 1)
-        );
+        LayoutParams p = new LayoutParams(tileSize * 7, tileSize * 8);
         p.gravity = Gravity.CENTER;
         addView(root, p);
 
         LinearLayout topbar = new LinearLayout(getContext());
         topbar.setOrientation(LinearLayout.HORIZONTAL);
+        topbar.setWeightSum(7);
         topbar.setClipChildren(false);
         topbar.setClipToPadding(false);
         root.addView(topbar, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
@@ -233,9 +228,7 @@ public class MaterialCalendarView extends FrameLayout {
         topbar.addView(buttonPast, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 1));
 
         title.setGravity(Gravity.CENTER);
-        topbar.addView(title, new LinearLayout.LayoutParams(
-                0, LayoutParams.MATCH_PARENT, MonthView.DEFAULT_DAYS_IN_WEEK - 2
-        ));
+        topbar.addView(title, new LinearLayout.LayoutParams(0, LayoutParams.MATCH_PARENT, 5));
 
         buttonFuture.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
         buttonFuture.setImageResource(R.drawable.mcv_action_next);
@@ -243,9 +236,7 @@ public class MaterialCalendarView extends FrameLayout {
 
         pager.setId(R.id.mcv_pager);
         pager.setOffscreenPageLimit(1);
-        root.addView(pager, new LinearLayout.LayoutParams(
-                LayoutParams.MATCH_PARENT, 0, MonthView.DEFAULT_MONTH_TILE_HEIGHT
-        ));
+        root.addView(pager, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 0, 7));
     }
 
     /**
@@ -272,10 +263,7 @@ public class MaterialCalendarView extends FrameLayout {
      * @param size the new size for each tile in pixels
      */
     public void setTileSize(int size) {
-        LayoutParams p = new LayoutParams(
-                size * MonthView.DEFAULT_DAYS_IN_WEEK,
-                size * (MonthView.DEFAULT_MONTH_TILE_HEIGHT + 1)
-        );
+        LayoutParams p = new LayoutParams(size * 7, size * 8);
         p.gravity = Gravity.CENTER;
         root.setLayoutParams(p);
     }
