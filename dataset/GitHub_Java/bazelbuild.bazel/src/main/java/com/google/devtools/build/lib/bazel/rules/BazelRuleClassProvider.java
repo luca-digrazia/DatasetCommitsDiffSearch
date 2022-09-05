@@ -84,7 +84,6 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfigRule;
 import com.google.devtools.build.lib.rules.apple.XcodeVersionRule;
 import com.google.devtools.build.lib.rules.apple.cpp.AppleCcToolchainRule;
-import com.google.devtools.build.lib.rules.cpp.CcIncLibraryRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainRule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
@@ -230,9 +229,7 @@ public class BazelRuleClassProvider {
    * Java objects accessible from Skylark rule implementations using this module.
    */
   public static final ImmutableMap<String, SkylarkType> skylarkBuiltinJavaObects =
-      ImmutableMap.of(
-          "android_common", SkylarkType.of(AndroidSkylarkCommon.class),
-          "apple_toolchain", SkylarkType.of(AppleToolchain.class));
+      ImmutableMap.of("android_common", SkylarkType.of(AndroidSkylarkCommon.class));
 
 
   public static void setup(ConfiguredRuleClassProvider.Builder builder) {
@@ -280,7 +277,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new CcToolchainRule());
     builder.addRuleDefinition(new AppleCcToolchainRule());
     builder.addRuleDefinition(new CcToolchainSuiteRule());
-    builder.addRuleDefinition(new CcIncLibraryRule());
     builder.addRuleDefinition(new BazelCppRuleClasses.CcLinkingRule());
     builder.addRuleDefinition(new BazelCppRuleClasses.CcDeclRule());
     builder.addRuleDefinition(new BazelCppRuleClasses.CcBaseRule());
@@ -290,7 +286,6 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new BazelCppRuleClasses.CcTestRule());
     builder.addRuleDefinition(new BazelCppRuleClasses.CcLibraryBaseRule());
     builder.addRuleDefinition(new BazelCppRuleClasses.CcLibraryRule());
-    builder.addRuleDefinition(new BazelCppRuleClasses.BazelCcIncLibraryRule());
 
     builder.addRuleDefinition(new BazelPyRuleClasses.PyBaseRule());
     builder.addRuleDefinition(new BazelPyRuleClasses.PyBinaryBaseRule());
@@ -299,13 +294,13 @@ public class BazelRuleClassProvider {
     builder.addRuleDefinition(new BazelPyTestRule());
 
     try {
-      builder.addWorkspaceFilePrefix(
+      builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelRuleClassProvider.class, "tools.WORKSPACE"));
-      builder.addWorkspaceFilePrefix(
+      builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelJavaRuleClasses.class, "jdk.WORKSPACE"));
-      builder.addWorkspaceFilePrefix(
+      builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelAndroidSemantics.class, "android.WORKSPACE"));
-      builder.addWorkspaceFilePrefix(
+      builder.addWorkspaceFile(
           ResourceFileLoader.loadResource(BazelJ2ObjcLibraryRule.class, "j2objc.WORKSPACE"));
     } catch (IOException e) {
       throw new IllegalStateException(e);
