@@ -60,8 +60,7 @@ public abstract class FileSystemTest {
   protected Path xEmptyDirectory;
 
   @Before
-  public final void createDirectories() throws Exception  {
-    executeBeforeCreatingDirectories();
+  public void setUp() throws Exception {
     testFS = getFreshFileSystem();
     workingDir = testFS.getPath(getTestTmpDir());
     cleanUpWorkingDirectory(workingDir);
@@ -86,13 +85,8 @@ public abstract class FileSystemTest {
     xEmptyDirectory.createDirectory();
   }
 
-  protected void executeBeforeCreatingDirectories() throws Exception {
-    // This method exists because LazyDigestFileSystemTest requires some code to be run before
-    // createDirectories().
-  }
-
   @After
-  public final void destroyFileSystem() throws Exception  {
+  public void tearDown() throws Exception {
     destroyFileSystem(testFS);
   }
 
