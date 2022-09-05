@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.Dependency;
+import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection.Transitions;
@@ -1502,16 +1502,17 @@ public final class BuildConfiguration {
     Transitions getCurrentTransitions();
 
     /**
-     * Populates a {@link com.google.devtools.build.lib.analysis.Dependency}
+     * Populates a {@link com.google.devtools.build.lib.analysis.DependencyResolver.Dependency}
      * for each configuration represented by this instance.
      * TODO(bazel-team): this is a really ugly reverse dependency: factor this away.
      */
-    Iterable<Dependency> getDependencies(Label label, ImmutableSet<Aspect> aspects);
+    Iterable<DependencyResolver.Dependency> getDependencies(
+        Label label, ImmutableSet<Aspect> aspects);
   }
 
   /**
    * Transition applier for static configurations. This implementation populates
-   * {@link com.google.devtools.build.lib.analysis.Dependency} objects with
+   * {@link com.google.devtools.build.lib.analysis.DependencyResolver.Dependency} objects with
    * actual configurations.
    *
    * <p>Does not support split transitions (see {@link SplittableTransitionApplier}).
@@ -1579,17 +1580,16 @@ public final class BuildConfiguration {
     }
 
     @Override
-    public Iterable<Dependency> getDependencies(Label label, ImmutableSet<Aspect> aspects) {
+    public Iterable<DependencyResolver.Dependency> getDependencies(
+        Label label, ImmutableSet<Aspect> aspects) {
       return ImmutableList.of(
-          currentConfiguration != null
-              ? Dependency.withConfigurationAndAspects(label, currentConfiguration, aspects)
-              : Dependency.withNullConfiguration(label));
+          new DependencyResolver.Dependency(label, currentConfiguration, aspects));
     }
   }
 
   /**
    * Transition applier for dynamic configurations. This implementation populates
-   * {@link com.google.devtools.build.lib.analysis.Dependency} objects with
+   * {@link com.google.devtools.build.lib.analysis.DependencyResolver.Dependency} objects with
    * transition definitions that the caller subsequently creates configurations out of.
    *
    * <p>Does not support split transitions (see {@link SplittableTransitionApplier}).
@@ -1681,10 +1681,9 @@ public final class BuildConfiguration {
     }
 
     @Override
-    public Iterable<Dependency> getDependencies(
+    public Iterable<DependencyResolver.Dependency> getDependencies(
         Label label, ImmutableSet<Aspect> aspects) {
-      return ImmutableList.of(
-          Dependency.withTransitionAndAspects(label, transition, aspects));
+      return ImmutableList.of(new DependencyResolver.Dependency(label, transition, aspects));
     }
   }
 
@@ -1749,8 +1748,9 @@ public final class BuildConfiguration {
 
 
     @Override
-    public Iterable<Dependency> getDependencies(Label label, ImmutableSet<Aspect> aspects) {
-      ImmutableList.Builder<Dependency> builder = ImmutableList.builder();
+    public Iterable<DependencyResolver.Dependency> getDependencies(
+        Label label, ImmutableSet<Aspect> aspects) {
+      ImmutableList.Builder<DependencyResolver.Dependency> builder = ImmutableList.builder();
       for (TransitionApplier applier : appliers) {
         builder.addAll(applier.getDependencies(label, aspects));
       }
