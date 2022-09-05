@@ -71,9 +71,6 @@ import javax.annotation.Nullable;
 /** An Aspect which JavaProtoLibrary injects to build Java SPEED protos. */
 public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
 
-  private static final String SPEED_PROTO_RUNTIME_ATTR = "$aspect_java_lib";
-  private static final String SPEED_PROTO_RUNTIME_LABEL = "//external:protobuf/java_runtime";
-
   /**
    * The attribute name for holding a list of protos for which no code should be generated because
    * the proto-runtime already contains them.
@@ -81,23 +78,26 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
   private static final String PROTO_SOURCE_FILE_BLACKLIST_ATTR = "$proto_source_file_blacklist";
 
   private final JavaSemantics javaSemantics;
+  private final String protoRuntimeAttr;
+  private final String protoRuntimeLabel;
   private final ImmutableList<String> protoSourceFileBlacklistLabels;
 
   @Nullable private final String jacocoLabel;
   private final ImmutableList<String> protoCompilerPluginOptions;
-  private final RpcSupport rpcSupport;
 
   protected JavaProtoAspect(
       JavaSemantics javaSemantics,
+      String protoRuntimeAttr,
+      String protoRuntimeLabel,
       ImmutableList<String> protoSourceFileBlacklistLabels,
       @Nullable String jacocoLabel,
-      ImmutableList<String> protoCompilerPluginOptions,
-      RpcSupport rpcSupport) {
+      ImmutableList<String> protoCompilerPluginOptions) {
     this.javaSemantics = javaSemantics;
+    this.protoRuntimeAttr = protoRuntimeAttr;
+    this.protoRuntimeLabel = protoRuntimeLabel;
     this.protoSourceFileBlacklistLabels = protoSourceFileBlacklistLabels;
     this.jacocoLabel = jacocoLabel;
     this.protoCompilerPluginOptions = protoCompilerPluginOptions;
-    this.rpcSupport = rpcSupport;
   }
 
   @Override
@@ -107,10 +107,6 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     ConfiguredAspect.Builder aspect =
         new ConfiguredAspect.Builder(getClass().getSimpleName(), ruleContext);
 
-    if (!rpcSupport.checkAttributes(ruleContext, parameters)) {
-      return aspect.build();
-    }
-
     // Get SupportData, which is provided by the proto_library rule we attach to.
     SupportData supportData =
         checkNotNull(base.getProvider(ProtoSupportDataProvider.class)).getSupportData();
@@ -119,9 +115,9 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
         new Impl(
                 ruleContext,
                 supportData,
+                protoRuntimeAttr,
                 protoCompilerPluginOptions,
-                javaSemantics,
-            rpcSupport)
+                javaSemantics)
             .createProviders());
 
     return aspect.build();
@@ -135,9 +131,9 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
             .requiresConfigurationFragments(JavaConfiguration.class, ProtoConfiguration.class)
             .requireProvider(ProtoSourcesProvider.class)
             .add(
-                attr(SPEED_PROTO_RUNTIME_ATTR, LABEL)
+                attr(protoRuntimeAttr, LABEL)
                     .legacyAllowAnyFileType()
-                    .value(parseAbsoluteUnchecked(SPEED_PROTO_RUNTIME_LABEL)))
+                    .value(parseAbsoluteUnchecked(protoRuntimeLabel)))
             .add(
                 attr(PROTO_SOURCE_FILE_BLACKLIST_ATTR, LABEL_LIST)
                     .cfg(HOST)
@@ -148,8 +144,6 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                 attr(":java_toolchain", LABEL)
                     .allowedRuleClasses("java_toolchain")
                     .value(JavaSemantics.JAVA_TOOLCHAIN));
-
-    rpcSupport.mutateAspectDefinition(result, aspectParameters);
 
     Attribute.Builder<Label> jacocoAttr = attr("$jacoco_instrumentation", LABEL).cfg(HOST);
 
@@ -180,7 +174,8 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     private final RuleContext ruleContext;
     private final SupportData supportData;
 
-    private final RpcSupport rpcSupport;
+    private final boolean isStrictDeps;
+    private final String protoRuntimeAttr;
     private final JavaSemantics javaSemantics;
 
     /**
@@ -193,14 +188,17 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     Impl(
         final RuleContext ruleContext,
         final SupportData supportData,
+        String protoRuntimeAttr,
         ImmutableList<String> protoCompilerPluginOptions,
-        JavaSemantics javaSemantics,
-        RpcSupport rpcSupport) {
+        JavaSemantics javaSemantics) {
       this.ruleContext = ruleContext;
       this.supportData = supportData;
+      this.protoRuntimeAttr = protoRuntimeAttr;
       this.protoCompilerPluginOptions = protoCompilerPluginOptions;
       this.javaSemantics = javaSemantics;
-      this.rpcSupport = rpcSupport;
+
+      isStrictDeps =
+          ruleContext.getFragment(JavaConfiguration.class).javaProtoLibraryDepsAreStrict();
 
       dependencyCompilationArgs =
           JavaCompilationArgsProvider.merge(
@@ -243,7 +241,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
             .put(
                 JavaSourceJarsAspectProvider.class,
                 new JavaSourceJarsAspectProvider(
-                    JavaSourceJarsProvider.create(
+                    new JavaSourceJarsProvider(
                         NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars)));
       } else {
         // No sources - this proto_library is an alias library, which exports its dependencies.
@@ -304,8 +302,6 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
               .setLangParameter(
                   ProtoCompileActionBuilder.buildProtoArg(
                       "java_out", sourceJar.getExecPathString(), protoCompilerPluginOptions));
-      rpcSupport.mutateProtoCompileAction(
-          ruleContext, sourceJar, actionBuilder);
       ruleContext.registerAction(actionBuilder.build());
     }
 
@@ -316,15 +312,13 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
               .setOutput(outputJar)
               .addSourceJars(sourceJar)
               .setJavacOpts(constructJavacOpts());
+      helper.addDep(dependencyCompilationArgs);
       helper
-          .addDep(dependencyCompilationArgs)
           .addDep(
               ruleContext.getPrerequisite(
-                  SPEED_PROTO_RUNTIME_ATTR, Mode.TARGET, JavaCompilationArgsProvider.class))
-          .setCompilationStrictDepsMode(StrictDepsMode.OFF);
-      rpcSupport.mutateJavaCompileAction(ruleContext, helper);
-      return helper.buildCompilationArgsProvider(
-          helper.build(javaSemantics), true /* isReportedAsStrict */);
+                  protoRuntimeAttr, Mode.TARGET, JavaCompilationArgsProvider.class))
+          .setStrictDepsMode(isStrictDeps ? StrictDepsMode.WARN : StrictDepsMode.OFF);
+      return helper.buildCompilationArgsProvider(helper.build(javaSemantics));
     }
 
     private Artifact getSourceJarArtifact() {
