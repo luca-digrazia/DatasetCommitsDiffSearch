@@ -309,7 +309,7 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
   /**
    * Send the terminal controls that will put the cursor on the beginning
    * of the same line if cursor control is on, or the next line if not.
-   * @return True if it did any output; if so, caller is responsible for
+   * @returns True if it did any output; if so, caller is responsible for
    *          flushing the terminal if needed.
    */
   private boolean maybeOverwritePreviousMessage() throws IOException {
@@ -360,8 +360,7 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
     terminal.writeString(event.getKind() + ": ");
     terminal.resetTerminal();
     writeTimestampAndLocation(event);
-    terminal.writeString(event.getMessage());
-    // No period; info messages may end with a URL.
+    writeStringWithPotentialPeriod(event.getMessage());
     crlf();
   }
 

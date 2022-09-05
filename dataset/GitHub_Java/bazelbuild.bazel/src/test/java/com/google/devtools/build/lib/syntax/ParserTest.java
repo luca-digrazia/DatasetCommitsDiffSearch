@@ -43,7 +43,9 @@ public class ParserTest extends EvaluationTestCase {
   Environment buildEnvironment;
 
   @Before
-  public final void createBuildEnvironment() throws Exception  {
+  @Override
+  public void setUp() throws Exception {
+    super.setUp();
     buildEnvironment = newBuildEnvironment();
   }
 
