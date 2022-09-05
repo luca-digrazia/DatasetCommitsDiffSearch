@@ -34,10 +34,8 @@ public class LipoSupport {
   /**
    * Registers an action to invoke "lipo" on all artifacts in {@code inputBinaries} to create the
    * {@code outputBinary} multi-architecture artifact, built for platform {@code platform}.
-   *
-   * @return this object
    */
-  public LipoSupport registerCombineArchitecturesAction(NestedSet<Artifact> inputBinaries,
+  public void registerCombineArchitecturesAction(NestedSet<Artifact> inputBinaries,
       Artifact outputBinary, Platform platform) {
 
     ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
@@ -51,7 +49,5 @@ public class LipoSupport {
             .addExecPath("-o", outputBinary)
             .build())
         .build(ruleContext));
-    
-    return this;
   }
 }

@@ -478,12 +478,10 @@ public final class ObjcCommon {
     }
 
     /**
-     * Sets information from {@code cc_library} dependencies to be used during linking from
-     * the {@link TransitiveInfoCollection} objects which contain the relevant link providers
-     * (for example, from the current rule's "deps" attribute).
+     * Sets information from {@code cc_library} dependencies to be used during linking.
      */
-    public Builder addDepCcLinkProviders(List<? extends TransitiveInfoCollection> deps) {
-      for (TransitiveInfoCollection dep : deps) {
+    public Builder addDepCcLinkProviders(RuleContext ruleContext) {
+      for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("deps", Mode.TARGET)) {
         // Hack to determine if dep is a cc target. Required so objc_library archives packed in
         // CcLinkParamsProvider do not get consumed as cc targets.
         if (dep.getProvider(CppRunfilesProvider.class) != null) {

@@ -187,16 +187,6 @@ public final class CompilationSupport {
     }
   }
 
-  /**
-   * Iterable wrapper providing strong type safety for extra compile flags.
-   */
-  static final class ExtraCompileArgs extends IterableWrapper<String> {
-    static final ExtraCompileArgs NONE = new ExtraCompileArgs();
-    ExtraCompileArgs(String... args) {
-      super(args);
-    }
-  }
-
   @VisibleForTesting
   static final String FILE_IN_SRCS_AND_HDRS_WARNING_FORMAT =
       "File '%s' is in both srcs and hdrs.";
@@ -278,19 +268,6 @@ public final class CompilationSupport {
    * @return this compilation support
    */
   CompilationSupport registerCompileAndArchiveActions(ObjcCommon common) {
-    return registerCompileAndArchiveActions(common, ExtraCompileArgs.NONE);
-  }
-
-  /**
-   * Registers all actions necessary to compile this rule's sources and archive them.
-   *
-   * @param common common information about this rule and its dependencies
-   * @param extraCompileArgs args to be added to compile actions
-   * @return this compilation support
-   */
-  CompilationSupport registerCompileAndArchiveActions(
-      ObjcCommon common,
-      ExtraCompileArgs extraCompileArgs) {
     if (common.getCompilationArtifacts().isPresent()) {
       registerGenerateModuleMapAction(common.getCompilationArtifacts());
       Optional<CppModuleMap> moduleMap;
@@ -302,7 +279,6 @@ public final class CompilationSupport {
       registerCompileAndArchiveActions(
           common.getCompilationArtifacts().get(),
           common.getObjcProvider(),
-          extraCompileArgs,
           moduleMap,
           buildConfiguration.isCodeCoverageEnabled());
     }
@@ -316,7 +292,6 @@ public final class CompilationSupport {
   private void registerCompileAndArchiveActions(
       CompilationArtifacts compilationArtifacts,
       ObjcProvider objcProvider,
-      ExtraCompileArgs extraCompileArgs,
       Optional<CppModuleMap> moduleMap,
       boolean isCodeCoverageEnabled) {
     ImmutableList.Builder<Artifact> objFiles = new ImmutableList.Builder<>();
@@ -332,7 +307,7 @@ public final class CompilationSupport {
             objcProvider,
             moduleMap,
             compilationArtifacts,
-            Iterables.concat(extraCompileArgs, ImmutableList.of("-fobjc-arc")),
+            ImmutableList.of("-fobjc-arc"),
             isCodeCoverageEnabled);
       }
     }
@@ -345,12 +320,12 @@ public final class CompilationSupport {
           objcProvider,
           moduleMap,
           compilationArtifacts,
-          Iterables.concat(extraCompileArgs, ImmutableList.of("-fno-objc-arc")),
+          ImmutableList.of("-fno-objc-arc"),
           isCodeCoverageEnabled);
     }
 
     objFiles.addAll(compilationArtifacts.getPrecompiledSrcs());
-  
+    
     if (compilationArtifacts.hasSwiftSources()) {
       registerSwiftModuleMergeAction(compilationArtifacts, objcProvider);
     }
