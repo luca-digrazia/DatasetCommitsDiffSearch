@@ -10,24 +10,24 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A meter metric which measures mean throughput and one-, five-, and fifteen-minute
- * exponentially-weighted moving average throughputs.
+ * A meter metric which measures mean throughput and one-, five-, and
+ * fifteen-minute exponentially-weighted moving average throughputs.
  *
  * @see <a href="http://en.wikipedia.org/wiki/Moving_average#Exponential_moving_average">EMA</a>
  */
-public class MeterMetric implements Metered, Stoppable {
+public class MeterMetric implements Metered {
     private static final long INTERVAL = 5; // seconds
     private final Clock clock;
 
     /**
      * Creates a new {@link MeterMetric}.
      *
-     * @param eventType the plural name of the event the meter is measuring (e.g., {@code
-     *                  "requests"})
-     * @param rateUnit  the rate unit of the new meter
+     * @param eventType the plural name of the event the meter is measuring
+     *                  (e.g., {@code "requests"})
+     * @param rateUnit the rate unit of the new meter
      * @return a new {@link MeterMetric}
-     * @deprecated use the other {@code newMeter} method or create a new meter via the {@link
-     *             MetricsRegistry} or {@link Metrics}
+     * @deprecated use the other {@code newMeter} method or create a new meter via the
+     *              {@link MetricsRegistry} or {@link Metrics}
      */
     @SuppressWarnings({"deprecation"})
     public static MeterMetric newMeter(String eventType, TimeUnit rateUnit) {
@@ -38,9 +38,9 @@ public class MeterMetric implements Metered, Stoppable {
      * Creates a new {@link MeterMetric}.
      *
      * @param tickThread background thread for updating the rates
-     * @param eventType  the plural name of the event the meter is measuring (e.g., {@code
-     *                   "requests"})
-     * @param rateUnit   the rate unit of the new meter
+     * @param eventType the plural name of the event the meter is measuring
+     *                  (e.g., {@code "requests"})
+     * @param rateUnit the rate unit of the new meter
      * @return a new {@link MeterMetric}
      */
     public static MeterMetric newMeter(ScheduledExecutorService tickThread, String eventType, TimeUnit rateUnit) {
@@ -142,13 +142,7 @@ public class MeterMetric implements Metered, Stoppable {
         return ratePerNs * (double) rateUnit.toNanos(1);
     }
 
-    @Override
-    public void stop() {
+    void stop() {
         future.cancel(false);
-    }
-
-    @Override
-    public <T> void processWith(MetricsProcessor<T> processor, MetricName name, T context) throws Exception {
-        processor.processMeter(name, this, context);
     }
 }
