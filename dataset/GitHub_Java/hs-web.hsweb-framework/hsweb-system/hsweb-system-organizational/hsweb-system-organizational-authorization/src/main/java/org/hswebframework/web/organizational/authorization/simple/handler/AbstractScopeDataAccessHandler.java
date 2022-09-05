@@ -1,6 +1,6 @@
 package org.hswebframework.web.organizational.authorization.simple.handler;
 
-import org.hswebframework.ezorm.core.param.Term;
+import org.hsweb.ezorm.core.param.Term;
 import org.hswebframework.utils.ClassUtils;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
@@ -51,7 +51,7 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
     @Override
     public boolean handle(DataAccessConfig access, AuthorizingContext context) {
         ScopeDataAccessConfig accessConfig = ((ScopeDataAccessConfig) access);
-        if (!PersonnelAuthorization.current().isPresent()) {
+        if (PersonnelAuthorization.current().isPresent()) {
             return false;
         }
         switch (accessConfig.getAction()) {
@@ -133,9 +133,8 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
     }
 
     protected Set<String> getTryOperationScope(ScopeDataAccessConfig access) {
-        if (DataAccessType.SCOPE_TYPE_CUSTOM.equals(access.getScopeType())) {
+        if (DataAccessType.SCOPE_TYPE_CUSTOM.equals(access.getScopeType()))
             return access.getScope().stream().map(String::valueOf).collect(Collectors.toSet());
-        }
         return getTryOperationScope(access.getScopeType(), getPersonnelAuthorization());
     }
 
@@ -155,9 +154,8 @@ public abstract class AbstractScopeDataAccessHandler<E> implements DataAccessHan
             return defaultSuccessOnError;
         }
         if (entity instanceof QueryParamEntity) {
-            if (logger.isDebugEnabled()) {
+            if (logger.isDebugEnabled())
                 logger.debug("try rebuild query param ...");
-            }
             QueryParamEntity queryParamEntity = ((QueryParamEntity) entity);
             //重构查询条件
             //如: 旧的条件为 where name =? or name = ?
