@@ -22,6 +22,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
@@ -32,7 +33,6 @@ import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PythonSourcesProvider;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -356,8 +356,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   @Test
   public void testGetRuleSelect() throws Exception {
     scratch.file("test/skylark/BUILD");
-    scratch.file(
-        "test/skylark/rulestr.bzl", "def rule_dict(name):", "  return native.existing_rule(name)");
+    scratch.file("test/skylark/rulestr.bzl", "def rule_dict(name):", "  return native.rule(name)");
 
     scratch.file(
         "test/getrule/BUILD",
@@ -377,9 +376,9 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     scratch.file(
         "test/skylark/rulestr.bzl",
         "def rule_dict(name):",
-        "  return native.existing_rule(name)",
+        "  return native.rule(name)",
         "def rules_dict():",
-        "  return native.existing_rules()",
+        "  return native.rules()",
         "def nop(ctx):",
         "  pass",
         "nop_rule = rule(attrs = {'x': attr.label()}, implementation = nop)",
@@ -544,7 +543,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
   public void testSkylarkRuleContextGetDefaultShellEnv() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     Object result = evalRuleContextCode(ruleContext, "ruleContext.configuration.default_shell_env");
-    assertThat(result).isInstanceOf(SkylarkDict.class);
+    assertThat(result).isInstanceOf(ImmutableMap.class);
   }
 
   @Test
