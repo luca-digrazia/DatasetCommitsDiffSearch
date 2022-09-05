@@ -18,7 +18,6 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.syntax.SkylarkType.castMap;
 import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -40,7 +39,6 @@ import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import java.util.Map;
 
@@ -89,17 +87,6 @@ public class SkylarkRepositoryModule {
                 + "reevaluated at every fetch.",
         named = true,
         positional = false
-      ),
-      @Param(
-        name = "environ",
-        type = SkylarkList.class,
-        generic1 = String.class,
-        defaultValue = "[]",
-        doc =
-            "Provides a list of environment variable that this repository rule depends on. If"
-                + " an environment variable in that list change, the repository will be refetched.",
-        named = true,
-        positional = false
       )
     },
     useAst = true,
@@ -113,7 +100,6 @@ public class SkylarkRepositoryModule {
             BaseFunction implementation,
             Object attrs,
             Boolean local,
-            SkylarkList<String> environ,
             FuncallExpression ast,
             com.google.devtools.build.lib.syntax.Environment funcallEnv)
             throws EvalException {
@@ -122,9 +108,6 @@ public class SkylarkRepositoryModule {
           Builder builder = new Builder("", RuleClassType.WORKSPACE, true);
 
           builder.addOrOverrideAttribute(attr("$local", BOOLEAN).defaultValue(local).build());
-          builder.addOrOverrideAttribute(attr("$environ", STRING_LIST)
-              .defaultValue(environ).build());
-          BaseRuleClasses.nameAttribute(builder);
           BaseRuleClasses.commonCoreAndSkylarkAttributes(builder);
           builder.add(attr("expect_failure", STRING));
           if (attrs != Runtime.NONE) {
