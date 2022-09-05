@@ -57,8 +57,7 @@ public class PackageFactoryApparatus {
             null,
             AttributeContainer.ATTRIBUTE_CONTAINER_FACTORY,
             ImmutableList.copyOf(environmentExtensions),
-            "test",
-            Package.Builder.DefaultHelper.INSTANCE);
+            "test");
   }
 
   /**
@@ -124,7 +123,7 @@ public class PackageFactoryApparatus {
             TestUtils.getPool());
     LegacyGlobber globber = new LegacyGlobber(globCache);
     Package externalPkg =
-        factory.newExternalPackageBuilder(
+        Package.newExternalPackageBuilder(
                 buildFile.getParentDirectory().getRelative("WORKSPACE"), "TESTING")
             .build();
     Builder resultBuilder =

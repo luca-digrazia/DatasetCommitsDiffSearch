@@ -91,7 +91,6 @@ public class PackageFunction implements SkyFunction {
   private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache;
   private final AtomicBoolean showLoadingProgress;
   private final AtomicInteger numPackagesLoaded;
-  private final PackageProgressReceiver packageProgress;
   private final Profiler profiler = Profiler.instance();
   private final Label preludeLabel;
 
@@ -107,8 +106,7 @@ public class PackageFunction implements SkyFunction {
       Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>> packageFunctionCache,
       Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
       AtomicInteger numPackagesLoaded,
-      @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining,
-      @Nullable PackageProgressReceiver packageProgress) {
+      @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
     this.skylarkImportLookupFunctionForInlining = skylarkImportLookupFunctionForInlining;
     // Can be null in tests.
     this.preludeLabel = packageFactory == null
@@ -120,26 +118,6 @@ public class PackageFunction implements SkyFunction {
     this.packageFunctionCache = packageFunctionCache;
     this.astCache = astCache;
     this.numPackagesLoaded = numPackagesLoaded;
-    this.packageProgress = packageProgress;
-  }
-
-  public PackageFunction(
-      PackageFactory packageFactory,
-      CachingPackageLocator pkgLocator,
-      AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.Builder>> packageFunctionCache,
-      Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
-      AtomicInteger numPackagesLoaded,
-      @Nullable SkylarkImportLookupFunction skylarkImportLookupFunctionForInlining) {
-    this(
-        packageFactory,
-        pkgLocator,
-        showLoadingProgress,
-        packageFunctionCache,
-        astCache,
-        numPackagesLoaded,
-        skylarkImportLookupFunctionForInlining,
-        null);
   }
 
   public void setSkylarkImportLookupFunctionForInliningForTesting(
@@ -383,7 +361,6 @@ public class PackageFunction implements SkyFunction {
     Package pkg = workspace.getPackage();
     Event.replayEventsOn(env.getListener(), pkg.getEvents());
 
-    packageFactory.afterDoneLoadingPackage(pkg);
     return new PackageValue(pkg);
   }
 
@@ -540,7 +517,6 @@ public class PackageFunction implements SkyFunction {
     // We know this SkyFunction will not be called again, so we can remove the cache entry.
     packageFunctionCache.invalidate(packageId);
 
-    packageFactory.afterDoneLoadingPackage(pkg);
     return new PackageValue(pkg);
   }
 
@@ -1120,9 +1096,6 @@ public class PackageFunction implements SkyFunction {
         packageFunctionCache.getIfPresent(packageId);
     if (packageFunctionCacheEntry == null) {
       profiler.startTask(ProfilerTask.CREATE_PACKAGE, packageId.toString());
-      if (packageProgress != null) {
-        packageProgress.startReadPackage(packageId);
-      }
       try {
         CacheEntryWithGlobDeps<AstAfterPreprocessing> astCacheEntry =
             astCache.getIfPresent(packageId);
@@ -1210,9 +1183,6 @@ public class PackageFunction implements SkyFunction {
         packageFunctionCacheEntry =
             new CacheEntryWithGlobDeps<>(pkgBuilder, globDepsRequested, null);
         numPackagesLoaded.incrementAndGet();
-        if (packageProgress != null) {
-          packageProgress.doneReadPackage(packageId);
-        }
         packageFunctionCache.put(packageId, packageFunctionCacheEntry);
       } finally {
         profiler.completeTask(ProfilerTask.CREATE_PACKAGE);

@@ -115,8 +115,7 @@ public class WorkspaceFactoryTest {
         fail("Shouldn't happen: " + e.getMessage());
       }
       StoredEventHandler eventHandler = new StoredEventHandler();
-      builder = Package.newExternalPackageBuilder(
-          Package.Builder.DefaultHelper.INSTANCE, workspaceFilePath, "");
+      builder = Package.newExternalPackageBuilder(workspaceFilePath, "");
       this.factory = new WorkspaceFactory(
           builder,
           TestRuleClassProvider.getRuleClassProvider(),
