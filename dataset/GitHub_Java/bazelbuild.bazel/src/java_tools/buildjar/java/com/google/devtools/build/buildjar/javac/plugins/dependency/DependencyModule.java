@@ -41,13 +41,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Wrapper class for managing dependencies on top of {@link
- * com.google.devtools.build.buildjar.javac.BlazeJavaCompiler}. If strict_java_deps is enabled, it
- * keeps two maps between jar names (as they appear on the classpath) and their originating targets,
- * one for direct dependencies and the other for transitive (indirect) dependencies, and enables the
- * {@link StrictJavaDepsPlugin} to perform the actual checks. The plugin also collects dependency
- * information during compilation, and DependencyModule generates a .jdeps artifact summarizing the
- * discovered dependencies.
+ * Wrapper class for managing dependencies on top of
+ * {@link com.google.devtools.build.buildjar.javac.BlazeJavaCompiler}. If strict_java_deps is
+ * enabled, it keeps two maps between jar names (as they appear on the classpath) and their
+ * originating targets, one for direct dependencies and the other for transitive (indirect)
+ * dependencies, and enables the {@link StrictJavaDepsPlugin} to perform the actual checks. The
+ * plugin also collects dependency information during compilation, and DependencyModule generates a
+ * .jdeps artifact summarizing the discovered dependencies.
  */
 public final class DependencyModule {
 
@@ -114,7 +114,9 @@ public final class DependencyModule {
     this.packages = new HashSet<>();
   }
 
-  /** Returns a plugin to be enabled in the compiler. */
+  /**
+   * Returns a plugin to be enabled in the compiler.
+   */
   public BlazeJavaCompilerPlugin getPlugin() {
     return new StrictJavaDepsPlugin(this);
   }
@@ -131,7 +133,7 @@ public final class DependencyModule {
     }
 
     try (BufferedOutputStream out =
-        new BufferedOutputStream(new FileOutputStream(outputDepsProtoFile))) {
+             new BufferedOutputStream(new FileOutputStream(outputDepsProtoFile))) {
       buildDependenciesProto(classpath, successful).writeTo(out);
     } catch (IOException ex) {
       throw new IOException("Cannot write dependencies to " + outputDepsProtoFile, ex);
@@ -168,7 +170,9 @@ public final class DependencyModule {
     return deps.build();
   }
 
-  /** Returns whether strict dependency checks (strictJavaDeps) are enabled. */
+  /**
+   * Returns whether strict dependency checks (strictJavaDeps) are enabled.
+   */
   public boolean isStrictDepsEnabled() {
     return strictJavaDeps.isEnabled();
   }
@@ -189,17 +193,23 @@ public final class DependencyModule {
     return indirectJarsToTargets;
   }
 
-  /** Returns the strict dependency checking (strictJavaDeps) setting. */
+  /**
+   * Returns the strict dependency checking (strictJavaDeps) setting.
+   */
   public StrictJavaDeps getStrictJavaDeps() {
     return strictJavaDeps;
   }
 
-  /** Returns the map collecting precise explicit dependency information. */
+  /**
+   * Returns the map collecting precise explicit dependency information.
+   */
   public Map<String, Deps.Dependency> getExplicitDependenciesMap() {
     return explicitDependenciesMap;
   }
 
-  /** Returns the map collecting precise implicit dependency information. */
+  /**
+   * Returns the map collecting precise implicit dependency information.
+   */
   public Map<String, Deps.Dependency> getImplicitDependenciesMap() {
     return implicitDependenciesMap;
   }
@@ -209,17 +219,23 @@ public final class DependencyModule {
     return packages.add(packge);
   }
 
-  /** Returns the type (rule kind) of the originating target. */
+  /**
+   * Returns the type (rule kind) of the originating target.
+   */
   public String getRuleKind() {
     return ruleKind;
   }
 
-  /** Returns the name (label) of the originating target. */
+  /**
+   * Returns the name (label) of the originating target.
+   */
   public String getTargetLabel() {
     return targetLabel;
   }
 
-  /** Returns the file name collecting dependency information. */
+  /**
+   * Returns the file name collecting dependency information.
+   */
   public String getOutputDepsProtoFile() {
     return outputDepsProtoFile;
   }
@@ -234,12 +250,16 @@ public final class DependencyModule {
     return fixMessage;
   }
 
-  /** Return a set of generator values that are exempt from strict dependencies. */
+  /**
+   * Return a set of generator values that are exempt from strict dependencies.
+   */
   public Set<String> getExemptGenerators() {
     return exemptGenerators;
   }
 
-  /** Returns whether classpath reduction is enabled for this invocation. */
+  /**
+   * Returns whether classpath reduction is enabled for this invocation.
+   */
   public boolean reduceClasspath() {
     return strictClasspathMode;
   }
@@ -272,7 +292,7 @@ public final class DependencyModule {
     requiredClasspath = new HashSet<>(directJarsToTargets.keySet());
 
     for (String depsArtifact : depsArtifacts) {
-      collectDependenciesFromArtifact(depsArtifact);
+       collectDependenciesFromArtifact(depsArtifact);
     }
 
     // Filter the initial classpath and keep the original order
@@ -290,7 +310,9 @@ public final class DependencyModule {
     this.requiredClasspath = strictClasspath;
   }
 
-  /** Updates {@link #requiredClasspath} to include dependencies from the given output artifact. */
+  /**
+   * Updates {@link #requiredClasspath} to include dependencies from the given output artifact.
+   */
   private void collectDependenciesFromArtifact(String path) throws IOException {
     try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(path))) {
       Deps.Dependencies deps = Deps.Dependencies.parseFrom(bis);
@@ -318,7 +340,9 @@ public final class DependencyModule {
     String get(Iterable<JarOwner> missing, String recipient, boolean useColor);
   }
 
-  /** Builder for {@link DependencyModule}. */
+  /**
+   * Builder for {@link DependencyModule}.
+   */
   public static class Builder {
 
     private StrictJavaDeps strictJavaDeps = StrictJavaDeps.OFF;
@@ -351,8 +375,9 @@ public final class DependencyModule {
     }
 
     /**
-     * Constructs the DependencyModule, guaranteeing that the maps are never null (they may be
-     * empty), and the default strictJavaDeps setting is OFF.
+     * Constructs the DependencyModule, guaranteeing that the maps are
+     * never null (they may be empty), and the default strictJavaDeps setting
+     * is OFF.
      *
      * @return an instance of DependencyModule
      */
