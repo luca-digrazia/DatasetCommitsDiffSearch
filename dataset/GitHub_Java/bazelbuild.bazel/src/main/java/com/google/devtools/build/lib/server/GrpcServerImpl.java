@@ -40,6 +40,7 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.nio.charset.Charset;
 import java.security.SecureRandom;
@@ -275,7 +276,7 @@ public class GrpcServerImpl extends RPCServer {
     InetSocketAddress address = new InetSocketAddress("[::1]", port);
     try {
       server = NettyServerBuilder.forAddress(address).addService(commandServer).build().start();
-    } catch (IOException e) {
+    } catch (BindException e) {
       address = new InetSocketAddress("127.0.0.1", port);
       server = NettyServerBuilder.forAddress(address).addService(commandServer).build().start();
     }
