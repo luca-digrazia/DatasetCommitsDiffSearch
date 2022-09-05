@@ -43,8 +43,6 @@ import com.google.devtools.build.lib.bazel.rules.cpp.BazelCcIncLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCcLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCcTestRule;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
-import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppSemantics;
-import com.google.devtools.build.lib.bazel.rules.cpp.proto.BazelCcProtoAspect;
 import com.google.devtools.build.lib.bazel.rules.genrule.BazelGenRuleRule;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaBinaryRule;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaBuildInfoFactory;
@@ -105,15 +103,12 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.rules.cpp.proto.CcProtoAspect;
-import com.google.devtools.build.lib.rules.cpp.proto.CcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.extra.ActionListenerRule;
 import com.google.devtools.build.lib.rules.extra.ExtraActionRule;
 import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaOptions;
-import com.google.devtools.build.lib.rules.java.JavaSkylarkCommon;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
@@ -125,6 +120,7 @@ import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatch1ExtensionRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatch2ExtensionRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatchExtensionBinaryRule;
+import com.google.devtools.build.lib.rules.objc.BazelJ2ObjcProtoAspect;
 import com.google.devtools.build.lib.rules.objc.ExperimentalObjcLibraryRule;
 import com.google.devtools.build.lib.rules.objc.IosApplicationRule;
 import com.google.devtools.build.lib.rules.objc.IosDeviceRule;
@@ -277,7 +273,6 @@ public class BazelRuleClassProvider {
     PROTO_RULES.init(builder);
     SH_RULES.init(builder);
     CPP_RULES.init(builder);
-    CPP_PROTO_RULES.init(builder);
     JAVA_RULES.init(builder);
     JAVA_PROTO_RULES.init(builder);
     ANDROID_RULES.init(builder);
@@ -437,21 +432,6 @@ public class BazelRuleClassProvider {
         }
       };
 
-  public static final RuleSet CPP_PROTO_RULES =
-      new RuleSet() {
-        @Override
-        public void init(Builder builder) {
-          CcProtoAspect ccProtoAspect = new BazelCcProtoAspect(BazelCppSemantics.INSTANCE);
-          builder.addNativeAspectClass(ccProtoAspect);
-          builder.addRuleDefinition(new CcProtoLibraryRule(ccProtoAspect));
-        }
-
-        @Override
-        public ImmutableList<RuleSet> requires() {
-          return ImmutableList.of(CORE_RULES, CPP_RULES);
-        }
-      };
-
   public static final RuleSet JAVA_RULES =
       new RuleSet() {
         @Override
@@ -542,7 +522,6 @@ public class BazelRuleClassProvider {
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
           builder.addSkylarkAccessibleTopLevels("java_proto_common", JavaProtoSkylarkCommon.class);
-          builder.addSkylarkAccessibleTopLevels("java_common", JavaSkylarkCommon.INSTANCE);
 
           try {
             builder.addWorkspaceFilePrefix(
@@ -662,8 +641,12 @@ public class BazelRuleClassProvider {
         @Override
         public void init(Builder builder) {
           String toolsRepository = checkNotNull(builder.getToolsRepository());
-          J2ObjcAspect j2ObjcAspect = new J2ObjcAspect(toolsRepository);
 
+          BazelJ2ObjcProtoAspect bazelJ2ObjcProtoAspect =
+              new BazelJ2ObjcProtoAspect(toolsRepository);
+          J2ObjcAspect j2ObjcAspect = new J2ObjcAspect(toolsRepository, bazelJ2ObjcProtoAspect);
+
+          builder.addNativeAspectClass(bazelJ2ObjcProtoAspect);
           builder.addNativeAspectClass(j2ObjcAspect);
           builder.addRuleDefinition(new J2ObjcLibraryBaseRule());
           builder.addRuleDefinition(new J2ObjcLibraryRule(j2ObjcAspect));
