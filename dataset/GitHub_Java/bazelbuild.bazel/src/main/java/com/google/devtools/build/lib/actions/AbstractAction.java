@@ -40,9 +40,9 @@ import java.util.Collection;
 import javax.annotation.Nullable;
 
 /**
- * Abstract implementation of Action which implements basic functionality: the inputs, outputs, and
- * toString method. Both input and output sets are immutable. Subclasses must be generally
- * immutable - see the documentation on {@link Action}.
+ * Abstract implementation of Action which implements basic functionality: the
+ * inputs, outputs, and toString method.  Both input and output sets are
+ * immutable.
  */
 @Immutable @ThreadSafe
 public abstract class AbstractAction implements Action, SkylarkValue {
@@ -390,11 +390,6 @@ public abstract class AbstractAction implements Action, SkylarkValue {
   @Override
   public boolean shouldReportPathPrefixConflict(Action action) {
     return this != action;
-  }
-
-  @Override
-  public boolean extraActionCanAttach() {
-    return true;
   }
 
   @Override
