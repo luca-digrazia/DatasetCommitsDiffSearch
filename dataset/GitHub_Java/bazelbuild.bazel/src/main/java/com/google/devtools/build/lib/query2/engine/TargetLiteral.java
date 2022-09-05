@@ -67,7 +67,7 @@ public final class TargetLiteral extends QueryExpression {
   }
 
   @Override
-  public QueryExpression getMapped(QueryExpressionMapper mapper) {
+  public QueryExpression getMapped(QueryExpressionMapper mapper) throws QueryException {
     return mapper.map(this);
   }
 

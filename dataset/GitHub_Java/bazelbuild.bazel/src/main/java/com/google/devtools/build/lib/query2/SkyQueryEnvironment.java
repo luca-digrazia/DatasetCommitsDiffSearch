@@ -243,7 +243,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
 
     @Override
-    public QueryExpression map(FunctionExpression functionExpression) {
+    public QueryExpression map(FunctionExpression functionExpression) throws QueryException {
       if (functionExpression.getFunction().getName().equals(new RdepsFunction().getName())) {
         List<Argument> args = functionExpression.getArgs();
         QueryExpression universeExpression = args.get(0).getExpression();
@@ -267,7 +267,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   }
 
   @Override
-  public final QueryExpression transformParsedQuery(QueryExpression queryExpression) {
+  public final QueryExpression transformParsedQuery(QueryExpression queryExpression)
+      throws QueryException {
     QueryExpression transformedQueryExpression = getTransformedQueryExpression(queryExpression);
     LOG.info(String.format(
         "transformed query [%s] to [%s]",
@@ -278,7 +279,8 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     return transformedQueryExpression;
   }
 
-  protected QueryExpression getTransformedQueryExpression(QueryExpression queryExpression) {
+  protected QueryExpression getTransformedQueryExpression(QueryExpression queryExpression)
+      throws QueryException {
     if (universeScope.size() != 1) {
       return queryExpression;
     }

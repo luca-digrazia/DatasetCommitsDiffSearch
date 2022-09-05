@@ -119,20 +119,20 @@ public final class Lexer {
    * Entry point to the lexer.  Returns the list of tokens for the specified
    * input, or throws QueryException.
    */
-  public static List<Token> scan(String input) throws QueryException {
-    Lexer lexer = new Lexer(input);
+  public static List<Token> scan(char[] buffer) throws QueryException {
+    Lexer lexer = new Lexer(buffer);
     lexer.tokenize();
     return lexer.tokens;
   }
 
   // Input buffer and position
-  private String input;
+  private char[] buffer;
   private int pos;
 
   private final List<Token> tokens = new ArrayList<>();
 
-  private Lexer(String input) {
-    this.input = input;
+  private Lexer(char[] buffer) {
+    this.buffer = buffer;
     this.pos = 0;
   }
 
@@ -150,8 +150,8 @@ public final class Lexer {
    */
   private Token quotedWord(char quot) throws QueryException {
     int oldPos = pos - 1;
-    while (pos < input.length()) {
-      char c = input.charAt(pos++);
+    while (pos < buffer.length) {
+      char c = buffer[pos++];
       switch (c) {
         case '\'':
         case '"':
@@ -174,8 +174,8 @@ public final class Lexer {
   // (e.g. cc_.*). Keep consistent with TargetLiteral.toString()!
   private String scanWord() {
     int oldPos = pos - 1;
-    while (pos < input.length()) {
-      switch (input.charAt(pos)) {
+    while (pos < buffer.length) {
+      switch (buffer[pos]) {
         case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
         case 'g': case 'h': case 'i': case 'j': case 'k': case 'l':
         case 'm': case 'n': case 'o': case 'p': case 'q': case 'r':
@@ -218,8 +218,8 @@ public final class Lexer {
    * the constructor.
    */
   private void tokenize() throws QueryException {
-    while (pos < input.length()) {
-      char c = input.charAt(pos);
+    while (pos < buffer.length) {
+      char c = buffer[pos];
       pos++;
       switch (c) {
       case '(': {
@@ -271,11 +271,11 @@ public final class Lexer {
 
     addToken(new Token(TokenKind.EOF));
 
-    this.input = null; // release buffer now that we have our tokens
+    this.buffer = null; // release buffer now that we have our tokens
   }
 
   private String bufferSlice(int start, int end) {
-    return this.input.substring(start, end);
+    return new String(this.buffer, start, end - start);
   }
 
 }
