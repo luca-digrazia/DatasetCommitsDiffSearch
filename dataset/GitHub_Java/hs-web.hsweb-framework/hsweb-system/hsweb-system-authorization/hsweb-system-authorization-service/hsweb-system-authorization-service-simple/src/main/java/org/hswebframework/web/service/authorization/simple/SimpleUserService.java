@@ -47,9 +47,6 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Autowired(required = false)
     private PasswordEncoder passwordEncoder = (password, salt) -> DigestUtils.md5Hex(String.format("hsweb.%s.framework.%s", password, salt));
 
-    @Autowired(required = false)
-    private DataAccessFactory dataAccessFactory;
-
     @Autowired
     private UserDao userDao;
 
@@ -64,6 +61,9 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
 
     @Autowired
     private RoleDao roleDao;
+
+    @Autowired(required = false)
+    private DataAccessFactory dataAccessFactory;
 
     @Override
     @Cacheable(value = USER_AUTH_CACHE_NAME, key = "#userId")
@@ -153,7 +153,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         userEntity.setId(userId);
         //判断用户是否存在
         boolean userExists = createQuery().where()
-                .is(UserEntity.username, userEntity.getUsername())
+                .is("username", userEntity.getUsername())
                 .and().not(GenericEntity.id, userId)
                 .total() > 0;
         tryValidateProperty(!userExists, GenericEntity.id, "{username_exists}");
@@ -161,10 +161,10 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         //修改密码
         if (!StringUtils.hasLength(userEntity.getPassword())) {
             //密码强度验证
-            tryValidateProperty(usernameValidator, UserEntity.password, userEntity.getPassword());
+            tryValidateProperty(usernameValidator, "password", userEntity.getPassword());
             //密码MD5
             userEntity.setPassword(encodePassword(userEntity.getPassword(), userEntity.getSalt()));
-            updateProperties.add(UserEntity.password);
+            updateProperties.add("password");
         }
         //修改数据
         DefaultDSLUpdateService.createUpdate(getDao(), userEntity)
@@ -183,7 +183,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     public boolean enable(String userId) {
         return DefaultDSLUpdateService.createUpdate(getDao())
-                .set(UserEntity.enabled, true)
+                .set("enabled", true)
                 .where(GenericEntity.id, userId)
                 .exec() > 0;
     }
@@ -191,7 +191,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     public boolean disable(String userId) {
         return DefaultDSLUpdateService.createUpdate(getDao())
-                .set(UserEntity.enabled, false)
+                .set("enabled", false)
                 .where(GenericEntity.id, userId)
                 .exec() > 0;
     }
@@ -206,7 +206,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         }
         newPassword = encodePassword(newPassword, userEntity.getSalt());
         DefaultDSLUpdateService.createUpdate(getDao())
-                .set(UserEntity.password, newPassword)
+                .set("password", newPassword)
                 .where(GenericEntity.id, userId)
                 .exec();
     }
