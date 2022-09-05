@@ -289,7 +289,9 @@ public final class CppLinkAction extends AbstractAction {
 
   @Override
   public String describeStrategy(Executor executor) {
-    return fake ? "fake,local" : executor.getContext(CppLinkActionContext.class).strategyLocality();
+    return fake
+        ? "fake,local"
+        : executor.getContext(CppLinkActionContext.class).strategyLocality(this);
   }
 
   // Don't forget to update FAKE_LINK_GUID if you modify this method.
@@ -1159,12 +1161,6 @@ public final class CppLinkAction extends AbstractAction {
     public Builder addLinkParams(CcLinkParams linkParams, RuleErrorConsumer errorListener) {
       addLinkopts(linkParams.flattenedLinkopts());
       addLibraries(linkParams.getLibraries());
-      ExtraLinkTimeLibraries extraLinkTimeLibraries = linkParams.getExtraLinkTimeLibraries();
-      if (extraLinkTimeLibraries != null) {
-        for (ExtraLinkTimeLibrary extraLibrary : extraLinkTimeLibraries.getExtraLibraries()) {
-          addLibraries(extraLibrary.buildLibraries(ruleContext));
-        }
-      }
       addLinkstamps(CppHelper.resolveLinkstamps(errorListener, linkParams));
       return this;
     }
