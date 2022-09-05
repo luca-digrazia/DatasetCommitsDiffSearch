@@ -48,7 +48,7 @@ import java.util.regex.Pattern;
 /**
  * Base class for BuildView test cases.
  */
-public abstract class BuildViewTestBase extends AnalysisTestCase {
+public abstract class BuildViewTestBase extends AnalysisTestCaseForJunit4 {
 
   protected static int getFrequencyOfErrorsWithLocation(
       PathFragment path, EventCollector eventCollector) {
@@ -136,19 +136,8 @@ public abstract class BuildViewTestBase extends AnalysisTestCase {
     reporter.removeHandler(failFastHandler);
     useConfiguration("--experimental_multi_cpu=" + badCpu + "," + goodCpu);
     scratch.file("multi/BUILD",
-        "config_setting(",
-        "    name = 'config',",
-        "    values = {'cpu': '" + badCpu + "'})",
-        "cc_library(",
-        "    name = 'cpu',",
-        "    deps = select({",
-        "        ':config': [':fail'],",
-        "        '//conditions:default': []}))",
-        "genrule(",
-        "    name = 'fail',",
-        "    outs = ['file1', 'file2'],",
-        "    executable = 1,",
-        "    cmd = 'touch $@')");
+        "cc_library(name='cpu', abi='$(TARGET_CPU)', abi_deps={'" + badCpu + "':[':fail']})",
+        "genrule(name='fail', outs=['file1', 'file2'], executable = 1, cmd='touch $@')");
     update(defaultFlags().with(Flag.KEEP_GOING), "//multi:cpu");
     AnalysisResult result = getAnalysisResult();
     assertThat(result.getTargetsToBuild()).hasSize(1);
