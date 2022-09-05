@@ -18,15 +18,19 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
- * Tests for {@link SkylarkCommandLine}.
+ * Tests for {@link com.google.devtools.build.lib.rules.SkylarkCommandLine}.
  */
+@RunWith(JUnit4.class)
 public class SkylarkCommandLineTest extends SkylarkTestCase {
 
-  @Override
-  public void setUp() throws Exception {
-    super.setUp();
+  @Before
+  public final void generateBuildFile() throws Exception {
     scratch.file(
         "foo/BUILD",
         "genrule(name = 'foo',",
@@ -36,11 +40,12 @@ public class SkylarkCommandLineTest extends SkylarkTestCase {
         "  outs = ['c.txt'])");
   }
 
+  @Test
   public void testCmdHelperAll() throws Exception {
     Object result =
         evalRuleContextCode(
             createRuleContext("//foo:foo"),
-            "cmd_helper.template(set(ruleContext.files.srcs), '--%{short_path}=%{path}')");
+            "cmd_helper.template(depset(ruleContext.files.srcs), '--%{short_path}=%{path}')");
     SkylarkList list = (SkylarkList) result;
     assertThat(list).containsExactly("--foo/a.txt=foo/a.txt", "--foo/b.img=foo/b.img").inOrder();
   }

@@ -1366,7 +1366,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     } catch (TargetParsingException | ViewCreationFailedException expected) {
       // expected.
     }
-    assertContainsEvent("aspect //test:aspect.bzl%my_aspect added more than once");
+    assertContainsEvent("Aspect //test:aspect.bzl%my_aspect added more than once");
   }
 
   @Test
