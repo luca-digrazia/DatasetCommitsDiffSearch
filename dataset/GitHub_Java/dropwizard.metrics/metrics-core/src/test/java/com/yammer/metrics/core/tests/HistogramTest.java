@@ -4,7 +4,6 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricProcessor;
 import com.yammer.metrics.core.MetricsRegistry;
-import com.yammer.metrics.stats.Snapshot;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -51,28 +50,24 @@ public class HistogramTest {
         assertThat("the histogram has a standard deviation of zero",
                    histogram.stdDev(),
                    is(closeTo(0.0, 0.0001)));
-        
-        assertThat("the histogram has a sum of zero",
-                   histogram.sum(),
-                   is(closeTo(0.0, 0.0001)));
 
-        final Snapshot snapshot = histogram.getSnapshot();
+        final Double[] quantiles = histogram.quantiles(0.5, 0.75, 0.99);
 
         assertThat("the histogram has a median of zero",
-                   snapshot.getMedian(),
+                   quantiles[0],
                    is(closeTo(0.0, 0.0001)));
 
         assertThat("the histogram has a 75th percentile of zero",
-                   snapshot.get75thPercentile(),
+                   quantiles[1],
                    is(closeTo(0.0, 0.0001)));
 
         assertThat("the histogram has a 99th percentile of zero",
-                   snapshot.get99thPercentile(),
+                   quantiles[2],
                    is(closeTo(0.0, 0.0001)));
 
         assertThat("the histogram is empty",
-                   snapshot.size(),
-                   is(0));
+                   histogram.values().isEmpty(),
+                   is(true));
     }
 
     @Test
@@ -100,27 +95,23 @@ public class HistogramTest {
         assertThat("the histogram has a standard deviation of 288.82",
                    histogram.stdDev(),
                    is(closeTo(288.8194360957494, 0.0001)));
-        
-        assertThat("the histogram has a sum of 499500",
-                   histogram.sum(),
-                   is(closeTo(500500, 0.1)));
 
-        final Snapshot snapshot = histogram.getSnapshot();
+        final Double[] quantiles = histogram.quantiles(0.5, 0.75, 0.99);
 
         assertThat("the histogram has a median of 500.5",
-                   snapshot.getMedian(),
+                   quantiles[0],
                    is(closeTo(500.5, 0.0001)));
 
         assertThat("the histogram has a 75th percentile of 750.75",
-                   snapshot.get75thPercentile(),
+                   quantiles[1],
                    is(closeTo(750.75, 0.0001)));
 
         assertThat("the histogram has a 99th percentile of 990.99",
-                   snapshot.get99thPercentile(),
+                   quantiles[2],
                    is(closeTo(990.99, 0.0001)));
 
         assertThat("the histogram has 1000 values",
-                   snapshot.size(),
+                   histogram.values().size(),
                    is(1000));
     }
 

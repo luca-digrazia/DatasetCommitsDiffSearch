@@ -1,8 +1,11 @@
 package com.yammer.metrics.core;
 
 import com.yammer.metrics.core.Histogram.SampleType;
-import com.yammer.metrics.stats.Snapshot;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -11,7 +14,7 @@ import java.util.concurrent.TimeUnit;
  * A timer metric which aggregates timing durations and provides duration statistics, plus
  * throughput statistics via {@link Meter}.
  */
-public class Timer implements Metered, Stoppable, Sampling, Summarizable {
+public class Timer implements Metered, Stoppable, Quantized, Summarized {
 
     private final TimeUnit durationUnit, rateUnit;
     private final Meter meter;
@@ -26,7 +29,7 @@ public class Timer implements Metered, Stoppable, Sampling, Summarizable {
      * @param rateUnit     the scale unit for this timer's rate metrics
      */
     Timer(ScheduledExecutorService tickThread, TimeUnit durationUnit, TimeUnit rateUnit) {
-        this(tickThread, durationUnit, rateUnit, Clock.defaultClock());
+        this(tickThread, durationUnit, rateUnit, Clock.DEFAULT);
     }
 
     /**
@@ -168,19 +171,53 @@ public class Timer implements Metered, Stoppable, Sampling, Summarizable {
         return convertFromNS(histogram.stdDev());
     }
 
+    /* (non-Javadoc)
+     * @see com.yammer.metrics.core.Quantized#quantile(double)
+     */
     @Override
-    public Snapshot getSnapshot() {
-        final double[] values = histogram.getSnapshot().getValues();
-        final double[] converted = new double[values.length];
-        for (int i = 0; i < values.length; i++) {
-            converted[i] = convertFromNS(values[i]);
+    public double quantile(double quantile) {
+        return quantiles(quantile)[0];
+    }
+
+    /* (non-Javadoc)
+     * @see com.yammer.metrics.core.Quantized#quantiles(double)
+     */
+    @Override
+    public Double[] quantiles(Double... quantiles) {
+        final Double[] scores = histogram.quantiles(quantiles);
+        for (int i = 0; i < scores.length; i++) {
+            scores[i] = convertFromNS(scores[i]);
         }
-        return new Snapshot(converted);
+
+        return scores;
     }
 
     @Override
     public String eventType() {
         return meter.eventType();
+    }
+
+    /**
+     * Returns a list of all recorded durations in the timer's sample.
+     *
+     * @return a list of all recorded durations in the timer's sample
+     */
+    public List<Double> values() {
+        final List<Double> values = new ArrayList<Double>();
+        for (Long value : histogram.values()) {
+            values.add(convertFromNS(value));
+        }
+        return values;
+    }
+
+    /**
+     * Writes the values of the timer's sample to the given file.
+     *
+     * @param output the file to which the values will be written
+     * @throws java.io.IOException if there is an error writing the values
+     */
+    public void dump(File output) throws IOException {
+        histogram.dump(output);
     }
 
     private void update(long duration) {

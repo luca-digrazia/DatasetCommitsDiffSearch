@@ -1,9 +1,8 @@
 package com.yammer.metrics.core.tests;
 
-import com.yammer.metrics.core.Clock;
 import com.yammer.metrics.core.MetricsRegistry;
 import com.yammer.metrics.core.Timer;
-import com.yammer.metrics.stats.Snapshot;
+import com.yammer.metrics.core.TimerContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,15 +19,7 @@ public class TimerTest {
 
     @Before
     public void setUp() throws Exception {
-        this.registry = new MetricsRegistry(new Clock() {
-            // a mock clock that increments its ticker by 50msec per call
-            private long val = 0;
-
-            @Override
-            public long tick() {
-                return val += 50000000;
-            }
-        });
+        this.registry = new MetricsRegistry();
         this.timer = registry.newTimer(TimerTest.class, "timer");
     }
 
@@ -73,18 +64,18 @@ public class TimerTest {
                    timer.stdDev(),
                    is(closeTo(0.0, 0.001)));
 
-        final Snapshot snapshot = timer.getSnapshot();
+        final Double[] quantiles = timer.quantiles(0.5, 0.75, 0.99);
 
         assertThat("the timer has a median duration of zero",
-                   snapshot.getMedian(),
+                   quantiles[0],
                    is(closeTo(0.0, 0.001)));
 
         assertThat("the timer has a 75th percentile duration of zero",
-                   snapshot.get75thPercentile(),
+                   quantiles[1],
                    is(closeTo(0.0, 0.001)));
 
         assertThat("the timer has a 99th percentile duration of zero",
-                   snapshot.get99thPercentile(),
+                   quantiles[2],
                    is(closeTo(0.0, 0.001)));
 
         assertThat("the timer has a mean rate of zero",
@@ -104,8 +95,8 @@ public class TimerTest {
                    is(closeTo(0.0, 0.001)));
 
         assertThat("the timer has no values",
-                   timer.getSnapshot().size(),
-                   is(0));
+                   timer.values().isEmpty(),
+                   is(true));
     }
 
     @Test
@@ -136,23 +127,23 @@ public class TimerTest {
                    timer.stdDev(),
                    is(closeTo(11.401, 0.001)));
 
-        final Snapshot snapshot = timer.getSnapshot();
+        final Double[] quantiles = timer.quantiles(0.5, 0.75, 0.99);
 
         assertThat("the timer has a median duration of 20",
-                   snapshot.getMedian(),
+                   quantiles[0],
                    is(closeTo(20.0, 0.001)));
 
         assertThat("the timer has a 75th percentile duration of 35",
-                   snapshot.get75thPercentile(),
+                   quantiles[1],
                    is(closeTo(35.0, 0.001)));
 
         assertThat("the timer has a 99th percentile duration of 40",
-                   snapshot.get99thPercentile(),
+                   quantiles[2],
                    is(closeTo(40.0, 0.001)));
 
         assertThat("the timer has no values",
-                   timer.getSnapshot().getValues(),
-                   is(new double[]{10.0, 20.0, 20.0, 30.0, 40.0}));
+                   timer.values(),
+                   hasItems(10.0, 20.0, 20.0, 30.0, 40.0));
     }
 
     @Test
@@ -170,13 +161,10 @@ public class TimerTest {
         final String value = timer.time(new Callable<String>() {
             @Override
             public String call() throws Exception {
+                Thread.sleep(50);
                 return "one";
             }
         });
-
-        assertThat("the timer has a count of 1",
-                   timer.count(),
-                   is(1L));
 
         assertThat("returns the result of the callable",
                    value,
@@ -184,19 +172,17 @@ public class TimerTest {
 
         assertThat("records the duration of the Callable#call()",
                    timer.max(),
-                   is(closeTo(50.0, 0.001)));
+                   is(closeTo(50, 5)));
     }
 
     @Test
     public void timingContexts() throws Exception {
-        timer.time().stop();
-
-        assertThat("the timer has a count of 1",
-                   timer.count(),
-                   is(1L));
+        final TimerContext context = timer.time();
+        Thread.sleep(50);
+        context.stop();
 
         assertThat("records the duration of the context",
                    timer.max(),
-                   is(closeTo(50.0, 0.001)));
+                   is(closeTo(50, 5)));
     }
 }

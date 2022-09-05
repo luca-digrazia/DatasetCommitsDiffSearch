@@ -1,11 +1,11 @@
 package com.yammer.metrics.core.tests;
 
 import com.yammer.metrics.core.Meter;
+import com.yammer.metrics.core.MetricsRegistry;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.Matchers.closeTo;
@@ -13,12 +13,18 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
 
 public class MeterTest {
-    final ScheduledExecutorService pool = Executors.newSingleThreadScheduledExecutor();
-    final Meter meter = Meter.newMeter(pool, "thangs", TimeUnit.SECONDS);
+    private MetricsRegistry registry;
+    private Meter meter;
+
+    @Before
+    public void setUp() throws Exception {
+        this.registry = new MetricsRegistry();
+        this.meter = registry.newMeter(MeterTest.class, "things", "thing", TimeUnit.SECONDS);
+    }
 
     @After
     public void tearDown() throws Exception {
-        pool.shutdownNow();
+        registry.shutdown();
     }
 
     @Test
