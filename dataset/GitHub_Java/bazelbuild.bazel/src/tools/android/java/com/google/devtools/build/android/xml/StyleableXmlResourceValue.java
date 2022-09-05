@@ -22,12 +22,7 @@ import com.google.common.collect.Ordering;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
-import com.google.devtools.build.android.XmlResourceValues;
-import com.google.devtools.build.android.proto.SerializeFormat;
-import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml.XmlType;
 
-import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -39,25 +34,25 @@ import javax.annotation.concurrent.Immutable;
 /**
  * Represent an Android styleable resource.
  *
- * <p>
- * Styleable resources are groups of attributes that can be applied to views. They are, for the most
- * part, vaguely documented (http://developer.android.com/training/custom-views/create-view
- * .html#customattr). It's worth noting that attributes declared inside a &lt;declare-styleable&gt;
- * tags, for example; <code>
+ * <p>Styleable resources are groups of attributes that can be applied to views. They are, for the
+ * most part, vaguely documented (http://developer.android.com/training/custom-views/create-view
+ * .html#customattr). It's worth noting that attributes declared inside a
+ * &lt;declare-styleable&gt; tags, for example;
+ * <code>
  *  <declare-styleable name="PieChart">
  *     <attr name="showText" format="boolean" />
  *  </declare-styleable>
  * </code>
  *
- * Can also be seen as: <code>
+ * Can also be seen as:
+ * <code>
  *  <attr name="showText" format="boolean" />
  *  <declare-styleable name="PieChart">
  *     <attr name="showText"/>
  *  </declare-styleable>
  * </code>
  *
- * <p>
- * The StyleableXmlValue only contains names of the attributes it holds, not definitions.
+ * <p>The StyleableXmlValue only contains names of the attributes it holds, not definitions.
  */
 @Immutable
 public class StyleableXmlResourceValue implements XmlResourceValue {
@@ -96,21 +91,6 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
                     String.format("<declare-styleable name='%s'>", key.name())))
             .append(FluentIterable.from(attrs).transform(ITEM_TO_ATTR))
             .append("</declare-styleable>"));
-  }
-
-  @Override
-  public int serializeTo(Path source, OutputStream output) throws IOException {
-    return XmlResourceValues.serializeProtoDataValue(
-        output,
-        XmlResourceValues.newSerializableDataValueBuilder(source)
-            .setXmlValue(
-                SerializeFormat.DataValueXml.newBuilder()
-                    .setType(XmlType.STYLEABLE)
-                    .addAllListValue(attrs)));
-  }
-
-  public static XmlResourceValue from(SerializeFormat.DataValueXml proto) {
-    return of(proto.getListValueList());
   }
 
   @Override
