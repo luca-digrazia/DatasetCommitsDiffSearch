@@ -106,29 +106,23 @@ public abstract class ReverseDepsUtil<T> {
     }
   }
 
-  boolean reverseDepsIsEmpty(T container) {
-    return !isSingleReverseDep(container)
-        && ((List<SkyKey>) getReverseDepsObject(container)).isEmpty();
-  }
-
   /**
    * See {@code addReverseDeps} method.
    */
   void removeReverseDep(T container, SkyKey reverseDep) {
     if (isSingleReverseDep(container)) {
       // This removal is cheap so let's do it and not keep it in reverseDepsToRemove.
-      Preconditions.checkState(
-          getReverseDepsObject(container).equals(reverseDep),
-          "toRemove: %s container: %s",
-          reverseDep,
-          container);
+      // !equals should only happen in case of catastrophe.
+      if (getReverseDepsObject(container).equals(reverseDep)) {
         overwriteReverseDepsList(container, ImmutableList.<SkyKey>of());
+      }
       return;
     }
     @SuppressWarnings("unchecked")
     List<SkyKey> reverseDepsAsList = (List<SkyKey>) getReverseDepsObject(container);
-    Preconditions.checkState(
-        !reverseDepsAsList.isEmpty(), "toRemove: %s container: %s", reverseDep, container);
+    if (reverseDepsAsList.isEmpty()) {
+      return;
+    }
     List<SkyKey> reverseDepsToRemove = getReverseDepsToRemove(container);
     if (reverseDepsToRemove == null) {
       reverseDepsToRemove = Lists.newArrayListWithExpectedSize(1);
