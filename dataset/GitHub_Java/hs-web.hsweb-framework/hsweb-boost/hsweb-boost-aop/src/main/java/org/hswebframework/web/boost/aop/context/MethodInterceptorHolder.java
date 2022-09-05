@@ -141,7 +141,7 @@ public class MethodInterceptorHolder {
                 if (args == null) {
                     return Optional.empty();
                 }
-                return Optional.ofNullable((T) args.get(name));
+                return Optional.of((T) args.get(name));
             }
 
             @Override
