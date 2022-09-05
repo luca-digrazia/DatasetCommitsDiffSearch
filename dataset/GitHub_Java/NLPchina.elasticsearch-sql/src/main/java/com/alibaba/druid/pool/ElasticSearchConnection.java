@@ -3,8 +3,7 @@ package com.alibaba.druid.pool;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.transport.TransportAddress;
-import org.elasticsearch.xpack.client.PreBuiltXPackTransportClient;
+import org.elasticsearch.common.transport.InetSocketTransportAddress;
 
 import java.io.InputStream;
 import java.io.Reader;
@@ -23,16 +22,13 @@ import java.util.concurrent.Executor;
 public class ElasticSearchConnection implements Connection {
 
     private Client client;
-    //关闭标识
-    private boolean closeStatus = true;
 
-    public ElasticSearchConnection(String jdbcUrl, Properties info) {
+    public ElasticSearchConnection(String jdbcUrl) {
 
-        Settings.Builder builder = Settings.builder();
-        info.forEach((k, v) -> builder.put(k.toString(), v.toString()));
-        Settings settings = builder.build();
+
+        Settings settings = Settings.builder().put("client.transport.ignore_cluster_name", true).build();
         try {
-            TransportClient transportClient = new PreBuiltXPackTransportClient(settings);
+            TransportClient transportClient = TransportClient.builder().settings(settings).build();
 
             String hostAndPortArrayStr = jdbcUrl.split("/")[2];
             String[] hostAndPortArray = hostAndPortArrayStr.split(",");
@@ -40,10 +36,9 @@ public class ElasticSearchConnection implements Connection {
             for (String hostAndPort : hostAndPortArray) {
                 String host = hostAndPort.split(":")[0];
                 String port = hostAndPort.split(":")[1];
-                transportClient.addTransportAddress(new TransportAddress(InetAddress.getByName(host), Integer.parseInt(port)));
+                transportClient.addTransportAddress(new InetSocketTransportAddress(InetAddress.getByName(host), Integer.parseInt(port)));
             }
             client = transportClient;
-            closeStatus = false;
         } catch (UnknownHostException e) {
             e.printStackTrace();
         }
@@ -589,14 +584,12 @@ public class ElasticSearchConnection implements Connection {
 
     @Override
     public void close() throws SQLException {
-        this.getClient().close();
-        closeStatus = true;
 
     }
 
     @Override
     public boolean isClosed() throws SQLException {
-        return closeStatus;
+        return false;
     }
 
     @Override
