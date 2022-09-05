@@ -201,12 +201,10 @@ public class SimpleAuthorizationSettingService extends GenericEntityService<Auth
     @CacheEvict(cacheNames = {CacheConstants.USER_AUTH_CACHE_NAME, CacheConstants.USER_MENU_CACHE_NAME}, allEntries = true)
     public void mergeSetting(List<AuthorizationSettingEntity> settings) {
         for (AuthorizationSettingEntity setting : settings) {
-            AuthorizationSettingEntity old = select(setting.getType(), setting.getSettingFor());
-            if (old == null) {
+            if (select(setting.getType(), setting.getSettingFor()) == null) {
                 insert(setting);
                 continue;
             }
-            setting.setId(old.getId());
             if (!CollectionUtils.isEmpty(setting.getDetails())) {
                 for (AuthorizationSettingDetailEntity detail : setting.getDetails()) {
                     detail.setSettingId(setting.getId());
