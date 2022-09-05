@@ -460,7 +460,32 @@ public abstract class EvalUtils {
       o = o.toString();  // Pretty-print a label like a string
     }
     if (o instanceof String) {
-      Printer.writeString(buffer, (String) o);
+      String s = (String) o;
+      buffer.append('"');
+      for (int ii = 0, len = s.length(); ii < len; ++ii) {
+        char c = s.charAt(ii);
+        switch (c) {
+        case '\r':
+          buffer.append('\\').append('r');
+          break;
+        case '\n':
+          buffer.append('\\').append('n');
+          break;
+        case '\t':
+          buffer.append('\\').append('t');
+          break;
+        case '\"':
+          buffer.append('\\').append('"');
+          break;
+        default:
+          if (c < 32) {
+            buffer.append(String.format("\\x%02x", (int) c));
+          } else {
+            buffer.append(c); // no need to support UTF-8
+          }
+        } // endswitch
+      }
+      buffer.append('\"');
     } else {
       printValueX(o, buffer);
     }
