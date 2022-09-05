@@ -101,9 +101,8 @@ public class AndroidDataWriter implements Flushable, AndroidDataWritingVisitor {
     }
   }
 
-  public static final char[] START_RESOURCES =
-      ("<resources xmlns:xliff=\"" + XmlResourceValues.XLIFF_NAMESPACE + "\">").toCharArray();
-  public static final char[] END_RESOURCES = "</resources>".toCharArray();
+  private static final char[] START_RESOURCES = "<resources>".toCharArray();
+  private static final char[] END_RESOURCES = "</resources>".toCharArray();
   private static final char[] LINE_END = "\n".toCharArray();
   private static final PngCruncher NOOP_CRUNCHER =
       new PngCruncher() {
