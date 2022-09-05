@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,7 +135,7 @@ public abstract class Location implements Serializable {
    *
    * <p>This method is intentionally abstract, as a space optimisation.  Some
    * subclass instances implement sharing of common data (e.g. tables for
-   * converting offsets into line numbers) and this enables them to share the
+   * convering offsets into line numbers) and this enables them to share the
    * Path value in the same way.
    */
   public abstract PathFragment getPath();
@@ -309,14 +309,14 @@ public abstract class Location implements Serializable {
    *
    * <p>If such a location is not defined, this method returns an empty string.
    */
-  public static String printLocation(Location location) {
-    return (location == null) ? "" : location.printLocation();
+  public static String printPathAndLine(Location location) {
+    return (location == null) ? "" : location.printPathAndLine();
   }
 
   /**
    * Returns this location in the format "filename:line".
    */
-  public String printLocation() {
+  public String printPathAndLine() {
     StringBuilder builder = new StringBuilder();
     PathFragment path = getPath();
     if (path != null) {

@@ -900,7 +900,7 @@ public final class PackageFactory {
                               Map<String, Object> kwargs,
                               FuncallExpression ast,
                               Environment env)
-      throws RuleFactory.InvalidRuleException, Package.NameConflictException, InterruptedException {
+      throws RuleFactory.InvalidRuleException, Package.NameConflictException {
     RuleClass ruleClass = getBuiltInRuleClass(ruleClassName, ruleFactory);
     RuleFactory.createAndAddRule(context, ruleClass, kwargs, ast, env);
   }
@@ -938,7 +938,7 @@ public final class PackageFactory {
       @SuppressWarnings({"unchecked", "unused"})
       public Runtime.NoneType invoke(Map<String, Object> kwargs,
           FuncallExpression ast, Environment env)
-          throws EvalException, InterruptedException {
+          throws EvalException {
         env.checkLoadingPhase(ruleClass, ast.getLocation());
         try {
           addRule(ruleFactory, ruleClass, getContext(env, ast), kwargs, ast, env);

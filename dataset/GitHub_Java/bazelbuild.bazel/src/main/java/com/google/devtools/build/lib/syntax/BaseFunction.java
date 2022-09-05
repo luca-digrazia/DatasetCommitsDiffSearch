@@ -425,7 +425,22 @@ public abstract class BaseFunction implements Serializable {
     Object[] arguments = processArguments(args, kwargs, loc);
     canonicalizeArguments(arguments, loc);
 
-    return call(arguments, ast, env);
+    try {
+      return call(arguments, ast, env);
+    } catch (EvalExceptionWithStackTrace ex) {
+      throw updateStackTrace(ex, loc);
+    } catch (EvalException | RuntimeException | InterruptedException ex) {
+      throw updateStackTrace(new EvalExceptionWithStackTrace(ex, loc), loc);
+    }
+  }
+
+  /**
+   * Adds an entry for the current function to the stack trace of the exception.
+   */
+  private EvalExceptionWithStackTrace updateStackTrace(
+      EvalExceptionWithStackTrace ex, Location location) {
+    ex.registerFunction(this, location);
+    return ex;
   }
 
   /**

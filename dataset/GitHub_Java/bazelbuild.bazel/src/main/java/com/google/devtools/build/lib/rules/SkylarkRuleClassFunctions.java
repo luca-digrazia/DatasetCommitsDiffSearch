@@ -38,7 +38,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
@@ -116,7 +115,7 @@ public class SkylarkRuleClassFunctions {
     public Label load(String from) throws Exception {
       try {
         return Label.parseAbsolute(from);
-      } catch (LabelSyntaxException e) {
+      } catch (Label.SyntaxException e) {
         throw new Exception(from);
       }
     }

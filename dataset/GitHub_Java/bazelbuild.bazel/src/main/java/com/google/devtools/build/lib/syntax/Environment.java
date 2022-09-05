@@ -230,11 +230,6 @@ public final class Environment implements Freezable {
     BaseExtension(Environment env) {
       this.bindings = ImmutableMap.copyOf(env.globalFrame.bindings);
     }
-
-    // Hack to allow serialization.
-    BaseExtension() {
-      this.bindings = ImmutableMap.of();
-    }
   }
 
   /**
@@ -252,12 +247,6 @@ public final class Environment implements Freezable {
     public Extension(Environment env) {
       super(env);
       this.transitiveContentHashCode = env.getTransitiveContentHashCode();
-    }
-
-    // Hack to allow serialization.
-    private Extension() {
-      super();
-      this.transitiveContentHashCode = null;
     }
 
     @VisibleForTesting // This is only used in one test.

@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,14 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 
 /**
  * Rule definition for {@code objc_xcodeproj}.
@@ -32,7 +31,7 @@ public class ObjcXcodeprojRule implements RuleDefinition {
   @Override
   public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     return builder
-        .requiresConfigurationFragments(ObjcConfiguration.class, AppleConfiguration.class)
+        .requiresConfigurationFragments(ObjcConfiguration.class)
         /*<!-- #BLAZE_RULE(objc_xcodeproj).IMPLICIT_OUTPUTS -->
         <ul>
         <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: A combined Xcode project file
@@ -77,7 +76,11 @@ public class ObjcXcodeprojRule implements RuleDefinition {
 
 /*<!-- #BLAZE_RULE (NAME = objc_xcodeproj, TYPE = OTHER, FAMILY = Objective-C) -->
 
+${ATTRIBUTE_SIGNATURE}
+
 <p>This rule combines build information about several objc targets (and all their transitive
 dependencies) into a single Xcode project file, for use in developing on a Mac.</p>
+
+${ATTRIBUTE_DEFINITION}
 
 <!-- #END_BLAZE_RULE -->*/

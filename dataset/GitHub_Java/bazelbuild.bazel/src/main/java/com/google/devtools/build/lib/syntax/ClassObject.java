@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Ordering;
@@ -21,8 +22,6 @@ import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import java.io.Serializable;
 import java.util.Map;
@@ -75,24 +74,15 @@ public interface ClassObject {
      * exactly one '%s' parameter to substitute the struct field name.
      */
     public SkylarkClassObject(Map<String, Object> values, String errorMessage) {
-      this.values = copyValues(values);
+      this.values = ImmutableMap.copyOf(values);
       this.creationLoc = null;
       this.errorMessage = Preconditions.checkNotNull(errorMessage);
     }
 
     public SkylarkClassObject(Map<String, Object> values, Location creationLoc) {
-      this.values = copyValues(values);
+      this.values = ImmutableMap.copyOf(values);
       this.creationLoc = Preconditions.checkNotNull(creationLoc);
       this.errorMessage = DEFAULT_ERROR_MESSAGE;
-    }
-
-    // Ensure that values are all acceptable to Skylark before to stuff them in a ClassObject
-    private ImmutableMap<String, Object> copyValues(Map<String, Object> values) {
-      ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-      for (Map.Entry<String, Object> e : values.entrySet()) {
-        builder.put(e.getKey(), SkylarkType.convertToSkylark(e.getValue(), null));
-      }
-      return builder.build();
     }
 
     @Override
