@@ -170,13 +170,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
 
       ListMultimap<Attribute, ConfiguredTarget> depValueMap =
           computeDependencies(env, resolver, ctgValue, null, configConditions);
-
-      // TODO(bazel-team): Support dynamically created host configurations.
-      BuildConfiguration hostConfiguration = configuration == null
-          ? null : configuration.getConfiguration(Attribute.ConfigurationTransition.HOST);
-
       return createConfiguredTarget(
-          view, env, target, configuration, hostConfiguration, depValueMap, configConditions);
+          view, env, target, configuration, depValueMap, configConditions);
     } catch (DependencyEvaluationException e) {
       throw new ConfiguredTargetFunctionException(e.getRootCauseSkyKey(), e.getCause());
     }
@@ -427,7 +422,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
           transitiveChildException = e;
         }
       } catch (NoSuchPackageException e) {
-        if (depLabel.getPackageIdentifier().equals(e.getPackageId())) {
+        if (depLabel.getPackageName().equals(e.getPackageName())) {
           directChildException = e;
         } else {
           childKey = entry.getKey();
@@ -470,9 +465,10 @@ final class ConfiguredTargetFunction implements SkyFunction {
   @Nullable
   private ConfiguredTargetValue createConfiguredTarget(SkyframeBuildView view,
       Environment env, Target target, BuildConfiguration configuration,
-      BuildConfiguration hostConfiguration, ListMultimap<Attribute, ConfiguredTarget> depValueMap,
+      ListMultimap<Attribute, ConfiguredTarget> depValueMap,
       Set<ConfigMatchingProvider> configConditions)
-      throws ConfiguredTargetFunctionException, InterruptedException {
+      throws ConfiguredTargetFunctionException,
+      InterruptedException {
     StoredEventHandler events = new StoredEventHandler();
     BuildConfiguration ownerConfig = (configuration == null)
         ? null : configuration.getArtifactOwnerConfiguration();
@@ -484,7 +480,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     ConfiguredTarget configuredTarget = view.createConfiguredTarget(target, configuration,
-        hostConfiguration, analysisEnvironment, depValueMap, configConditions);
+        analysisEnvironment, depValueMap, configConditions);
 
     events.replayOn(env.getListener());
     if (events.hasErrors()) {
