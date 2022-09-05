@@ -19,17 +19,19 @@ package org.hsweb.concureent.cache.monitor;
 import org.hsweb.web.core.cache.monitor.MonitorCache;
 import org.springframework.cache.concurrent.ConcurrentMapCache;
 
+import java.lang.ref.Reference;
+import java.lang.ref.SoftReference;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SimpleMonitorCache extends ConcurrentMapCache implements MonitorCache {
 
     private final AtomicInteger totalTimes = new AtomicInteger(0);
-    private final AtomicInteger hitTimes = new AtomicInteger(0);
-    private final AtomicInteger putTimes = new AtomicInteger(0);
+    private final AtomicInteger hitTimes   = new AtomicInteger(0);
+    private final AtomicInteger putTimes   = new AtomicInteger(0);
 
     public SimpleMonitorCache(String name) {
-        super(name,false);
+        super(name, true);
     }
 
     @Override
@@ -53,6 +55,18 @@ public class SimpleMonitorCache extends ConcurrentMapCache implements MonitorCac
     }
 
     @Override
+    protected Object lookup(Object key) {
+        Object value = super.lookup(key);
+        if (value != null && value instanceof Reference) {
+            Reference reference = (Reference) value;
+            value = reference.get();
+            if (value == null)
+                evict(key);
+        }
+        return value;
+    }
+
+    @Override
     public ValueWrapper get(Object key) {
         ValueWrapper wrapper = super.get(key);
         totalTimes.addAndGet(1);
@@ -72,22 +86,28 @@ public class SimpleMonitorCache extends ConcurrentMapCache implements MonitorCac
         return value;
     }
 
+    protected Object buildValue(Object value) {
+        if (null == value) return null;
+        return new SoftReference(value);
+    }
+
     @Override
     public void put(Object key, Object value) {
-        if (key == null || value == null) return;
+        if (key == null) return;
         putTimes.addAndGet(1);
-        super.put(key, value);
+        super.put(key, buildValue(value));
     }
 
     @Override
     public ValueWrapper putIfAbsent(Object key, Object value) {
-        if (key == null || value == null) return null;
+        if (key == null) return null;
         putTimes.addAndGet(1);
-        return super.putIfAbsent(key, value);
+        return super.putIfAbsent(key, buildValue(value));
     }
 
     @Override
     public long getPutTimes() {
         return putTimes.get();
     }
+
 }
