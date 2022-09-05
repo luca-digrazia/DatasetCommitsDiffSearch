@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,6 +65,7 @@ import java.util.logging.Logger;
  *      --primaryData path/to/resources:path/to/assets:path/to/manifest:path/to/R.txt
  *      --data p/t/res1:p/t/assets1:p/t/1/AndroidManifest.xml:p/t/1/R.txt,\
  *             p/t/res2:p/t/assets2:p/t/2/AndroidManifest.xml:p/t/2/R.txt
+ *      --generatedSourcePath path/to/write/generated/sources
  *      --packagePath path/to/write/archive.ap_
  *      --srcJarOutput path/to/write/archive.srcjar
  * </pre>
@@ -142,6 +143,13 @@ public class AndroidResourceProcessingAction {
             + "resources[#resources]:assets[#assets]:manifest:r.txt:symbols.txt"
             + "[,resources[#resources]:assets[#assets]:manifest:r.txt:symbols.txt]")
     public List<DependencyAndroidData> data;
+
+    @Option(name = "generatedSourcePath",
+        defaultValue = "null",
+        converter = PathConverter.class,
+        category = "output",
+        help = "Path for generated sources.")
+    public Path generatedSourcePath;
 
     @Option(name = "rOutput",
         defaultValue = "null",

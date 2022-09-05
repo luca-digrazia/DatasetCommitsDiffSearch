@@ -197,9 +197,9 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       .add(JavaRuleOutputJarsProvider.class,
           new JavaRuleOutputJarsProvider(
               classesJar,
-              androidCommon.getGenSourceJar(),
-              androidCommon.getGenClassJar(),
-              androidCommon.getGenSourceJar()))
+              androidCommon.getGensrcJar(),
+              androidCommon.getGenJar(),
+              androidCommon.getGensrcJar()))
       .add(JavaSourceInfoProvider.class,
            JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))
       .add(JavaSourceJarsProvider.class, androidCommon.getJavaSourceJarsProvider())
