@@ -209,11 +209,11 @@ public abstract class MockCcSupport {
           + "  }"
           + "}";
 
-  public static final String STATIC_LINK_TWEAKED_CONFIGURATION =
+  public static final String STATIC_LINK_AS_LIB_CONFIGURATION =
       ""
           + "artifact_name_pattern {"
           + "   category_name: 'static_library'"
-          + "   pattern: 'lib%{base_name}.tweaked.a'"
+          + "   pattern: 'lib%{base_name}.lib'"
           + "}";
 
   public static final String STATIC_LINK_AS_DOT_A_CONFIGURATION =

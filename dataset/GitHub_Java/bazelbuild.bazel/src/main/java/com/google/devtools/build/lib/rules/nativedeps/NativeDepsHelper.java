@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.rules.cpp.ArtifactCategory;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
@@ -65,7 +64,7 @@ public abstract class NativeDepsHelper {
         public Artifact create(RuleContext ruleContext, BuildConfiguration configuration,
             PathFragment rootRelativePath) {
           return ruleContext.getShareableArtifact(rootRelativePath,
-              configuration.getBinDirectory(ruleContext.getRule().getRepository()));
+              configuration.getBinDirectory());
         }
       };
 
@@ -104,7 +103,7 @@ public abstract class NativeDepsHelper {
         .getPathString();
     Artifact nativeDeps = ruleContext.getUniqueDirectoryArtifact(ANDROID_UNIQUE_DIR,
         labelName.replaceName("lib" + labelName.getBaseName() + ".so"),
-        configuration.getBinDirectory(ruleContext.getRule().getRepository()));
+        configuration.getBinDirectory());
 
     return createNativeDepsAction(
             ruleContext,
@@ -114,7 +113,7 @@ public abstract class NativeDepsHelper {
             toolchain,
             nativeDeps,
             libraryIdentifier,
-            configuration.getBinDirectory(ruleContext.getRule().getRepository()),
+            configuration.getBinDirectory(),
             /*useDynamicRuntime*/ false)
         .getLibrary();
   }
@@ -154,17 +153,17 @@ public abstract class NativeDepsHelper {
       libraryIdentifier = sharedPath.getPathString();
       sharedLibrary = ruleContext.getShareableArtifact(
           sharedPath.replaceName(sharedPath.getBaseName() + ".so"),
-          configuration.getBinDirectory(ruleContext.getRule().getRepository()));
+          configuration.getBinDirectory());
     } else {
       sharedLibrary = nativeDeps;
     }
     CppLinkActionBuilder builder =
         new CppLinkActionBuilder(ruleContext, sharedLibrary, configuration, toolchain);
     if (useDynamicRuntime) {
-      builder.setRuntimeInputs(ArtifactCategory.DYNAMIC_LIBRARY,
+      builder.setRuntimeInputs(
           toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs());
     } else {
-      builder.setRuntimeInputs(ArtifactCategory.DYNAMIC_LIBRARY,
+      builder.setRuntimeInputs(
           toolchain.getStaticRuntimeLinkMiddleman(), toolchain.getStaticRuntimeLinkInputs());
     }
     CppLinkAction linkAction =

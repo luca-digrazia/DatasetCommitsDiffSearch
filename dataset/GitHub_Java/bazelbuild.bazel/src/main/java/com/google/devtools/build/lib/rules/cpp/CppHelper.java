@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -341,7 +342,8 @@ public class CppHelper {
       name = name.replaceName("lib" + name.getBaseName() + linkType.getExtension());
     }
 
-    return ruleContext.getBinArtifact(name);
+    return ruleContext.getPackageRelativeArtifact(
+        name, ruleContext.getConfiguration().getBinDirectory());
   }
 
   /**
@@ -443,8 +445,7 @@ public class CppHelper {
     Artifact mapFile = ruleContext.getPackageRelativeArtifact(
         ruleContext.getLabel().getName()
             + Iterables.getOnlyElement(CppFileTypes.CPP_MODULE_MAP.getExtensions()),
-        ruleContext.getConfiguration().getGenfilesDirectory(
-            ruleContext.getRule().getRepository()));
+        ruleContext.getConfiguration().getGenfilesDirectory());
     return new CppModuleMap(mapFile, ruleContext.getLabel().toString());
   }
 
@@ -496,8 +497,7 @@ public class CppHelper {
     }
     return ImmutableList.of(
         factory.createMiddlemanAllowMultiple(env, actionOwner, ruleContext.getPackageDirectory(),
-            purpose, artifacts, configuration.getMiddlemanDirectory(
-                ruleContext.getRule().getRepository())));
+            purpose, artifacts, configuration.getMiddlemanDirectory()));
   }
 
   /**
@@ -606,12 +606,13 @@ public class CppHelper {
   static Artifact getCompileOutputArtifact(RuleContext ruleContext, String outputName) {
     PathFragment objectDir = getObjDirectory(ruleContext.getLabel());
     return ruleContext.getDerivedArtifact(objectDir.getRelative(outputName),
-        ruleContext.getConfiguration().getBinDirectory(ruleContext.getRule().getRepository()));
+        ruleContext.getConfiguration().getBinDirectory());
   }
 
-  static String getArtifactNameForCategory(RuleContext ruleContext, ArtifactCategory category,
-      String outputName) {
-    return getToolchain(ruleContext).getFeatures().getArtifactNameForCategory(category, outputName);
+  static String getCompileArtifactName(RuleContext ruleContext, ArtifactCategory category,
+      String base) {
+    return getToolchain(ruleContext).getFeatures().getArtifactNameForCategory(
+        category, ruleContext, ImmutableMap.of("output_name", base));
   }
 
   static String getDotdFileName(RuleContext ruleContext, ArtifactCategory outputCategory,
@@ -619,8 +620,8 @@ public class CppHelper {
     String baseName = outputCategory == ArtifactCategory.OBJECT_FILE
         || outputCategory == ArtifactCategory.PROCESSED_HEADER
         ? outputName
-        : getArtifactNameForCategory(ruleContext, outputCategory, outputName);
+        : getCompileArtifactName(ruleContext, outputCategory, outputName);
 
-    return getArtifactNameForCategory(ruleContext, ArtifactCategory.INCLUDED_FILE_LIST, baseName);
+    return getCompileArtifactName(ruleContext, ArtifactCategory.INCLUDED_FILE_LIST, baseName);
   }
 }

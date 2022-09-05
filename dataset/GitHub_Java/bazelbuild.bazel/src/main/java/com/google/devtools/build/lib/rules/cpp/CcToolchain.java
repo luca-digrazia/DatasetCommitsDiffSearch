@@ -62,8 +62,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       new PathFragment("include/stdc-predef.h");
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws RuleErrorException, InterruptedException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws RuleErrorException {
     TransitiveInfoCollection lipoContextCollector =
         ruleContext.getPrerequisite(":lipo_context_collector", Mode.DONT_CHECK);
     if (lipoContextCollector != null
@@ -218,8 +217,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
             supportsHeaderParsing,
             getBuildVariables(ruleContext),
             getBuiltinIncludes(ruleContext),
-            coverageEnvironment.build(),
-            getEnvironment(ruleContext));
+            coverageEnvironment.build());
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
             .add(CcToolchainProvider.class, provider)
@@ -275,19 +273,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         .build();
   }
 
-  /**
-   * Returns the crosstool-derived link action inputs for a given rule. Adds the given set of
-   * artifacts as extra inputs.
-   */
-  protected NestedSet<Artifact> fullInputsForLink(
-      RuleContext ruleContext, NestedSet<Artifact> link) {
+  private NestedSet<Artifact> fullInputsForLink(RuleContext ruleContext, NestedSet<Artifact> link) {
     return NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(link)
         .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top"))
-        .add(
-            ruleContext
-                .getAnalysisEnvironment()
-                .getEmbeddedToolArtifact(CppRuleClasses.BUILD_INTERFACE_SO))
+        .add(ruleContext.getAnalysisEnvironment().getEmbeddedToolArtifact(
+            CppRuleClasses.BUILD_INTERFACE_SO))
         .build();
   }
 
@@ -324,22 +315,10 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Returns a map that should be templated into the crosstool as build variables. Is meant to
+   * Returns a map that should be templated into the crosstool as build variables.  Is meant to
    * be overridden by subclasses of CcToolchain.
-   *
-   * @param ruleContext the rule context
    */
   protected Map<String, String> getBuildVariables(RuleContext ruleContext) {
-    return ImmutableMap.<String, String>of();
-  }
-
-  /**
-   * Returns a map of environment variables to be added to the compile actions created for this
-   * toolchain. Ideally, this will get replaced by features, which also allow setting env variables.
-   *
-   * @param ruleContext the rule context
-   */
-  protected ImmutableMap<String, String> getEnvironment(RuleContext ruleContext) {
     return ImmutableMap.<String, String>of();
   }
 }
