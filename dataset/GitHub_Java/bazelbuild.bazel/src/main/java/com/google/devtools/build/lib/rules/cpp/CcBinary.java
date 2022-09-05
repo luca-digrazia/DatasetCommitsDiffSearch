@@ -533,7 +533,8 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
     // to support .dwp generation even when fission is disabled. Since no actual functionality
     // is expected then, an empty file is appropriate.
     if (Iterables.isEmpty(allInputs)) {
-      context.registerAction(FileWriteAction.create(context, dwpOutput, "", false));
+      context.registerAction(
+          new FileWriteAction(context.getActionOwner(), dwpOutput, "", false));
       return;
     }
 
