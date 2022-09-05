@@ -46,10 +46,22 @@ public class AutoSyncAuthenticationSupplier implements AuthenticationSupplier {
     }
 
     @Override
+    public Authentication get(String userId) {
+        Authentication nativeAuth = getNative(userId);
+        if (null == nativeAuth) return null;
+        return new AutoSyncAuthentication(nativeAuth);
+    }
+
+    @Override
     public Authentication get() {
         Authentication nativeAuth = getNative();
         if (null == nativeAuth) return null;
         return new AutoSyncAuthentication(nativeAuth);
+    }
+
+    protected Authentication getNative(String userId) {
+        // ThreadLocal cache
+        return ThreadLocalUtils.get(Authentication.class.getName(), () -> authenticationManager.getByUserId(userId));
     }
 
     protected Authentication getNative() {
@@ -57,8 +69,7 @@ public class AutoSyncAuthenticationSupplier implements AuthenticationSupplier {
         if (!SecurityUtils.getSubject().isAuthenticated() && !SecurityUtils.getSubject().isRemembered()) return null;
         String id = (String) SecurityUtils.getSubject().getPrincipal();
         if (null == id) return null;
-        // ThreadLocal cache
-        return ThreadLocalUtils.get(Authentication.class.getName(), () -> authenticationManager.getByUserId(id));
+        return getNative(id);
     }
 
     protected void sync(Authentication authentication) {
