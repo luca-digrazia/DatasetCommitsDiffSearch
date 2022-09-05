@@ -1,9 +1,8 @@
 package com.prolificinteractive.materialcalendarview;
 
 import android.graphics.drawable.Drawable;
+import android.support.annotation.NonNull;
 
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -11,37 +10,45 @@ import java.util.List;
 /**
  * Abstraction layer to help in decorating Day views
  */
-public final class DayViewFacade {
+public class DayViewFacade {
 
-    private boolean isReset;
+    private boolean isDecorated;
 
-    private Drawable unselectedBackground = null;
-    private Drawable background = null;
+    private Drawable backgroundDrawable = null;
+    private Drawable selectionDrawable = null;
     private final LinkedList<Span> spans = new LinkedList<>();
+    private boolean daysDisabled = false;
 
-    public DayViewFacade() {
-        isReset = true;
+    DayViewFacade() {
+        isDecorated = false;
     }
 
     /**
-     * Set the drawable to use in the 'normal' state of the Day view
+     * Set a drawable to draw behind everything else
      *
-     * @param drawable Drawable to use, null for default
+     * @param drawable Drawable to draw behind everything
      */
-    public void setBackgroundUnselected(Drawable drawable) {
-        this.unselectedBackground = drawable;
-        isReset = false;
+    public void setBackgroundDrawable(@NonNull Drawable drawable) {
+        if(drawable == null) {
+            throw new IllegalArgumentException("Cannot be null");
+        }
+        this.backgroundDrawable = drawable;
+        isDecorated = true;
     }
 
     /**
-     * Set the entire background drawable of the Day view.
-     * This will take precedent over {@linkplain #setBackgroundUnselected(Drawable)}
+     * Set a custom selection drawable
      *
-     * @param drawable the drawable for the Day view
+     * TODO: define states that can/should be used in StateListDrawables
+     *
+     * @param drawable the drawable for selection
      */
-    public void setBackground(Drawable drawable) {
-        background = drawable;
-        isReset = false;
+    public void setSelectionDrawable(@NonNull Drawable drawable) {
+        if(drawable == null) {
+            throw new IllegalArgumentException("Cannot be null");
+        }
+        selectionDrawable = drawable;
+        isDecorated = true;
     }
 
     /**
@@ -49,43 +56,77 @@ public final class DayViewFacade {
      *
      * @param span text span instance
      */
-    public void addSpan(Object span) {
+    public void addSpan(@NonNull Object span) {
         if(spans != null) {
             this.spans.add(new Span(span));
-            isReset = false;
+            isDecorated = true;
         }
     }
 
-    protected void reset() {
-        unselectedBackground = null;
-        background = null;
+    /**
+     * <p>Set days to be in a disabled state, or re-enabled.</p>
+     *
+     * <p>Note, passing true here will <b>not</b> override minimum and maximum dates, if set.
+     * This will only re-enable disabled dates.</p>
+     *
+     * @param daysDisabled true to disable days, false to re-enable days
+     */
+    public void setDaysDisabled(boolean daysDisabled) {
+        this.daysDisabled = daysDisabled;
+        this.isDecorated = true;
+    }
+
+    void reset() {
+        backgroundDrawable = null;
+        selectionDrawable = null;
         spans.clear();
-        isReset = true;
+        isDecorated = false;
+        daysDisabled = false;
     }
 
-    public boolean isReset() {
-        return isReset;
+    /**
+     * Apply things set this to other
+     * @param other facade to apply our data to
+     */
+    void applyTo(DayViewFacade other) {
+        if(selectionDrawable != null) {
+            other.setSelectionDrawable(selectionDrawable);
+        }
+        if(backgroundDrawable != null) {
+            other.setBackgroundDrawable(backgroundDrawable);
+        }
+        other.spans.addAll(spans);
+        other.isDecorated |= this.isDecorated;
+        other.daysDisabled = daysDisabled;
     }
 
-    protected Drawable getBackground() {
-        return background;
+    boolean isDecorated() {
+        return isDecorated;
     }
 
-    protected Drawable getUnselectedBackground() {
-        return unselectedBackground;
+    Drawable getSelectionDrawable() {
+        return selectionDrawable;
     }
 
-    protected List<Span> getSpans() {
+    Drawable getBackgroundDrawable() {
+        return backgroundDrawable;
+    }
+
+    List<Span> getSpans() {
         return Collections.unmodifiableList(spans);
     }
 
-    protected static class Span {
-        final Object span;
+    /**
+     * Are days from this facade disabled
+     * @return true if disabled, false if not re-enabled
+     */
+    public boolean areDaysDisabled() {
+        return daysDisabled;
+    }
 
-        /**
-         * False == Start, True == End, Null == All
-         */
-        final Boolean position = null;
+    static class Span {
+
+        final Object span;
 
         public Span(Object span) {
             this.span  = span;
