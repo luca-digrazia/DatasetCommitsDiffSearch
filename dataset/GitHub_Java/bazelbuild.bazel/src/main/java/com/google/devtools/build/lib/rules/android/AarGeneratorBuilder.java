@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ public class AarGeneratorBuilder {
   private Artifact manifest;
   private Artifact rTxt;
   private Artifact classes;
+  private boolean strictMerge;
 
   private Artifact aarOut;
 
@@ -81,6 +82,11 @@ public class AarGeneratorBuilder {
     return this;
   }
 
+  public AarGeneratorBuilder strictResourceMerging() {
+    this.strictMerge = true;
+    return this;
+  }
+
   public void build(ActionConstructionContext context) {
     List<Artifact> outs = new ArrayList<>();
     List<Artifact> ins = new ArrayList<>();
@@ -105,6 +111,10 @@ public class AarGeneratorBuilder {
       args.add("--classes");
       args.add(classes.getExecPathString());
       ins.add(classes);
+    }
+
+    if (!strictMerge) {
+      args.add("--nostrictMerge");
     }
 
     args.add("--aarOutput");

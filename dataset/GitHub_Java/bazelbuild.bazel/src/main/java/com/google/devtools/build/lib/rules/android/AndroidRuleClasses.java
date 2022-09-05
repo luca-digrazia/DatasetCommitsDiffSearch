@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.rules.cpp.CppOptions;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.syntax.Label;
@@ -66,8 +65,6 @@ public final class AndroidRuleClasses {
       JavaSemantics.JAVA_LIBRARY_SOURCE_JAR;
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_CLASS_JAR =
       JavaSemantics.JAVA_LIBRARY_CLASS_JAR;
-  public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_GEN_JAR =
-      JavaSemantics.JAVA_LIBRARY_GEN_JAR;
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_JACK_FILE =
       fromTemplates("lib%{name}.jack");
   public static final SafeImplicitOutputsFunction ANDROID_LIBRARY_AAR =
@@ -86,8 +83,6 @@ public final class AndroidRuleClasses {
       fromTemplates("%{name}_unsigned.apk");
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_SIGNED_APK =
       fromTemplates("%{name}_signed.apk");
-  public static final SafeImplicitOutputsFunction ANDROID_BINARY_GEN_JAR =
-      JavaSemantics.JAVA_BINARY_GEN_JAR;
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_DEPLOY_JAR =
       fromTemplates("%{name}_deploy.jar");
   public static final SafeImplicitOutputsFunction ANDROID_BINARY_PROGUARD_JAR =
@@ -177,29 +172,12 @@ public final class AndroidRuleClasses {
       return true;
     }
 
-    private void setCrosstoolToAndroid(BuildOptions output, BuildOptions input) {
-      AndroidConfiguration.Options androidOptions = input.get(AndroidConfiguration.Options.class);
-      CppOptions cppOptions = output.get(CppOptions.class);
-      if (androidOptions.androidCrosstoolTop != null) {
-        if (cppOptions.hostCrosstoolTop == null) {
-          cppOptions.hostCrosstoolTop = cppOptions.crosstoolTop;
-        }
-        cppOptions.crosstoolTop = androidOptions.androidCrosstoolTop;
-      }
-    }
-
     @Override
     public List<BuildOptions> split(BuildOptions buildOptions) {
       AndroidConfiguration.Options androidOptions =
           buildOptions.get(AndroidConfiguration.Options.class);
-      if (androidOptions.fatApkCpus.isEmpty() && androidOptions.androidCrosstoolTop == null) {
-        return ImmutableList.of();
-      }
-
       if (androidOptions.fatApkCpus.isEmpty()) {
-        BuildOptions splitOptions = buildOptions.clone();
-        setCrosstoolToAndroid(splitOptions, buildOptions);
-        return ImmutableList.of(splitOptions);
+        return ImmutableList.of();
       }
 
       List<BuildOptions> result = new ArrayList<>();
@@ -212,7 +190,6 @@ public final class AndroidRuleClasses {
         // TODO(bazel-team): --android_cpu doesn't follow --cpu right now; it should.
         splitOptions.get(AndroidConfiguration.Options.class).cpu = cpu;
         splitOptions.get(BuildConfiguration.Options.class).cpu = cpu;
-        setCrosstoolToAndroid(splitOptions, buildOptions);
         result.add(splitOptions);
       }
       return result;
@@ -234,11 +211,10 @@ public final class AndroidRuleClasses {
         @Override
         public Iterable<String> getImplicitOutputs(AttributeMap rule) {
           boolean mapping = rule.get("proguard_generate_mapping", Type.BOOLEAN);
-          List<SafeImplicitOutputsFunction> functions = Lists.newArrayList();
+          List<SafeImplicitOutputsFunction> functions = Lists.newArrayListWithCapacity(6);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_APK);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_UNSIGNED_APK);
           functions.add(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR);
-          functions.add(AndroidRuleClasses.ANDROID_BINARY_GEN_JAR);
 
           // The below is a hack to support configurable attributes (proguard_specs seems like
           // too valuable an attribute to make nonconfigurable, and we don't currently
@@ -275,25 +251,23 @@ public final class AndroidRuleClasses {
       new ImplicitOutputsFunction() {
         @Override
         public Iterable<String> getImplicitOutputs(AttributeMap attributes) {
-          
-          ImmutableList.Builder<SafeImplicitOutputsFunction> implicitOutputs =
-              ImmutableList.builder();
-          
-          implicitOutputs.add(
-              AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR,
-              AndroidRuleClasses.ANDROID_LIBRARY_GEN_JAR,
-              AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR,
-              AndroidRuleClasses.ANDROID_LIBRARY_JACK_FILE,
-              AndroidRuleClasses.ANDROID_LIBRARY_AAR);
-          
           if (LocalResourceContainer.definesAndroidResources(attributes)) {
-            implicitOutputs.add(
-                AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR,
-                AndroidRuleClasses.ANDROID_RESOURCES_APK,
-                AndroidRuleClasses.ANDROID_R_TXT);
+            return fromFunctions(
+                    AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR,
+                    AndroidRuleClasses.ANDROID_RESOURCES_APK,
+                    AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR,
+                    AndroidRuleClasses.ANDROID_LIBRARY_JACK_FILE,
+                    AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR,
+                    AndroidRuleClasses.ANDROID_LIBRARY_AAR,
+                    AndroidRuleClasses.ANDROID_R_TXT)
+                .getImplicitOutputs(attributes);
           }
-
-          return fromFunctions(implicitOutputs.build()).getImplicitOutputs(attributes);
+          return fromFunctions(
+                  AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR,
+                  AndroidRuleClasses.ANDROID_LIBRARY_JACK_FILE,
+                  AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR,
+                  AndroidRuleClasses.ANDROID_LIBRARY_AAR)
+              .getImplicitOutputs(attributes);
         }
       };
 

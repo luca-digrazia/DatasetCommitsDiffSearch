@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.Constants;
+import com.google.devtools.build.lib.analysis.RedirectChaser;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
@@ -114,6 +115,13 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       }
 
       labelMap.put("android_sdk", realSdk());
+
+      labelMap.put("android_incremental_stub_application",
+          AndroidRuleClasses.DEFAULT_INCREMENTAL_STUB_APPLICATION);
+      labelMap.put("android_incremental_split_stub_application",
+          AndroidRuleClasses.DEFAULT_INCREMENTAL_SPLIT_STUB_APPLICATION);
+      labelMap.put("android_resources_processor", AndroidRuleClasses.DEFAULT_RESOURCES_PROCESSOR);
+      labelMap.put("android_aar_generator", AndroidRuleClasses.DEFAULT_AAR_GENERATOR);
     }
 
     // This method is here because Constants.ANDROID_DEFAULT_SDK cannot be a constant, because we
@@ -143,7 +151,9 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Override
     public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
         throws InvalidConfigurationException {
-      return new AndroidConfiguration(buildOptions.get(Options.class));
+      Options options = buildOptions.get(Options.class);
+      Label sdk = RedirectChaser.followRedirects(env, options.realSdk(), "android_sdk");
+      return new AndroidConfiguration(options, sdk);
     }
 
     @Override
@@ -166,8 +176,8 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean useJackForDexing;
   private final boolean jackSanityChecks;
 
-  AndroidConfiguration(Options options) {
-    this.sdk = options.realSdk();
+  AndroidConfiguration(Options options, Label sdk) {
+    this.sdk = sdk;
     this.strictDeps = options.strictDeps;
     this.legacyNativeSupport = options.legacyNativeSupport;
     this.cpu = options.cpu;
@@ -219,6 +229,11 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   @Override
   public String getOutputDirectoryName() {
+    return fatApk ? "fat-apk" : null;
+  }
+
+  @Override
+  public String getConfigurationNameSuffix() {
     return fatApk ? "fat-apk" : null;
   }
 

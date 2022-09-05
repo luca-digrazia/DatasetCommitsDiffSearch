@@ -53,6 +53,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgs;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
@@ -374,12 +375,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     Artifact stubData = ruleContext.getImplicitOutputArtifact(
         AndroidRuleClasses.STUB_APPLICATION_DATA);
-    Artifact stubDex = getStubDex(ruleContext, javaSemantics, false);
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
     ruleContext.registerAction(new ApkActionBuilder(ruleContext, androidSemantics)
-        .classesDex(stubDex)
+        .classesDex(getStubDex(ruleContext, javaSemantics, false))
         .resourceApk(incrementalResourceApk.getArtifact())
         .javaResourceZip(dexingOutput.javaResourceJar)
         .nativeLibs(nativeLibs)
@@ -462,13 +459,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     NestedSet<Artifact> splitApks = splitApkSetBuilder.build();
     Artifact splitMainApk = getDxArtifact(ruleContext, "split_main.apk");
-    Artifact splitStubDex = getStubDex(ruleContext, javaSemantics, true);
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
     ruleContext.registerAction(new ApkActionBuilder(ruleContext, androidSemantics)
         .resourceApk(splitMainApkResources)
-        .classesDex(splitStubDex)
+        .classesDex(getStubDex(ruleContext, javaSemantics, true))
         .sign(true)
         .message("Generating split main apk")
         .build(splitMainApk));
@@ -577,23 +570,15 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
   private static Artifact getStubDex(
       RuleContext ruleContext, JavaSemantics javaSemantics, boolean split) {
-    String attribute =
-        split ? "$incremental_split_stub_application" : "$incremental_stub_application";
-
-    TransitiveInfoCollection dep = ruleContext.getPrerequisite(attribute, Mode.TARGET);
-    if (dep == null) {
-      ruleContext.attributeError(attribute, "Stub application cannot be found");
-      return null;
-    }
-
-    JavaCompilationArgsProvider provider = dep.getProvider(JavaCompilationArgsProvider.class);
-    if (provider == null) {
-      ruleContext.attributeError(attribute, "'" + dep.getLabel() + "' should be a Java target");
-      return null;
-    }
+    JavaCompilationArgs dep = ruleContext
+        .getPrerequisite(
+            split ? "$incremental_split_stub_application" : "$incremental_stub_application",
+            Mode.TARGET)
+        .getProvider(JavaCompilationArgsProvider.class)
+        .getJavaCompilationArgs();
 
     JavaTargetAttributes attributes = new JavaTargetAttributes.Builder(javaSemantics)
-        .addRuntimeClassPathEntries(provider.getJavaCompilationArgs().getRuntimeJars())
+        .addRuntimeClassPathEntries(dep.getRuntimeJars())
         .build();
 
     Artifact stubDeployJar = getDxArtifact(ruleContext,
