@@ -19,6 +19,7 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Point;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Display;
 import android.view.WindowManager;
@@ -31,6 +32,10 @@ import android.view.WindowManager;
  * ================================================
  */
 public class ScreenUtils {
+
+    private ScreenUtils() {
+        throw new IllegalStateException("you can't instantiate me!");
+    }
 
     public static int getStatusBarHeight() {
         int result = 0;
@@ -45,7 +50,32 @@ public class ScreenUtils {
         return result;
     }
 
+    /**
+     * 获取当前的屏幕尺寸
+     *
+     * @param context {@link Context}
+     * @return 屏幕尺寸
+     */
     public static int[] getScreenSize(Context context) {
+        int[] size = new int[2];
+
+        WindowManager w = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        Display d = w.getDefaultDisplay();
+        DisplayMetrics metrics = new DisplayMetrics();
+        d.getMetrics(metrics);
+
+        size[0] = metrics.widthPixels;
+        size[1] = metrics.heightPixels;
+        return size;
+    }
+
+    /**
+     * 获取原始的屏幕尺寸
+     *
+     * @param context {@link Context}
+     * @return 屏幕尺寸
+     */
+    public static int[] getRawScreenSize(Context context) {
         int[] size = new int[2];
 
         WindowManager w = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
@@ -77,4 +107,16 @@ public class ScreenUtils {
         return size;
     }
 
+    public static int getHeightOfNavigationBar(Context context) {
+        //如果小米手机开启了全面屏手势隐藏了导航栏则返回 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            if (Settings.Global.getInt(context.getContentResolver(), "force_fsg_nav_bar", 0) != 0) {
+                return 0;
+            }
+        }
+
+        int realHeight = getRawScreenSize(context)[1];
+        int displayHeight = getScreenSize(context)[1];
+        return realHeight - displayHeight;
+    }
 }
