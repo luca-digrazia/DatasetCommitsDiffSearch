@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,11 +29,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 /**
  * The set of services that are provided to {@link ConfiguredTarget} objects
  * during initialization.
- *
- * <p>These objects should not outlast the analysis phase. Do not pass them to {@link Action}
- * objects or other persistent objects. There are internal tests to ensure that AnalysisEnvironment
- * objects are not persisted that check the name of this class, so update those tests you change the
- * names of any implementation of this class.
  */
 public interface AnalysisEnvironment extends ActionRegistry {
   /**
@@ -73,13 +68,6 @@ public interface AnalysisEnvironment extends ActionRegistry {
    */
   Artifact getConstantMetadataArtifact(PathFragment rootRelativePath,
       Root root);
-
-  /**
-   * Returns the artifact for the derived TreeArtifact with directory {@code rootRelativePath},
-   * creating it if necessary, and setting the root of that artifact to
-   * {@code root}. The artifact will be a TreeArtifact.
-   */
-  Artifact getTreeArtifact(PathFragment rootRelativePath, Root root);
 
   /**
    * Returns the artifact for the derived file {@code rootRelativePath},
