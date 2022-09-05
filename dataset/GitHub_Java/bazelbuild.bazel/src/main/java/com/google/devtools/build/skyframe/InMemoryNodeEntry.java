@@ -21,9 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.skyframe.KeyToConsolidate.Op;
-import com.google.devtools.build.skyframe.KeyToConsolidate.OpToStoreBare;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -87,34 +84,43 @@ public class InMemoryNodeEntry implements NodeEntry {
    *
    * <p>In case of a single object we store the object unwrapped, without the list, for
    * memory-efficiency.
-   *
-   * <p>When an entry is being re-evaluated, this object stores the reverse deps from the previous
-   * evaluation. At the end of evaluation, the changed reverse dep operations from {@link
-   * #reverseDepsDataToConsolidate} are merged in here.
    */
   protected Object reverseDeps = ImmutableList.of();
 
   /**
-   * This list stores objects returned by {@link KeyToConsolidate#create}. Morally they are {@link
-   * KeyToConsolidate} objects, but since some operations are stored bare, we can only declare that
-   * this list holds {@link Object} references. Created lazily to save memory.
+   * When reverse deps are removed, checked for presence, or possibly added, we store them in this
+   * object instead of directly doing the operation. That is because removals/checks in reverseDeps
+   * are O(N). Originally reverseDeps was a HashSet, but because of memory consumption we switched
+   * to a list.
    *
-   * <p>This list serves double duty. For a done node, when a reverse dep is removed, checked for
-   * presence, or possibly added, we store the mutation in this object instead of immediately doing
-   * the operation. That is because removals/checks in reverseDeps are O(N). Originally reverseDeps
-   * was a HashSet, but because of memory consumption we switched to a list.
-   *
-   * <p>Internally, {@link ReverseDepsUtility} consolidates this data periodically, and when the set
-   * of reverse deps is requested. While this operation is not free, it can be done more effectively
+   * <p>Internally, ReverseDepsUtilImpl consolidates this data periodically, and when the set of
+   * reverse deps is requested. While this operation is not free, it can be done more effectively
    * than trying to remove/check each dirty reverse dependency individually (O(N) each time).
-   *
-   * <p>When the node entry is evaluating, this list serves to declare the reverse dep operations
-   * that have taken place on it during this evaluation. When evaluation finishes, this list will be
-   * merged into the existing reverse deps if any, but furthermore, this list will also be used to
-   * calculate the set of reverse deps to signal when this entry finishes evaluation. That is done
-   * by {@link ReverseDepsUtility#consolidateDataAndReturnNewElements}.
    */
   private List<Object> reverseDepsDataToConsolidate = null;
+
+  private static final ReverseDepsUtil<InMemoryNodeEntry> REVERSE_DEPS_UTIL =
+      new ReverseDepsUtilImpl<InMemoryNodeEntry>() {
+        @Override
+        void setReverseDepsObject(InMemoryNodeEntry container, Object object) {
+          container.reverseDeps = object;
+        }
+
+        @Override
+        void setDataToConsolidate(InMemoryNodeEntry container, List<Object> dataToConsolidate) {
+          container.reverseDepsDataToConsolidate = dataToConsolidate;
+        }
+
+        @Override
+        Object getReverseDepsObject(InMemoryNodeEntry container) {
+          return container.reverseDeps;
+        }
+
+        @Override
+        List<Object> getDataToConsolidate(InMemoryNodeEntry container) {
+          return container.reverseDepsDataToConsolidate;
+        }
+      };
 
   /**
    * The transient state of this entry, after it has been created but before it is done. It allows
@@ -203,8 +209,11 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   protected synchronized Set<SkyKey> setStateFinishedAndReturnReverseDepsToSignal() {
-    Set<SkyKey> reverseDepsToSignal =
-        ReverseDepsUtility.consolidateDataAndReturnNewElements(this, getOpToStoreBare());
+    // Get reverse deps that need to be signaled.
+    ImmutableSet<SkyKey> reverseDepsToSignal = buildingState.getReverseDepsToSignal();
+    getReverseDepsUtil().addReverseDeps(this, reverseDepsToSignal);
+    // Force consistency check and consolidate rdeps changes.
+    getReverseDepsUtil().consolidateReverseDeps(this);
     this.directDeps = getTemporaryDirectDeps().compress();
 
     markDone();
@@ -219,7 +228,7 @@ public class InMemoryNodeEntry implements NodeEntry {
   @Override
   public synchronized Set<SkyKey> getInProgressReverseDeps() {
     Preconditions.checkState(!isDone(), this);
-    return ReverseDepsUtility.returnNewElements(this, getOpToStoreBare());
+    return buildingState.getReverseDepsToSignal();
   }
 
   @Override
@@ -247,15 +256,23 @@ public class InMemoryNodeEntry implements NodeEntry {
     return setStateFinishedAndReturnReverseDepsToSignal();
   }
 
+  protected ReverseDepsUtil<InMemoryNodeEntry> getReverseDepsUtil() {
+    return REVERSE_DEPS_UTIL;
+  }
+
   @Override
   public synchronized DependencyState addReverseDepAndCheckIfDone(SkyKey reverseDep) {
     if (reverseDep != null) {
+      if (keepEdges()) {
+        getReverseDepsUtil().maybeCheckReverseDepNotPresent(this, reverseDep);
+      }
       if (isDone()) {
         if (keepEdges()) {
-          ReverseDepsUtility.addReverseDeps(this, ImmutableList.of(reverseDep));
+          getReverseDepsUtil().addReverseDeps(this, ImmutableList.of(reverseDep));
         }
       } else {
-        appendToReverseDepOperations(reverseDep, Op.ADD);
+        // Parent should never register itself twice in the same build.
+        buildingState.addReverseDepToSignal(reverseDep);
       }
     }
     if (isDone()) {
@@ -265,52 +282,15 @@ public class InMemoryNodeEntry implements NodeEntry {
                                            : DependencyState.ALREADY_EVALUATING;
   }
 
-  /** Sets {@link #reverseDeps}. Does not alter {@link #reverseDepsDataToConsolidate}. */
-  synchronized void setSingleReverseDepForReverseDepsUtil(SkyKey reverseDep) {
-    this.reverseDeps = reverseDep;
-  }
-
-  /** Sets {@link #reverseDeps}. Does not alter {@link #reverseDepsDataToConsolidate}. */
-  synchronized void setReverseDepsForReverseDepsUtil(List<SkyKey> reverseDeps) {
-    this.reverseDeps = reverseDeps;
-  }
-
-  /** Sets {@link #reverseDepsDataToConsolidate}. Does not alter {@link #reverseDeps}. */
-  synchronized void setReverseDepsDataToConsolidateForReverseDepsUtil(
-      List<Object> dataToConsolidate) {
-    this.reverseDepsDataToConsolidate = dataToConsolidate;
-  }
-
-  synchronized Object getReverseDepsRawForReverseDepsUtil() {
-    return this.reverseDeps;
-  }
-
-  synchronized List<Object> getReverseDepsDataToConsolidateForReverseDepsUtil() {
-    return this.reverseDepsDataToConsolidate;
-  }
-
-  private synchronized void appendToReverseDepOperations(SkyKey reverseDep, Op op) {
-    Preconditions.checkState(!isDone(), "Don't append to done %s %s %s", this, reverseDep, op);
-    if (reverseDepsDataToConsolidate == null) {
-      reverseDepsDataToConsolidate = new ArrayList<>();
-    }
-    Preconditions.checkState(
-        isDirty() || op != Op.CHECK, "Not dirty check %s %s", this, reverseDep);
-    reverseDepsDataToConsolidate.add(KeyToConsolidate.create(reverseDep, op, getOpToStoreBare()));
-  }
-
-  private OpToStoreBare getOpToStoreBare() {
-    return isDirty() ? OpToStoreBare.CHECK : OpToStoreBare.ADD;
-  }
-
   @Override
   public synchronized DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) {
     Preconditions.checkNotNull(reverseDep, this);
     Preconditions.checkState(keepEdges(), "%s %s", reverseDep, this);
-    if (isDone()) {
-      ReverseDepsUtility.checkReverseDep(this, reverseDep);
+    if (!isDone()) {
+      getReverseDepsUtil().removeReverseDep(this, reverseDep);
+      buildingState.addReverseDepToSignal(reverseDep);
     } else {
-      appendToReverseDepOperations(reverseDep, Op.CHECK);
+      getReverseDepsUtil().checkReverseDep(this, reverseDep);
     }
     return addReverseDepAndCheckIfDone(null);
   }
@@ -320,36 +300,23 @@ public class InMemoryNodeEntry implements NodeEntry {
     if (!keepEdges()) {
       return;
     }
-    if (isDone()) {
-      ReverseDepsUtility.removeReverseDep(this, reverseDep);
-    } else {
-      // Removing a reverse dep from an in-flight node is rare -- it should only happen when this
-      // node is about to be cleaned from the graph.
-      appendToReverseDepOperations(reverseDep, Op.REMOVE_OLD);
-    }
+    getReverseDepsUtil().removeReverseDep(this, reverseDep);
   }
 
   @Override
   public synchronized void removeInProgressReverseDep(SkyKey reverseDep) {
-    appendToReverseDepOperations(reverseDep, Op.REMOVE);
+    buildingState.removeReverseDepToSignal(reverseDep);
   }
 
   @Override
-  public synchronized Iterable<SkyKey> getReverseDepsForDoneEntry() {
+  public synchronized Iterable<SkyKey> getReverseDeps() {
     assertKeepEdges();
-    Preconditions.checkState(isDone(), "Called on not done %s", this);
-    return ReverseDepsUtility.getReverseDeps(this);
-  }
-
-  @Override
-  public synchronized Iterable<SkyKey> getAllReverseDepsForNodeBeingDeleted() {
-    assertKeepEdges();
-    if (!isDone()) {
-      // This consolidation loses information about pending reverse deps to signal, but that is
-      // unimportant since this node is being deleted.
-      ReverseDepsUtility.consolidateDataAndReturnNewElements(this, getOpToStoreBare());
+    Iterable<SkyKey> reverseDeps = getReverseDepsUtil().getReverseDeps(this);
+    if (isDone()) {
+      return reverseDeps;
+    } else {
+      return Iterables.concat(reverseDeps, buildingState.getReverseDepsToSignal());
     }
-    return ReverseDepsUtility.getReverseDeps(this);
   }
 
   @Override
@@ -388,7 +355,7 @@ public class InMemoryNodeEntry implements NodeEntry {
           DirtyBuildingState.create(isChanged, GroupedList.<SkyKey>create(directDeps), value);
       value = null;
       directDeps = null;
-      return new MarkedDirtyResult(ReverseDepsUtility.getReverseDeps(this));
+      return new MarkedDirtyResult(getReverseDepsUtil().getReverseDeps(this));
     }
     // The caller may be simultaneously trying to mark this node dirty and changed, and the dirty
     // thread may have lost the race, but it is the caller's responsibility not to try to mark
@@ -532,7 +499,7 @@ public class InMemoryNodeEntry implements NodeEntry {
         .add("lastChangedVersion", lastChangedVersion)
         .add("lastEvaluatedVersion", lastEvaluatedVersion)
         .add("directDeps", isDone() ? GroupedList.create(directDeps) : directDeps)
-        .add("reverseDeps", ReverseDepsUtility.toString(this))
+        .add("reverseDeps", getReverseDepsUtil().toString(this))
         .add("buildingState", buildingState)
         .toString();
   }
@@ -549,7 +516,7 @@ public class InMemoryNodeEntry implements NodeEntry {
     nodeEntry.value = value;
     nodeEntry.lastChangedVersion = this.lastChangedVersion;
     nodeEntry.lastEvaluatedVersion = this.lastEvaluatedVersion;
-    ReverseDepsUtility.addReverseDeps(nodeEntry, ReverseDepsUtility.getReverseDeps(this));
+    getReverseDepsUtil().addReverseDeps(nodeEntry, getReverseDepsUtil().getReverseDeps(this));
     nodeEntry.directDeps = directDeps;
     nodeEntry.buildingState = null;
     return nodeEntry;

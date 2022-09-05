@@ -104,8 +104,7 @@ public interface NodeEntry extends ThinNodeEntry {
    * Removes a reverse dependency.
    *
    * <p>May only be called if this entry is not done (i.e. {@link #isDone} is false) and {@param
-   * reverseDep} was added/confirmed during this evaluation (by {@link #addReverseDepAndCheckIfDone}
-   * or {@link #checkIfDoneForDirtyReverseDep}).
+   * reverseDep} is present in {@link #getReverseDeps}
    */
   @ThreadSafe
   void removeInProgressReverseDep(SkyKey reverseDep);
@@ -113,11 +112,9 @@ public interface NodeEntry extends ThinNodeEntry {
   /**
    * Returns a copy of the set of reverse dependencies. Note that this introduces a potential
    * check-then-act race; {@link #removeReverseDep} may fail for a key that is returned here.
-   *
-   * <p>May only be called on a done node entry.
    */
   @ThreadSafe
-  Iterable<SkyKey> getReverseDepsForDoneEntry() throws InterruptedException;
+  Iterable<SkyKey> getReverseDeps() throws InterruptedException;
 
   /**
    * Returns raw {@link SkyValue} stored in this entry, which may include metadata associated with
@@ -201,8 +198,6 @@ public interface NodeEntry extends ThinNodeEntry {
    */
   @ThreadSafe
   DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) throws InterruptedException;
-
-  Iterable<SkyKey> getAllReverseDepsForNodeBeingDeleted();
 
   /**
    * Tell this node that one of its dependencies is now done. Callers must check the return value,
