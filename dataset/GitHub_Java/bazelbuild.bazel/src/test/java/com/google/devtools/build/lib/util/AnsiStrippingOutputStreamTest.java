@@ -13,15 +13,16 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
-import java.io.ByteArrayOutputStream;
-import java.io.OutputStream;
-import java.io.PrintStream;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.ByteArrayOutputStream;
+import java.io.OutputStream;
+import java.io.PrintStream;
 
 /**
  * Tests for {@link AnsiStrippingOutputStream}.
@@ -50,32 +51,34 @@ public class AnsiStrippingOutputStreamTest {
 
   @Test
   public void doesNotFailHorribly() throws Exception {
-    assertThat(getOutput("Love")).isEqualTo("Love");
+    assertEquals("Love", getOutput("Love"));
   }
 
   @Test
   public void canStripAnsiCode() throws Exception {
-    assertThat(getOutput(ESCAPE + "32mLove" + ESCAPE + "m")).isEqualTo("Love");
+    assertEquals("Love", getOutput(ESCAPE + "32mLove" + ESCAPE + "m"));
   }
 
   @Test
   public void recognizesAnsiCodeWhenBrokenUp() throws Exception {
-    assertThat(getOutput("\u001b", "[", "mLove")).isEqualTo("Love");
+    assertEquals("Love", getOutput("\u001b", "[", "mLove"));
   }
 
   @Test
   public void handlesOnlyEscCorrectly() throws Exception {
-    assertThat(getOutput("\u001bLove")).isEqualTo("\u001bLove");
+    assertEquals("\u001bLove", getOutput("\u001bLove"));
   }
 
   @Test
   public void handlesEscInPlaceOfControlCharCorrectly() throws Exception {
-    assertThat(getOutput(ESCAPE + "31;42" + ESCAPE + "1mLove")).isEqualTo(ESCAPE + "31;42Love");
+    assertEquals(ESCAPE + "31;42Love",
+        getOutput(ESCAPE + "31;42" + ESCAPE + "1mLove"));
   }
 
   @Test
   public void handlesTwoEscapeSequencesCorrectly() throws Exception {
-    assertThat(getOutput(ESCAPE + "32m" + ESCAPE + "1m" + "Love")).isEqualTo("Love");
+    assertEquals("Love",
+        getOutput(ESCAPE + "32m" + ESCAPE + "1m" + "Love"));
   }
 
 }
