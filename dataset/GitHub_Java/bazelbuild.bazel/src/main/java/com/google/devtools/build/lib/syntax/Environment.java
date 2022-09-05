@@ -295,18 +295,16 @@ public class Environment {
     this.importedExtensions = importedExtensions;
   }
 
-  public void importSymbol(PathFragment extension, Identifier symbol, String nameInLoadedFile)
+  public void importSymbol(PathFragment extension, String symbol)
       throws NoSuchVariableException, LoadFailedException {
     if (!importedExtensions.containsKey(extension)) {
       throw new LoadFailedException(extension.toString());
     }
-
-    Object value = importedExtensions.get(extension).lookup(nameInLoadedFile);
+    Object value = importedExtensions.get(extension).lookup(symbol);
     if (!isSkylarkEnabled()) {
       value = SkylarkType.convertFromSkylark(value);
     }
-
-    update(symbol.getName(), value);
+    update(symbol, value);
   }
 
   /**

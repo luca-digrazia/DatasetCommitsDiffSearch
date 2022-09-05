@@ -14,16 +14,17 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
+import com.google.devtools.build.lib.packages.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
+import com.google.devtools.build.lib.packages.SkylarkNativeModule;
 import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions;
 import com.google.devtools.build.lib.skyframe.ASTFileLookupValue.ASTLookupInputException;
+import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuildFileAST;
 import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.syntax.Label.SyntaxException;
@@ -44,12 +45,12 @@ import java.util.Map;
 public class SkylarkImportLookupFunction implements SkyFunction {
 
   private final RuleClassProvider ruleClassProvider;
-  private final PackageFactory packageFactory;
+  private final ImmutableList<BaseFunction> nativeRuleFunctions;
 
   public SkylarkImportLookupFunction(
-    RuleClassProvider ruleClassProvider, PackageFactory packageFactory) {
+      RuleClassProvider ruleClassProvider, PackageFactory packageFactory) {
     this.ruleClassProvider = ruleClassProvider;
-    this.packageFactory = packageFactory;
+    this.nativeRuleFunctions = packageFactory.collectNativeRuleFunctions();
   }
 
   @Override
@@ -59,7 +60,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     PathFragment file = arg.getPackageFragment();
     ASTFileLookupValue astLookupValue = null;
     try {
-      SkyKey astLookupKey = ASTFileLookupValue.key(arg);
+      SkyKey astLookupKey = ASTFileLookupValue.key(file);
       astLookupValue = (ASTFileLookupValue) env.getValueOrThrow(astLookupKey,
           ErrorReadingSkylarkExtensionException.class, InconsistentFilesystemException.class);
     } catch (ErrorReadingSkylarkExtensionException e) {
@@ -82,18 +83,10 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     ImmutableList.Builder<SkylarkFileDependency> fileDependencies = ImmutableList.builder();
     BuildFileAST ast = astLookupValue.getAST();
     // TODO(bazel-team): Refactor this code and PackageFunction to reduce code duplications.
-    for (Map.Entry<Location, PathFragment> entry : ast.getImports().entrySet()) {
+    for (PathFragment importFile : ast.getImports()) {
       try {
-        PathFragment importFile = entry.getValue();
-        // HACK: The prelude sometimes contains load() statements, which need to be resolved
-        // relative to the prelude file. However, we don't have a good way to tell "this should come
-        // from the main repository" in a load() statement, and we don't have a good way to tell if
-        // a load() statement comes from the prelude, since we just prepend those statements before
-        // the actual BUILD file. So we use this evil .endsWith() statement to figure it out.
-        RepositoryName repository =
-            entry.getKey().getPath().endsWith(PackageFunction.PRELUDE_FILE_FRAGMENT)
-                ? PackageIdentifier.DEFAULT_REPOSITORY_NAME : arg.getRepository();
-        SkyKey importsLookupKey = SkylarkImportLookupValue.key(repository, file, importFile);
+        SkyKey importsLookupKey =
+            SkylarkImportLookupValue.key(arg.getRepository(), file, importFile);
         SkylarkImportLookupValue importsLookupValue;
         importsLookupValue = (SkylarkImportLookupValue) env.getValueOrThrow(
             importsLookupKey, ASTLookupInputException.class);
@@ -179,7 +172,12 @@ public class SkylarkImportLookupFunction implements SkyFunction {
     // the transitive closure of the accessible AST nodes.
     SkylarkEnvironment extensionEnv = ruleClassProvider
         .createSkylarkRuleClassEnvironment(eventHandler, ast.getContentHashCode());
-    extensionEnv.update("native", packageFactory.getNativeModule());
+    // Adding native rules module for build extensions.
+    // TODO(bazel-team): this might not be the best place to do this.
+    for (BaseFunction function : nativeRuleFunctions) {
+        extensionEnv.registerFunction(
+            SkylarkNativeModule.class, function.getName(), function);
+    }
     extensionEnv.setImportedExtensions(importMap);
     ast.exec(extensionEnv, eventHandler);
     SkylarkRuleClassFunctions.exportRuleFunctions(extensionEnv, file);
