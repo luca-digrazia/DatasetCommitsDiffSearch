@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaNeverlinkInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
@@ -135,7 +134,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             .add(JavaSourceJarsProvider.class, new JavaSourceJarsProvider(
                 androidCommon.getTransitiveSourceJars(),
                 androidCommon.getTopLevelSourceJars()))
-            .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
             .add(JavaNeverlinkInfoProvider.class,
                 new JavaNeverlinkInfoProvider(androidCommon.isNeverLink()))
             .add(AndroidCcLinkParamsProvider.class,
@@ -179,7 +177,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           .add(JavaSourceJarsProvider.class, androidCommon.getJavaSourceJarsProvider())
           .add(AndroidCcLinkParamsProvider.class,
               new AndroidCcLinkParamsProvider(androidCommon.getCcLinkParamsStore()))
-          .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
           .add(JavaNeverlinkInfoProvider.class,
               new JavaNeverlinkInfoProvider(androidCommon.isNeverLink()))
           .add(ProguardSpecProvider.class, new ProguardSpecProvider(transitiveProguardConfigs))
