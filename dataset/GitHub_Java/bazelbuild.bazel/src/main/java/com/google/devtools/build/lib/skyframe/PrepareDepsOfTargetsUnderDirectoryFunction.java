@@ -18,7 +18,6 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
@@ -79,9 +78,9 @@ public class PrepareDepsOfTargetsUnderDirectoryFunction implements SkyFunction {
     }
 
     @Override
-    protected SkyKey getSkyKeyForSubdirectory(RepositoryName repository, RootedPath subdirectory,
+    protected SkyKey getSkyKeyForSubdirectory(RootedPath subdirectory,
         ImmutableSet<PathFragment> excludedSubdirectoriesBeneathSubdirectory) {
-      return PrepareDepsOfTargetsUnderDirectoryValue.key(repository, subdirectory,
+      return PrepareDepsOfTargetsUnderDirectoryValue.key(subdirectory,
           excludedSubdirectoriesBeneathSubdirectory, filteringPolicy);
     }
 

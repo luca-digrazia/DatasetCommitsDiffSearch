@@ -399,7 +399,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             // We evaluate in keepGoing mode because in the case that the graph does not store its
             // edges, nokeepGoing builds are not allowed, whereas keepGoing builds are always
             // permitted.
-            EvaluationResult<SkyValue> result = buildDriver.evaluate(
+            EvaluationResult<ActionLookupValue> result = buildDriver.evaluate(
                 ImmutableList.of(key), true, ResourceUsage.getAvailableProcessors(),
                 errorEventListener);
             if (!result.hasError()) {

@@ -267,7 +267,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   @Override
   public Set<Target> getTargetsMatchingPattern(QueryExpression owner, String pattern)
       throws QueryException {
-    Set<Target> targets = new LinkedHashSet<>(resolvedTargetPatterns.get(pattern));
+    Set<Target> targets = new LinkedHashSet<>(resolvedTargetPatterns.get(pattern).getTargets());
 
     // Sets.filter would be more convenient here, but can't deal with exceptions.
     Iterator<Target> targetIterator = targets.iterator();
@@ -367,12 +367,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   @Override
-  protected Map<String, Set<Target>> preloadOrThrow(
-      QueryExpression caller, Collection<String> patterns)
-      throws QueryException, TargetParsingException {
+  protected Map<String, ResolvedTargets<Target>> preloadOrThrow(QueryExpression caller,
+      Collection<String> patterns) throws QueryException, TargetParsingException {
     GraphBackedRecursivePackageProvider provider =
         new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys);
-    Map<String, Set<Target>> result = Maps.newHashMapWithExpectedSize(patterns.size());
+    Map<String, ResolvedTargets<Target>> result = Maps.newHashMapWithExpectedSize(patterns.size());
     for (String pattern : patterns) {
       SkyKey patternKey = TargetPatternValue.key(pattern,
           TargetPatternEvaluator.DEFAULT_FILTERING_POLICY, parserPrefix);
@@ -388,7 +387,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
           ResolvedTargets.Builder<Target> targetsBuilder = ResolvedTargets.builder();
           targetsBuilder.addAll(makeTargetsFromLabels(value.getTargets().getTargets()));
           targetsBuilder.removeAll(makeTargetsFromLabels(value.getTargets().getFilteredTargets()));
-          result.put(pattern, targetsBuilder.build().getTargets());
+          result.put(pattern, targetsBuilder.build());
         } else {
           // Because the graph was always initialized via a keep_going build, we know that the
           // exception stored here must be a TargetParsingException. Thus the comment in
@@ -406,7 +405,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
                 targetPatternKey.getPolicy(), pkgPath);
         TargetPattern parsedPattern = targetPatternKey.getParsedPattern();
         try {
-          result.put(pattern, parsedPattern.eval(resolver).getTargets());
+          result.put(pattern, parsedPattern.eval(resolver));
         } catch (TargetParsingException e) {
           targetParsingException = e;
         } catch (InterruptedException e) {
@@ -420,7 +419,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
         } else {
           eventHandler.handle(Event.error("Evaluation of query \"" + caller + "\" failed: "
               + targetParsingException.getMessage()));
-          result.put(pattern, ImmutableSet.<Target>of());
+          result.put(pattern, ResolvedTargets.<Target>builder().setError().build());
         }
       }
     }

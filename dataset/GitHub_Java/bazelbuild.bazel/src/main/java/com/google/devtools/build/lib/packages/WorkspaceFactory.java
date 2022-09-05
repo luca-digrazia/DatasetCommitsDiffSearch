@@ -142,7 +142,6 @@ public class WorkspaceFactory {
       Builder builder, RuleClassProvider ruleClassProvider, String installDir) {
     Environment workspaceEnv = new Environment();
     MethodLibrary.setupMethodEnvironment(workspaceEnv);
-    workspaceEnv.setLoadingPhase();
 
     RuleFactory ruleFactory = new RuleFactory(ruleClassProvider);
     for (String ruleClass : ruleFactory.getRuleClassNames()) {

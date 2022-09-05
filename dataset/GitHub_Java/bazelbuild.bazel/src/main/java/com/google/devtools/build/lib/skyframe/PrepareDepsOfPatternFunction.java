@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.cmdline.TargetPattern;
@@ -26,6 +25,7 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
@@ -106,8 +106,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
   }
 
   /**
-   * A {@link TargetPatternResolver} backed by an {@link
-   * com.google.devtools.build.skyframe.SkyFunction.Environment} whose methods do not actually
+   * A {@link TargetPatternResolver} backed by an {@link Environment} whose methods do not actually
    * return resolved targets, but that ensures the graph loads the matching targets <b>and</b> their
    * transitive dependencies. Its methods may throw {@link MissingDepException} if the package
    * values this depends on haven't been calculated and added to its environment.
@@ -160,7 +159,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
 
     @Override
     public ResolvedTargets<Void> getTargetsInPackage(String originalPattern, String packageName,
-        boolean rulesOnly) throws TargetParsingException {
+        boolean rulesOnly) throws TargetParsingException, InterruptedException {
       FilteringPolicy policy =
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
       return getTargetsInPackage(originalPattern, new PathFragment(packageName), policy);
@@ -168,7 +167,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
 
     private ResolvedTargets<Void> getTargetsInPackage(String originalPattern,
         PathFragment packageNameFragment, FilteringPolicy policy)
-        throws TargetParsingException {
+        throws TargetParsingException, InterruptedException {
       TargetPatternResolverUtil.validatePatternPackage(originalPattern, packageNameFragment, this);
       try {
         PackageIdentifier packageId = PackageIdentifier.createInDefaultRepo(packageNameFragment);
