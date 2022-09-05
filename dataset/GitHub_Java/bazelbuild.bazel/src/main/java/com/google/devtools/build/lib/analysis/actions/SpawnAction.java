@@ -85,7 +85,6 @@ public class SpawnAction extends AbstractAction {
 
   private final CommandLine argv;
 
-  private final boolean executeUnconditionally;
   private final String progressMessage;
   private final String mnemonic;
   // entries are (directory for remote execution, Artifact)
@@ -126,7 +125,7 @@ public class SpawnAction extends AbstractAction {
     this(owner, inputs, outputs,
         resourceSet, argv, ImmutableMap.copyOf(environment),
         ImmutableMap.<String, String>of(), progressMessage,
-        ImmutableMap.<PathFragment, Artifact>of(), mnemonic, false, null);
+        ImmutableMap.<PathFragment, Artifact>of(), mnemonic, null);
   }
 
   /**
@@ -161,7 +160,6 @@ public class SpawnAction extends AbstractAction {
       String progressMessage,
       ImmutableMap<PathFragment, Artifact> inputManifests,
       String mnemonic,
-      boolean executeUnconditionally,
       ExtraActionInfoSupplier<?> extraActionInfoSupplier) {
     super(owner, inputs, outputs);
     this.resourceSet = resourceSet;
@@ -171,7 +169,6 @@ public class SpawnAction extends AbstractAction {
     this.progressMessage = progressMessage;
     this.inputManifests = inputManifests;
     this.mnemonic = mnemonic;
-    this.executeUnconditionally = executeUnconditionally;
     this.extraActionInfoSupplier = extraActionInfoSupplier;
   }
 
@@ -203,16 +200,6 @@ public class SpawnAction extends AbstractAction {
   @VisibleForTesting
   public boolean isShellCommand() {
     return argv.isShellCommand();
-  }
-
-  @Override
-  public boolean isVolatile() {
-    return executeUnconditionally;
-  }
-
-  @Override
-  public boolean executeUnconditionally() {
-    return executeUnconditionally;
   }
 
   /**
@@ -428,7 +415,6 @@ public class SpawnAction extends AbstractAction {
     private ImmutableMap<String, String> executionInfo = ImmutableMap.of();
     private boolean isShellCommand = false;
     private boolean useDefaultShellEnvironment = false;
-    private boolean executeUnconditionally;
     private PathFragment executable;
     // executableArgs does not include the executable itself.
     private List<String> executableArgs;
@@ -527,8 +513,7 @@ public class SpawnAction extends AbstractAction {
 
       actions.add(0, new SpawnAction(owner, actualInputs, ImmutableList.copyOf(outputs),
           resourceSet, actualCommandLine, environment, executionInfo, progressMessage,
-          ImmutableMap.copyOf(inputManifests), mnemonic, executeUnconditionally,
-          extraActionInfoSupplier));
+          ImmutableMap.copyOf(inputManifests), mnemonic, extraActionInfoSupplier));
       return actions.toArray(new Action[actions.size()]);
     }
 
@@ -607,21 +592,6 @@ public class SpawnAction extends AbstractAction {
     public Builder useDefaultShellEnvironment() {
       this.environment = null;
       this.useDefaultShellEnvironment  = true;
-      return this;
-    }
-
-    /**
-     * Makes the action always execute, even if none of its inputs have changed.
-     *
-     * <p>Only use this when absolutely necessary, since this is a performance hit and we'd like to
-     * get rid of this mechanism eventually. You'll eventually be able to declare a Skyframe
-     * dependency on the build ID, which would accomplish the same thing.
-     */
-    public Builder executeUnconditionally() {
-      // This should really be implemented by declaring a Skyframe dependency on the build ID
-      // instead, however, we can't just do that yet from within actions, so we need to go through
-      // Action.executeUnconditionally() which in turn is called by ActionCacheChecker.
-      this.executeUnconditionally = true;
       return this;
     }
 

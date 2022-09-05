@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.DelegateSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.PackageRootResolver;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -153,20 +152,15 @@ public final class ExtraAction extends SpawnAction {
   }
 
   @Override
-  public boolean updateInputsFromCache(ArtifactResolver artifactResolver,
-      PackageRootResolver resolver, Collection<PathFragment> inputPaths) {
+  public void updateInputsFromCache(ArtifactResolver artifactResolver,
+      Collection<PathFragment> inputPaths) {
     // We update the inputs directly from the shadowed action.
     Set<PathFragment> extraActionPathFragments =
         ImmutableSet.copyOf(Artifact.asPathFragments(extraActionInputs));
-    boolean noMissingDependencies = shadowedAction.updateInputsFromCache(artifactResolver, resolver,
+    shadowedAction.updateInputsFromCache(artifactResolver,
         Collections2.filter(inputPaths, Predicates.in(extraActionPathFragments)));
-    if (!noMissingDependencies) {
-      // This update needs to be rerun.
-      return false;
-    }
     Preconditions.checkState(shadowedAction.inputsKnown(), "%s %s", this, shadowedAction);
     updateInputs(shadowedAction.getInputs());
-    return true;
   }
 
   /**
