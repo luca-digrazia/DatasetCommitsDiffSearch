@@ -29,7 +29,6 @@ import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.commons.entity.factory.MapperEntityFactory;
 import org.hswebframework.web.commons.model.Model;
-import org.hswebframework.web.starter.convert.FastJsonGenericHttpMessageConverter;
 import org.hswebframework.web.starter.convert.FastJsonHttpMessageConverter;
 import org.hswebframework.web.starter.entity.EntityFactoryInitConfiguration;
 import org.hswebframework.web.starter.entity.EntityProperties;
@@ -78,14 +77,8 @@ public class HswebAutoConfiguration {
     @Primary
     @ConfigurationProperties(prefix = "fastjson")
     public FastJsonHttpMessageConverter fastJsonHttpMessageConverter(@Autowired(required = false) EntityFactory entityFactory) {
-        return new FastJsonHttpMessageConverter();
-    }
-    @Bean
-    @Primary
-    @ConfigurationProperties(prefix = "fastjson")
-    public FastJsonGenericHttpMessageConverter fastJsonGenericHttpMessageConverter(@Autowired(required = false) EntityFactory entityFactory) {
         JSON.DEFAULT_PARSER_FEATURE |= Feature.DisableFieldSmartMatch.getMask();
-        FastJsonGenericHttpMessageConverter converter = new FastJsonGenericHttpMessageConverter();
+        FastJsonHttpMessageConverter converter = new FastJsonHttpMessageConverter();
         converter.setFeatures(
                 SerializerFeature.WriteNullListAsEmpty,
                 SerializerFeature.WriteNullNumberAsZero,
@@ -119,7 +112,7 @@ public class HswebAutoConfiguration {
     }
 
     @Bean
-    public JsonParamResolver jsonParamResolver(FastJsonGenericHttpMessageConverter fastJsonHttpMessageConverter) {
+    public JsonParamResolver jsonParamResolver(FastJsonHttpMessageConverter fastJsonHttpMessageConverter) {
         return new JsonParamResolver(fastJsonHttpMessageConverter);
     }
 
