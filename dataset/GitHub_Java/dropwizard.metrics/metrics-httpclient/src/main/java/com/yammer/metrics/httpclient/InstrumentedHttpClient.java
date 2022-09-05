@@ -13,31 +13,19 @@ import org.apache.http.params.HttpParams;
 import org.apache.http.protocol.HttpProcessor;
 import org.apache.http.protocol.HttpRequestExecutor;
 
-import static com.yammer.metrics.httpclient.HttpClientMetricNameStrategies.METHOD_ONLY;
-
 public class InstrumentedHttpClient extends DefaultHttpClient {
     private final Log log = LogFactory.getLog(getClass());
 
     private final MetricRegistry registry;
     private final String name;
-    private final HttpClientMetricNameStrategy metricNameStrategy;
-
-    public InstrumentedHttpClient(MetricRegistry registry,
-                                  InstrumentedClientConnManager manager,
-                                  HttpParams params,
-                                  String name,
-                                  HttpClientMetricNameStrategy metricNameStrategy) {
-        super(manager, params);
-        this.registry = registry;
-        this.name = name;
-        this.metricNameStrategy = metricNameStrategy;
-    }
 
     public InstrumentedHttpClient(MetricRegistry registry,
                                   InstrumentedClientConnManager manager,
                                   HttpParams params,
                                   String name) {
-        this(registry, manager, params, name, METHOD_ONLY);
+        super(manager, params);
+        this.registry = registry;
+        this.name = name;
     }
 
     public InstrumentedHttpClient(MetricRegistry registry,
@@ -47,14 +35,6 @@ public class InstrumentedHttpClient extends DefaultHttpClient {
 
     public InstrumentedHttpClient(MetricRegistry registry) {
         this(registry, new InstrumentedClientConnManager(registry), null, null);
-    }
-
-    public InstrumentedHttpClient(MetricRegistry registry, HttpClientMetricNameStrategy metricNameStrategy) {
-        this(registry, new InstrumentedClientConnManager(registry), null, null, metricNameStrategy);
-    }
-
-    public InstrumentedHttpClient(MetricRegistry registry, String name, HttpClientMetricNameStrategy metricNameStrategy) {
-        this(registry, new InstrumentedClientConnManager(registry), null, name, metricNameStrategy);
     }
 
     @Override
@@ -73,7 +53,6 @@ public class InstrumentedHttpClient extends DefaultHttpClient {
         return new InstrumentedRequestDirector(
                 registry,
                 name,
-                metricNameStrategy,
                 log,
                 requestExec,
                 conman,

@@ -1,46 +1,76 @@
 package com.yammer.metrics.httpclient;
 
+import com.yammer.metrics.Gauge;
+import com.yammer.metrics.MetricRegistry;
+import org.apache.http.conn.ClientConnectionManager;
+import org.apache.http.conn.DnsResolver;
+import org.apache.http.conn.scheme.SchemeRegistry;
+import org.apache.http.impl.conn.PoolingClientConnectionManager;
+import org.apache.http.impl.conn.SchemeRegistryFactory;
+import org.apache.http.impl.conn.SystemDefaultDnsResolver;
+
 import java.util.concurrent.TimeUnit;
 
-import org.apache.http.conn.scheme.SchemeRegistry;
-import org.apache.http.impl.conn.SchemeRegistryFactory;
-import org.apache.http.impl.conn.tsccm.ConnPoolByRoute;
-import org.apache.http.impl.conn.tsccm.ThreadSafeClientConnManager;
-
-import com.yammer.metrics.Metrics;
-import com.yammer.metrics.core.GaugeMetric;
+import static com.yammer.metrics.MetricRegistry.name;
 
 /**
- * A {@link org.apache.http.conn.ClientConnectionManager} which monitors the number of open
- * connections.
+ * A {@link ClientConnectionManager} which monitors the number of open connections.
  */
-public class InstrumentedClientConnManager extends ThreadSafeClientConnManager {
-    public InstrumentedClientConnManager(SchemeRegistry registry) {
-        this(registry, -1, TimeUnit.MILLISECONDS);
+public class InstrumentedClientConnManager extends PoolingClientConnectionManager {
+    public InstrumentedClientConnManager(MetricRegistry metricRegistry) {
+        this(metricRegistry, SchemeRegistryFactory.createDefault());
     }
 
-    public InstrumentedClientConnManager() {
-        this(SchemeRegistryFactory.createDefault());
+    public InstrumentedClientConnManager(MetricRegistry metricsRegistry,
+                                         SchemeRegistry registry) {
+        this(metricsRegistry, registry, -1, TimeUnit.MILLISECONDS);
     }
 
-    public InstrumentedClientConnManager(SchemeRegistry registry,
+    public InstrumentedClientConnManager(MetricRegistry metricsRegistry,
+                                         SchemeRegistry registry,
                                          long connTTL,
                                          TimeUnit connTTLTimeUnit) {
-        super(registry, connTTL, connTTLTimeUnit);
-        Metrics.newGauge(InstrumentedClientConnManager.class,
-                         "connections",
-                         new GaugeMetric<Integer>() {
-                             @Override
-                             public Integer value() {
-                                 // this acquires a lock on the connection pool; remove if contention sucks
-                                 return getConnectionsInPool();
-                             }
-                         });
+        this(metricsRegistry, registry, connTTL, connTTLTimeUnit, new SystemDefaultDnsResolver(), null);
     }
 
-    @Override
-    protected ConnPoolByRoute createConnectionPool(long connTTL,
-                                                   TimeUnit connTTLTimeUnit) {
-        return new InstrumentedConnByRoute(connOperator, connPerRoute, 20, connTTL, connTTLTimeUnit);
+    public InstrumentedClientConnManager(MetricRegistry metricsRegistry,
+                                         SchemeRegistry schemeRegistry,
+                                         long connTTL,
+                                         TimeUnit connTTLTimeUnit,
+                                         DnsResolver dnsResolver,
+                                         String name) {
+        super(schemeRegistry, connTTL, connTTLTimeUnit, dnsResolver);
+        metricsRegistry.register(name(ClientConnectionManager.class, name, "available-connections"),
+                                 new Gauge<Integer>() {
+                                     @Override
+                                     public Integer getValue() {
+                                         // this acquires a lock on the connection pool; remove if contention sucks
+                                         return getTotalStats().getAvailable();
+                                     }
+                                 });
+        metricsRegistry.register(name(ClientConnectionManager.class, name, "leased-connections"),
+                                 new Gauge<Integer>() {
+                                     @Override
+                                     public Integer getValue() {
+                                         // this acquires a lock on the connection pool; remove if contention sucks
+                                         return getTotalStats().getLeased();
+                                     }
+                                 });
+        metricsRegistry.register(name(ClientConnectionManager.class, name, "max-connections"),
+                                 new Gauge<Integer>() {
+                                     @Override
+                                     public Integer getValue() {
+                                         // this acquires a lock on the connection pool; remove if contention sucks
+                                         return getTotalStats().getMax();
+                                     }
+                                 });
+        metricsRegistry.register(name(ClientConnectionManager.class, name, "pending-connections"),
+                                 new Gauge<Integer>() {
+                                     @Override
+                                     public Integer getValue() {
+                                         // this acquires a lock on the connection pool; remove if contention sucks
+                                         return getTotalStats().getPending();
+                                     }
+                                 });
     }
 }

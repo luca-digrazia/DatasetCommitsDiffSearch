@@ -19,14 +19,24 @@ import java.io.IOException;
 import static com.yammer.metrics.MetricRegistry.name;
 
 class InstrumentedRequestDirector extends DefaultRequestDirector {
+    private final static String GET = "GET", POST = "POST", HEAD = "HEAD", PUT = "PUT",
+            OPTIONS = "OPTIONS", DELETE = "DELETE", TRACE = "TRACE",
+            CONNECT = "CONNECT", MOVE = "MOVE", PATCH = "PATCH";
 
-    private final MetricRegistry registry;
-    private final HttpClientMetricNameStrategy metricNameStrategy;
-    private final String name;
+    private final Timer getTimer;
+    private final Timer postTimer;
+    private final Timer headTimer;
+    private final Timer putTimer;
+    private final Timer deleteTimer;
+    private final Timer optionsTimer;
+    private final Timer traceTimer;
+    private final Timer connectTimer;
+    private final Timer moveTimer;
+    private final Timer patchTimer;
+    private final Timer otherTimer;
 
     InstrumentedRequestDirector(MetricRegistry registry,
                                 String name,
-                                HttpClientMetricNameStrategy metricNameStrategy,
                                 Log log,
                                 HttpRequestExecutor requestExec,
                                 ClientConnectionManager conman,
@@ -53,9 +63,17 @@ class InstrumentedRequestDirector extends DefaultRequestDirector {
               proxyAuthStrategy,
               userTokenHandler,
               params);
-        this.registry = registry;
-        this.name = name;
-        this.metricNameStrategy = metricNameStrategy;
+        getTimer = registry.timer(name(HttpClient.class, name, "get-requests"));
+        postTimer = registry.timer(name(HttpClient.class, name, "post-requests"));
+        headTimer = registry.timer(name(HttpClient.class, name, "head-requests"));
+        putTimer = registry.timer(name(HttpClient.class, name, "put-requests"));
+        deleteTimer = registry.timer(name(HttpClient.class, name, "delete-requests"));
+        optionsTimer = registry.timer(name(HttpClient.class, name, "options-requests"));
+        traceTimer = registry.timer(name(HttpClient.class, name, "trace-requests"));
+        connectTimer = registry.timer(name(HttpClient.class, name, "connect-requests"));
+        moveTimer = registry.timer(name(HttpClient.class, name, "move-requests"));
+        patchTimer = registry.timer(name(HttpClient.class, name, "patch-requests"));
+        otherTimer = registry.timer(name(HttpClient.class, name, "other-requests"));
     }
 
     @Override
@@ -69,6 +87,28 @@ class InstrumentedRequestDirector extends DefaultRequestDirector {
     }
 
     private Timer timer(HttpRequest request) {
-        return registry.timer(metricNameStrategy.getNameFor(name, request));
+        final String method = request.getRequestLine().getMethod();
+        if (GET.equalsIgnoreCase(method)) {
+            return getTimer;
+        } else if (POST.equalsIgnoreCase(method)) {
+            return postTimer;
+        } else if (PUT.equalsIgnoreCase(method)) {
+            return putTimer;
+        } else if (HEAD.equalsIgnoreCase(method)) {
+            return headTimer;
+        } else if (DELETE.equalsIgnoreCase(method)) {
+            return deleteTimer;
+        } else if (OPTIONS.equalsIgnoreCase(method)) {
+            return optionsTimer;
+        } else if (TRACE.equalsIgnoreCase(method)) {
+            return traceTimer;
+        } else if (CONNECT.equalsIgnoreCase(method)) {
+            return connectTimer;
+        } else if (PATCH.equalsIgnoreCase(method)) {
+            return patchTimer;
+        } else if (MOVE.equalsIgnoreCase(method)) {
+            return moveTimer;
+        }
+        return otherTimer;
     }
 }
