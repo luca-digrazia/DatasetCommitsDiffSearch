@@ -31,8 +31,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.FileType;
 
-import java.util.List;
-
 /**
  * Support for running XcTests.
  */
@@ -59,30 +57,23 @@ class TestSupport {
   }
 
   private void registerTestScriptSubstitutionAction() {
-    // testIpa is the app actually containing the tests
+    // testIpa is the app actually containing the XcTests
     Artifact testIpa = testIpa();
+    // xctestIpa is the app bundle being tested
+    Artifact xctestIpa = xctestIpa();
 
     ImmutableList.Builder<Substitution> substitutions = new ImmutableList.Builder<Substitution>()
         .add(Substitution.of("%(test_app_ipa)s", testIpa.getRootRelativePathString()))
         .add(Substitution.of("%(test_app_name)s", baseNameWithoutIpa(testIpa)))
+
+        .add(Substitution.of("%(xctest_app_ipa)s", xctestIpa.getRootRelativePathString()))
+        .add(Substitution.of("%(xctest_app_name)s", baseNameWithoutIpa(xctestIpa)))
 
         .add(Substitution.of("%(iossim_path)s", iossim().getRootRelativePath().getPathString()))
         .add(Substitution.of("%(plugin_jars)s", Artifact.joinRootRelativePaths(":", plugins())))
 
         .addAll(deviceSubstitutions().getSubstitutionsForTestRunnerScript());
 
-    // xctestIpa is the app bundle being tested
-    Optional<Artifact> xctestIpa = xctestIpa();
-    if (xctestIpa.isPresent()) {
-      substitutions
-          .add(Substitution.of("%(xctest_app_ipa)s", xctestIpa.get().getRootRelativePathString()))
-          .add(Substitution.of("%(xctest_app_name)s", baseNameWithoutIpa(xctestIpa.get())));
-    } else {
-      substitutions
-          .add(Substitution.of("%(xctest_app_ipa)s", ""))
-          .add(Substitution.of("%(xctest_app_name)s", ""));
-    }
-    
     Optional<Artifact> testRunner = testRunner();
     if (testRunner.isPresent()) {
       substitutions.add(
@@ -104,21 +95,11 @@ class TestSupport {
     return ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA);
   }
 
-  private Optional<Artifact> xctestIpa() {
+  private Artifact xctestIpa() {
     FileProvider fileProvider =
         ruleContext.getPrerequisite("xctest_app", Mode.TARGET, FileProvider.class);
-    if (fileProvider == null) {
-      return Optional.absent();
-    }
-    List<Artifact> files =
-        Artifact.filterFiles(fileProvider.getFilesToBuild(), FileType.of(".ipa"));
-    if (files.size() == 0) {
-      return Optional.absent();
-    } else if (files.size() == 1) {
-      return Optional.of(Iterables.getOnlyElement(files));
-    } else {
-      throw new IllegalStateException("Expected 0 or 1 files in xctest_app, got: " + files);
-    }
+    return Iterables.getOnlyElement(
+        Artifact.filterFiles(fileProvider.getFilesToBuild(), FileType.of(".ipa")));
   }
 
   private Artifact iossim() {
@@ -138,7 +119,7 @@ class TestSupport {
   TestSupport addRunfiles(Runfiles.Builder runfilesBuilder) {
     runfilesBuilder
         .addArtifact(testIpa())
-        .addArtifacts(xctestIpa().asSet())
+        .addArtifact(xctestIpa())
         .addArtifact(generatedTestScript())
         .addArtifact(iossim())
         .addTransitiveArtifacts(deviceRunfiles())
@@ -166,7 +147,7 @@ class TestSupport {
    * Adds files which must be built in order to run this test to builder.
    */
   TestSupport addFilesToBuild(NestedSetBuilder<Artifact> builder) {
-    builder.add(testIpa()).addAll(xctestIpa().asSet());
+    builder.add(testIpa()).add(xctestIpa());
     return this;
   }
 
