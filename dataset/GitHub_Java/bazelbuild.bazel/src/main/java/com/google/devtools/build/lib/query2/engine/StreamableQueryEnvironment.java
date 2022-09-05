@@ -26,8 +26,7 @@ public interface StreamableQueryEnvironment<T> extends QueryEnvironment<T> {
   void getAllRdeps(
       QueryExpression expression,
       Predicate<T> universe,
-      VariableContext<T> context,
-      Callback<T> callback,
-      int depth)
+      final Callback<T> callback,
+      final int depth)
       throws QueryException, InterruptedException;
 }
