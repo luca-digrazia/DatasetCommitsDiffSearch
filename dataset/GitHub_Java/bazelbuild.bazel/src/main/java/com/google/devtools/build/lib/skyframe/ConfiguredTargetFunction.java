@@ -77,7 +77,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 
@@ -598,9 +597,8 @@ final class ConfiguredTargetFunction implements SkyFunction {
     ListMultimap<SkyKey, ConfiguredAspect> result = ArrayListMultimap.create();
     Set<SkyKey> aspectKeys = new HashSet<>();
     for (Dependency dep : deps) {
-      for (Entry<Aspect, BuildConfiguration> depAspect : dep.getAspectConfigurations().entrySet()) {
-        aspectKeys.add(createAspectKey(
-            dep.getLabel(), depAspect.getValue(), dep.getConfiguration(), depAspect.getKey()));
+      for (Aspect depAspect : dep.getAspects()) {
+        aspectKeys.add(createAspectKey(dep.getLabel(), dep.getConfiguration(), depAspect));
       }
     }
 
@@ -615,13 +613,12 @@ final class ConfiguredTargetFunction implements SkyFunction {
         continue;
       }
       ConfiguredTarget depConfiguredTarget = configuredTargetMap.get(depKey);
-      for (Entry<Aspect, BuildConfiguration> depAspect : dep.getAspectConfigurations().entrySet()) {
-        if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect.getKey())) {
+      for (Aspect depAspect : dep.getAspects()) {
+        if (!aspectMatchesConfiguredTarget(depConfiguredTarget, depAspect)) {
           continue;
         }
 
-        SkyKey aspectKey = createAspectKey(
-            dep.getLabel(), depAspect.getValue(), dep.getConfiguration(), depAspect.getKey());
+        SkyKey aspectKey = createAspectKey(dep.getLabel(), dep.getConfiguration(), depAspect);
         AspectValue aspectValue = null;
         try {
           // TODO(ulfjack): Catch all thrown AspectCreationException and NoSuchThingException
@@ -631,7 +628,7 @@ final class ConfiguredTargetFunction implements SkyFunction {
           throw new AspectCreationException(
               String.format(
                   "Evaluation of aspect %s on %s failed: %s",
-                  depAspect.getKey().getDefinition().getName(),
+                  depAspect.getDefinition().getName(),
                   dep.getLabel(),
                   e.toString()));
         }
@@ -648,13 +645,9 @@ final class ConfiguredTargetFunction implements SkyFunction {
   }
 
   public static SkyKey createAspectKey(
-      Label label,
-      BuildConfiguration aspectConfiguration,
-      BuildConfiguration baseConfiguration,
-      Aspect depAspect) {
+      Label label, BuildConfiguration buildConfiguration, Aspect depAspect) {
     return AspectValue.key(label,
-        aspectConfiguration,
-        baseConfiguration,
+        buildConfiguration,
         depAspect.getAspectClass(),
         depAspect.getParameters());
   }

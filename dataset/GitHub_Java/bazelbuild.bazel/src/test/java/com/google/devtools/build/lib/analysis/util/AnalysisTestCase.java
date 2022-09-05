@@ -106,7 +106,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
       return this;
     }
 
-    public boolean contains(Flag flag) {
+    boolean contains(Flag flag) {
       return flags.contains(flag);
     }
   }

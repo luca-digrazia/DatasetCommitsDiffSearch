@@ -283,7 +283,7 @@ public final class SkyframeBuildView {
     if (!result.hasError() && badActions.isEmpty()) {
       setDeserializedArtifactOwners();
       return new SkyframeAnalysisResult(
-          /*hasLoadingError=*/false, /*hasAnalysisError=*/false,
+          false,
           ImmutableList.copyOf(goodCts),
           result.getWalkableGraph(),
           ImmutableList.copyOf(goodAspects),
@@ -336,7 +336,6 @@ public final class SkyframeBuildView {
       throw new ViewCreationFailedException(errorMsg);
     }
 
-    boolean hasLoadingError = false;
     // --keep_going : We notify the error and return a ConfiguredTargetValue
     for (Map.Entry<SkyKey, ErrorInfo> errorEntry : result.errorMap().entrySet()) {
       // Only handle errors of configured targets, not errors of top-level aspects.
@@ -357,7 +356,6 @@ public final class SkyframeBuildView {
       if (cause instanceof ConfiguredValueCreationException) {
         ConfiguredValueCreationException ctCause = (ConfiguredValueCreationException) cause;
         for (Label rootCause : ctCause.getRootCauses()) {
-          hasLoadingError = true;
           eventBus.post(new LoadingFailureEvent(topLevelLabel, rootCause));
         }
         analysisRootCause = ctCause.getAnalysisRootCause();
@@ -410,7 +408,6 @@ public final class SkyframeBuildView {
     }
     setDeserializedArtifactOwners();
     return new SkyframeAnalysisResult(
-        hasLoadingError,
         result.hasError() || !badActions.isEmpty(),
         ImmutableList.copyOf(goodCts),
         result.getWalkableGraph(),

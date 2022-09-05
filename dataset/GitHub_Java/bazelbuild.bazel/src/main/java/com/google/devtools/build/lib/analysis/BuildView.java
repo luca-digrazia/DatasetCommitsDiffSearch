@@ -451,6 +451,7 @@ public class BuildView {
 
     List<AspectValueKey> aspectKeys = new ArrayList<>();
     for (String aspect : aspects) {
+
       // Syntax: label%aspect
       int delimiterPosition = aspect.indexOf('%');
       if (delimiterPosition >= 0) {
@@ -513,13 +514,18 @@ public class BuildView {
       LOG.info(msg);
     }
 
+    boolean analysisSuccessful = !skyframeAnalysisResult.hasError();
     AnalysisResult result =
         createResult(
             eventHandler,
             loadingResult,
             topLevelOptions,
             viewOptions,
-            skyframeAnalysisResult);
+            skyframeAnalysisResult.getConfiguredTargets(),
+            skyframeAnalysisResult.getAspects(),
+            skyframeAnalysisResult.getWalkableGraph(),
+            skyframeAnalysisResult.getPackageRoots(),
+            analysisSuccessful);
     LOG.info("Finished analysis");
     return result;
   }
@@ -529,10 +535,13 @@ public class BuildView {
       LoadingResult loadingResult,
       TopLevelArtifactContext topLevelOptions,
       BuildView.Options viewOptions,
-      SkyframeAnalysisResult skyframeAnalysisResult)
-          throws InterruptedException {
+      Collection<ConfiguredTarget> configuredTargets,
+      Collection<AspectValue> aspects,
+      final WalkableGraph graph,
+      ImmutableMap<PackageIdentifier, Path> packageRoots,
+      boolean analysisSuccessful)
+      throws InterruptedException {
     Collection<Target> testsToRun = loadingResult.getTestsToRun();
-    Collection<ConfiguredTarget> configuredTargets = skyframeAnalysisResult.getConfiguredTargets();
     Collection<ConfiguredTarget> allTargetsToTest = null;
     if (testsToRun != null) {
       // Determine the subset of configured targets that are meant to be run as tests.
@@ -575,13 +584,12 @@ public class BuildView {
     // Tests. This must come last, so that the exclusive tests are scheduled after everything else.
     scheduleTestsIfRequested(parallelTests, exclusiveTests, topLevelOptions, allTargetsToTest);
 
-    String error = loadingResult.hasLoadingError() || skyframeAnalysisResult.hasLoadingError()
-          ? "execution phase succeeded, but there were loading phase errors"
-          : skyframeAnalysisResult.hasAnalysisError()
-            ? "execution phase succeeded, but not all targets were analyzed"
-            : null;
+    String error = !loadingResult.hasLoadingError()
+          ? (analysisSuccessful
+            ? null
+            : "execution phase succeeded, but not all targets were analyzed")
+          : "execution phase succeeded, but there were loading phase errors";
 
-    final WalkableGraph graph = skyframeAnalysisResult.getWalkableGraph();
     final ActionGraph actionGraph = new ActionGraph() {
       @Nullable
       @Override
@@ -597,7 +605,7 @@ public class BuildView {
     };
     return new AnalysisResult(
         configuredTargets,
-        skyframeAnalysisResult.getAspects(),
+        aspects,
         allTargetsToTest,
         error,
         actionGraph,
@@ -605,7 +613,7 @@ public class BuildView {
         parallelTests,
         exclusiveTests,
         topLevelOptions,
-        skyframeAnalysisResult.getPackageRoots());
+        packageRoots);
   }
 
   private static NestedSet<Artifact> getBaselineCoverageArtifacts(
