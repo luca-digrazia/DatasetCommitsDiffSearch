@@ -3,8 +3,6 @@ package org.nlpcn.es4sql.domain.hints;
 
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLParser;
-import org.elasticsearch.common.xcontent.LoggingDeprecationHandler;
-import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.common.xcontent.yaml.YamlXContentParser;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
@@ -61,23 +59,26 @@ public class HintFactory {
             int multiSearchSize = Integer.parseInt(number[0]);
             return new Hint(HintType.NL_MULTISEARCH_SIZE,new Object[]{multiSearchSize});
         }
-        if (hintAsString.startsWith("! USE_SCROLL")) {
-            String[] scrollParams = getParamsFromHint(hintAsString, "! USE_SCROLL");
-            if (scrollParams != null && scrollParams.length == 2) {
-                String param = scrollParams[0];
-                return new Hint(HintType.USE_SCROLL,
-                        new Object[]{(param.startsWith("\"") && param.endsWith("\"")) || (param.startsWith("'") && param.endsWith("'")) ? param.substring(1, param.length() - 1) :
-                                Integer.parseInt(param),
-                                Integer.parseInt(scrollParams[1])});
-            } else {
-                return new Hint(HintType.USE_SCROLL, new Object[]{50, 60000});
+        if(hintAsString.startsWith("! USE_SCROLL")){
+            String[] scrollParams = getParamsFromHint(hintAsString,"! USE_SCROLL");
+            int docsPerShardFetch = 50;
+            int timeout = 60000;
+            if(scrollParams != null && scrollParams.length ==2) {
+                docsPerShardFetch = Integer.parseInt(scrollParams[0]);
+                timeout = Integer.parseInt(scrollParams[1]);
             }
+            return new Hint(HintType.USE_SCROLL, new Object[]{docsPerShardFetch,timeout});
         }
         if(hintAsString.startsWith("! IGNORE_UNAVAILABLE")){
             return new Hint(HintType.IGNORE_UNAVAILABLE,null);
         }
         if(hintAsString.startsWith("! DOCS_WITH_AGGREGATION")) {
-            Integer[] params = parseParamsAsInts(hintAsString,"! DOCS_WITH_AGGREGATION");
+            String[] number = getParamsFromHint(hintAsString,"! DOCS_WITH_AGGREGATION");
+            //todo: check if numbers etc..
+            Integer[] params = new Integer[number.length];
+            for (int i = 0; i < params.length; i++) {
+                params[i] = Integer.parseInt(number[i]);
+            }
             return new Hint(HintType.DOCS_WITH_AGGREGATION, params);
         }
         if(hintAsString.startsWith("! ROUTINGS")) {
@@ -101,7 +102,7 @@ public class HintFactory {
                 YAMLParser yamlParser = null;
                 try {
                 yamlParser = yamlFactory.createParser(heighlightParam.toCharArray());
-                YamlXContentParser yamlXContentParser = new YamlXContentParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, yamlParser);
+                YamlXContentParser yamlXContentParser = new YamlXContentParser(yamlParser);
                 Map<String, Object> map = yamlXContentParser.map();
                 hintParams.add(map);
                 } catch (IOException e) {
@@ -110,86 +111,15 @@ public class HintFactory {
             }
             return new Hint(HintType.HIGHLIGHT,hintParams.toArray());
         }
-        if(hintAsString.startsWith("! MINUS_SCROLL_FETCH_AND_RESULT_LIMITS")){
-            Integer[] params = parseParamsAsInts(hintAsString,"! MINUS_SCROLL_FETCH_AND_RESULT_LIMITS");
-            if( params.length>3){
-                throw new SqlParseException("MINUS_FETCH_AND_RESULT_LIMITS should have 3 int params (maxFromFirst,maxFromSecond,hitsPerScrollShard)");
-            }
-            Integer[] paramsWithDefaults = new Integer[3];
-            int defaultMaxFetchFromTable = 100000;
-            int defaultFetchOnScroll = 1000;
-            paramsWithDefaults[0] = defaultMaxFetchFromTable;
-            paramsWithDefaults[1] = defaultMaxFetchFromTable;
-            paramsWithDefaults[2] = defaultFetchOnScroll;
-            for(int i=0;i<params.length;i++){
-                paramsWithDefaults[i]=params[i];
-            }
-
-            return new Hint(HintType.MINUS_FETCH_AND_RESULT_LIMITS, paramsWithDefaults);
-        }
-        if(hintAsString.startsWith("! MINUS_USE_TERMS_OPTIMIZATION")){
-            String[] param = getParamsFromHint(hintAsString,"! MINUS_USE_TERMS_OPTIMIZATION");
-            boolean shouldLowerStringOnTerms = false;
-            if(param!=null ){
-                if(param.length!=1) {
-                    throw new SqlParseException("MINUS_USE_TERMS_OPTIMIZATION should have none or one boolean param: false/true ");
-                }
-                try {
-                    shouldLowerStringOnTerms = Boolean.parseBoolean(param[0].toLowerCase());
-                }
-                catch (Exception e){
-                    throw new SqlParseException("MINUS_USE_TERMS_OPTIMIZATION should have none or one boolean param: false/true , got:" + param[0]);
-                }
-            }
-            return new Hint(HintType.MINUS_USE_TERMS_OPTIMIZATION, new Object[]{shouldLowerStringOnTerms});
-        }
-        if (hintAsString.startsWith("! COLLAPSE")) {
-            String collapse = getParamFromHint(hintAsString, "! COLLAPSE");
-            return new Hint(HintType.COLLAPSE, new String[]{collapse});
-        }
-        if (hintAsString.startsWith("! POST_FILTER")) {
-            String postFilter = getParamFromHint(hintAsString, "! POST_FILTER");
-            return new Hint(HintType.POST_FILTER, new String[]{postFilter});
-        }
-        if (hintAsString.startsWith("! STATS")) {
-            String[] statsGroups = getParamsFromHint(hintAsString, "! STATS");
-            return new Hint(HintType.STATS, statsGroups);
-        }
-        if (hintAsString.startsWith("! CONFLICTS")) {
-            String conflictsParam = getParamFromHint(hintAsString, "! CONFLICTS");
-            return new Hint(HintType.CONFLICTS, new String[] { conflictsParam });
-        }
-        if (hintAsString.startsWith("! PREFERENCE")) {
-            String preferenceParam = getParamFromHint(hintAsString, "! PREFERENCE");
-            return new Hint(HintType.PREFERENCE, new String[]{preferenceParam});
-        }
-        if (hintAsString.startsWith("! TRACK_TOTAL_HITS")) {
-            String trackTotalTitsParam = getParamFromHint(hintAsString, "! TRACK_TOTAL_HITS");
-            return new Hint(HintType.TRACK_TOTAL_HITS, new String[]{trackTotalTitsParam});
-        }
 
         return null;
     }
 
-    private static String getParamFromHint(String hint, String prefix) {
-        if (!hint.contains("(")) return null;
-        return hint.replace(prefix, "").replaceAll("\\s*\\(\\s*", "").replaceAll("\\s*\\,\\s*", ",").replaceAll("\\s*\\)\\s*", "");
-    }
+
     private static String[] getParamsFromHint(String hint, String prefix) {
-        String param = getParamFromHint(hint, prefix);
-        return param != null ? param.split(",") : null;
-    }
-    private static Integer[] parseParamsAsInts(String hintAsString,String startWith) {
-        String[] number = getParamsFromHint(hintAsString,startWith);
-        if(number == null){
-            return new Integer[0];
-        }
-        //todo: check if numbers etc..
-        Integer[] params = new Integer[number.length];
-        for (int i = 0; i < params.length; i++) {
-            params[i] = Integer.parseInt(number[i]);
-        }
-        return params;
+        if(!hint.contains("(")) return null;
+        String onlyParams = hint.replace(prefix, "").replaceAll("\\s*\\(\\s*","").replaceAll("\\s*\\,\\s*", ",").replaceAll("\\s*\\)\\s*", "");
+        return onlyParams.split(",");
     }
 
 

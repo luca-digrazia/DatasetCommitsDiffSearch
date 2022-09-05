@@ -57,7 +57,22 @@ public class AggregationQueryAction extends QueryAction {
 
 
                 //make groupby can reference to field alias
-                lastAgg = getGroupAgg(field, select);
+                boolean refrence = false;
+                for (Field temp : select.getFields()) {
+                    if (temp instanceof MethodField && temp.getName().equals("script")) {
+                        MethodField scriptField = (MethodField) temp;
+                        for (KVValue kv : scriptField.getParams()) {
+                            if (kv.value.equals(field.getName())) {
+                                lastAgg = aggMaker.makeGroupAgg(scriptField);
+                                refrence = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!refrence) lastAgg = aggMaker.makeGroupAgg(field);
+
 
                 if (lastAgg != null && lastAgg instanceof TermsBuilder && !(field instanceof MethodField)) {
                     //if limit size is too small, increasing shard  size is required
@@ -100,8 +115,6 @@ public class AggregationQueryAction extends QueryAction {
 
                 for (int i = 1; i < groupBy.size(); i++) {
                     field = groupBy.get(i);
-					AggregationBuilder<?> subAgg = getGroupAgg(field, select);
-					
                     AggregationBuilder<?> subAgg = aggMaker.makeGroupAgg(field);
                     if (subAgg instanceof TermsBuilder && !(field instanceof MethodField)) {
                         ((TermsBuilder) subAgg).size(0);
@@ -180,26 +193,6 @@ public class AggregationQueryAction extends QueryAction {
         SqlElasticSearchRequestBuilder sqlElasticRequestBuilder = new SqlElasticSearchRequestBuilder(request);
         return sqlElasticRequestBuilder;
     }
-	private AggregationBuilder<?> getGroupAgg(Field field, Select select2) throws SqlParseException {
-    	boolean refrence = false;
-    	AggregationBuilder<?> lastAgg = null;
-        for (Field temp : select.getFields()) {
-            if (temp instanceof MethodField && temp.getName().equals("script")) {
-                MethodField scriptField = (MethodField) temp;
-                for (KVValue kv : scriptField.getParams()) {
-                    if (kv.value.equals(field.getName())) {
-                        lastAgg = aggMaker.makeGroupAgg(scriptField);
-                        refrence = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!refrence) lastAgg = aggMaker.makeGroupAgg(field);
-        
-        return lastAgg;
-	}
 
     private AbstractAggregationBuilder wrapNestedIfNeeded(AggregationBuilder nestedBuilder, boolean reverseNested) {
         if (!reverseNested) return nestedBuilder;
@@ -341,7 +334,7 @@ public class AggregationQueryAction extends QueryAction {
      */
     private void setWhere(Where where) throws SqlParseException {
         if (where != null) {
-            QueryBuilder whereQuery = QueryMaker.explan(where,this.select.isQuery);
+            QueryBuilder whereQuery = QueryMaker.explan(where);
             request.setQuery(whereQuery);
         }
     }

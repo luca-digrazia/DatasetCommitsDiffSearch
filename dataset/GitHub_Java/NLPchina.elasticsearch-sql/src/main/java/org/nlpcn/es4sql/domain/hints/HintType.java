@@ -1,5 +1,8 @@
 package org.nlpcn.es4sql.domain.hints;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Created by Eliran on 29/8/2015.
  */
@@ -14,13 +17,5 @@ public enum HintType
     DOCS_WITH_AGGREGATION,
     ROUTINGS,
     SHARD_SIZE,
-    HIGHLIGHT,
-    MINUS_FETCH_AND_RESULT_LIMITS,
-    MINUS_USE_TERMS_OPTIMIZATION,
-    COLLAPSE,
-    POST_FILTER,
-    STATS,
-    CONFLICTS,
-    PREFERENCE,
-    TRACK_TOTAL_HITS
+    HIGHLIGHT;
 }
