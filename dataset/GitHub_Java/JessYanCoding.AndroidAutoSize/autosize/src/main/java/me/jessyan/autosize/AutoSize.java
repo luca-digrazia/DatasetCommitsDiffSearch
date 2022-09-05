@@ -172,9 +172,8 @@ public final class AutoSize {
             } else {
                 targetDensity = AutoSizeConfig.getInstance().getScreenHeight() * 1.0f / sizeInDp;
             }
-            float scale = AutoSizeConfig.getInstance().isExcludeFontScale() ? 1 : AutoSizeConfig.getInstance().
-                    getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity();
-            targetScaledDensity = targetDensity * scale;
+            targetScaledDensity = targetDensity * (AutoSizeConfig.getInstance().
+                    getInitScaledDensity() * 1.0f / AutoSizeConfig.getInstance().getInitDensity());
             targetDensityDpi = (int) (targetDensity * 160);
 
             if (isBaseOnWidth) {
