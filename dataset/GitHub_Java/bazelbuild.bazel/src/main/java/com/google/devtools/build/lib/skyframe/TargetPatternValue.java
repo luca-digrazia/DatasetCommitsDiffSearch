@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.InterruptibleSupplier;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
@@ -109,7 +108,7 @@ public final class TargetPatternValue implements SkyValue {
    * @param offset The offset to apply to relative target patterns.
    */
   @ThreadSafe
-  public static TargetPatternKey key(String pattern, FilteringPolicy policy, String offset)
+  public static SkyKey key(String pattern, FilteringPolicy policy, String offset)
       throws TargetParsingException {
     return Iterables.getOnlyElement(keys(ImmutableList.of(pattern), policy, offset)).getSkyKey();
   }
@@ -147,7 +146,8 @@ public final class TargetPatternValue implements SkyValue {
               !positive,
               offset,
               ImmutableSet.<PathFragment>of());
-      builder.add(new TargetPatternSkyKeyValue(targetPatternKey));
+      SkyKey skyKey = SkyKey.create(SkyFunctions.TARGET_PATTERN, targetPatternKey);
+      builder.add(new TargetPatternSkyKeyValue(skyKey));
     }
     return builder.build();
   }
@@ -161,7 +161,7 @@ public final class TargetPatternValue implements SkyValue {
    * offset, whether it is a positive or negative match, and a set of excluded subdirectories.
    */
   @ThreadSafe
-  public static class TargetPatternKey implements SkyKey, Serializable {
+  public static class TargetPatternKey implements Serializable {
 
     private final TargetPattern parsedPattern;
     private final FilteringPolicy policy;
@@ -181,16 +181,6 @@ public final class TargetPatternValue implements SkyValue {
       this.isNegative = isNegative;
       this.offset = offset;
       this.excludedSubdirectories = Preconditions.checkNotNull(excludedSubdirectories);
-    }
-
-    @Override
-    public SkyFunctionName functionName() {
-      return SkyFunctions.TARGET_PATTERN;
-    }
-
-    @Override
-    public Object argument() {
-      return this;
     }
 
     public String getPattern() {
@@ -276,7 +266,7 @@ public final class TargetPatternValue implements SkyValue {
      * Returns the stored {@link SkyKey} or throws {@link TargetParsingException} if one was thrown
      * when computing the key.
      */
-    TargetPatternKey getSkyKey() throws TargetParsingException;
+    SkyKey getSkyKey() throws TargetParsingException;
 
     /**
      * Returns the pattern that resulted in the stored {@link SkyKey} or {@link
@@ -287,14 +277,14 @@ public final class TargetPatternValue implements SkyValue {
 
   private static final class TargetPatternSkyKeyValue implements TargetPatternSkyKeyOrException {
 
-    private final TargetPatternKey value;
+    private final SkyKey value;
 
-    private TargetPatternSkyKeyValue(TargetPatternKey value) {
+    private TargetPatternSkyKeyValue(SkyKey value) {
       this.value = value;
     }
 
     @Override
-    public TargetPatternKey getSkyKey() throws TargetParsingException {
+    public SkyKey getSkyKey() throws TargetParsingException {
       return value;
     }
 
@@ -316,7 +306,7 @@ public final class TargetPatternValue implements SkyValue {
     }
 
     @Override
-    public TargetPatternKey getSkyKey() throws TargetParsingException {
+    public SkyKey getSkyKey() throws TargetParsingException {
       throw exception;
     }
 
