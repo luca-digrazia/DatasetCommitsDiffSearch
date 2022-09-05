@@ -211,8 +211,6 @@ package android.taobao.atlas.runtime;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import android.content.ComponentName;
 import android.content.pm.PackageInfo;
@@ -222,7 +220,6 @@ import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
 import android.taobao.atlas.framework.Atlas;
 import android.taobao.atlas.framework.BundleImpl;
 import android.taobao.atlas.framework.MbundleImpl;
-import android.taobao.atlas.util.BundleLock;
 import android.taobao.atlas.util.FileUtils;
 import org.osgi.framework.Bundle;
 
@@ -233,8 +230,6 @@ import dalvik.system.PathClassLoader;
 import org.osgi.framework.BundleException;
 
 public class DelegateClassLoader extends PathClassLoader {
-
-    private ReadWriteLock mReadWirteLock = new ReentrantReadWriteLock();
 
     public DelegateClassLoader(ClassLoader cl) {
         super(".", cl);
@@ -257,39 +252,32 @@ public class DelegateClassLoader extends PathClassLoader {
             return super.loadClass(className);
         }
 
-        installMbundleWithDependency(location);
-
+        installMbundles(location);
         return super.loadClass(className);
 
     }
 
-    public void installMbundleWithDependency(String location) throws ClassNotFoundException {
+    private void installMbundles(String location) throws ClassNotFoundException {
         if (AtlasBundleInfoManager.instance().isMbundle(location)) {
             List<String> bundles = AtlasBundleInfoManager.instance().getBundleInfo(location).getTotalDependency();
             for (String bundle : bundles) {
-                if (bundle == null || AtlasBundleInfoManager.instance().getBundleInfo(bundle) == null) {
+                if (bundle == null || AtlasBundleInfoManager.instance().getBundleInfo(bundle) == null){
                     continue;
                 }
-                if (!AtlasBundleInfoManager.instance().getBundleInfo(bundle).isMBundle()) {
-                    throw new ClassNotFoundException(location + " Mbundle can not has dependency bundle--> " + bundle);
+                if (!AtlasBundleInfoManager.instance().getBundleInfo(bundle).isMBundle()){
+                    throw new ClassNotFoundException(location+" Mbundle can not dependent bundleImpl "+bundle);
                 }
-                installMbundle(bundle);
+                try {
+                    Bundle mBundle = null;
+                    if ((mBundle = Framework.getBundle(bundle)) == null) {
+                        mBundle= new MbundleImpl(bundle);
+                        Framework.bundles.put(bundle, mBundle);
+                    }
+                    mBundle.start();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
-        }
-    }
-
-
-    public void installMbundle(String location) {
-        try {
-            BundleLock.WriteLock(location);
-            if (Atlas.getInstance().getBundle(location) == null) {
-                BundleImpl bundle = new MbundleImpl(location);
-                bundle.start();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            BundleLock.WriteUnLock(location);
         }
 
     }
