@@ -347,8 +347,8 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  public boolean supportsSymbolicLinksNatively() {
-    return symlinkStrategy != SymlinkStrategy.WINDOWS_COMPATIBLE;
+  public boolean supportsSymbolicLinks() {
+    return true;
   }
 
   @Override
@@ -374,10 +374,7 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
       throws IOException {
     SymlinkImplementation strategy = computeSymlinkImplementation(linkPath, targetFragment);
     switch (strategy) {
-      case HARDLINK:
-        FilesystemUtils.link(targetFragment.toString(), linkPath.toString());
-        break;
-
+      case HARDLINK:  // TBD, fallthrough for now
       case JUNCTION:  // Junctions are emulated on Linux with symlinks, fall through
       case SYMLINK:
         synchronized (linkPath) {
@@ -493,10 +490,6 @@ public class UnixFileSystem extends AbstractFileSystemWithCustomStat {
 
     return emitSymlinkCompatibilityMessage(
         "Target is a non-writable file", linkPath, targetFragment);
-  }
-
-  public SymlinkStrategy getSymlinkStrategy() {
-    return symlinkStrategy;
   }
 
   @Override

@@ -27,8 +27,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.annotation.Nullable;
-
 /**
  * Static utilities for managing output directory symlinks.
  */
@@ -51,7 +49,7 @@ public class OutputDirectoryLinksUtils {
    */
   public static void createOutputDirectoryLinks(String workspaceName,
       Path workspace, Path execRoot, Path outputPath,
-      EventHandler eventHandler, @Nullable BuildConfiguration targetConfig, String symlinkPrefix) {
+      EventHandler eventHandler, BuildConfiguration targetConfig, String symlinkPrefix) {
     if (NO_CREATE_SYMLINKS_PREFIX.equals(symlinkPrefix)) {
       return;
     }
@@ -64,16 +62,12 @@ public class OutputDirectoryLinksUtils {
 
     // Points to execroot
     createLink(workspace, execRootSymlink(workspaceName), execRoot, failures);
-
-    if (targetConfig != null) {
-      createLink(workspace, symlinkPrefix + "bin",
-          targetConfig.getBinDirectory().getPath(), failures);
-      createLink(workspace, symlinkPrefix + "testlogs",
-          targetConfig.getTestLogsDirectory().getPath(), failures);
-      createLink(workspace, symlinkPrefix + "genfiles",
-          targetConfig.getGenfilesDirectory().getPath(), failures);
-    }
-
+    createLink(workspace, symlinkPrefix + "bin", targetConfig.getBinDirectory().getPath(),
+        failures);
+    createLink(workspace, symlinkPrefix + "testlogs", targetConfig.getTestLogsDirectory().getPath(),
+        failures);
+    createLink(workspace, symlinkPrefix + "genfiles", targetConfig.getGenfilesDirectory().getPath(),
+        failures);
     if (!failures.isEmpty()) {
       eventHandler.handle(Event.warn(String.format(
           "failed to create one or more convenience symlinks for prefix '%s':\n  %s",
@@ -163,21 +157,15 @@ public class OutputDirectoryLinksUtils {
    */
   private static boolean createLink(Path base, String name, Path target, List<String> failures) {
     try {
-      FileSystemUtils.createDirectoryAndParents(target);
+      if (target.exists()) {
+        // Do not create a symlink to non-existent directories
+        FileSystemUtils.ensureSymbolicLink(base.getRelative(name), target);
+      }
+      return true;
     } catch (IOException e) {
-      failures.add(String.format("cannot create directory %s: %s",
-          target.getPathString(), e.getMessage()));
+      failures.add(String.format("%s -> %s:  %s", name, target.getPathString(), e.getMessage()));
       return false;
     }
-    try {
-      FileSystemUtils.ensureSymbolicLink(base.getRelative(name), target);
-    } catch (IOException e) {
-      failures.add(String.format("cannot create symbolic link %s -> %s:  %s",
-          name, target.getPathString(), e.getMessage()));
-      return false;
-    }
-
-    return true;
   }
 
   /**
