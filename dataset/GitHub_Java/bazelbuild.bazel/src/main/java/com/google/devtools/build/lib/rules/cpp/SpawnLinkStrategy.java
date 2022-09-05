@@ -44,7 +44,7 @@ public final class SpawnLinkStrategy implements CppLinkActionContext {
             action.getEnvironment(),
             action.getExecutionInfo(),
             action,
-            action.estimateResourceConsumptionLocal());
+            estimateResourceConsumption(action));
     spawnActionContext.exec(spawn, actionExecutionContext);
   }
 
