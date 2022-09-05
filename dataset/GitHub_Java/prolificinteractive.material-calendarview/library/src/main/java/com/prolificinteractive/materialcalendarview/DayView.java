@@ -40,10 +40,6 @@ class DayView extends CheckedTextView {
     private Drawable selectionDrawable;
     private DayFormatter formatter = DayFormatter.DEFAULT;
 
-    private boolean isInRange = true;
-    private boolean showOtherDates = false;
-    private boolean isDecoratedDisabled = false;
-
     public DayView(Context context, CalendarDay day) {
         super(context);
 
@@ -115,15 +111,15 @@ class DayView extends CheckedTextView {
         return date;
     }
 
-    private void setEnabled() {
-        super.setEnabled(isInRange && !isDecoratedDisabled);
-        setVisibility(isEnabled() || showOtherDates ? View.VISIBLE : View.INVISIBLE);
+    @Override
+    public void setEnabled(boolean enabled) {
+        super.setEnabled(enabled);
     }
 
     protected void setupSelection(boolean showOtherDates, boolean inRange, boolean inMonth) {
-        this.showOtherDates = showOtherDates;
-        this.isInRange = inMonth && inRange;
-        setEnabled();
+        boolean enabled = inMonth && inRange;
+        setEnabled(enabled);
+        setVisibility(enabled || showOtherDates ? View.VISIBLE : View.INVISIBLE);
     }
 
     private final Rect tempRect = new Rect();
@@ -185,9 +181,6 @@ class DayView extends CheckedTextView {
      * @param facade apply the facade to us
      */
     void applyFacade(DayViewFacade facade) {
-        this.isDecoratedDisabled = facade.areDaysDisabled();
-        setEnabled();
-
         setCustomBackground(facade.getBackgroundDrawable());
         setSelectionDrawable(facade.getSelectionDrawable());
 
