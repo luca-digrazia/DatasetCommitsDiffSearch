@@ -13,11 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
+import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 
@@ -25,53 +24,51 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * The value returned by {@link PrepareDepsOfPatternsFunction}. Although that function is
- * invoked primarily for its side effect (i.e. ensuring the graph contains targets matching the
- * pattern sequence and their transitive dependencies), this value contains the
- * {@link TargetPatternKey} arguments of the {@link PrepareDepsOfPatternFunction}s evaluated in
- * service of it.
+ * The value returned by {@link PrepareDepsOfPatternsFunction}. Because that function is
+ * invoked only for its side effect (i.e. ensuring the graph contains targets matching the
+ * pattern sequence and their transitive dependencies), this value carries no information.
  *
- * <p>Because the returned value may remain the same when the side-effects of this function
- * evaluation change, this value and the {@link PrepareDepsOfPatternsFunction} which computes it
- * are incompatible with change pruning. It should only be requested by consumers who do not
- * require reevaluation when {@link PrepareDepsOfPatternsFunction} is reevaluated. Safe consumers
- * include, e.g., top-level consumers, and other functions which invoke {@link
- * PrepareDepsOfPatternsFunction} solely for its side-effects and which do not behave differently
- * depending on those side-effects.
+ * <p>Because the returned value is always the same object, this value and the
+ * {@link PrepareDepsOfPatternsFunction} which computes it are incompatible with change pruning. It
+ * should only be requested by consumers who do not require reevaluation when
+ * {@link PrepareDepsOfPatternsFunction} is reevaluated. Safe consumers include, e.g., top-level
+ * consumers, and other functions which invoke {@link PrepareDepsOfPatternsFunction} solely for its
+ * side-effects.
  */
 @Immutable
 @ThreadSafe
 public final class PrepareDepsOfPatternsValue implements SkyValue {
+  public static final PrepareDepsOfPatternsValue INSTANCE = new PrepareDepsOfPatternsValue();
 
-  private final ImmutableList<TargetPatternKey> targetPatternKeys;
-
-  PrepareDepsOfPatternsValue(ImmutableList<TargetPatternKey> targetPatternKeys) {
-    this.targetPatternKeys = targetPatternKeys;
-  }
-
-  public ImmutableList<TargetPatternKey> getTargetPatternKeys() {
-    return targetPatternKeys;
+  private PrepareDepsOfPatternsValue() {
   }
 
   @ThreadSafe
-  public static SkyKey key(ImmutableList<String> patterns, String offset) {
+  public static SkyKey key(ImmutableList<String> patterns, FilteringPolicy policy, String offset) {
     return new SkyKey(SkyFunctions.PREPARE_DEPS_OF_PATTERNS,
-        new TargetPatternSequence(patterns, offset));
+        new TargetPatternSequence(patterns, policy, offset));
   }
 
   /** The argument value for {@link SkyKey}s of {@link PrepareDepsOfPatternsFunction}. */
   @ThreadSafe
   public static class TargetPatternSequence implements Serializable {
     private final ImmutableList<String> patterns;
+    private final FilteringPolicy policy;
     private final String offset;
 
-    private TargetPatternSequence(ImmutableList<String> patterns, String offset) {
-      this.patterns = Preconditions.checkNotNull(patterns);
-      this.offset = Preconditions.checkNotNull(offset);
+    private TargetPatternSequence(ImmutableList<String> patterns, FilteringPolicy policy,
+        String offset) {
+      this.patterns = patterns;
+      this.policy = policy;
+      this.offset = offset;
     }
 
     public ImmutableList<String> getPatterns() {
       return patterns;
+    }
+
+    public FilteringPolicy getPolicy() {
+      return policy;
     }
 
     public String getOffset() {
@@ -87,12 +84,13 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
         return false;
       }
       TargetPatternSequence that = (TargetPatternSequence) o;
-      return Objects.equals(offset, that.offset) && Objects.equals(patterns, that.patterns);
+      return offset.equals(that.offset) && patterns.equals(that.patterns)
+          && policy.equals(that.policy);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(patterns, offset);
+      return Objects.hash(patterns, policy, offset);
     }
   }
 }
