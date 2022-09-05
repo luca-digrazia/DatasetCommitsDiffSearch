@@ -43,8 +43,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import javax.annotation.Nullable;
-
 /**
  * Recursive descent parser for LL(2) BUILD language.
  * Loosely based on Python 2 grammar.
@@ -210,14 +208,12 @@ class Parser {
       Lexer lexer,
       EventHandler eventHandler,
       CachingPackageLocator locator,
-      @Nullable ValidationEnvironment validationEnvironment) {
+      ValidationEnvironment validationEnvironment) {
     Parser parser = new Parser(lexer, eventHandler, locator, SKYLARK);
     List<Statement> statements = parser.parseFileInput();
     boolean hasSemanticalErrors = false;
     try {
-      if (validationEnvironment != null) {
-        validationEnvironment.validateAst(statements);
-      }
+      validationEnvironment.validateAst(statements);
     } catch (EvalException e) {
       // Do not report errors caused by a previous parsing error, as it has already been reported.
       if (!e.isDueToIncompleteAST()) {
