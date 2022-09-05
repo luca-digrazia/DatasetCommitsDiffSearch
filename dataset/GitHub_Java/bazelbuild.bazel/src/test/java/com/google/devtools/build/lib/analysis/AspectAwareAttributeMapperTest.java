@@ -22,7 +22,9 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -102,8 +104,8 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
 
   @Test
   public void isConfigurable() throws Exception {
-    assertThat(mapper.isConfigurable("linkstatic")).isTrue();
-    assertThat(mapper.isConfigurable("fromaspect")).isFalse();
+    assertThat(mapper.isConfigurable("linkstatic", Type.BOOLEAN)).isTrue();
+    assertThat(mapper.isConfigurable("fromaspect", BuildType.LABEL_LIST)).isFalse();
   }
 
   @Test
@@ -126,8 +128,8 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
 
   @Test
   public void has() throws Exception {
-    assertThat(mapper.has("srcs")).isTrue();
-    assertThat(mapper.has("fromaspect")).isTrue();
+    assertThat(mapper.has("srcs", BuildType.LABEL_LIST)).isTrue();
+    assertThat(mapper.has("fromaspect", BuildType.LABEL)).isTrue();
   }
 }
 

@@ -755,7 +755,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     if (proguardOutput.getMapping() != null) {
       builder.add(
           ProguardMappingProvider.class,
-          ProguardMappingProvider.create(finalProguardMap));
+          ProguardMappingProvider.create(finalProguardMap, proguardOutput.getProtoMapping()));
     }
 
     return builder

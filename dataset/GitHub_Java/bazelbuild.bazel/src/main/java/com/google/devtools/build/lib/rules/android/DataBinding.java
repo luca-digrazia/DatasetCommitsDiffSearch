@@ -242,7 +242,7 @@ public final class DataBinding {
         String.format(
             "_javac/%s/lib%s_classes/%s/%s-",
             ruleLabel.getName(),
-            ruleLabel.getName(),
+            ruleLabel.getPackageIdentifier().getPackageFragment().getBaseName(),
             javaPackage.replace('.', '/'),
             javaPackage);
     for (String suffix : METADATA_OUTPUT_SUFFIXES) {

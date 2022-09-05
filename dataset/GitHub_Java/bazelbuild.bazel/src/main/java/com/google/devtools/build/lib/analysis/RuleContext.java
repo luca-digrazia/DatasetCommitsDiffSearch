@@ -71,8 +71,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
@@ -837,27 +835,6 @@ public final class RuleContext extends TargetContext
       Mode mode, final Class<C> classType) {
     AnalysisUtils.checkProvider(classType);
     return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), classType);
-  }
-
-  /**
-   * Returns all the declared providers (native and Skylark) for the specified constructor under the
-   * specified attribute of this target in the BUILD file.
-   */
-  public Iterable<SkylarkClassObject> getPrerequisites(
-      String attributeName, Mode mode, final SkylarkClassObjectConstructor.Key skylarkKey) {
-    return AnalysisUtils.getProviders(getPrerequisites(attributeName, mode), skylarkKey);
-  }
-
-  /**
-   * Returns the declared provider (native and Skylark) for the specified constructor under the
-   * specified attribute of this target in the BUILD file. May return null if there is no
-   * TransitiveInfoCollection under the specified attribute.
-   */
-  @Nullable
-  public SkylarkClassObject getPrerequisite(
-      String attributeName, Mode mode, final SkylarkClassObjectConstructor.Key skylarkKey) {
-    TransitiveInfoCollection prerequisite = getPrerequisite(attributeName, mode);
-    return prerequisite == null ? null : prerequisite.get(skylarkKey);
   }
 
   /**
@@ -1672,12 +1649,13 @@ public final class RuleContext extends TargetContext
       String msgReason = reason != null ? " (" + reason + ")" : "";
       if (isWarning) {
         return String.format(
-            "%s%s is unexpected here%s; continuing anyway",
-            msgPrefix, AliasProvider.printLabelWithAliasChain(prerequisite),
+            "%s'%s'%s is unexpected here%s; continuing anyway",
+            msgPrefix, prerequisite.getLabel(), AliasProvider.printVisibilityChain(prerequisite),
             msgReason);
       }
-      return String.format("%s%s is misplaced here%s",
-          msgPrefix, AliasProvider.printLabelWithAliasChain(prerequisite), msgReason);
+      return String.format(
+          "%s'%s'%s is misplaced here%s", msgPrefix, prerequisite.getLabel(),
+          AliasProvider.printVisibilityChain(prerequisite), msgReason);
     }
 
     private void reportBadPrerequisite(Attribute attribute, String targetKind,

@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 
 /**
  * Represents a container for the {@link ResourceContainer}s for a given library. This is
@@ -150,12 +151,6 @@ public final class ResourceDependencies {
     this.neverlink = neverlink;
     this.transitiveResources = transitiveResources;
     this.directResources = directResources;
-  }
-  
-  /** Returns a copy of this instance with filtered resources. The original object is unchanged. */
-  public ResourceDependencies filter(ResourceConfigurationFilter filter) {
-    return new ResourceDependencies(
-        neverlink, filter.filter(transitiveResources), filter.filter(directResources));
   }
 
   /**
