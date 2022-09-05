@@ -1,15 +1,16 @@
 package com.yammer.metrics.stats;
 
-import com.yammer.metrics.core.Clock;
+import static java.lang.Math.exp;
+import static java.lang.Math.min;
 
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static java.lang.Math.exp;
-import static java.lang.Math.min;
+import com.yammer.metrics.core.Clock;
 
 /**
  * An exponentially-decaying random sample of {@code long}s. Uses Cormode et al's forward-decaying
@@ -30,6 +31,7 @@ public class ExponentiallyDecayingSample implements Sample {
     private volatile long startTime;
     private final AtomicLong nextScaleTime = new AtomicLong(0);
     private final Clock clock;
+    
 
     /**
      * Creates a new {@link ExponentiallyDecayingSample}.
@@ -39,9 +41,9 @@ public class ExponentiallyDecayingSample implements Sample {
      *                      sample will be towards newer values
      */
     public ExponentiallyDecayingSample(int reservoirSize, double alpha) {
-        this(reservoirSize, alpha, Clock.defaultClock());
+    	this(reservoirSize,alpha,Clock.defaultClock());
     }
-
+    
     /**
      * Creates a new {@link ExponentiallyDecayingSample}.
      *
@@ -88,13 +90,12 @@ public class ExponentiallyDecayingSample implements Sample {
      * @param timestamp the epoch timestamp of {@code value} in seconds
      */
     public void update(long value, long timestamp) {
-
-        rescaleIfNeeded();
-
+        
+    	rescaleIfNeeded();
+    	
         lockForRegularUsage();
         try {
-            final double priority = weight(timestamp - startTime) / ThreadLocalRandom.current()
-                                                                                     .nextDouble();
+            final double priority = weight(timestamp - startTime) / ThreadLocalRandom.current().nextDouble();
             final long newCount = count.incrementAndGet();
             if (newCount <= reservoirSize) {
                 values.put(priority, value);
@@ -116,13 +117,13 @@ public class ExponentiallyDecayingSample implements Sample {
 
     }
 
-    private void rescaleIfNeeded() {
-        final long now = clock.tick();
+	private void rescaleIfNeeded() {
+		final long now = clock.tick();
         final long next = nextScaleTime.get();
         if (now >= next) {
             rescale(now, next);
         }
-    }
+	}
 
     @Override
     public Snapshot getSnapshot() {
@@ -171,7 +172,7 @@ public class ExponentiallyDecayingSample implements Sample {
                     final Long value = values.remove(key);
                     values.put(key * exp(-alpha * (startTime - oldStartTime)), value);
                 }
-
+                
                 // make sure the counter is in sync with the number of stored samples.
                 count.set(values.size());
             } finally {
@@ -195,4 +196,10 @@ public class ExponentiallyDecayingSample implements Sample {
     private void unlockForRegularUsage() {
         lock.readLock().unlock();
     }
+
+	public Map<Double, Long> getValues() {
+		return values;
+	}
+    
+    
 }
