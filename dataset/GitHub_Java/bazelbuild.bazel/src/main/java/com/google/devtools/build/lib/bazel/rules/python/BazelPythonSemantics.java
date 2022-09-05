@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.bazel.rules.python;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -23,18 +22,13 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.python.PyCommon;
 import com.google.devtools.build.lib.rules.python.PythonSemantics;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 /**
  * Functionality specific to the Python rules in Bazel.
@@ -70,34 +64,8 @@ public class BazelPythonSemantics implements PythonSemantics {
   }
 
   @Override
-  public List<PathFragment> getImports(RuleContext ruleContext) {
-    List<PathFragment> result = new ArrayList<>();
-    PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier()
-        .getPathUnderExecRoot();
-    // Python scripts start with x.runfiles/ as the module space, so everything must be manually
-    // adjusted to be relative to the workspace name.
-    packageFragment = new PathFragment(ruleContext.getWorkspaceName())
-        .getRelative(packageFragment);
-    for (String importsAttr : ruleContext.attributes().get("imports", Type.STRING_LIST)) {
-      importsAttr = ruleContext.expandMakeVariables("includes", importsAttr);
-      if (importsAttr.startsWith("/")) {
-        ruleContext.attributeWarning("imports",
-            "ignoring invalid absolute path '" + importsAttr + "'");
-        continue;
-      }
-      PathFragment importsPath = packageFragment.getRelative(importsAttr).normalize();
-      if (!importsPath.isNormalized()) {
-        ruleContext.attributeError("imports",
-            "Path " + importsAttr + " references a path above the execution root");
-      }
-      result.add(importsPath);
-    }
-    return result;
-  }
-
-  @Override
   public void createExecutable(RuleContext ruleContext, PyCommon common,
-      CcLinkParamsStore ccLinkParamsStore, NestedSet<PathFragment> imports) {
+      CcLinkParamsStore ccLinkParamsStore) {
     String main = common.determineMainExecutableSource();
     BazelPythonConfiguration config = ruleContext.getFragment(BazelPythonConfiguration.class);
     String pythonBinary;
@@ -114,9 +82,7 @@ public class BazelPythonSemantics implements PythonSemantics {
         STUB_TEMPLATE,
         ImmutableList.of(
             Substitution.of("%main%", main),
-            Substitution.of("%python_binary%", pythonBinary),
-            Substitution.of("%imports%", Joiner.on(":").join(imports)),
-            Substitution.of("%workspace_name%", ruleContext.getWorkspaceName())),
+            Substitution.of("%python_binary%", pythonBinary)),
         true));
   }
 

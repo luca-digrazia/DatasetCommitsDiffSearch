@@ -35,8 +35,8 @@ import java.util.Set;
  * Various utility methods for Python support.
  */
 public final class PythonUtils {
-  public static final PathFragment INIT_PY = PathFragment.create("__init__.py");
-  public static final PathFragment INIT_PYC = PathFragment.create("__init__.pyc");
+  public static final PathFragment INIT_PY = new PathFragment("__init__.py");
+  public static final PathFragment INIT_PYC = new PathFragment("__init__.pyc");
 
   private static final FileType REQUIRES_INIT_PY = FileType.of(".py", ".so", ".pyc");
 
@@ -84,9 +84,8 @@ public final class PythonUtils {
    * subdirectory to avoid conflicts (eg. when the input file is generated).
    */
   private static Artifact get2to3OutputArtifact(RuleContext ruleContext, Artifact input) {
-    Root root = ruleContext.getConfiguration().getGenfilesDirectory(
-        ruleContext.getRule().getRepository());
-    PathFragment path = PathFragment.create("python3").getRelative(input.getRootRelativePath());
+    Root root = ruleContext.getConfiguration().getGenfilesDirectory();
+    PathFragment path = new PathFragment("python3").getRelative(input.getRootRelativePath());
     return ruleContext.getShareableArtifact(path, root);
   }
 

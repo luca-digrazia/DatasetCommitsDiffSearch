@@ -48,8 +48,6 @@ public abstract class PyLibrary implements RuleConfiguredTargetFactory {
     PyCommon common = new PyCommon(ruleContext);
     common.initCommon(common.getDefaultPythonVersion());
     common.validatePackageName();
-    semantics.validate(ruleContext, common);
-
 
     List<Artifact> srcs = common.validateSrcs();
     List<Artifact> allOutputs =

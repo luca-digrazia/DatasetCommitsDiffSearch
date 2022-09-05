@@ -21,12 +21,10 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
-import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -67,16 +65,11 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    NestedSet<PathFragment> imports = common.collectImports(ruleContext, semantics);
-    if (ruleContext.hasErrors()) {
-      return null;
-    }
-
-    semantics.createExecutable(ruleContext, common, ccLinkParamsStore, imports);
+    semantics.createExecutable(ruleContext, common, ccLinkParamsStore);
     Runfiles commonRunfiles = collectCommonRunfiles(ruleContext, common, semantics);
 
     Runfiles.Builder defaultRunfilesBuilder = new Runfiles.Builder(ruleContext.getWorkspaceName())
-                                    .merge(commonRunfiles);
+        .merge(commonRunfiles);
     semantics.collectDefaultRunfilesForBinary(ruleContext, defaultRunfilesBuilder);
     Runfiles defaultRunfiles = defaultRunfilesBuilder.build();
 
@@ -106,8 +99,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
         .setFilesToBuild(common.getFilesToBuild())
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, common.getExecutable())
-        .add(CcLinkParamsProvider.class, new CcLinkParamsProvider(ccLinkParamsStore))
-        .add(PythonImportsProvider.class, new PythonImportsProvider(imports));
+        .add(CcLinkParamsProvider.class, new CcLinkParamsProvider(ccLinkParamsStore));
   }
 
   private static Runfiles collectCommonRunfiles(RuleContext ruleContext, PyCommon common,

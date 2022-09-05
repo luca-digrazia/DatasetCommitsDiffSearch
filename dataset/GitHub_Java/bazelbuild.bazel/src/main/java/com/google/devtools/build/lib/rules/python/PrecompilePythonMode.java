@@ -26,10 +26,7 @@ public enum PrecompilePythonMode {
   ONLY,
 
   /** Compiles all Python files, and leaves the .py sources in the runfiles. */
-  ALL,
-
-  /** The default mode for the platform. */
-  DEFAULT;
+  ALL;
 
   public boolean shouldPrecompileProtos() {
     return this != NONE;
