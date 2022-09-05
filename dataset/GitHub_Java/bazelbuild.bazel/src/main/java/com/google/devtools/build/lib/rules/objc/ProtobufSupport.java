@@ -467,8 +467,11 @@ final class ProtobufSupport {
     Artifact protoInputsFile = getProtoInputsFile(protoFileSuffix);
 
     ruleContext.registerAction(
-        FileWriteAction.create(
-            ruleContext, protoInputsFile, getProtoInputsFileContents(outputProtos), false));
+        new FileWriteAction(
+            ruleContext.getActionOwner(),
+            protoInputsFile,
+            getProtoInputsFileContents(outputProtos),
+            false));
 
     ruleContext.registerAction(
         new SpawnAction.Builder()

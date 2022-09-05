@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions.AppleBitcodeMode;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
@@ -862,31 +861,38 @@ public class LegacyCompilationSupport extends CompilationSupport {
       AppleConfiguration appleConfiguration) {
     ImmutableList.Builder<String> builder = new ImmutableList.Builder<>();
     Platform platform = appleConfiguration.getSingleArchPlatform();
-    String minOSVersionArg;
     switch (platform) {
       case IOS_SIMULATOR:
-        minOSVersionArg = "-mios-simulator-version-min";
+        builder.add("-mios-simulator-version-min="
+                + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       case IOS_DEVICE:
-        minOSVersionArg = "-miphoneos-version-min";
+        builder.add("-miphoneos-version-min="
+                + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       case WATCHOS_SIMULATOR:
-        minOSVersionArg = "-mwatchos-simulator-version-min";
+        // TODO(bazel-team): Use the value from --watchos-minimum-os instead of tying to the SDK
+        // version.
+        builder.add("-mwatchos-simulator-version-min="
+                + appleConfiguration.getSdkVersionForPlatform(platform));
         break;
       case WATCHOS_DEVICE:
-        minOSVersionArg = "-mwatchos-version-min";
+        // TODO(bazel-team): Use the value from --watchos-minimum-os instead of tying to the SDK
+        // version.
+        builder.add("-mwatchos-version-min="
+                + appleConfiguration.getSdkVersionForPlatform(platform));
         break;
       case TVOS_SIMULATOR:
-        minOSVersionArg = "-mtvos-simulator-version-min";
+        builder.add("-mtvos-simulator-version-min="
+                + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       case TVOS_DEVICE:
-        minOSVersionArg = "-mtvos-version-min";
+        builder.add("-mtvos-version-min="
+                + appleConfiguration.getMinimumOsForPlatformType(platform.getType()));
         break;
       default:
         throw new IllegalArgumentException("Unhandled platform " + platform);
-    }
-    DottedVersion minOSVersion = appleConfiguration.getMinimumOsForPlatformType(platform.getType());
-    builder.add(minOSVersionArg + "=" + minOSVersion);
+    } 
 
     if (objcConfiguration.generateDsym()) {
       builder.add("-g");

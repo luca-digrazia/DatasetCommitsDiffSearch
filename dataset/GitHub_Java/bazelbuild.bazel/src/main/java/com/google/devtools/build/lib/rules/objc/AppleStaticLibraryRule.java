@@ -89,7 +89,6 @@ public class AppleStaticLibraryRule implements RuleDefinition {
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(ImplicitOutputsFunction.fromFunctions(LIPO_ARCHIVE))
-        .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
         .build();
   }
 

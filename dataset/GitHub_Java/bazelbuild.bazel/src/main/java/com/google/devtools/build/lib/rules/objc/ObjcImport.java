@@ -58,7 +58,7 @@ public class ObjcImport implements RuleConfiguredTargetFactory {
     Iterable<Artifact> publicHeaders = compilationAttributes.hdrs();
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
 
-    CompilationSupport.create(ruleContext)
+    new LegacyCompilationSupport(ruleContext)
         .registerGenerateModuleMapAction(moduleMap, publicHeaders)
         .addXcodeSettings(xcodeProviderBuilder, common)
         .validateAttributes();

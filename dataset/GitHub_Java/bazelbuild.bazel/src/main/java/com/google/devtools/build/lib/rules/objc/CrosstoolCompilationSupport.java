@@ -30,7 +30,6 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper;
@@ -83,26 +82,11 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
    * @param ruleContext the RuleContext for the calling target
    */
   public CrosstoolCompilationSupport(RuleContext ruleContext) {
-    this(
+    super(
         ruleContext,
         ruleContext.getConfiguration(),
         ObjcRuleClasses.intermediateArtifacts(ruleContext),
         CompilationAttributes.Builder.fromRuleContext(ruleContext).build());
-  }
-
-  /**
-   * Creates a new CompilationSupport instance that uses the c++ rule backend
-   *
-   * @param ruleContext the RuleContext for the calling target
-   * @param buildConfiguration the configuration for the calling target
-   * @param intermediateArtifacts IntermediateArtifacts for deriving artifact paths
-   * @param compilationAttributes attributes of the calling target
-   */
-  public CrosstoolCompilationSupport(RuleContext ruleContext,
-      BuildConfiguration buildConfiguration,
-      IntermediateArtifacts intermediateArtifacts,
-      CompilationAttributes compilationAttributes) {
-    super(ruleContext, buildConfiguration, intermediateArtifacts, compilationAttributes);
     this.compilationArtifacts = compilationArtifacts(ruleContext);
   }
 
@@ -293,7 +277,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
                     .getFeatureNames())
             // We create a module map by default to allow for Swift interop.
             .add(CppRuleClasses.MODULE_MAPS)
-            .add(CppRuleClasses.COMPILE_ALL_MODULES)
             .add(CppRuleClasses.COMPILE_ACTION_FLAGS_IN_FLAG_SET)
             .add(CppRuleClasses.DEPENDENCY_FILE)
             .add(CppRuleClasses.INCLUDE_PATHS);

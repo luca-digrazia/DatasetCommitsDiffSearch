@@ -94,15 +94,6 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
     Iterable<ObjcProvider> dylibProviders =
         ruleContext.getPrerequisites(DYLIBS_ATTR_NAME, Mode.TARGET, ObjcProvider.class);
-
-    BundleLoaderProvider bundleLoaderProvider =
-        ruleContext.getPrerequisite(
-            AppleBinaryRule.BUNDLE_LOADER_ATTR, Mode.TARGET, BundleLoaderProvider.class);
-    Optional<ObjcProvider> bundleLoaderObjcProvider = Optional.absent();
-    if (bundleLoaderProvider != null) {
-      bundleLoaderObjcProvider = Optional.of(bundleLoaderProvider.toObjcProvider());
-    }
-
     Set<BuildConfiguration> childConfigurations = getChildConfigurations(ruleContext);
     Artifact outputArtifact =
         ObjcRuleClasses.intermediateArtifacts(ruleContext).combinedArchitectureBinary();
@@ -110,12 +101,9 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     MultiArchBinarySupport multiArchBinarySupport = new MultiArchBinarySupport(ruleContext);
 
     Map<BuildConfiguration, ObjcProvider> objcProviderByDepConfiguration =
-        multiArchBinarySupport.objcProviderByDepConfiguration(
-            childConfigurations,
-            configToDepsCollectionMap,
-            configurationToNonPropagatedObjcMap,
-            dylibProviders,
-            bundleLoaderObjcProvider);
+        multiArchBinarySupport.objcProviderByDepConfiguration(childConfigurations,
+            configToDepsCollectionMap, configurationToNonPropagatedObjcMap,
+            dylibProviders);
 
     multiArchBinarySupport.registerActions(
         platform,
@@ -136,18 +124,15 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
     }
     objcProviderBuilder.add(MULTI_ARCH_LINKED_BINARIES, outputArtifact);
 
-    ObjcProvider objcProvider = objcProviderBuilder.build();
-    targetBuilder.addProvider(ObjcProvider.class, objcProvider);
-
-    if (getBinaryType(ruleContext) == BinaryType.EXECUTABLE) {
-      targetBuilder.addProvider(BundleLoaderProvider.class, new BundleLoaderProvider(objcProvider));
-    }
-
+    targetBuilder.addProvider(ObjcProvider.class, objcProviderBuilder.build());
     return targetBuilder.build();
   }
 
   private ExtraLinkArgs getExtraLinkArgs(RuleContext ruleContext) throws RuleErrorException {
-    BinaryType binaryType = getBinaryType(ruleContext);
+    String binaryTypeString = ruleContext
+        .attributes()
+        .get(AppleBinaryRule.BINARY_TYPE_ATTR, STRING);
+    BinaryType binaryType = BinaryType.fromString(binaryTypeString);
 
     ImmutableList.Builder<String> extraLinkArgs = new ImmutableList.Builder<>();
 
@@ -191,11 +176,5 @@ public class AppleBinary implements RuleConfiguredTargetFactory {
             CcToolchainProvider.class);
 
     return configToProvider.keySet();
-  }
-
-  private static BinaryType getBinaryType(RuleContext ruleContext) {
-    String binaryTypeString =
-        ruleContext.attributes().get(AppleBinaryRule.BINARY_TYPE_ATTR, STRING);
-    return BinaryType.fromString(binaryTypeString);
   }
 }
