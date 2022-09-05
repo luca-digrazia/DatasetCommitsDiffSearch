@@ -1,8 +1,5 @@
 package com.yammer.metrics.stats;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -51,15 +48,10 @@ public class ExponentiallyDecayingSample implements Sample {
 
     @Override
     public void clear() {
-	lockForRegularUsage();
-        try {
-           values.clear();
-           count.set(0);
-           this.startTime = tick();
-           nextScaleTime.set(System.nanoTime() + RESCALE_THRESHOLD);
-        } finally {
-            unlockForRegularUsage();
-	}
+        values.clear();
+        count.set(0);
+        this.startTime = tick();
+        nextScaleTime.set(System.nanoTime() + RESCALE_THRESHOLD);
     }
 
     @Override
@@ -114,19 +106,6 @@ public class ExponentiallyDecayingSample implements Sample {
             return new ArrayList<Long>(values.values());
         } finally {
             unlockForRegularUsage();
-        }
-    }
-
-    @Override
-    public void dump(File output) throws IOException {
-        final PrintWriter writer = new PrintWriter(output);
-        try {
-            final List<Long> values = values();
-            for (Long value : values) {
-                writer.printf("%d\n", value);
-            }
-        } finally {
-            writer.close();
         }
     }
 
