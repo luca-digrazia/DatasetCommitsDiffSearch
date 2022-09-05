@@ -40,6 +40,7 @@ import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.actions.ArtifactFile;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.CachedActionEvent;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -77,6 +78,7 @@ import com.google.protobuf.ByteString;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -221,14 +223,44 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
     ActionGraph actionGraph = result.first;
     SortedMap<PathFragment, Artifact> artifactPathMap = result.second;
 
-    Map<Action, ArtifactPrefixConflictException> actionsWithArtifactPrefixConflict =
-        Actions.findArtifactPrefixConflicts(actionGraph, artifactPathMap);
-    for (Map.Entry<Action, ArtifactPrefixConflictException> actionExceptionPair :
-        actionsWithArtifactPrefixConflict.entrySet()) {
-      temporaryBadActionMap.put(
-          actionExceptionPair.getKey(), new ConflictException(actionExceptionPair.getValue()));
+    // Report an error for every derived artifact which is a prefix of another.
+    // If x << y << z (where x << y means "y starts with x"), then we only report (x,y), (x,z), but
+    // not (y,z).
+    Iterator<PathFragment> iter = artifactPathMap.keySet().iterator();
+    if (!iter.hasNext()) {
+      // No actions in graph -- currently happens only in tests. Special-cased because .next() call
+      // below is unconditional.
+      this.badActionMap = ImmutableMap.of();
+      return;
     }
-
+    for (PathFragment pathJ = iter.next(); iter.hasNext(); ) {
+      // For each comparison, we have a prefix candidate (pathI) and a suffix candidate (pathJ).
+      // At the beginning of the loop, we set pathI to the last suffix candidate, since it has not
+      // yet been tested as a prefix candidate, and then set pathJ to the paths coming after pathI,
+      // until we come to one that does not contain pathI as a prefix. pathI is then verified not to
+      // be the prefix of any path, so we start the next run of the loop.
+      PathFragment pathI = pathJ;
+      // Compare pathI to the paths coming after it.
+      while (iter.hasNext()) {
+        pathJ = iter.next();
+        if (pathJ.startsWith(pathI)) { // prefix conflict.
+          Artifact artifactI = Preconditions.checkNotNull(artifactPathMap.get(pathI), pathI);
+          Artifact artifactJ = Preconditions.checkNotNull(artifactPathMap.get(pathJ), pathJ);
+          Action actionI =
+              Preconditions.checkNotNull(actionGraph.getGeneratingAction(artifactI), artifactI);
+          Action actionJ =
+              Preconditions.checkNotNull(actionGraph.getGeneratingAction(artifactJ), artifactJ);
+          if (actionI.shouldReportPathPrefixConflict(actionJ)) {
+            ArtifactPrefixConflictException exception = new ArtifactPrefixConflictException(pathI,
+                pathJ, actionI.getOwner().getLabel(), actionJ.getOwner().getLabel());
+            temporaryBadActionMap.put(actionI, new ConflictException(exception));
+            temporaryBadActionMap.put(actionJ, new ConflictException(exception));
+          }
+        } else { // pathJ didn't have prefix pathI, so no conflict possible for pathI.
+          break;
+        }
+      }
+    }
     this.badActionMap = ImmutableMap.copyOf(temporaryBadActionMap);
   }
 
@@ -400,17 +432,17 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   }
 
   private static class ArtifactExpanderImpl implements ArtifactExpander {
-    private final Map<Artifact, Collection<Artifact>> expandedInputs;
+    private final Map<Artifact, Collection<ArtifactFile>> expandedInputs;
 
-    private ArtifactExpanderImpl(Map<Artifact, Collection<Artifact>> expandedInputMiddlemen) {
+    private ArtifactExpanderImpl(Map<Artifact, Collection<ArtifactFile>> expandedInputMiddlemen) {
       this.expandedInputs = expandedInputMiddlemen;
     }
 
     @Override
-    public void expand(Artifact artifact, Collection<? super Artifact> output) {
+    public void expand(Artifact artifact, Collection<? super ArtifactFile> output) {
       Preconditions.checkState(artifact.isMiddlemanArtifact() || artifact.isTreeArtifact(),
           artifact);
-      Collection<Artifact> result = expandedInputs.get(artifact);
+      Collection<ArtifactFile> result = expandedInputs.get(artifact);
       // Note that result may be null for non-aggregating middlemen.
       if (result != null) {
         output.addAll(result);
@@ -426,7 +458,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   @Override
   public ActionExecutionContext getContext(
       ActionInputFileCache graphFileCache, MetadataHandler metadataHandler,
-      Map<Artifact, Collection<Artifact>> expandedInputs) {
+      Map<Artifact, Collection<ArtifactFile>> expandedInputs) {
     FileOutErr fileOutErr = actionLogBufferPathGenerator.generate();
     return new ActionExecutionContext(
         executorEngine,
@@ -584,7 +616,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
             "%s %s", actionExecutionContext.getMetadataHandler(), metadataHandler);
         prepareScheduleExecuteAndCompleteAction(action, actionExecutionContext, actionStartTime);
         return new ActionExecutionValue(
-            metadataHandler.getOutputArtifactData(),
+            metadataHandler.getOutputArtifactFileData(),
             metadataHandler.getOutputTreeArtifactData(),
             metadataHandler.getAdditionalOutputData());
       } finally {
@@ -819,14 +851,14 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
   }
 
   private static void setPathReadOnlyAndExecutable(MetadataHandler metadataHandler,
-      Artifact artifact)
+      ArtifactFile file)
       throws IOException {
     // If the metadata was injected, we assume the mode is set correct and bail out early to avoid
     // the additional overhead of resetting it.
-    if (metadataHandler.isInjected(artifact)) {
+    if (metadataHandler.isInjected(file)) {
       return;
     }
-    Path path = artifact.getPath();
+    Path path = file.getPath();
     if (path.isFile(Symlinks.NOFOLLOW)) { // i.e. regular files only.
       // We trust the files created by the execution-engine to be non symlinks with expected
       // chmod() settings already applied.
@@ -845,7 +877,7 @@ public final class SkyframeActionExecutor implements ActionExecutionContextFacto
       }
     } else {
       setPathReadOnlyAndExecutable(
-          metadataHandler, ActionInputHelper.treeFileArtifact(parent, subpath));
+          metadataHandler, ActionInputHelper.artifactFile(parent, subpath));
     }
   }
 
