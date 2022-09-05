@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.bazel.rules.java.proto;
 import static com.google.devtools.build.lib.packages.Aspect.INJECTING_RULE_KIND_PARAMETER_KEY;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
 
 import com.google.common.base.Function;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
@@ -26,8 +25,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.proto.JavaProtoLibrary;
+
 import javax.annotation.Nullable;
 
 /** Declaration of the {@code java_proto_library} rule. */
@@ -55,7 +53,6 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
     return builder
         // This rule isn't ready for use yet.
         .setUndocumented()
-        .requiresConfigurationFragments(JavaConfiguration.class)
         /* <!-- #BLAZE_RULE(java_proto_library).ATTRIBUTE(deps) -->
         The list of <a href="protocol-buffer.html#proto_library"><code>proto_library</code></a>
         rules to generate Java code for.
@@ -65,7 +62,6 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
                 .allowedRuleClasses("proto_library")
                 .allowedFileTypes()
                 .aspect(javaProtoAspect, ASPECT_PARAMETERS))
-        .add(attr("strict_deps", BOOLEAN).undocumented("for migration"))
         .build();
   }
 
@@ -73,7 +69,7 @@ public class BazelJavaProtoLibraryRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("java_proto_library")
-        .factoryClass(JavaProtoLibrary.class)
+        .factoryClass(BazelJavaProtoLibrary.class)
         .ancestors(BaseRuleClasses.RuleBase.class)
         .build();
   }
@@ -97,16 +93,16 @@ Example:
 <pre class="code">
 java_library(
     name = "lib",
-    deps = [":foo_java_proto"],
+    deps = [":foo"],
 )
 
 java_proto_library(
-    name = "foo_java_proto",
-    deps = [":foo_proto"],
+    name = "foo",
+    deps = [":bar"],
 )
 
 proto_library(
-    name = "foo_proto",
+    name = "bar",
 )
 </pre>
 
