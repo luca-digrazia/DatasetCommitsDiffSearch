@@ -28,22 +28,17 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.CommandAction;
-import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
-import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
@@ -95,6 +90,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   private final boolean executeUnconditionally;
   private final String progressMessage;
   private final String mnemonic;
+  // entries are (directory for remote execution, Artifact)
+  private final ImmutableMap<PathFragment, Artifact> inputManifests;
 
   private final ResourceSet resourceSet;
   private final ImmutableMap<String, String> environment;
@@ -145,7 +142,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         ImmutableSet.copyOf(clientEnvironmentVariables),
         ImmutableMap.<String, String>of(),
         progressMessage,
-        EmptyRunfilesSupplier.INSTANCE,
+        ImmutableMap.<PathFragment, Artifact>of(),
         mnemonic,
         false,
         null);
@@ -172,7 +169,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    *     dependency checking; typically it may include the names of input and output files, but this
    *     is not necessary.
    * @param progressMessage the message printed during the progression of the build
-   * @param runfilesSupplier {@link RunfilesSupplier}s describing the runfiles for the action
+   * @param inputManifests entries in inputs that are symlink manifest files. These are passed to
+   *     remote execution in the environment rather than as inputs.
    * @param mnemonic the mnemonic that is reported in the master log.
    */
   public SpawnAction(
@@ -186,17 +184,18 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       ImmutableSet<String> clientEnvironmentVariables,
       ImmutableMap<String, String> executionInfo,
       String progressMessage,
-      RunfilesSupplier runfilesSupplier,
+      ImmutableMap<PathFragment, Artifact> inputManifests,
       String mnemonic,
       boolean executeUnconditionally,
       ExtraActionInfoSupplier<?> extraActionInfoSupplier) {
-    super(owner, tools, inputs, runfilesSupplier, outputs);
+    super(owner, tools, inputs, outputs);
     this.resourceSet = resourceSet;
     this.executionInfo = executionInfo;
     this.environment = environment;
     this.clientEnvironmentVariables = clientEnvironmentVariables;
     this.argv = argv;
     this.progressMessage = progressMessage;
+    this.inputManifests = inputManifests;
     this.mnemonic = mnemonic;
     this.executeUnconditionally = executeUnconditionally;
     this.extraActionInfoSupplier = extraActionInfoSupplier;
@@ -289,6 +288,10 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
   }
 
+  public ImmutableMap<PathFragment, Artifact> getInputManifests() {
+    return inputManifests;
+  }
+
   /**
    * Returns s, truncated to no more than maxLen characters, appending an
    * ellipsis if truncation occurred.
@@ -305,7 +308,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    *
    * This method is final, as it is merely a shorthand use of the generic way to obtain a spawn,
    * which also depends on the client environment. Subclasses that which to override the way to get
-   * a spawn should override {@link #getSpawn(Map)} instead.
+   * a spawn should override {@link getSpawn(Map<String, String>)} instead.
    */
   public final Spawn getSpawn() {
     return getSpawn(null);
@@ -328,11 +331,10 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     // We don't need the toolManifests here, because they are a subset of the inputManifests by
     // definition and the output of an action shouldn't change whether something is considered a
     // tool or not.
-    f.addPaths(getRunfilesSupplier().getRunfilesDirs());
-    ImmutableList<Artifact> runfilesManifests = getRunfilesSupplier().getManifests();
-    f.addInt(runfilesManifests.size());
-    for (Artifact runfilesManifest : runfilesManifests) {
-      f.addPath(runfilesManifest.getExecPath());
+    f.addInt(inputManifests.size());
+    for (Map.Entry<PathFragment, Artifact> input : inputManifests.entrySet()) {
+      f.addString(input.getKey().getPathString() + "/");
+      f.addPath(input.getValue().getExecPath());
     }
     f.addStringMap(getEnvironment());
     f.addStrings(getClientEnvironmentVariables());
@@ -383,7 +385,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     ExtraActionInfo.Builder builder = super.getExtraActionInfo();
     if (extraActionInfoSupplier == null) {
       Spawn spawn = getSpawn();
-      SpawnInfo spawnInfo = getExtraActionInfo(spawn);
+      SpawnInfo spawnInfo = spawn.getExtraActionInfo();
 
       return builder
           .setExtension(SpawnInfo.spawnInfo, spawnInfo);
@@ -391,27 +393,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       extraActionInfoSupplier.extend(builder);
       return builder;
     }
-  }
-
-  private static SpawnInfo getExtraActionInfo(Spawn spawn) {
-    SpawnInfo.Builder info = SpawnInfo.newBuilder();
-
-    info.addAllArgument(spawn.getArguments());
-    for (Map.Entry<String, String> variable : spawn.getEnvironment().entrySet()) {
-      info.addVariable(
-          EnvironmentVariable.newBuilder()
-              .setName(variable.getKey())
-              .setValue(variable.getValue())
-              .build());
-    }
-    for (ActionInput input : spawn.getInputFiles()) {
-      // Explicitly ignore middleman artifacts here.
-      if (!(input instanceof Artifact) || !((Artifact) input).isMiddlemanArtifact()) {
-        info.addInputFile(input.getExecPathString());
-      }
-    }
-    info.addAllOutputFile(ActionInputHelper.toExecPaths(spawn.getOutputFiles()));
-    return info.build();
   }
 
   @Override
@@ -464,7 +445,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       super(ImmutableList.copyOf(argv.arguments()),
           ImmutableMap.<String, String>of(),
           executionInfo,
-          SpawnAction.this.getRunfilesSupplier(),
+          inputManifests,
           SpawnAction.this,
           resourceSet);
       for (Artifact input : getInputs()) {
@@ -502,7 +483,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       // included as manifests in getEnvironment().
       List<Artifact> inputs = Lists.newArrayList(getInputs());
       inputs.removeAll(filesets);
-      inputs.removeAll(this.getRunfilesSupplier().getManifests());
+      inputs.removeAll(inputManifests.values());
       return inputs;
     }
   }
@@ -515,8 +496,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private final NestedSetBuilder<Artifact> toolsBuilder = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     private final List<Artifact> outputs = new ArrayList<>();
-    private final List<RunfilesSupplier> inputRunfilesSuppliers = new ArrayList<>();
-    private final List<RunfilesSupplier> toolRunfilesSuppliers = new ArrayList<>();
+    private final Map<PathFragment, Artifact> toolManifests = new LinkedHashMap<>();
+    private final Map<PathFragment, Artifact> inputManifests = new LinkedHashMap<>();
     private ResourceSet resourceSet = AbstractAction.DEFAULT_RESOURCE_SET;
     private ImmutableMap<String, String> environment = ImmutableMap.of();
     private ImmutableSet<String> clientEnvironmentVariables = ImmutableSet.of();
@@ -548,8 +529,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       this.toolsBuilder.addTransitive(other.toolsBuilder.build());
       this.inputsBuilder.addTransitive(other.inputsBuilder.build());
       this.outputs.addAll(other.outputs);
-      this.inputRunfilesSuppliers.addAll(other.inputRunfilesSuppliers);
-      this.toolRunfilesSuppliers.addAll(other.toolRunfilesSuppliers);
+      this.toolManifests.putAll(other.toolManifests);
+      this.inputManifests.putAll(other.inputManifests);
       this.resourceSet = other.resourceSet;
       this.environment = other.environment;
       this.clientEnvironmentVariables = other.clientEnvironmentVariables;
@@ -676,6 +657,10 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
               .addTransitive(tools)
               .build();
 
+      LinkedHashMap<PathFragment, Artifact> inputAndToolManifests =
+          new LinkedHashMap<>(inputManifests);
+      inputAndToolManifests.putAll(toolManifests);
+
       Map<String, String> env;
       Set<String> clientEnv;
       if (useDefaultShellEnvironment) {
@@ -704,8 +689,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           ImmutableSet.copyOf(clientEnv),
           ImmutableMap.copyOf(executionInfo),
           progressMessage,
-          new CompositeRunfilesSupplier(
-              Iterables.concat(this.inputRunfilesSuppliers, this.toolRunfilesSuppliers)),
+          ImmutableMap.copyOf(inputAndToolManifests),
           mnemonic);
     }
 
@@ -721,7 +705,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         ImmutableSet<String> clientEnvironmentVariables,
         ImmutableMap<String, String> executionInfo,
         String progressMessage,
-        RunfilesSupplier runfilesSupplier,
+        ImmutableMap<PathFragment, Artifact> inputAndToolManifests,
         String mnemonic) {
       return new SpawnAction(
           owner,
@@ -734,7 +718,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           clientEnvironmentVariables,
           executionInfo,
           progressMessage,
-          runfilesSupplier,
+          inputAndToolManifests,
           mnemonic,
           executeUnconditionally,
           extraActionInfoSupplier);
@@ -806,8 +790,13 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       return this;
     }
 
-    public Builder addRunfilesSupplier(RunfilesSupplier supplier) {
-      inputRunfilesSuppliers.add(supplier);
+    private Builder addToolManifest(Artifact artifact, PathFragment remote) {
+      toolManifests.put(remote, artifact);
+      return this;
+    }
+
+    public Builder addInputManifest(Artifact artifact, PathFragment remote) {
+      inputManifests.put(remote, artifact);
       return this;
     }
 
@@ -1018,7 +1007,11 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      */
     public Builder addTool(FilesToRunProvider tool) {
       addTools(tool.getFilesToRun());
-      toolRunfilesSuppliers.add(tool.getRunfilesSupplier());
+      if (tool.getRunfilesManifest() != null) {
+        addToolManifest(
+            tool.getRunfilesManifest(),
+            BaseSpawn.runfilesForFragment(tool.getExecutable().getExecPath()));
+      }
       return this;
     }
 
