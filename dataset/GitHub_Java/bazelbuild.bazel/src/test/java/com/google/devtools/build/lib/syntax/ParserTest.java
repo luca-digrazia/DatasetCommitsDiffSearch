@@ -446,10 +446,6 @@ public class ParserTest extends EvaluationTestCase {
   @Test
   public void testAugmentedAssign() throws Exception {
     assertEquals("[x = x + 1\n]", parseFile("x += 1").toString());
-    assertEquals("[x = x - 1\n]", parseFile("x -= 1").toString());
-    assertEquals("[x = x * 1\n]", parseFile("x *= 1").toString());
-    assertEquals("[x = x / 1\n]", parseFile("x /= 1").toString());
-    assertEquals("[x = x % 1\n]", parseFile("x %= 1").toString());
   }
 
   @Test
