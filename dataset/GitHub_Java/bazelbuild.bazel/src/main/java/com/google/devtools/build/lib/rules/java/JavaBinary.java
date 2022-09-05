@@ -219,7 +219,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     semantics.addProviders(ruleContext, common, jvmFlags, classJar, srcJar,
             genClassJar, genSourceJar, ImmutableMap.<Artifact, Artifact>of(),
-            filesBuilder, builder);
+            helper, filesBuilder, builder);
 
     Artifact deployJar =
         ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_DEPLOY_JAR);
@@ -315,9 +315,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     return builder
         .setFilesToBuild(filesToBuild)
         .add(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.builder()
-            .addOutputJar(classJar, null /* iJar */, srcJar)
-            .setJdeps(outputDepsProto)
-            .build())
+            .addOutputJar(classJar, null /* iJar */, srcJar).build())
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, executable)
         .add(

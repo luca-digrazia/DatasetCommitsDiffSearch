@@ -127,9 +127,9 @@ public final class JavaConfiguration extends Fragment {
   private final ImmutableList<String> commandLineJavacFlags;
   private final Label javaLauncherLabel;
   private final Label javaBuilderTop;
+  private final ImmutableList<String> defaultJavaBuilderJvmOpts;
   private final Label javaLangtoolsJar;
   private final boolean useIjars;
-  private final boolean useHeaderCompilation;
   private final boolean generateJavaDeps;
   private final JavaClasspathMode experimentalJavaClasspath;
   private final ImmutableList<String> javaWarns;
@@ -151,15 +151,16 @@ public final class JavaConfiguration extends Fragment {
   private final boolean legacyBazelJavaTest;
 
   JavaConfiguration(boolean generateJavaDeps,
-      List<String> defaultJvmFlags, JavaOptions javaOptions, Label javaToolchain, String javaCpu)
+      List<String> defaultJvmFlags, JavaOptions javaOptions, Label javaToolchain, String javaCpu,
+      ImmutableList<String> defaultJavaBuilderJvmOpts)
           throws InvalidConfigurationException {
     this.commandLineJavacFlags =
         ImmutableList.copyOf(JavaHelper.tokenizeJavaOptions(javaOptions.javacOpts));
     this.javaLauncherLabel = javaOptions.javaLauncher;
     this.javaBuilderTop = javaOptions.javaBuilderTop;
+    this.defaultJavaBuilderJvmOpts = defaultJavaBuilderJvmOpts;
     this.javaLangtoolsJar = javaOptions.javaLangtoolsJar;
     this.useIjars = javaOptions.useIjars;
-    this.useHeaderCompilation = javaOptions.headerCompilation;
     this.generateJavaDeps = generateJavaDeps;
     this.experimentalJavaClasspath = javaOptions.experimentalJavaClasspath;
     this.javaWarns = ImmutableList.copyOf(javaOptions.javaWarns);
@@ -194,7 +195,7 @@ public final class JavaConfiguration extends Fragment {
       doc = "The default flags for the Java compiler.")
   // TODO(bazel-team): this is the command-line passed options, we should remove from skylark
   // probably.
-  public ImmutableList<String> getDefaultJavacFlags() {
+  public List<String> getDefaultJavacFlags() {
     return commandLineJavacFlags;
   }
 
@@ -220,6 +221,13 @@ public final class JavaConfiguration extends Fragment {
   }
 
   /**
+   * Returns the default JVM flags to be used when invoking javabuilder.
+   */
+  public ImmutableList<String> getDefaultJavaBuilderJvmFlags() {
+    return defaultJavaBuilderJvmOpts;
+  }
+
+  /**
    * Returns the default java langtools jar
    */
   public Label getDefaultJavaLangtoolsJar() {
@@ -231,11 +239,6 @@ public final class JavaConfiguration extends Fragment {
    */
   public boolean getUseIjars() {
     return useIjars;
-  }
-
-  /** Returns true iff Java header compilation is enabled. */
-  public boolean useHeaderCompilation() {
-    return useHeaderCompilation;
   }
 
   /**
@@ -252,15 +255,15 @@ public final class JavaConfiguration extends Fragment {
   /**
    * Returns the extra warnings enabled for Java compilation.
    */
-  public ImmutableList<String> getJavaWarns() {
+  public List<String> getJavaWarns() {
     return javaWarns;
   }
 
-  public ImmutableList<String> getDefaultJvmFlags() {
+  public List<String> getDefaultJvmFlags() {
     return defaultJvmFlags;
   }
 
-  public ImmutableList<String> getCheckedConstraints() {
+  public List<String> getCheckedConstraints() {
     return checkedConstraints;
   }
 
@@ -294,7 +297,7 @@ public final class JavaConfiguration extends Fragment {
     return javacExtdir;
   }
 
-  public ImmutableList<String> getJavacOpts() {
+  public List<String> getJavacOpts() {
     return javacOpts;
   }
 
@@ -309,14 +312,14 @@ public final class JavaConfiguration extends Fragment {
   /**
    * Returns all labels provided with --extra_proguard_specs.
    */
-  public ImmutableList<Label> getExtraProguardSpecs() {
+  public List<Label> getExtraProguardSpecs() {
     return extraProguardSpecs;
   }
 
   /**
    * Returns the raw translation targets.
    */
-  public ImmutableList<Label> getTranslationTargets() {
+  public List<Label> getTranslationTargets() {
     return translationTargets;
   }
 

@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
@@ -40,7 +39,6 @@ import java.util.List;
 /**
  * Configuration fragment for Android rules.
  */
-@Immutable
 public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   /** Converter for --android_crosstool_top. */
@@ -179,13 +177,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Enables sanity checks for Jack and Jill compilation.")
     public boolean jackSanityChecks;
 
-    @Option(name = "experimental_allow_android_library_deps_without_srcs",
-        defaultValue = "true",
-        category = "undocumented",
-        help = "Flag to help transition from allowing to disallowing srcs-less android_library"
-            + " rules with deps. The depot needs to be cleaned up to roll this out by default.")
-    public boolean allowAndroidLibraryDepsWithoutSrcs;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (androidCrosstoolTop != null) {
@@ -247,7 +238,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ConfigurationDistinguisher configurationDistinguisher;
   private final boolean useJackForDexing;
   private final boolean jackSanityChecks;
-  private final boolean allowAndroidLibraryDepsWithoutSrcs;
 
   AndroidConfiguration(Options options) {
     this.sdk = options.sdk;
@@ -259,7 +249,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.configurationDistinguisher = options.configurationDistinguisher;
     this.useJackForDexing = options.useJackForDexing;
     this.jackSanityChecks = options.jackSanityChecks;
-    this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
   }
 
   public String getCpu() {
@@ -299,10 +288,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useIncrementalNativeLibs() {
     return incrementalNativeLibs;
-  }
-
-  public boolean allowSrcsLessAndroidLibraryDeps() {
-    return allowAndroidLibraryDepsWithoutSrcs;
   }
 
   @Override
