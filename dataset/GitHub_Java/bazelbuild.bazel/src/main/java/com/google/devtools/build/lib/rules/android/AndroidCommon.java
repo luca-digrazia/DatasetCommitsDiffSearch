@@ -611,10 +611,7 @@ public class AndroidCommon {
 
     javaCommon.setClassPathFragment(
         new ClasspathConfiguredFragment(
-            javaCommon.getJavaCompilationArtifacts(),
-            attributes,
-            asNeverLink,
-            helper.getBootclasspathOrDefault()));
+            javaCommon.getJavaCompilationArtifacts(), attributes, asNeverLink));
 
     transitiveNeverlinkLibraries = collectTransitiveNeverlinkLibraries(
         ruleContext,
