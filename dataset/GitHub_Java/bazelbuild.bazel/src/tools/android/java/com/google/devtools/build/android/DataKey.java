@@ -26,8 +26,7 @@ import java.io.OutputStream;
  *
  * For Assets, it is the asset path from the assets directory.
  */
-public interface DataKey extends Comparable<DataKey> {
-
+public interface DataKey {
   /**
    * Writes the Key and the value size to a stream.
    *
@@ -41,14 +40,4 @@ public interface DataKey extends Comparable<DataKey> {
    * Returns a human readable string representation of the key.
    */
   String toPrettyString();
-
-  /**
-   * Defines a total ordering on the different key types to assist in compareTo operations.
-   */
-  enum KeyType {
-    ASSET_PATH,
-    FULL_QUALIFIED_NAME
-  }
-
-  KeyType getKeyType();
 }
