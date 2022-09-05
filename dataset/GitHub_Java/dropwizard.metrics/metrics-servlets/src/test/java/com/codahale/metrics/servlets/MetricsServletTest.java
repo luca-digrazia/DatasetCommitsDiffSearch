@@ -13,7 +13,7 @@ import javax.servlet.ServletConfig;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.assertThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -65,7 +65,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo("{" +
-                                   "\"version\":\"3.1.3\"," +
+                                   "\"version\":\"3.0.0\"," +
                                    "\"gauges\":{" +
                                        "\"g1\":{\"value\":100}" +
                                    "}," +
@@ -96,7 +96,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo("{" +
-                                   "\"version\":\"3.1.3\"," +
+                                   "\"version\":\"3.0.0\"," +
                                    "\"gauges\":{" +
                                        "\"g1\":{\"value\":100}" +
                                    "}," +
@@ -127,7 +127,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo(callbackParamVal + "({" +
-                                   "\"version\":\"3.1.3\"," +
+                                   "\"version\":\"3.0.0\"," +
                                    "\"gauges\":{" +
                                        "\"g1\":{\"value\":100}" +
                                    "}," +
@@ -157,7 +157,7 @@ public class MetricsServletTest extends AbstractServletTest {
                 .isEqualTo("*");
         assertThat(response.getContent())
                 .isEqualTo(String.format("{%n" +
-                                                 "  \"version\" : \"3.1.3\",%n" +
+                                                 "  \"version\" : \"3.0.0\",%n" +
                                                  "  \"gauges\" : {%n" +
                                                  "    \"g1\" : {%n" +
                                                  "      \"value\" : 100%n" +
