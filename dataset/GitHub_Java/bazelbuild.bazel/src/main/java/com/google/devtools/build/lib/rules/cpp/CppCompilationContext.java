@@ -70,6 +70,9 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   // True if this context is for a compilation that needs transitive module maps.
   private final boolean provideTransitiveModuleMaps;
   
+  // True if this context is for a compilation that should use header modules from dependencies.
+  private final boolean useHeaderModules;
+
   // Derived from depsContexts.
   private final ImmutableSet<Artifact> compilationPrerequisites;
 
@@ -85,7 +88,8 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       NestedSet<Artifact> transitiveModuleMaps,
       NestedSet<Artifact> directModuleMaps,
       CppModuleMap cppModuleMap,
-      boolean provideTransitiveModuleMaps) {
+      boolean provideTransitiveModuleMaps,
+      boolean useHeaderModules) {
     Preconditions.checkNotNull(commandLineContext);
     this.commandLineContext = commandLineContext;
     this.declaredIncludeDirs = declaredIncludeDirs;
@@ -98,6 +102,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     this.transitiveModuleMaps = transitiveModuleMaps;
     this.cppModuleMap = cppModuleMap;
     this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
+    this.useHeaderModules = useHeaderModules;
     this.compilationPrerequisites = compilationPrerequisites;
   }
 
@@ -287,7 +292,8 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         context.transitiveModuleMaps,
         context.directModuleMaps,
         context.cppModuleMap,
-        context.provideTransitiveModuleMaps);
+        context.provideTransitiveModuleMaps,
+        context.useHeaderModules);
   }
 
   /**
@@ -338,7 +344,8 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         mergeSets(ownerContext.transitiveModuleMaps, libContext.transitiveModuleMaps),
         mergeSets(ownerContext.directModuleMaps, libContext.directModuleMaps),
         libContext.cppModuleMap,
-        libContext.provideTransitiveModuleMaps);
+        libContext.provideTransitiveModuleMaps,
+        libContext.useHeaderModules);
   }
   
   /**
@@ -354,6 +361,11 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   /** @return the C++ module map of the owner. */
   public CppModuleMap getCppModuleMap() {
     return cppModuleMap;
+  }
+
+  /** @return whether header modules should be used in this context. */
+  public boolean getUseHeaderModules() {
+    return useHeaderModules;
   }
 
   /**
@@ -402,6 +414,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     private final Set<String> defines = new LinkedHashSet<>();
     private CppModuleMap cppModuleMap;
     private boolean provideTransitiveModuleMaps = false;
+    private boolean useHeaderModules = false;
 
     /** The rule that owns the context */
     private final RuleContext ruleContext;
@@ -668,6 +681,15 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     }
     
     /**
+     * Sets that the context will be used by a compilation that uses header modules provided by
+     * its dependencies.
+     */
+    public Builder setUseHeaderModules(boolean useHeaderModules) {
+      this.useHeaderModules = useHeaderModules;
+      return this;
+    }
+
+    /**
      * Builds the {@link CppCompilationContext}.
      */
     public CppCompilationContext build() {
@@ -703,7 +725,8 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
           transitiveModuleMaps.build(),
           directModuleMaps.build(),
           cppModuleMap,
-          provideTransitiveModuleMaps);
+          provideTransitiveModuleMaps,
+          useHeaderModules);
     }
 
     /**

@@ -233,6 +233,7 @@ public class CppCompileAction extends AbstractAction
    * @param dwoFile the .dwo output file where debug information is stored for Fission builds (null
    *     if Fission mode is disabled)
    * @param optionalSourceFile an additional optional source file (null if unneeded)
+   * @param configuration the build configurations
    * @param cppConfiguration TODO(bazel-team): Add parameter description.
    * @param context the compilation context
    * @param actionContext TODO(bazel-team): Add parameter description.
@@ -289,9 +290,7 @@ public class CppCompileAction extends AbstractAction
             ruleContext,
             mandatoryInputs,
             context.getTransitiveCompilationPrerequisites(),
-            context.getUseHeaderModules() && !cppConfiguration.getSkipUnusedModules()
-                ? context.getTransitiveModules(usePic)
-                : null,
+            context.getUseHeaderModules() ? context.getTransitiveModules(usePic) : null,
             optionalSourceFile,
             lipoScannables),
         CollectionUtils.asListWithoutNulls(
@@ -356,6 +355,7 @@ public class CppCompileAction extends AbstractAction
       }
 
       // One starting ../ is okay for getting to a sibling repository.
+      PathFragment originalInclude = include;
       if (include.startsWith(new PathFragment(Label.EXTERNAL_PATH_PREFIX))) {
         include = include.relativeTo(Label.EXTERNAL_PATH_PREFIX);
       }
@@ -430,6 +430,10 @@ public class CppCompileAction extends AbstractAction
     return builtinIncludeFiles;
   }
 
+  public List<Artifact> getadditionalIncludeScannables() {
+    return additionalIncludeScannables;
+  }
+
   public String getHostSystemName() {
     return cppConfiguration.getHostSystemName();
   }
@@ -437,21 +441,6 @@ public class CppCompileAction extends AbstractAction
   @Override
   public NestedSet<Artifact> getMandatoryInputs() {
     return mandatoryInputs;
-  }
-
-  @Override
-  public ImmutableSet<Artifact> getMandatoryOutputs() {
-    // Never prune orphaned modules files. To cut down critical paths, CppCompileActions do not
-    // add modules files as inputs. Instead they rely on input discovery to recognize the needed
-    // ones. However, orphan detection runs before input discovery and thus module files would be
-    // discarded as orphans.
-    // This is strictly better than marking all transitive modules as inputs, which would also
-    // effectively disable orphan detection for .pcm files.
-    if (cppConfiguration.getSkipUnusedModules()
-        && CppFileTypes.CPP_MODULE.matches(outputFile.getFilename())) {
-      return ImmutableSet.of(outputFile);
-    }
-    return super.getMandatoryOutputs();
   }
 
   @Override
@@ -529,15 +518,6 @@ public class CppCompileAction extends AbstractAction
       result.addAll(initialResult);
     }
     return result;
-  }
-
-  @Override
-  public Iterable<Artifact> getInputsWhenSkippingInputDiscovery() {
-    if (context.getUseHeaderModules()
-        && cppConfiguration.getSkipUnusedModules()) {
-      return context.getTransitiveModules(usePic);
-    }
-    return null;
   }
 
   @Override
@@ -992,7 +972,6 @@ public class CppCompileAction extends AbstractAction
     return variableBuilder.build();
   }
 
-  // Keep in sync with {@link ObjcCompileAction#resolveInputsFromCache}
   @Override
   public Iterable<Artifact> resolveInputsFromCache(
       ArtifactResolver artifactResolver,

@@ -71,7 +71,6 @@ public class CppCompileActionBuilder {
   private AnalysisEnvironment analysisEnvironment;
   private ImmutableList<PathFragment> extraSystemIncludePrefixes = ImmutableList.of();
   private boolean usePic;
-  private boolean allowUsingHeaderModules;
   private SpecialInputsHandler specialInputsHandler = CppCompileAction.VOID_SPECIAL_INPUTS_HANDLER;
   private UUID actionClassId = GUID;
   private Class<? extends CppCompileActionContext> actionContext;
@@ -100,7 +99,6 @@ public class CppCompileActionBuilder {
     this.mandatoryInputsBuilder = NestedSetBuilder.stableOrder();
     this.lipoScannableMap = getLipoScannableMap(ruleContext);
     this.ruleContext = ruleContext;
-    this.allowUsingHeaderModules = true;
 
     features.addAll(ruleContext.getFeatures());
   }
@@ -148,7 +146,6 @@ public class CppCompileActionBuilder {
     this.actionContext = other.actionContext;
     this.cppConfiguration = other.cppConfiguration;
     this.usePic = other.usePic;
-    this.allowUsingHeaderModules = other.allowUsingHeaderModules;
     this.lipoScannableMap = other.lipoScannableMap;
     this.ruleContext = other.ruleContext;
     this.shouldScanIncludes = other.shouldScanIncludes;
@@ -251,9 +248,6 @@ public class CppCompileActionBuilder {
     // This must be set either to false or true by CppSemantics, otherwise someone forgot to call
     // finalizeCompileActionBuilder on this builder.
     Preconditions.checkNotNull(shouldScanIncludes);
-    boolean useHeaderModules =
-        allowUsingHeaderModules
-            && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES);
 
     boolean fake = tempOutputFile != null;
 
@@ -274,11 +268,11 @@ public class CppCompileActionBuilder {
     // before discovering inputs and thus would not declare their inputs properly.
     boolean shouldPruneModules =
         shouldScanIncludes
-            && useHeaderModules
+            && context.getUseHeaderModules()
             && !fake
             && !getActionName().equals(CppCompileAction.CPP_MODULE_COMPILE)
             && featureConfiguration.isEnabled(CppRuleClasses.PRUNE_HEADER_MODULES);
-    if (useHeaderModules && !shouldPruneModules) {
+    if (context.getUseHeaderModules() && !shouldPruneModules) {
       realMandatoryInputsBuilder.addTransitive(context.getTransitiveModules(usePic));
     }
     realMandatoryInputsBuilder.addTransitive(context.getAdditionalInputs());
@@ -305,7 +299,6 @@ public class CppCompileActionBuilder {
           shouldScanIncludes,
           shouldPruneModules,
           usePic,
-          useHeaderModules,
           sourceLabel,
           realMandatoryInputsBuilder.build(),
           outputFile,
@@ -331,7 +324,6 @@ public class CppCompileActionBuilder {
           shouldScanIncludes,
           shouldPruneModules,
           usePic,
-          useHeaderModules,
           sourceLabel,
           realMandatoryInputs,
           outputFile,
@@ -512,15 +504,11 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  /** Sets whether the CompileAction should use pic mode. */
+  /**
+   * Sets whether the CompileAction should use pic mode.
+   */
   public CppCompileActionBuilder setPicMode(boolean usePic) {
     this.usePic = usePic;
-    return this;
-  }
-
-  /** Sets whether the CompileAction should use header modules. */
-  public CppCompileActionBuilder setAllowUsingHeaderModules(boolean allowUsingHeaderModules) {
-    this.allowUsingHeaderModules = allowUsingHeaderModules;
     return this;
   }
 
