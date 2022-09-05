@@ -59,6 +59,8 @@ public class CastParser {
             }
             if(isReturn) {
                 result.add("return " + name);
+            }else{
+                result.add(name);
             }
 
             return Joiner.on("; ").join(result);
