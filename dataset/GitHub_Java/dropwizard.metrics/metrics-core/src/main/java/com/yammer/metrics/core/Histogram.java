@@ -2,15 +2,16 @@ package com.yammer.metrics.core;
 
 import com.yammer.metrics.stats.ExponentiallyDecayingSample;
 import com.yammer.metrics.stats.Sample;
-import com.yammer.metrics.stats.Snapshot;
 import com.yammer.metrics.stats.UniformSample;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static java.lang.Math.floor;
 import static java.lang.Math.sqrt;
 
 /**
@@ -19,10 +20,7 @@ import static java.lang.Math.sqrt;
  * @see <a href="http://www.johndcook.com/standard_deviation.html">Accurately computing running
  *      variance</a>
  */
-public class Histogram implements Metric, Sampling, Summarizable {
-    private static final int DEFAULT_SAMPLE_SIZE = 1028;
-    private static final double DEFAULT_ALPHA = 0.015;
-
+public class Histogram implements Metric, Quantized, Summarized {
     /**
      * The type of sampling the histogram should be performing.
      */
@@ -34,7 +32,7 @@ public class Histogram implements Metric, Sampling, Summarizable {
         UNIFORM {
             @Override
             public Sample newSample() {
-                return new UniformSample(DEFAULT_SAMPLE_SIZE);
+                return new UniformSample(1028);
             }
         },
 
@@ -46,7 +44,7 @@ public class Histogram implements Metric, Sampling, Summarizable {
         BIASED {
             @Override
             public Sample newSample() {
-                return new ExponentiallyDecayingSample(DEFAULT_SAMPLE_SIZE, DEFAULT_ALPHA);
+                return new ExponentiallyDecayingSample(1028, 0.015);
             }
         };
 
@@ -138,7 +136,7 @@ public class Histogram implements Metric, Sampling, Summarizable {
     }
 
     /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarizable#max()
+     * @see com.yammer.metrics.core.Summarized#max()
      */
     @Override
     public double max() {
@@ -149,7 +147,7 @@ public class Histogram implements Metric, Sampling, Summarizable {
     }
 
     /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarizable#min()
+     * @see com.yammer.metrics.core.Summarized#min()
      */
     @Override
     public double min() {
@@ -160,7 +158,7 @@ public class Histogram implements Metric, Sampling, Summarizable {
     }
 
     /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarizable#mean()
+     * @see com.yammer.metrics.core.Summarized#mean()
      */
     @Override
     public double mean() {
@@ -171,7 +169,7 @@ public class Histogram implements Metric, Sampling, Summarizable {
     }
 
     /* (non-Javadoc)
-     * @see com.yammer.metrics.core.Summarizable#stdDev()
+     * @see com.yammer.metrics.core.Summarized#stdDev()
      */
     @Override
     public double stdDev() {
@@ -181,9 +179,51 @@ public class Histogram implements Metric, Sampling, Summarizable {
         return 0.0;
     }
 
+    /**
+     * Returns the value at the given quantile.
+     *
+     * @param quantile a quantile ({@code 0..1})
+     * @return the value at the given quantile
+     */
     @Override
-    public Snapshot getSnapshot() {
-        return sample.getSnapshot();
+    public double quantile(double quantile) {
+        return quantiles(quantile)[0];
+    }
+
+    /**
+     * Returns an array of values at the given quantiles.
+     *
+     * @param quantiles one or more quantiles ({@code 0..1})
+     * @return an array of values at the given quantiles
+     */
+    @Override
+    public Double[] quantiles(Double... quantiles) {
+        final Double[] scores = new Double[quantiles.length];
+        for (int i = 0; i < scores.length; i++) {
+            scores[i] = 0.0;
+
+        }
+
+        if (count() > 0) {
+            final List<Long> values = sample.values();
+            Collections.sort(values);
+
+            for (int i = 0; i < quantiles.length; i++) {
+                final double p = quantiles[i];
+                final double pos = p * (values.size() + 1);
+                if (pos < 1) {
+                    scores[i] = Double.valueOf(values.get(0));
+                } else if (pos >= values.size()) {
+                    scores[i] = Double.valueOf(values.get(values.size() - 1));
+                } else {
+                    final double lower = values.get((int) pos - 1);
+                    final double upper = values.get((int) pos);
+                    scores[i] = lower + (pos - floor(pos)) * (upper - lower);
+                }
+            }
+        }
+
+        return scores;
     }
 
     /**
