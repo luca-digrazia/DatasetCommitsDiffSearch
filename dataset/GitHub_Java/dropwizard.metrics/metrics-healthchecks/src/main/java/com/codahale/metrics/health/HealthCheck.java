@@ -226,7 +226,7 @@ public abstract class HealthCheck {
         /**
          * Configure an healthy result
          *
-         * @return this builder with healthy status
+         * @return
          */
         public ResultBuilder healthy() {
             this.healthy = true;
@@ -236,7 +236,7 @@ public abstract class HealthCheck {
         /**
          * Configure an unhealthy result
          *
-         * @return this builder with unhealthy status
+         * @return
          */
         public ResultBuilder unhealthy() {
             this.healthy = false;
@@ -247,7 +247,7 @@ public abstract class HealthCheck {
          * Configure an unhealthy result with an {@code error}
          *
          * @param error the error
-         * @return this builder with the given error
+         * @return
          */
         public ResultBuilder unhealthy(Throwable error) {
             this.error = error;
