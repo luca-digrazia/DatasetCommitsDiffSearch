@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.ide.common.res2.MergingException;
-
 import java.io.IOException;
 import java.nio.file.Path;
 
@@ -42,10 +40,9 @@ public interface AndroidDataWritingVisitor {
    * @param source The source file to copy.
    * @param relativeDestinationPath The relative destination path to write the resource to.
    * @throws IOException if there are errors during copying.
-   * @throws MergingException for errors during png crunching.
    */
   void copyResource(Path source, String relativeDestinationPath)
-      throws IOException, MergingException;
+      throws IOException;
 
   /**
    * Adds a xml string fragment to the values file.
