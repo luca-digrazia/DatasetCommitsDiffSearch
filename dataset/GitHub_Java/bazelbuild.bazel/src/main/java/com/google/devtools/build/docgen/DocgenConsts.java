@@ -18,6 +18,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
+
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -27,23 +29,19 @@ public class DocgenConsts {
 
   public static final String LS = "\n";
 
-  public static final String BE_TEMPLATE_DIR =
-      "com/google/devtools/build/docgen/templates/be";
-  public static final String SINGLE_BE_TEMPLATE = BE_TEMPLATE_DIR + "/single-page.vm";
   public static final String COMMON_DEFINITIONS_TEMPLATE =
-      BE_TEMPLATE_DIR + "/common-definitions.vm";
-  public static final String OVERVIEW_TEMPLATE = BE_TEMPLATE_DIR + "/overview.vm";
-  public static final String RULES_TEMPLATE = BE_TEMPLATE_DIR + "/rules.vm";
-  public static final String BE_NAV_TEMPLATE = BE_TEMPLATE_DIR + "/be-nav.vm";
+      "com/google/devtools/build/docgen/templates/be/common-definitions.vm";
+  public static final String OVERVIEW_TEMPLATE =
+      "com/google/devtools/build/docgen/templates/be/overview.vm";
+  public static final String RULES_TEMPLATE =
+      "com/google/devtools/build/docgen/templates/be/rules.vm";
+  public static final String BE_NAV_TEMPLATE =
+      "com/google/devtools/build/docgen/templates/be/be-nav.vm";
 
   public static final String SKYLARK_LIBRARY_TEMPLATE =
       "com/google/devtools/build/docgen/templates/skylark-library.vm";
   public static final String SKYLARK_NAV_TEMPLATE =
       "com/google/devtools/build/docgen/templates/skylark-nav.vm";
-  public static final String SKYLARK_MODULE_CATEGORY_TEMPLATE =
-      "com/google/devtools/build/docgen/templates/skylark-category.vm";
-  public static final String SKYLARK_OVERVIEW_TEMPLATE =
-      "com/google/devtools/build/docgen/templates/skylark-overview.vm";
 
   public static final String VAR_LEFT_PANEL = "LEFT_PANEL";
 
@@ -155,7 +153,7 @@ public class DocgenConsts {
   /** e.g. "[DEPRECATED]" in &lt;!-- #BLAZE_RULE(...).ATTRIBUTE(...)[DEPRECATED] --&gt; */
   public static final Pattern BLAZE_RULE_FLAGS = Pattern.compile("^.*\\[(.*)\\].*$");
 
-  public static final ImmutableMap<String, Integer> ATTRIBUTE_ORDERING = ImmutableMap
+  public static final Map<String, Integer> ATTRIBUTE_ORDERING = ImmutableMap
       .<String, Integer>builder()
       .put("name", -99)
       .put("deps", -98)
@@ -168,15 +166,6 @@ public class DocgenConsts {
       .put("outs", -91)
       .put("hdrs", -90)
       .build();
-
-  // The following variables are not constants as they can be overridden from
-  // SkylarkDocumentationProcessor#parseOptions
-
-  // Build Encyclopedia documentation root
-  public static String BeDocsRoot = "/versions/master/be";
-
-  // Documentation files extension
-  public static String documentationExtension = "html";
 
   static String toCommandLineFormat(String cmdDoc) {
     // Replace html <br> tags with line breaks
