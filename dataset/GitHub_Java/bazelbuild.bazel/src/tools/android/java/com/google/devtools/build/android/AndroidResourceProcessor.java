@@ -61,8 +61,8 @@ import com.android.utils.StdLogger;
 
 import org.xml.sax.SAXException;
 
-import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.FileVisitResult;
@@ -262,8 +262,7 @@ public class AndroidResourceProcessor {
   public void createSrcJar(Path generatedSourcesRoot, Path srcJar, boolean staticIds) {
     try {
       Files.createDirectories(srcJar.getParent());
-      try (final ZipOutputStream zip = new ZipOutputStream(
-          new BufferedOutputStream(Files.newOutputStream(srcJar)))) {
+      try (final ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(srcJar))) {
         Files.walkFileTree(generatedSourcesRoot,
             new SymbolFileSrcJarBuildingVisitor(zip, generatedSourcesRoot, staticIds));
       }
@@ -302,8 +301,7 @@ public class AndroidResourceProcessor {
    */
   public void createResourcesZip(Path resourcesRoot, Path assetsRoot, Path output)
       throws IOException {
-    try (ZipOutputStream zout = new ZipOutputStream(
-        new BufferedOutputStream(Files.newOutputStream(output)))) {
+    try (ZipOutputStream zout = new ZipOutputStream(new FileOutputStream(output.toFile()))) {
       if (Files.exists(resourcesRoot)) {
         Files.walkFileTree(resourcesRoot, new ZipBuilderVisitor(zout, resourcesRoot, "res"));
       }
