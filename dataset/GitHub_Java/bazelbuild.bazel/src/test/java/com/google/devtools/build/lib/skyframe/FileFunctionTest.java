@@ -888,13 +888,22 @@ public class FileFunctionTest {
   }
 
   @Test
-  public void testDoesntStatChildIfParentDoesntExist() throws Exception {
-    // Our custom filesystem says "a" does not exist, so FileFunction shouldn't bother trying to
-    // think about "a/b". Test for this by having a stat of "a/b" fail with an io error, and
-    // observing that we don't encounter the error.
+  public void testFilesystemInconsistencies_ParentDoesntExistAndChildIsSymlink() throws Exception {
+    symlink("a/b", "doesntmatter");
+    // Our custom filesystem says "a/b" exists but "a" does not exist.
     fs.stubStat(path("a"), null);
-    fs.stubStatError(path("a/b"), new IOException("ouch!"));
-    assertThat(valueForPath(path("a/b")).exists()).isFalse();
+    SequentialBuildDriver driver = makeDriver();
+    SkyKey skyKey = skyKey("a/b");
+    EvaluationResult<FileValue> result =
+        driver.evaluate(
+            ImmutableList.of(skyKey), false, DEFAULT_THREAD_COUNT, NullEventHandler.INSTANCE);
+    assertTrue(result.hasError());
+    ErrorInfo errorInfo = result.getError(skyKey);
+    assertThat(errorInfo.getException()).isInstanceOf(InconsistentFilesystemException.class);
+    assertThat(errorInfo.getException().getMessage())
+        .contains(
+            "/root/a/b was a symlink to doesntmatter but others made us think it was a "
+                + "nonexistent path");
   }
 
   @Test
@@ -1630,9 +1639,8 @@ public class FileFunctionTest {
 
   private class CustomInMemoryFs extends InMemoryFileSystem {
 
-    private final Map<Path, FileStatus> stubbedStats = Maps.newHashMap();
-    private final Map<Path, IOException> stubbedStatErrors = Maps.newHashMap();
-    private final Map<Path, IOException> stubbedFastDigestErrors = Maps.newHashMap();
+    private Map<Path, FileStatus> stubbedStats = Maps.newHashMap();
+    private Map<Path, IOException> stubbedFastDigestErrors = Maps.newHashMap();
 
     public CustomInMemoryFs(ManualClock manualClock) {
       super(manualClock);
@@ -1659,15 +1667,8 @@ public class FileFunctionTest {
       stubbedStats.put(path, stubbedResult);
     }
 
-    public void stubStatError(Path path, IOException error) {
-      stubbedStatErrors.put(path, error);
-    }
-
     @Override
     public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
-      if (stubbedStatErrors.containsKey(path)) {
-        throw stubbedStatErrors.get(path);
-      }
       if (stubbedStats.containsKey(path)) {
         return stubbedStats.get(path);
       }

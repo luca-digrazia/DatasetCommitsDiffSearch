@@ -21,9 +21,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ActionLookupValue.ActionLookupKey;
-import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
-import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.testutil.TestUtils;
@@ -49,8 +47,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
 
 abstract class ArtifactFunctionTestCase {
-  static final ActionLookupKey ALL_OWNER = new SingletonActionLookupKey();
-  static final SkyKey OWNER_KEY = SkyKey.create(SkyFunctions.ACTION_LOOKUP, ALL_OWNER);
+  protected static final SkyKey OWNER_KEY = SkyKey.create(SkyFunctions.ACTION_LOOKUP, "OWNER");
+  protected static final ActionLookupKey ALL_OWNER = new SingletonActionLookupKey();
 
   protected Predicate<PathFragment> allowedMissingInputsPredicate = Predicates.alwaysFalse();
 
@@ -75,9 +73,7 @@ abstract class ArtifactFunctionTestCase {
     BlazeDirectories directories = new BlazeDirectories(root, root, root,
         TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper = new ExternalFilesHelper(
-        pkgLocator,
-        ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
-        directories);
+        pkgLocator, false, directories);
     differencer = new RecordingDifferencer();
     evaluator =
         new InMemoryMemoizingEvaluator(
@@ -94,10 +90,7 @@ abstract class ArtifactFunctionTestCase {
                     new PackageFunction(null, null, null, null, null, null, null))
                 .put(
                     SkyFunctions.PACKAGE_LOOKUP,
-                    new PackageLookupFunction(
-                        null,
-                        CrossRepositoryLabelViolationStrategy.ERROR,
-                        ImmutableList.of(BuildFileName.BUILD_DOT_BAZEL, BuildFileName.BUILD)))
+                    new PackageLookupFunction(null, CrossRepositoryLabelViolationStrategy.ERROR))
                 .put(
                     SkyFunctions.WORKSPACE_AST,
                     new WorkspaceASTFunction(TestRuleClassProvider.getRuleClassProvider()))
@@ -145,7 +138,7 @@ abstract class ArtifactFunctionTestCase {
 
   private static class SingletonActionLookupKey extends ActionLookupKey {
     @Override
-    SkyKey getSkyKeyInternal() {
+    SkyKey getSkyKey() {
       return OWNER_KEY;
     }
 
@@ -158,8 +151,13 @@ abstract class ArtifactFunctionTestCase {
   /** InMemoryFileSystem that can pretend to do a fast digest. */
   protected class CustomInMemoryFs extends InMemoryFileSystem {
     @Override
-    protected byte[] getFastDigest(Path path, HashFunction hashFunction) throws IOException {
-      return fastDigest ? getDigest(path, hashFunction) : null;
+    protected String getFastDigestFunctionType(Path path) {
+      return fastDigest ? "MD5" : null;
+    }
+
+    @Override
+    protected byte[] getFastDigest(Path path) throws IOException {
+      return fastDigest ? getMD5Digest(path) : null;
     }
   }
 }
