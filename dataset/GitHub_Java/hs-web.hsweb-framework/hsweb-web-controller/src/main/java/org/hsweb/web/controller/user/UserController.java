@@ -35,7 +35,7 @@ public class UserController extends GenericController<User, String> {
 
     @Override
     @AccessLogger("获取列表")
-    public ResponseMessage list(QueryParam param)  {
+    public ResponseMessage list(QueryParam param) throws Exception {
         param.excludes("password");
         return super.list(param)
                 .exclude(User.class, "password", "modules", "userRoles")
@@ -44,22 +44,20 @@ public class UserController extends GenericController<User, String> {
 
     @Override
     @AccessLogger("获取用户详情")
-    public ResponseMessage info(@PathVariable("id") String id)  {
+    public ResponseMessage info(@PathVariable("id") String id) throws Exception {
         return super.info(id).exclude(User.class, "password", "modules");
     }
 
     @AccessLogger("禁用")
     @RequestMapping(value = "/{id}/disable", method = RequestMethod.PUT)
-    @Authorize(action = "disable")
-    public ResponseMessage disable(@PathVariable("id") String id)  {
+    public ResponseMessage disable(@PathVariable("id") String id) throws Exception {
         getService().disableUser(id);
         return ResponseMessage.ok();
     }
 
     @AccessLogger("启用")
-    @Authorize(action = "enable")
     @RequestMapping(value = "/{id}/enable", method = RequestMethod.PUT)
-    public ResponseMessage enable(@PathVariable("id") String id)  {
+    public ResponseMessage enable(@PathVariable("id") String id) throws Exception {
         getService().enableUser(id);
         return ResponseMessage.ok();
     }
