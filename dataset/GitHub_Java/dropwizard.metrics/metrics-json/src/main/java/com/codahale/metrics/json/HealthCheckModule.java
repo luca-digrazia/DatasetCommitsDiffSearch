@@ -1,19 +1,22 @@
 package com.codahale.metrics.json;
 
+import com.codahale.metrics.health.HealthCheck;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.Version;
-import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.Module;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleSerializers;
 import com.fasterxml.jackson.databind.ser.std.StdSerializer;
-import com.codahale.metrics.health.HealthCheck;
 
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
 
 public class HealthCheckModule extends Module {
     private static class HealthCheckResultSerializer extends StdSerializer<HealthCheck.Result> {
+
+        private static final long serialVersionUID = 1L;
+
         private HealthCheckResultSerializer() {
             super(HealthCheck.Result.class);
         }
@@ -31,13 +34,23 @@ public class HealthCheckModule extends Module {
             }
 
             serializeThrowable(json, result.getError(), "error");
+            json.writeNumberField("duration", result.getDuration());
 
+            Map<String, Object> details = result.getDetails();
+            if (details != null && !details.isEmpty()) {
+                for (Map.Entry<String, Object> e : details.entrySet()) {
+                    json.writeObjectField(e.getKey(), e.getValue());
+                }
+            }
+
+            json.writeStringField("timestamp", result.getTimestamp());
             json.writeEndObject();
         }
 
         private void serializeThrowable(JsonGenerator json, Throwable error, String name) throws IOException {
             if (error != null) {
                 json.writeObjectFieldStart(name);
+                json.writeStringField("type", error.getClass().getTypeName());
                 json.writeStringField("message", error.getMessage());
                 json.writeArrayFieldStart("stack");
                 for (StackTraceElement element : error.getStackTrace()) {
@@ -66,8 +79,6 @@ public class HealthCheckModule extends Module {
 
     @Override
     public void setupModule(SetupContext context) {
-        context.addSerializers(new SimpleSerializers(Arrays.<JsonSerializer<?>>asList(
-                new HealthCheckResultSerializer()
-        )));
+        context.addSerializers(new SimpleSerializers(Collections.singletonList(new HealthCheckResultSerializer())));
     }
 }
