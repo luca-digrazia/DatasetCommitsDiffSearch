@@ -53,8 +53,9 @@ import java.util.List;
 @EnableConfigurationProperties(EntityProperties.class)
 public class HswebAutoConfiguration {
 
-    @Autowired
+    @Autowired(required = false)
     private EntityProperties entityProperties;
+
 
     @Bean
     @Primary
