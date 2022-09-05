@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -121,7 +120,16 @@ public final class RequiredProviders {
               return advertisedProviderSet.getNativeProviders().contains(aClass);
             }
           },
-          Predicates.in(advertisedProviderSet.getSkylarkProviders()),
+          new Predicate<SkylarkProviderIdentifier>() {
+            @Override
+            public boolean apply(SkylarkProviderIdentifier skylarkProviderIdentifier) {
+              if (!skylarkProviderIdentifier.isLegacy()) {
+                return false;
+              }
+              return advertisedProviderSet.getSkylarkProviders()
+                  .contains(skylarkProviderIdentifier.getLegacyId());
+            }
+          },
           requiredProviders
       );
     }

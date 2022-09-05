@@ -38,11 +38,12 @@ import java.util.Objects;
 public final class AdvertisedProviderSet {
   private final boolean canHaveAnyProvider;
   private final ImmutableSet<Class<?>> nativeProviders;
-  private final ImmutableSet<SkylarkProviderIdentifier> skylarkProviders;
+  // todo(dslomov,vladmos): support declared providers
+  private final ImmutableSet<String> skylarkProviders;
 
   private AdvertisedProviderSet(boolean canHaveAnyProvider,
       ImmutableSet<Class<?>> nativeProviders,
-      ImmutableSet<SkylarkProviderIdentifier> skylarkProviders) {
+      ImmutableSet<String> skylarkProviders) {
     this.canHaveAnyProvider = canHaveAnyProvider;
     this.nativeProviders = nativeProviders;
     this.skylarkProviders = skylarkProviders;
@@ -51,15 +52,15 @@ public final class AdvertisedProviderSet {
   public static final AdvertisedProviderSet ANY =
       new AdvertisedProviderSet(true,
           ImmutableSet.<Class<?>>of(),
-          ImmutableSet.<SkylarkProviderIdentifier>of());
+          ImmutableSet.<String>of());
   public static final AdvertisedProviderSet EMPTY =
       new AdvertisedProviderSet(false,
           ImmutableSet.<Class<?>>of(),
-          ImmutableSet.<SkylarkProviderIdentifier>of());
+          ImmutableSet.<String>of());
 
   public static AdvertisedProviderSet create(
       ImmutableSet<Class<?>> nativeProviders,
-      ImmutableSet<SkylarkProviderIdentifier> skylarkProviders) {
+      ImmutableSet<String> skylarkProviders) {
     if (nativeProviders.isEmpty() && skylarkProviders.isEmpty()) {
       return EMPTY;
     }
@@ -105,7 +106,7 @@ public final class AdvertisedProviderSet {
   /**
    * Get all advertised Skylark providers.
    */
-  public ImmutableSet<SkylarkProviderIdentifier> getSkylarkProviders() {
+  public ImmutableSet<String> getSkylarkProviders() {
     return skylarkProviders;
   }
 
@@ -117,7 +118,7 @@ public final class AdvertisedProviderSet {
   public static class Builder {
     private boolean canHaveAnyProvider;
     private final ArrayList<Class<?>> nativeProviders;
-    private final ArrayList<SkylarkProviderIdentifier> skylarkProviders;
+    private final ArrayList<String> skylarkProviders;
     private Builder() {
       nativeProviders = new ArrayList<>();
       skylarkProviders = new ArrayList<>();
@@ -155,17 +156,7 @@ public final class AdvertisedProviderSet {
     }
 
     public Builder addSkylark(String providerName) {
-      skylarkProviders.add(SkylarkProviderIdentifier.forLegacy(providerName));
-      return this;
-    }
-
-    public Builder addSkylark(SkylarkProviderIdentifier id) {
-      skylarkProviders.add(id);
-      return this;
-    }
-
-    public Builder addSkylark(ClassObjectConstructor.Key id) {
-      skylarkProviders.add(SkylarkProviderIdentifier.forKey(id));
+      skylarkProviders.add(providerName);
       return this;
     }
   }

@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.InputFile;
+import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
@@ -558,8 +559,19 @@ public abstract class DependencyResolver {
     ImmutableList.Builder<Aspect> aspectCandidates = ImmutableList.builder();
     aspectCandidates.addAll(attribute.getAspects(originalRule));
     for (Aspect aspect : aspects) {
-      if (aspect.getDefinition().propagateAlong(attribute)) {
-        aspectCandidates.add(aspect);
+      for (AspectClass aspectClass :
+          aspect.getDefinition().getAttributeAspects(attribute)) {
+        if (aspectClass.equals(aspect.getAspectClass())) {
+          aspectCandidates.add(aspect);
+        } else if (aspectClass instanceof NativeAspectClass) {
+          aspectCandidates.add(
+              Aspect.forNative((NativeAspectClass) aspectClass, aspect.getParameters()));
+        } else {
+          // If we ever want to support this specifying arbitrary aspects for Skylark aspects,
+          // we will need to do a Skyframe call here to load an up-to-date definition.
+          throw new IllegalStateException(
+              "Skylark aspect classes sending different aspects along attributes is not supported");
+        }
       }
     }
     return aspectCandidates.build();

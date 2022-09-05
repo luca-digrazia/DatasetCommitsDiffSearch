@@ -16,11 +16,8 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Predicates;
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RequiredProviders.Builder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,37 +28,27 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class RequiredProvidersTest {
-  private static final class P1 {}
-  private static final class P2 {}
-  private static final class P3 {}
-
-  private static final ClassObjectConstructor P_NATIVE =
-      new NativeClassObjectConstructor("p_native") {};
-
-  private static final SkylarkClassObjectConstructor P_SKYLARK =
-      new SkylarkClassObjectConstructor("p_skylark", Location.BUILTIN);
-  static {
-    try {
-      P_SKYLARK.export(Label.create("foo/bar", "x.bzl"), "p_skylark");
-    } catch (LabelSyntaxException e) {
-      throw new AssertionError(e);
-    }
-  }
-
-  private static final SkylarkProviderIdentifier ID_NATIVE =
-      SkylarkProviderIdentifier.forKey(P_NATIVE.getKey());
-  private static final SkylarkProviderIdentifier ID_SKYLARK =
-      SkylarkProviderIdentifier.forKey(P_SKYLARK.getKey());
-  private static final SkylarkProviderIdentifier ID_LEGACY =
-      SkylarkProviderIdentifier.forLegacy("p_legacy");
-
-  private static boolean satisfies(AdvertisedProviderSet providers,
+  private static boolean satisfies(final AdvertisedProviderSet providers,
       RequiredProviders requiredProviders) {
     boolean result = requiredProviders.isSatisfiedBy(providers);
 
     assertThat(requiredProviders.isSatisfiedBy(
-        Predicates.in(providers.getNativeProviders()),
-        Predicates.in(providers.getSkylarkProviders())
+        new Predicate<Class<?>>() {
+          @Override
+          public boolean apply(Class<?> aClass) {
+            return providers.getNativeProviders().contains(aClass);
+          }
+        },
+        new Predicate<SkylarkProviderIdentifier>() {
+          @Override
+          public boolean apply(SkylarkProviderIdentifier skylarkProviderIdentifier) {
+            if (!skylarkProviderIdentifier.isLegacy()) {
+              return false;
+            }
+            return providers.getSkylarkProviders()
+                .contains(skylarkProviderIdentifier.getLegacyId());
+          }
+        }
     )).isEqualTo(result);
     return result;
   }
@@ -102,6 +89,10 @@ public class RequiredProvidersTest {
         )).isFalse();
   }
 
+  private static final class P1 {}
+  private static final class P2 {}
+  private static final class P3 {}
+
   @Test
   public void nativeProvidersAllMatch() {
     AdvertisedProviderSet providerSet = AdvertisedProviderSet.builder()
@@ -139,13 +130,10 @@ public class RequiredProvidersTest {
   @Test
   public void skylarkProvidersAllMatch() {
     AdvertisedProviderSet providerSet = AdvertisedProviderSet.builder()
-        .addSkylark(ID_LEGACY)
-        .addSkylark(ID_NATIVE)
-        .addSkylark(ID_SKYLARK)
+        .addSkylark("p1")
+        .addSkylark("p2")
         .build();
-    assertThat(validateSkylark(providerSet,
-        ImmutableSet.of(
-            ID_LEGACY, ID_SKYLARK, ID_NATIVE)))
+    assertThat(validateSkylark(providerSet, ImmutableSet.of("p1", "p2")))
         .isTrue();
   }
 
@@ -154,10 +142,10 @@ public class RequiredProvidersTest {
     assertThat(
         validateSkylark(
             AdvertisedProviderSet.builder()
-                .addSkylark(ID_LEGACY)
+                .addSkylark("p1")
                 .build(),
-            ImmutableSet.of(ID_LEGACY),
-            ImmutableSet.of(ID_NATIVE)
+            ImmutableSet.of("p1"),
+            ImmutableSet.of("p2")
         )).isTrue();
   }
 
@@ -166,10 +154,10 @@ public class RequiredProvidersTest {
     assertThat(
         validateSkylark(
             AdvertisedProviderSet.builder()
-                .addSkylark(ID_SKYLARK)
+                .addSkylark("p3")
                 .build(),
-            ImmutableSet.of(ID_LEGACY),
-            ImmutableSet.of(ID_NATIVE)
+            ImmutableSet.of("p1"),
+            ImmutableSet.of("p2")
         )).isFalse();
   }
 
@@ -190,15 +178,25 @@ public class RequiredProvidersTest {
   @SafeVarargs
   private static boolean validateSkylark(
       AdvertisedProviderSet providerSet,
-      ImmutableSet<SkylarkProviderIdentifier>... sets) {
+      ImmutableSet<String>... sets) {
     Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
     Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
-    for (ImmutableSet<SkylarkProviderIdentifier> set : sets) {
-      anyBuilder.addSkylarkSet(set);
-      noneBuilder.addSkylarkSet(set);
+    for (ImmutableSet<String> set : sets) {
+      ImmutableSet<SkylarkProviderIdentifier> idSet = toIdSet(set);
+      anyBuilder.addSkylarkSet(idSet);
+      noneBuilder.addSkylarkSet(idSet);
     }
     boolean result = satisfies(providerSet, anyBuilder.build());
     assertThat(satisfies(providerSet, noneBuilder.build())).isEqualTo(result);
     return result;
   }
+
+  private static ImmutableSet<SkylarkProviderIdentifier> toIdSet(ImmutableSet<String> set) {
+    ImmutableSet.Builder<SkylarkProviderIdentifier> builder = ImmutableSet.builder();
+    for (String id : set) {
+      builder.add(SkylarkProviderIdentifier.forLegacy(id));
+    }
+    return builder.build();
+  }
+
 }
