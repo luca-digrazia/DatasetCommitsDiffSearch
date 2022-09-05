@@ -244,7 +244,7 @@ public class Histogram implements Metric, Quantized, Summarized {
     private void setMax(long potentialMax) {
         boolean done = false;
         while (!done) {
-            final long currentMax = _max.get();
+            long currentMax = _max.get();
             done = currentMax >= potentialMax || _max.compareAndSet(currentMax, potentialMax);
         }
     }
@@ -252,7 +252,7 @@ public class Histogram implements Metric, Quantized, Summarized {
     private void setMin(long potentialMin) {
         boolean done = false;
         while (!done) {
-            final long currentMin = _min.get();
+            long currentMin = _min.get();
             done = currentMin <= potentialMin || _min.compareAndSet(currentMin, potentialMin);
         }
     }

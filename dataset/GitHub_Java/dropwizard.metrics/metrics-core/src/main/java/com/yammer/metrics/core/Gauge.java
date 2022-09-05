@@ -5,12 +5,13 @@ package com.yammer.metrics.core;
  * A gauge metric is an instantaneous reading of a particular value. To instrument a queue's depth,
  * for example:<br>
  * <pre><code>
- * final Queue&lt;String&gt; queue = new ConcurrentLinkedQueue&lt;String&gt;();
- * final Gauge&lt;Integer&gt; queueDepth = new Gauge&lt;Integer&gt;() {
+ * Queue<String> queue = new ConcurrentLinkedQueue<String>();
+ * Gauge<Integer> queueDepth = new Gauge<Integer>() {
  *     public Integer value() {
  *         return queue.size();
  *     }
  * };
+ * <p/>
  * </code></pre>
  *
  * @param <T> the type of the metric's value
