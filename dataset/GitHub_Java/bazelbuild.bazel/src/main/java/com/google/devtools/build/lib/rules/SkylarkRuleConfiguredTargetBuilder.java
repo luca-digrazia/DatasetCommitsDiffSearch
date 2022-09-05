@@ -52,8 +52,8 @@ public final class SkylarkRuleConfiguredTargetBuilder {
   /**
    * Create a Rule Configured Target from the ruleContext and the ruleImplementation.
    */
-  public static ConfiguredTarget buildRule(RuleContext ruleContext, BaseFunction ruleImplementation)
-      throws InterruptedException {
+  public static ConfiguredTarget buildRule(RuleContext ruleContext,
+      BaseFunction ruleImplementation) {
     String expectFailure = ruleContext.attributes().get("expect_failure", Type.STRING);
     try (Mutability mutability = Mutability.create("configured target")) {
       SkylarkRuleContext skylarkRuleContext = new SkylarkRuleContext(ruleContext);
@@ -81,6 +81,9 @@ public final class SkylarkRuleConfiguredTargetBuilder {
       ConfiguredTarget configuredTarget = createTarget(ruleContext, target);
       checkOrphanArtifacts(ruleContext);
       return configuredTarget;
+    } catch (InterruptedException e) {
+      ruleContext.ruleError(e.getMessage());
+      return null;
     } catch (EvalException e) {
       addRuleToStackTrace(e, ruleContext.getRule(), ruleImplementation);
       // If the error was expected, return an empty target.

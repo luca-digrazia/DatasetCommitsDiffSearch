@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@ import com.google.common.collect.ImmutableList;
 
 import java.util.List;
 
+// TODO(bazel-team): maybe we should get rid of the ConditionalStatements and
+// create a chain of if-else statements for elif-s.
 /**
  * Syntax node for an if/else statement.
  */
@@ -45,6 +47,7 @@ public final class IfStatement extends Statement {
 
     @Override
     public String toString() {
+      // TODO(bazel-team): see TODO in the outer class
       return "[el]if " + condition + ": " + stmts + "\n";
     }
 
@@ -63,6 +66,7 @@ public final class IfStatement extends Statement {
 
     @Override
     void validate(ValidationEnvironment env) throws EvalException {
+      // EvalUtils.toBoolean() evaluates everything so we don't need type check here.
       condition.validate(env);
       validateStmts(env, stmts);
     }

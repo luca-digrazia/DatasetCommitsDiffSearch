@@ -34,11 +34,6 @@ public class ReturnStatement extends Statement {
     public Object getValue() {
       return value;
     }
-
-    @Override
-    public boolean canBeAddedToStackTrace() {
-      return false;
-    }
   }
 
   private final Expression returnExpression;

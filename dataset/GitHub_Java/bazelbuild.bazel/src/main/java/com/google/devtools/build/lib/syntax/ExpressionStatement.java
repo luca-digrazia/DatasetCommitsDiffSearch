@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,37 +14,38 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import java.io.IOException;
-
 /**
  * Syntax node for a function call statement. Used for build rules.
  */
 public final class ExpressionStatement extends Statement {
 
-  private final Expression expression;
+  private final Expression expr;
 
-  public ExpressionStatement(Expression expression) {
-    this.expression = expression;
+  public ExpressionStatement(Expression expr) {
+    this.expr = expr;
   }
 
   public Expression getExpression() {
-    return expression;
+    return expr;
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    expression.prettyPrint(buffer);
-    buffer.append('\n');
+  public String toString() {
+    return expr.toString() + '\n';
   }
 
   @Override
   void doExec(Environment env) throws EvalException, InterruptedException {
-    expression.eval(env);
+    expr.eval(env);
   }
 
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
+  }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    expr.validate(env);
   }
 }

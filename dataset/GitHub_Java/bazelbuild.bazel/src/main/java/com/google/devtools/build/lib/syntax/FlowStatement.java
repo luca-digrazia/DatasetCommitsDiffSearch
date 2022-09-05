@@ -82,10 +82,5 @@ public final class FlowStatement extends Statement {
     public boolean mustTerminateLoop() {
       return terminateLoop;
     }
-
-    @Override
-    public boolean canBeAddedToStackTrace() {
-      return false;
-    }
   }
 }

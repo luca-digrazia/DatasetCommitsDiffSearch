@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -49,21 +50,12 @@ public class FunctionDefStatement extends Statement {
         defaultValues.add(expr.eval(env));
       }
     }
-
-    FunctionSignature sig = signature.getSignature();
-    if (env.getSemantics().incompatibleKeywordOnlySyntax
-        && sig.getShape().getMandatoryNamedOnly() > 0) {
-      throw new EvalException(
-          getLocation(),
-          "Keyword-only argument is forbidden. You can temporarily disable this "
-              + "error using the flag --incompatible_keyword_only_syntax=false");
-    }
-
     env.update(
         ident.getName(),
         new UserDefinedFunction(
             ident,
-            FunctionSignature.WithValues.<Object, SkylarkType>create(sig, defaultValues, types),
+            FunctionSignature.WithValues.<Object, SkylarkType>create(
+                signature.getSignature(), defaultValues, types),
             statements,
             env.getGlobals()));
   }

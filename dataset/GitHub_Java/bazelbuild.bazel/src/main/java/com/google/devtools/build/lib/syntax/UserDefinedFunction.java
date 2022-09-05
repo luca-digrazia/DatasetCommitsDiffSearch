@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,13 +73,7 @@ public class UserDefinedFunction extends BaseFunction {
 
       try {
         for (Statement stmt : statements) {
-          if (stmt instanceof ReturnStatement) {
-            // Performance optimization.
-            // Executing the statement would throw an exception, which is slow.
-            return ((ReturnStatement) stmt).getReturnExpression().eval(env);
-          } else {
-            stmt.exec(env);
-          }
+          stmt.exec(env);
         }
       } catch (ReturnStatement.ReturnException e) {
         return e.getValue();
