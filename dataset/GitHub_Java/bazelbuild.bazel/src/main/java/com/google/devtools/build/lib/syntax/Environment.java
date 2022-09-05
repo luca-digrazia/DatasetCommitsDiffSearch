@@ -94,7 +94,7 @@ public final class Environment implements Freezable {
    * is closed, it becomes immutable, including the Frame, which can be shared in other
    * {@link Environment}-s. Indeed, a {@link UserDefinedFunction} will close over the global
    * Frame of its definition {@link Environment}, which will thus be reused (immutably)
-   * in any {@link Environment} in which this function is called, so it's important to
+   * in all any {@link Environment} in which this function is called, so it's important to
    * preserve the {@link Mutability} to make sure no Frame is modified after it's been finalized.
    */
   public static final class Frame implements Freezable {
@@ -379,9 +379,16 @@ public final class Environment implements Freezable {
   private final String transitiveHashCode;
 
   /**
+   * Is this Environment being evaluated during the loading phase?
+   * This is fixed during Environment setup, and enables various functions
+   * that are not available during the analysis or workspace phase.
+   */
+  public Phase getPhase() {
+    return phase;
+  }
+
+  /**
    * Checks that the current Environment is in the loading or the workspace phase.
-   * TODO(laurentlb): Move to SkylarkUtils
-   *
    * @param symbol name of the function being only authorized thus.
    */
   public void checkLoadingOrWorkspacePhase(String symbol, Location loc) throws EvalException {
@@ -392,8 +399,6 @@ public final class Environment implements Freezable {
 
   /**
    * Checks that the current Environment is in the loading phase.
-   * TODO(laurentlb): Move to SkylarkUtils
-   *
    * @param symbol name of the function being only authorized thus.
    */
   public void checkLoadingPhase(String symbol, Location loc) throws EvalException {
