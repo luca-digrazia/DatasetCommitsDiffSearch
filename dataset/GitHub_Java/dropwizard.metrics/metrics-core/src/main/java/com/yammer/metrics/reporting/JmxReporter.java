@@ -12,7 +12,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class JmxReporter extends AbstractReporter implements MetricsRegistryListener {
 
-    private final Map<MetricName, ObjectName> registeredBeans;
+    private final Map<MetricName, MetricMBean> beans;
+    private final List<ObjectName> registeredBeans = new LinkedList<ObjectName>();
     private final MBeanServer server;
 
     public static interface MetricMBean {
@@ -299,12 +300,12 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     public JmxReporter(MetricsRegistry metricsRegistry) {
         super(metricsRegistry, "jmx-reporter");
-        this.registeredBeans = new HashMap<MetricName, ObjectName>();
+        this.beans = new HashMap<MetricName, MetricMBean>(metricsRegistry.allMetrics().size());
         this.server = ManagementFactory.getPlatformMBeanServer();
     }
 
     @Override
-    public void metricAdded(MetricName name, Metric metric) {
+    public void newMetric(MetricName name, Metric metric) {
         if (metric != null) {
             try {
                 final ObjectName objectName = new ObjectName(name.getMBeanName());
@@ -324,30 +325,19 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
     }
 
-    @Override
-    public void metricRemoved(MetricName name, Metric metric) {
-        ObjectName objectName = registeredBeans.remove(name);
-        if (objectName != null) {
-            try {
-                server.unregisterMBean(objectName);
-            } catch (Exception ignored) {
-            }
-        }
-    }
-
     public final void start() {
         metricsRegistry.addListener(this);
     }
 
     private void registerBean(MetricName name, MetricMBean bean, ObjectName objectName) throws MBeanRegistrationException, InstanceAlreadyExistsException, NotCompliantMBeanException {
+        beans.put(name, bean);
         server.registerMBean(bean, objectName);
-        registeredBeans.put(name, objectName);
+        registeredBeans.add(objectName);
     }
 
     @Override
     public void shutdown() {
-        metricsRegistry.removeListener(this);
-        for (ObjectName name : registeredBeans.values()) {
+        for (ObjectName name : registeredBeans) {
             try {
                 server.unregisterMBean(name);
             } catch (Exception ignored) {
