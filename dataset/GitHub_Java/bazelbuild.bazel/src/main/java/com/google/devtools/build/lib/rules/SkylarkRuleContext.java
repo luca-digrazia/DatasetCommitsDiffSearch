@@ -120,9 +120,8 @@ public final class SkylarkRuleContext {
 
   /**
    * Creates a new SkylarkRuleContext using ruleContext.
-   * @throws InterruptedException 
    */
-  public SkylarkRuleContext(RuleContext ruleContext) throws EvalException, InterruptedException {
+  public SkylarkRuleContext(RuleContext ruleContext) throws EvalException {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     fragments = new FragmentCollection(ruleContext, ConfigurationTransition.NONE);
     hostFragments = new FragmentCollection(ruleContext, ConfigurationTransition.HOST);
