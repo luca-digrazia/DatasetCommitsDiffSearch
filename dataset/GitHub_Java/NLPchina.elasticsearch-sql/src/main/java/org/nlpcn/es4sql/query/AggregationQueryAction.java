@@ -7,7 +7,7 @@ import java.util.Map;
 import org.elasticsearch.action.search.SearchRequestBuilder;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.index.query.BoolFilterBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.aggregations.AbstractAggregationBuilder;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
@@ -26,7 +26,7 @@ import org.nlpcn.es4sql.domain.hints.Hint;
 import org.nlpcn.es4sql.domain.hints.HintType;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.maker.AggMaker;
-import org.nlpcn.es4sql.query.maker.FilterMaker;
+import org.nlpcn.es4sql.query.maker.QueryMaker;
 
 /**
  * Transform SQL query to Elasticsearch aggregations query
@@ -45,7 +45,7 @@ public class AggregationQueryAction extends QueryAction {
 	@Override
 	public SqlElasticSearchRequestBuilder explain() throws SqlParseException {
 		this.request = client.prepareSearch();
-		request.setListenerThreaded(false);
+
 		setIndicesAndTypes();
 
 		setWhere(select.getWhere());
@@ -57,6 +57,7 @@ public class AggregationQueryAction extends QueryAction {
 				lastAgg = aggMaker.makeGroupAgg(field);
 
 				if (lastAgg != null && lastAgg instanceof TermsBuilder && !(field instanceof MethodField )) {
+
 					((TermsBuilder) lastAgg).size(select.getRowCount());
 				}
 
@@ -136,9 +137,8 @@ public class AggregationQueryAction extends QueryAction {
 				}
 			}
 		}
-        
 
-        setLimitFromHint(this.select.getHints());
+		setLimitFromHint(this.select.getHints());
 
 		request.setSearchType(SearchType.DEFAULT);
         updateRequestWithIndexAndRoutingOptions(select, request);
@@ -246,8 +246,8 @@ public class AggregationQueryAction extends QueryAction {
 	 */
 	private void setWhere(Where where) throws SqlParseException {
 		if (where != null) {
-			BoolFilterBuilder boolFilter = FilterMaker.explan(where);
-			request.setQuery(QueryBuilders.filteredQuery(null, boolFilter));
+			QueryBuilder whereQuery = QueryMaker.explan(where);
+			request.setQuery(whereQuery);
 		}
 	}
 
@@ -286,5 +286,4 @@ public class AggregationQueryAction extends QueryAction {
         request.setFrom(from);
         request.setSize(size);
     }
-
 }
