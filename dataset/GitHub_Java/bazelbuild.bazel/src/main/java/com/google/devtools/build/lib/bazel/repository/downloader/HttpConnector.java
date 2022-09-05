@@ -20,7 +20,6 @@ import static com.google.common.base.Strings.nullToEmpty;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.math.IntMath;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
@@ -51,8 +50,6 @@ final class HttpConnector {
   private static final int CONNECT_TIMEOUT_MS = 1000;
   private static final int MAX_CONNECT_TIMEOUT_MS = 10000;
   private static final int READ_TIMEOUT_MS = 20000;
-  private static final ImmutableSet<String> COMPRESSED_EXTENSIONS =
-      ImmutableSet.of("bz2", "gz", "jar", "tgz", "war", "xz", "zip");
 
   /**
    * Connects to HTTP (or file) URL with GET request and lazily returns payload.
@@ -86,9 +83,7 @@ final class HttpConnector {
       HttpURLConnection connection = null;
       try {
         connection = (HttpURLConnection) url.openConnection(proxy);
-        if (!COMPRESSED_EXTENSIONS.contains(getExtension(url.getPath()))) {
-          connection.setRequestProperty("Accept-Encoding", "gzip");
-        }
+        connection.setRequestProperty("Accept-Encoding", "gzip");
         connection.setConnectTimeout(connectTimeout);
         connection.setReadTimeout(READ_TIMEOUT_MS);
         int code;
@@ -178,13 +173,7 @@ final class HttpConnector {
         return connection.getInputStream();
       case "gzip":
       case "x-gzip":
-        // Some web servers will send Content-Encoding: gzip even when we didn't request it, iff
-        // the file is a .gz file.
-        if (connection.getURL().getPath().endsWith(".gz")) {
-          return connection.getInputStream();
-        } else {
-          return new GZIPInputStream(connection.getInputStream());
-        }
+        return new GZIPInputStream(connection.getInputStream());
       default:
         throw new UnrecoverableHttpException(
             "Unsupported and unrequested Content-Encoding: " + connection.getContentEncoding());
@@ -248,14 +237,6 @@ final class HttpConnector {
     // An implementation should accept uppercase letters as equivalent to lowercase in scheme names
     // (e.g., allow "HTTP" as well as "http") for the sake of robustness. Quoth RFC3986 § 3.1
     return Ascii.equalsIgnoreCase(protocol, url.getProtocol());
-  }
-
-  private static String getExtension(String path) {
-    int index = path.lastIndexOf('.');
-    if (index == -1) {
-      return "";
-    }
-    return path.substring(index + 1);
   }
 
   private static final class UnrecoverableHttpException extends IOException {
