@@ -1,26 +1,29 @@
 package org.hswebframework.web.example.simple;
 
-import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.apache.shiro.authz.annotation.RequiresUser;
-import org.hswebframework.web.authorization.Authorization;
-import org.hswebframework.web.authorization.AuthorizationHolder;
+import io.swagger.annotations.ApiOperation;
+import org.apache.commons.codec.digest.DigestUtils;
+import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
-import org.hswebframework.web.authorization.annotation.RequiresFieldAccess;
+import org.hswebframework.web.authorization.exception.UnAuthorizedException;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.QueryController;
-import org.hswebframework.web.controller.authorization.UserController;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframework.web.entity.authorization.SimpleUserEntity;
 import org.hswebframework.web.entity.authorization.UserEntity;
+import org.hswebframework.web.logging.AccessLogger;
+import org.hswebframework.web.model.authorization.UserModel;
+import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
 import org.hswebframework.web.service.QueryByEntityService;
 import org.hswebframework.web.service.QueryService;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Base64;
 import java.util.List;
+
 
 /**
  * TODO 完成注释
@@ -28,41 +31,58 @@ import java.util.List;
  * @author zhouhao
  */
 @RestController
-@Authorize(permission = "test")
 @RequestMapping("/test")
+@Authorize(permission = "test")
+@AccessLogger("测试")
 public class TestController implements QueryController<UserEntity, String, QueryParamEntity> {
 
     @GetMapping("/test1")
-    @Authorize(action = "query", message = "${'表达式方式'}")
-    public ResponseMessage testSimple(Authorization authorization) {
-        return ResponseMessage.ok(authorization);
+    @Authorize(action = "query")
+    public ResponseMessage testSimple(Authentication authentication) {
+        return ResponseMessage.ok(
+                PersonnelAuthorization.current()
+                        //查找人员关系
+                        .map(PersonnelAuthorization::getRelations)
+                        .map(relations -> relations.findPos("leader"))
+                        .orElse(null));
     }
 
-    @GetMapping("/test")
-    @RequiresPermissions("test:*")
-    public ResponseMessage testShiro(Authorization authorization) {
-        return ResponseMessage.ok(authorization);
+    @GetMapping("/test2")
+    public ResponseMessage test2(Authentication authentication) {
+        return ResponseMessage.ok(authentication);
     }
 
     @GetMapping("/testQuery")
-    @RequiresUser
+    @Authorize
     @RequiresDataAccess(permission = "test", action = Permission.ACTION_QUERY)
-    @RequiresFieldAccess(permission = "test", action = Permission.ACTION_QUERY)
-    public ResponseMessage testQuery(QueryParamEntity entity) {
+    @ApiOperation("测试查询")
+    @AccessLogger("查询")
+    public ResponseMessage<QueryParamEntity> testQuery(QueryParamEntity entity) {
+
+        /*
+        @RequiresDataAccess 数据级别权限控制
+        entity.terms 被嵌入查询条件
+        */
         return ResponseMessage.ok(entity);
     }
-
 
     @PutMapping("/testUpdate/{id}")
-    @RequiresUser
     @RequiresDataAccess(permission = "test", action = Permission.ACTION_UPDATE)
-    @RequiresFieldAccess(permission = "test", action = Permission.ACTION_UPDATE)
-    public ResponseMessage testUpdate(@PathVariable String id, @RequestBody UserEntity entity) {
-        return ResponseMessage.ok(entity);
+    public ResponseMessage<UserModel> testUpdate(@PathVariable String id, @RequestBody UserModel model) {
+        return ResponseMessage.ok(model);
     }
 
-    public static void main(String[] args) throws NoSuchMethodException {
-        System.out.println(UserController.class.getMethod("list", Entity.class));
+
+    @PutMapping("/testUpdateBatch")
+    @Authorize(ignore = true)
+    public ResponseMessage<List<UserModel>> testUpdate(@RequestBody List<UserModel> model) {
+        return ResponseMessage.ok(model);
+    }
+
+
+    @PutMapping("/test/testPersonnel")
+    public ResponseMessage<PersonnelAuthorization> testPersonnel() {
+        return ResponseMessage.ok(PersonnelAuthorization.current().orElseThrow(UnAuthorizedException::new));
     }
 
     @Override
@@ -76,9 +96,13 @@ public class TestController implements QueryController<UserEntity, String, Query
         public UserEntity selectByPk(String id) {
             SimpleUserEntity userEntity = new SimpleUserEntity();
             // 同一个用户
-            userEntity.setCreatorId(AuthorizationHolder.get().getUser().getId());
-
+            userEntity.setCreatorId(Authentication.current().orElseThrow(UnAuthorizedException::new).getUser().getId());
             return userEntity;
+        }
+
+        @Override
+        public List<UserEntity> selectByPk(List<String> id) {
+            return null;
         }
 
         @Override
@@ -110,5 +134,10 @@ public class TestController implements QueryController<UserEntity, String, Query
         public UserEntity selectSingle(Entity param) {
             return null;
         }
+    }
+
+    public static void main(String[] args) {
+        String id =org.apache.commons.codec.binary.Base64.encodeBase64String("test".getBytes());
+        System.out.println(id);
     }
 }
