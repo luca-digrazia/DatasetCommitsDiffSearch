@@ -226,8 +226,84 @@ public class TBuildConfig {
     @Config(message = "Remote bundle list, artifactId", advance = false, order = 1, group = "atlas")
     private Set<String> outOfApkBundles = Sets.newHashSet();
 
+    public Set<String> getBundleToMdex() {
+        return bundleToMdex;
+    }
+
+    public void setBundleToMdex(Set<String> bundleToMdex) {
+        this.bundleToMdex = bundleToMdex;
+    }
+
+    private Set<String>bundleToMdex = Sets.newHashSet();
+
+
+    public Boolean getAllBundlesToMdex() {
+        return allBundlesToMdex;
+    }
+
+    public void setAllBundlesToMdex(Boolean allBundlesToMdex) {
+        this.allBundlesToMdex = allBundlesToMdex;
+    }
+
+    private Boolean allBundlesToMdex = false;
+
+    public Boolean getConsumerProguardEnabled() {
+        return consumerProguardEnabled;
+    }
+
+    public void setConsumerProguardEnabled(Boolean consumerProguardEnabled) {
+        this.consumerProguardEnabled = consumerProguardEnabled;
+    }
+
+    private Boolean consumerProguardEnabled = false;
+
+    public Boolean getMergeBundlesDex() {
+        return mergeBundlesDex;
+    }
+
+    public void setMergeBundlesDex(Boolean mergeBundlesDex) {
+        this.mergeBundlesDex = mergeBundlesDex;
+    }
+
+    private Boolean mergeBundlesDex = false;
+
+    public Boolean getScanDupRes() {
+        return scanDupRes;
+    }
+
+    public void setScanDupRes(Boolean scanDupRes) {
+        this.scanDupRes = scanDupRes;
+    }
+
+    private Boolean scanDupRes = false;
+
+    public String getAppCoordinate() {
+        return appCoordinate;
+    }
+
+    public void setAppCoordinate(String appCoordinate) {
+        this.appCoordinate = appCoordinate;
+    }
+
+    @Config(message = "appCoordinate groupId:artifactId", advance = false, order = 1, group = "atlas")
+    private String appCoordinate = "";
+
+    public String getGroup() {
+        return group;
+    }
+
+    public void setGroup(String group) {
+        this.group = group;
+    }
+
+    @Config(message = "group", advance = false, order = 1, group = "atlas")
+
+    private String group = "";
+
+
     @Config(title = "Self-initiated bundle list", message = "The value is packageName", order = 1, advance = false, group = "atlas")
     private List<String> autoStartBundles = new ArrayList<String>();
+
 
     @Config(title = "Pre-launch list",
         message = "To implement the PreLaunch class, multiple classes are used , No separate", order = 1, advance = false, group = "atlas")
@@ -242,6 +318,17 @@ public class TBuildConfig {
 
     @Config(title = "bundleThe packageId definition file", message = "bundlePackageId defines files that are not defined automatically", group = "atlas")
     private File packageIdFile = new File("");
+
+
+    public File getAwbConfigFile() {
+        return awbConfigFile;
+    }
+
+    public void setAwbConfigFile(File awbConfigFile) {
+        this.awbConfigFile = awbConfigFile;
+    }
+
+    private File awbConfigFile = new File("");
 
     @Config(message = "Automatically generate the bundle's packageId", order = 6, advance = false, group = "atlas")
     private boolean autoPackageId = true;
@@ -280,6 +367,17 @@ public class TBuildConfig {
     @Deprecated
     private Boolean resV4Enabled = true;
 
+
+    public Boolean getDisabledBundleDependency() {
+        return disabledBundleDependency;
+    }
+
+    public void setDisabledBundleDependency(Boolean disabledBundleDependency) {
+        this.disabledBundleDependency = disabledBundleDependency;
+    }
+
+    private Boolean disabledBundleDependency = false;
+
     @Config(message = "classInjection before proguard", advance = true, order = 12, group = "atlas")
     private Boolean injectBeforeProguard = false;
 
@@ -300,10 +398,44 @@ public class TBuildConfig {
     @Deprecated
     private Set<String> insideOfApkBundles = Sets.newHashSet();
 
+
+    public Set<String> getInjectExcludePkgs() {
+        return injectExcludePkgs;
+    }
+
+    public void setInjectExcludePkgs(Set<String> injectExcludePkgs) {
+        this.injectExcludePkgs = injectExcludePkgs;
+    }
+
+    private Set<String>injectExcludePkgs = new HashSet<>();
+
+    public Set<String> getOutOfApkNativeSos() {
+        return outOfApkNativeSos;
+    }
+
+    public void setOutOfApkNativeSos(Set<String> outOfApkNativeSos) {
+        this.outOfApkNativeSos = outOfApkNativeSos;
+    }
+
+    private Set<String>outOfApkNativeSos = Sets.newHashSet();
+
     private boolean incremental = false;
+
+
+    public boolean isInjectSerialVersionUID() {
+        return injectSerialVersionUID;
+    }
+
+    public void setInjectSerialVersionUID(boolean injectSerialVersionUID) {
+        this.injectSerialVersionUID = injectSerialVersionUID;
+    }
+
+    private boolean injectSerialVersionUID = false;
 
     @Config(message = "Whether to use fast proguard", order = 16, advance = true, group = "atlas")
     private boolean fastProguard = false;
+
+    private boolean keepJavaResAfterProguard = false;
 
     @Config(message = "Whether to use the proguard cache", order = 17, advance = true, group = "atlas")
     private boolean proguardCacheEnabled = true;
@@ -319,8 +451,12 @@ public class TBuildConfig {
 
     private int proguardParallelCount = 8;
 
+    @Config(message = "put awb so in assets, not  lib/armeabi dir", order = 19, advance = true, group = "atlas")
+    private Set<String> keepInAssetsSoNames = new HashSet<>();
+
     @Config(message = "put awb so in lib/armeabi , not assets dir", order = 19, advance = true, group = "atlas")
     private Set<String> keepInLibSoNames = new HashSet<>();
+
 
     public Set<String> getRemoveSoFiles() {
         return removeSoFiles;
@@ -399,6 +535,7 @@ public class TBuildConfig {
     }
 
     public Set<String> getOutOfApkBundles() {
+
         return outOfApkBundles;
     }
 
@@ -574,11 +711,80 @@ public class TBuildConfig {
         this.dexNetworkCacheEnabled = dexNetworkCacheEnabled;
     }
 
+    public Set<String> getKeepInAssetsSoNames() {
+        return keepInAssetsSoNames;
+    }
+
+    public void setKeepInAssetsSoNames(Set<String> keepInAssetsSoNames) {
+        this.keepInAssetsSoNames = keepInAssetsSoNames;
+    }
+
     public Set<String> getKeepInLibSoNames() {
         return keepInLibSoNames;
     }
 
     public void setKeepInLibSoNames(Set<String> keepInLibSoNames) {
         this.keepInLibSoNames = keepInLibSoNames;
+    }
+
+    public boolean isKeepJavaResAfterProguard() {
+        return keepJavaResAfterProguard;
+    }
+
+    public void setKeepJavaResAfterProguard(boolean keepJavaResAfterProguard) {
+        this.keepJavaResAfterProguard = keepJavaResAfterProguard;
+    }
+
+    public void setPushInstall(boolean pushInstall) {
+        this.pushInstall = pushInstall;
+    }
+
+    private boolean pushInstall;
+    public boolean isPushInstall() {
+        return pushInstall;
+    }
+
+    public boolean isPatchConstructors() {
+        return patchConstructors;
+    }
+
+    public void setPatchConstructors(boolean patchConstructors) {
+        this.patchConstructors = patchConstructors;
+    }
+
+    private boolean patchConstructors = false;
+
+    public boolean isPatchEachMethod() {
+        return patchEachMethod;
+    }
+
+    public void setPatchEachMethod(boolean patchEachMethod) {
+        this.patchEachMethod = patchEachMethod;
+    }
+
+    private boolean patchEachMethod = false;
+
+
+
+    public int getPatchSuperMethodCount() {
+        return patchSuperMethodCount;
+    }
+
+    public void setPatchSuperMethodCount(int patchSuperMethodCount) {
+        this.patchSuperMethodCount = patchSuperMethodCount;
+    }
+
+    private int patchSuperMethodCount = 100;
+
+    public void setSupportAddCallSuper(boolean supportAddCallSuper) {
+        this.supportAddCallSuper = supportAddCallSuper;
+    }
+
+    private boolean supportAddCallSuper = false;
+
+
+
+    public boolean isSupportAddCallSuper() {
+        return supportAddCallSuper;
     }
 }

@@ -9,6 +9,7 @@ import com.android.build.gradle.internal.api.AppVariantOutputContext;
 import com.android.build.gradle.internal.pipeline.InjectTransform;
 import com.android.build.gradle.internal.pipeline.IntermediateFolderUtils;
 import com.android.build.gradle.internal.pipeline.TransformManager;
+import com.android.build.gradle.internal.publishing.AndroidArtifacts;
 import com.android.build.gradle.internal.scope.GlobalScope;
 import com.android.build.gradle.internal.scope.VariantScope;
 import com.android.build.gradle.internal.transforms.ProGuardTransform;
@@ -106,6 +107,10 @@ public class DelegateProguardTransform extends MtlInjectTransform {
         firstTime = true;
         defaultProguardFiles.addAll(appVariantContext.getVariantData().getVariantConfiguration().getBuildType().getProguardFiles());
 
+        if (buildConfig.getConsumerProguardEnabled()){
+            defaultProguardFiles.addAll(appVariantContext.getScope().getArtifactFileCollection(AndroidArtifacts.ConsumedConfigType.COMPILE_CLASSPATH, AndroidArtifacts.ArtifactScope.ALL, AndroidArtifacts.ArtifactType.PROGUARD_RULES).getFiles());
+        }
+
         List<AwbBundle> awbBundles = AtlasBuildContext.androidDependencyTrees.get(
                 appVariantContext.getScope().getVariantConfiguration().getFullName()).getAwbBundles();
         if (awbBundles != null && awbBundles.size() > 0) {
@@ -136,9 +141,11 @@ public class DelegateProguardTransform extends MtlInjectTransform {
         applyBundleInOutConfigration(appVariantContext);
 
         //apply bundle's configuration, Switch control
-//        if (buildConfig.isBundleProguardConfigEnabled()) {
-//            applyBundleProguardConfigration(appVariantContext);
-//        }
+        if (buildConfig.isBundleProguardConfigEnabled() &&! buildConfig.getConsumerProguardEnabled()) {
+            applyBundleProguardConfigration(appVariantContext);
+        }
+
+        proGuardTransform.setConfigurationFiles(appVariantContext.getScope().getGlobalScope().getProject().files(defaultProguardFiles));
 
         //apply mapping
         applyMapping(appVariantContext);
@@ -240,7 +247,6 @@ public class DelegateProguardTransform extends MtlInjectTransform {
                 variantScope.getVariantConfiguration().getFullName());
 
         if (dependencyTree.getAwbBundles().size() > 0) {
-
             BaseVariantOutput vod = (BaseVariantOutput) appVariantContext.getVariantOutputData().iterator().next();
             AppVariantOutputContext appVariantOutputContext = appVariantContext.getAppVariantOutputContext(ApkDataUtils.get(vod));
             File awbObfuscatedDir = new File(globalScope.getIntermediatesDir(),
@@ -256,7 +262,6 @@ public class DelegateProguardTransform extends MtlInjectTransform {
             }
 
             defaultProguardFiles.add(awbInOutConfig);
-            proGuardTransform.setConfigurationFiles(appVariantContext.getScope().getGlobalScope().getProject().files(defaultProguardFiles));
 
         }
 
@@ -311,7 +316,7 @@ public class DelegateProguardTransform extends MtlInjectTransform {
                 }
             }
         }
-        proGuardTransform.setConfigurationFiles(appVariantContext.getScope().getGlobalScope().getProject().files(proguardFiles));
+        defaultProguardFiles.addAll(proguardFiles);
 
     }
 }
