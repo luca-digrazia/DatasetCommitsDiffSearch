@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -185,7 +185,8 @@ public final class PathFragment implements Comparable<PathFragment>, Serializabl
    * @param offset how many characters from the start of the string to ignore.
    */
   private static String[] segment(String toSegment, int offset) {
-    int length = toSegment.length();
+    char[] chars = toSegment.toCharArray();
+    int length = chars.length;
 
     // Handle "/" and "" quickly.
     if (length == offset) {
@@ -197,7 +198,7 @@ public final class PathFragment implements Comparable<PathFragment>, Serializabl
     int seg = 0;
     int start = offset;
     for (int i = offset; i < length; i++) {
-      if (isSeparator(toSegment.charAt(i))) {
+      if (isSeparator(chars[i])) {
         if (i > start) {  // to skip repeated separators
           seg++;
         }
@@ -211,16 +212,20 @@ public final class PathFragment implements Comparable<PathFragment>, Serializabl
     seg = 0;
     start = offset;
     for (int i = offset; i < length; i++) {
-      if (isSeparator(toSegment.charAt(i))) {
+      if (isSeparator(chars[i])) {
         if (i > start) {  // to skip repeated separators
-          result[seg] = StringCanonicalizer.intern(toSegment.substring(start,  i));
+          // Make a copy of the String here to allow the interning to save memory. String.substring
+          // does not make a copy, but refers to the original char array, preventing garbage
+          // collection of the parts that are unnecessary.
+          result[seg] = StringCanonicalizer.intern(new String(chars, start,  i - start));
           seg++;
         }
         start = i + 1;
       }
     }
     if (start < length) {
-      result[seg] = StringCanonicalizer.intern(toSegment.substring(start, length));
+      result[seg] = StringCanonicalizer.intern(new String(chars, start, length - start));
+      seg++;
     }
     return result;
   }
