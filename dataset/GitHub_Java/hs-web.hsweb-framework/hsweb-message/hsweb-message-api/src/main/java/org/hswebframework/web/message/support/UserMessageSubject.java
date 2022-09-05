@@ -16,20 +16,17 @@
  *
  */
 
-package org.hswebframework.web.message.annotation;
-
-
-import java.lang.annotation.*;
+package org.hswebframework.web.message.support;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
-@Target({ElementType.TYPE, ElementType.METHOD})
-@Retention(RetentionPolicy.RUNTIME)
-@Inherited
-@Documented
-public @interface MessageSupplier {
-    String queue() default "";
+public interface UserMessageSubject extends QueueMessageSubject {
+    String getUserId();
 
-    String topic() default "";
+    default String getQueueName() {
+        return "queue_for_user:" + getUserId();
+    }
 }

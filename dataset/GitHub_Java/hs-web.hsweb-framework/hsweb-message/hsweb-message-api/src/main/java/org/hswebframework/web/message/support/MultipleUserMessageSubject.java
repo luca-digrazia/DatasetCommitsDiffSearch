@@ -16,20 +16,22 @@
  *
  */
 
-package org.hswebframework.web.message.annotation;
+package org.hswebframework.web.message.support;
 
-
-import java.lang.annotation.*;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
-@Target({ElementType.TYPE, ElementType.METHOD})
-@Retention(RetentionPolicy.RUNTIME)
-@Inherited
-@Documented
-public @interface MessageSupplier {
-    String queue() default "";
+public interface MultipleUserMessageSubject extends MultipleQueueMessageSubject {
+    Set<String> getUserIdList();
 
-    String topic() default "";
+    default Set<String> getQueueName() {
+        return getUserIdList().stream()
+                .map(id -> "queue_for_user:" + id)
+                .collect(Collectors.toSet());
+    }
 }

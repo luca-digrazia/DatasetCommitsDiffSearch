@@ -26,6 +26,8 @@ import org.hswebframework.web.message.support.TextMessage;
 import java.io.Serializable;
 
 /**
+ * TODO 完成注释
+ *
  * @author zhouhao
  */
 public class StaticMessageBuilder {
