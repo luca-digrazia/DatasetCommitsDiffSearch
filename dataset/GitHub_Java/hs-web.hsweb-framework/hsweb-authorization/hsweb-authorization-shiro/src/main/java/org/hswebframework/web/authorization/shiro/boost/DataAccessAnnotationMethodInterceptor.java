@@ -17,27 +17,24 @@
 
 package org.hswebframework.web.authorization.shiro.boost;
 
+import org.apache.shiro.aop.AnnotationResolver;
+import org.apache.shiro.authc.AuthenticationException;
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.aop.AuthorizingAnnotationHandler;
 import org.apache.shiro.authz.aop.AuthorizingAnnotationMethodInterceptor;
-import org.hsweb.expands.script.engine.DynamicScriptEngine;
-import org.hsweb.expands.script.engine.DynamicScriptEngineFactory;
 import org.hswebframework.web.ApplicationContextHolder;
-import org.hswebframework.web.BusinessException;
-import org.hswebframework.web.authorization.Authorization;
-import org.hswebframework.web.authorization.AuthorizationHolder;
+import org.hswebframework.web.AuthorizeException;
+import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
-import org.hswebframework.web.authorization.access.DataAccess;
+import org.hswebframework.web.authorization.access.DataAccessConfig;
 import org.hswebframework.web.authorization.access.DataAccessController;
-import org.hswebframework.web.authorization.access.ParamContext;
 import org.hswebframework.web.authorization.annotation.Logical;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
-import org.hswebframework.web.authorization.annotation.RequiresExpression;
+import org.hswebframework.web.boost.aop.context.MethodInterceptorHolder;
+import org.hswebframework.web.boost.aop.context.MethodInterceptorParamContext;
 import org.hswebframwork.utils.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
 
 import java.lang.annotation.Annotation;
 import java.util.*;
@@ -53,12 +50,12 @@ import java.util.stream.Collectors;
  * @author zhouhao
  * @see DefaultDataAccessController
  * @see DataAccessAnnotationHandler#assertAuthorized(Annotation)
- * @since  3.0
+ * @since 3.0
  */
 public class DataAccessAnnotationMethodInterceptor extends AuthorizingAnnotationMethodInterceptor {
 
-    public DataAccessAnnotationMethodInterceptor(DataAccessController controller) {
-        super(new DataAccessAnnotationHandler(controller));
+    public DataAccessAnnotationMethodInterceptor(DataAccessController controller, AnnotationResolver resolver) {
+        super(new DataAccessAnnotationHandler(controller), resolver);
     }
 
     private static final Logger logger = LoggerFactory.getLogger(DataAccessAnnotationMethodInterceptor.class);
@@ -71,7 +68,7 @@ public class DataAccessAnnotationMethodInterceptor extends AuthorizingAnnotation
             this.dataAccessController = controller;
         }
 
-        Map<Class<DataAccessController>, DataAccessController> cache = new HashMap<>();
+        final Map<Class<DataAccessController>, DataAccessController> cache = new HashMap<>(128);
 
         @Override
         public void assertAuthorized(Annotation a) throws AuthorizationException {
@@ -82,10 +79,7 @@ public class DataAccessAnnotationMethodInterceptor extends AuthorizingAnnotation
                 return;
             }
             //无权限信息
-            Authorization authorization = AuthorizationHolder.get();
-            if (authorization == null) {
-                throw new AuthorizationException("{no_authorization}");
-            }
+            Authentication authentication = Authentication.current().orElseThrow(AuthorizeException::new);
             RequiresDataAccess accessAnn = ((RequiresDataAccess) a);
             DataAccessController accessController = dataAccessController;
             //在注解上自定义的权限控制器
@@ -107,12 +101,13 @@ public class DataAccessAnnotationMethodInterceptor extends AuthorizingAnnotation
             }
             DataAccessController finalAccessController = accessController;
 
-            ParamContext context = holder.createParamContext();
+            MethodInterceptorParamContext context = holder.createParamContext();
             String permission = accessAnn.permission();
-            Permission permissionInfo = authorization.getPermission(permission);
+            Permission permissionInfo = authentication.getPermission(permission).orElseThrow(AuthenticationException::new);
+
             List<String> actionList = Arrays.asList(accessAnn.action());
             //取得当前登录用户持有的控制规则
-            Set<DataAccess> accesses = permissionInfo
+            Set<DataAccessConfig> accesses = permissionInfo
                     .getDataAccesses()
                     .stream()
                     .filter(access -> actionList.contains(access.getAction()))
@@ -120,7 +115,7 @@ public class DataAccessAnnotationMethodInterceptor extends AuthorizingAnnotation
             //无规则,则代表不进行控制
             if (accesses.isEmpty()) return;
             //单个规则验证函数
-            Function<Predicate<DataAccess>, Boolean> function =
+            Function<Predicate<DataAccessConfig>, Boolean> function =
                     accessAnn.logical() == Logical.AND ?
                             accesses.stream()::allMatch : accesses.stream()::anyMatch;
             //调用控制器进行验证
