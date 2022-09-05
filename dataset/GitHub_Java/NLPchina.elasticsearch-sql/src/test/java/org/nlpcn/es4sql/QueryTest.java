@@ -36,9 +36,9 @@ public class QueryTest {
 	}
 
 	@Test
-	public void indexWithWildcardTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
-		SearchHits response = query("SELECT * FROM elasticsearch-* LIMIT 1000");
-		assertThat(response.getTotalHits(), greaterThan(0L));
+	public void typeWithWildcardTest() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
+		SearchHits response = query(String.format("SELECT * FROM %s/phrase* LIMIT 1000", TEST_INDEX));
+		Assert.assertEquals(8, response.getTotalHits());
 	}
 
 
@@ -289,22 +289,6 @@ public class QueryTest {
 			Assert.assertTrue(errorMessage, insertTime.isBefore(dateToCompare));
 		}
 	}
-
-    @Test
-    public void dateSearchBraces() throws IOException, SqlParseException, SQLFeatureNotSupportedException, ParseException {
-        DateTimeFormatter formatter = DateTimeFormat.forPattern(DATE_FORMAT);
-        DateTime dateToCompare = new DateTime(2014, 8, 18, 0, 0, 0);
-
-        SearchHits response = query(String.format("SELECT insert_time FROM %s/online WHERE insert_time < {ts '2014-08-18'}", TEST_INDEX));
-        SearchHit[] hits = response.getHits();
-        for(SearchHit hit : hits) {
-            Map<String, Object> source = hit.getSource();
-            DateTime insertTime = formatter.parseDateTime((String) source.get("insert_time"));
-
-            String errorMessage = String.format("insert_time must be smaller then 2014-08-18. found: %s", insertTime);
-            Assert.assertTrue(errorMessage, insertTime.isBefore(dateToCompare));
-        }
-    }
 
 
 	@Test

@@ -23,14 +23,20 @@ public class SQLExprTableSource extends SQLTableSourceImpl {
     private static final long serialVersionUID = 1L;
 
     protected SQLExpr         expr;
+	private String tablename;
 
-    public SQLExprTableSource(){
+	public SQLExprTableSource(){
 
     }
 
     public SQLExprTableSource(SQLExpr expr){
         this.expr = expr;
+		this.tablename = expr.toString().replace(" ", "");
     }
+
+	public SQLExprTableSource(String tablename){
+		this.tablename = tablename;
+	}
 
     public SQLExpr getExpr() {
         return this.expr;
@@ -38,6 +44,7 @@ public class SQLExprTableSource extends SQLTableSourceImpl {
 
     public void setExpr(SQLExpr expr) {
         this.expr = expr;
+		this.tablename = expr.toString().replace(" ", "");
     }
 
     @Override
@@ -51,4 +58,9 @@ public class SQLExprTableSource extends SQLTableSourceImpl {
     public void output(StringBuffer buf) {
         this.expr.output(buf);
     }
+
+	@Override
+	public String getTablename() {
+		return this.tablename;
+	}
 }
