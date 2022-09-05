@@ -20,7 +20,7 @@ package org.hswebframework.web.starter.organizational;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import org.hswebframework.web.entity.organizational.DepartmentEntity;
+import org.hswebframework.web.entity.organizational.PersonEntity;
 import org.hswebframework.web.starter.convert.FastJsonGenericHttpMessageConverter;
 import org.hswebframework.web.tests.SimpleWebApplicationTests;
 import org.junit.Assert;
@@ -33,52 +33,52 @@ import org.springframework.http.MediaType;
  *
  * @author hsweb-generator-online
  */
-public class DepartmentTests extends SimpleWebApplicationTests {
+public class PersonTests extends SimpleWebApplicationTests {
 
     @Autowired
     private FastJsonGenericHttpMessageConverter fastJsonHttpMessageConverter;
 
     @Test
     public void testCrud() throws Exception {
-        DepartmentEntity entity = entityFactory.newInstance(DepartmentEntity.class);
+        PersonEntity entity = entityFactory.newInstance(PersonEntity.class);
         //todo 设置测试属性
         entity.setName("test");
-        entity.setCode("2");
+
         // test add data
         String requestBody = JSON.toJSONString(entity);
-        JSONObject result = testPost("/department").setUp(setup -> setup.contentType(MediaType.APPLICATION_JSON).content(requestBody)).exec().resultAsJson();
+        JSONObject result = testPost("/person").setUp(setup -> setup.contentType(MediaType.APPLICATION_JSON).content(requestBody)).exec().resultAsJson();
         Assert.assertEquals(200, result.get("status"));
         String id = result.getString("result");
         Assert.assertNotNull(id);
         entity.setId(id);
         // test get data
-        result = testGet("/department/" + id).exec().resultAsJson();
-        entity = result.getObject("result", entityFactory.getInstanceType(DepartmentEntity.class));
+        result = testGet("/person/" + id).exec().resultAsJson();
+        entity = result.getObject("result", entityFactory.getInstanceType(PersonEntity.class));
 
         Assert.assertEquals(200, result.get("status"));
         Assert.assertNotNull(result.getJSONObject("result"));
 
         Assert.assertEquals(fastJsonHttpMessageConverter.converter(entity),
-                fastJsonHttpMessageConverter.converter(result.getObject("result", entityFactory.getInstanceType(DepartmentEntity.class))));
+                fastJsonHttpMessageConverter.converter(result.getObject("result", entityFactory.getInstanceType(PersonEntity.class))));
         //todo 修改测试属性
-        DepartmentEntity newEntity = entityFactory.newInstance(DepartmentEntity.class);
-        newEntity.setName("test");
+        PersonEntity newEntity = entityFactory.newInstance(PersonEntity.class);
+        newEntity.setName("test2");
 
-        result = testPut("/department/" + id)
+        result = testPut("/person/" + id)
                 .setUp(setup ->
                         setup.contentType(MediaType.APPLICATION_JSON)
                                 .content(JSON.toJSONString(newEntity)))
                 .exec().resultAsJson();
         Assert.assertEquals(200, result.get("status"));
 
-        result = testGet("/department/" + id).exec().resultAsJson();
+        result = testGet("/person/" + id).exec().resultAsJson();
         result = result.getJSONObject("result");
         Assert.assertNotNull(result);
 
-        result = testDelete("/department/" + id).exec().resultAsJson();
+        result = testDelete("/person/" + id).exec().resultAsJson();
         Assert.assertEquals(200, result.get("status"));
 
-        result = testGet("/department/" + id).exec().resultAsJson();
+        result = testGet("/person/" + id).exec().resultAsJson();
         Assert.assertEquals(404, result.get("status"));
     }
 }

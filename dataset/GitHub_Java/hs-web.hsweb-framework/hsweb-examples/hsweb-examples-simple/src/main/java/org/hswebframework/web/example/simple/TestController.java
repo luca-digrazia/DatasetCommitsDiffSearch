@@ -1,12 +1,11 @@
 package org.hswebframework.web.example.simple;
 
 import io.swagger.annotations.ApiOperation;
-import org.apache.commons.codec.digest.DigestUtils;
+import org.hswebframework.web.AuthorizeException;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
 import org.hswebframework.web.authorization.annotation.RequiresDataAccess;
-import org.hswebframework.web.authorization.exception.UnAuthorizedException;
 import org.hswebframework.web.commons.entity.Entity;
 import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
@@ -21,7 +20,6 @@ import org.hswebframework.web.service.QueryByEntityService;
 import org.hswebframework.web.service.QueryService;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Base64;
 import java.util.List;
 
 
@@ -39,12 +37,7 @@ public class TestController implements QueryController<UserEntity, String, Query
     @GetMapping("/test1")
     @Authorize(action = "query")
     public ResponseMessage testSimple(Authentication authentication) {
-        return ResponseMessage.ok(
-                PersonnelAuthorization.current()
-                        //查找人员关系
-                        .map(PersonnelAuthorization::getRelations)
-                        .map(relations -> relations.findPos("leader"))
-                        .orElse(null));
+        return ResponseMessage.ok(authentication).exclude(Authentication.class, "attributes");
     }
 
     @GetMapping("/test2")
@@ -82,7 +75,7 @@ public class TestController implements QueryController<UserEntity, String, Query
 
     @PutMapping("/test/testPersonnel")
     public ResponseMessage<PersonnelAuthorization> testPersonnel() {
-        return ResponseMessage.ok(PersonnelAuthorization.current().orElseThrow(UnAuthorizedException::new));
+        return ResponseMessage.ok(PersonnelAuthorization.current().get());
     }
 
     @Override
@@ -96,7 +89,7 @@ public class TestController implements QueryController<UserEntity, String, Query
         public UserEntity selectByPk(String id) {
             SimpleUserEntity userEntity = new SimpleUserEntity();
             // 同一个用户
-            userEntity.setCreatorId(Authentication.current().orElseThrow(UnAuthorizedException::new).getUser().getId());
+            userEntity.setCreatorId(Authentication.current().orElseThrow(AuthorizeException::new).getUser().getId());
             return userEntity;
         }
 
@@ -134,10 +127,5 @@ public class TestController implements QueryController<UserEntity, String, Query
         public UserEntity selectSingle(Entity param) {
             return null;
         }
-    }
-
-    public static void main(String[] args) {
-        String id =org.apache.commons.codec.binary.Base64.encodeBase64String("test".getBytes());
-        System.out.println(id);
     }
 }

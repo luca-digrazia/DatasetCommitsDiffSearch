@@ -9,11 +9,11 @@ import com.alibaba.fastjson.serializer.SerializeFilter;
 import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.alibaba.fastjson.serializer.SimplePropertyPreFilter;
 import org.hswebframework.web.ThreadLocalUtils;
+import org.hswebframework.web.commons.entity.Entity;
+import org.hswebframework.web.commons.entity.factory.EntityFactory;
+import org.hswebframework.web.commons.model.Model;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframework.utils.StringUtils;
-import org.hswebframework.web.convert.CustomMessageConverter;
-import org.hswebframework.web.dict.DictSupportApi;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpOutputMessage;
@@ -36,31 +36,32 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class FastJsonGenericHttpMessageConverter extends AbstractGenericHttpMessageConverter<Object> implements Ordered {
+public class FastJsonGenericHttpMessageConverter extends AbstractGenericHttpMessageConverter<Object> implements Ordered{
 
     public final static Charset UTF8 = Charset.forName("UTF-8");
-
-//    @Autowired(required = false)
-//    private DictSupportApi dictSupportApi;
 
     private Charset charset = UTF8;
 
     private SerializerFeature[] features = new SerializerFeature[0];
 
-    private List<CustomMessageConverter> converters;
+    private EntityFactory entityFactory;
 
     public FastJsonGenericHttpMessageConverter() {
         super(new MediaType("application", "json", UTF8),
                 new MediaType("application", "*+json", UTF8));
     }
 
-    public void setConverters(List<CustomMessageConverter> converters) {
-        this.converters = converters;
-    }
-
     @Override
     public int getOrder() {
         return Ordered.HIGHEST_PRECEDENCE;
+    }
+
+    public void setEntityFactory(EntityFactory entityFactory) {
+        this.entityFactory = entityFactory;
+    }
+
+    public EntityFactory getEntityFactory() {
+        return entityFactory;
     }
 
     @Override
@@ -71,7 +72,7 @@ public class FastJsonGenericHttpMessageConverter extends AbstractGenericHttpMess
 
     @Override
     public boolean canRead(Type type, Class<?> contextClass, MediaType mediaType) {
-        return type instanceof ParameterizedType && super.canRead(type, contextClass, mediaType);
+        return  type instanceof ParameterizedType&& super.canRead(type, contextClass, mediaType);
     }
 
     @Override
@@ -101,30 +102,20 @@ public class FastJsonGenericHttpMessageConverter extends AbstractGenericHttpMess
 
 
     public Object readByBytes(Type type, byte[] bytes) {
-        if (type == String.class) {
-            return new String(bytes, charset);
-        }
-        if (type instanceof Class) {
-            Class clazz = ((Class) type);
-            if (null != converters) {
-                CustomMessageConverter converter = converters.stream()
-                        .filter(cvt -> cvt.support(clazz))
-                        .findFirst()
-                        .orElse(null);
-                if (converter != null) {
-                    return converter.convert(clazz, bytes);
-                }
-            }
-        }
-        Object object = JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), type);
-//        if (dictSupportApi != null) {
-//            object = dictSupportApi.unwrap(object);
+        if (type == String.class) return new String(bytes, charset);
+//        if (type instanceof Class) {
+//            Class typeClass = ((Class) type);
+//            if (entityFactory != null && (Entity.class.isAssignableFrom(typeClass) || Model.class.isAssignableFrom(typeClass))) {
+//                @SuppressWarnings("unchecked")
+//                Class tmp = entityFactory.getInstanceType(typeClass);
+//                if (tmp != null) type = tmp;
+//            }
 //        }
-        return object;
+        return JSON.parseObject(bytes, 0, bytes.length, charset.newDecoder(), type);
     }
 
     @Override
-    public Object read(Type type, Class<?> contextClass, HttpInputMessage inputMessage) throws IOException {
+    public Object read(Type type, Class<?> contextClass, HttpInputMessage inputMessage) throws IOException, HttpMessageNotReadableException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         InputStream in = inputMessage.getBody();
         byte[] buf = new byte[1024];
@@ -142,22 +133,13 @@ public class FastJsonGenericHttpMessageConverter extends AbstractGenericHttpMess
     }
 
     public String converter(Object obj) {
-        if (obj instanceof String) {
-            return (String) obj;
-        }
-
+        if (obj instanceof String) return (String) obj;
         String text;
         String callback = ThreadLocalUtils.getAndRemove("jsonp-callback");
         if (obj instanceof ResponseMessage) {
             ResponseMessage message = (ResponseMessage) obj;
-//            if (dictSupportApi != null) {
-//                message.setResult(dictSupportApi.wrap(message.getResult()));
-//            }
-            text = JSON.toJSONString(obj, FastJsonHttpMessageConverter.parseFilter(message), features);
+            text = JSON.toJSONString(obj, parseFilter(message), features);
         } else {
-//            if (dictSupportApi != null) {
-//                obj = dictSupportApi.wrap(obj);
-//            }
             text = JSON.toJSONString(obj, features);
         }
         if (!StringUtils.isNullOrEmpty(callback)) {
@@ -177,5 +159,25 @@ public class FastJsonGenericHttpMessageConverter extends AbstractGenericHttpMess
         out.flush();
     }
 
+    protected static SerializeFilter[] parseFilter(ResponseMessage<?> responseMessage) {
+        List<SerializeFilter> filters = new ArrayList<>();
+        if (responseMessage.getIncludes() != null)
+            for (Map.Entry<Class<?>, Set<String>> classSetEntry : responseMessage.getIncludes().entrySet()) {
+                SimplePropertyPreFilter filter = new SimplePropertyPreFilter(classSetEntry.getKey());
+                filter.getIncludes().addAll(classSetEntry.getValue());
+                filters.add(filter);
+            }
+        if (responseMessage.getExcludes() != null)
+            for (Map.Entry<Class<?>, Set<String>> classSetEntry : responseMessage.getExcludes().entrySet()) {
+                SimplePropertyPreFilter filter = new SimplePropertyPreFilter(classSetEntry.getKey());
+                filter.getExcludes().addAll(classSetEntry.getValue());
+                filters.add(filter);
+            }
+        PropertyFilter responseMessageFilter = (object, name, value) ->
+                !(object instanceof ResponseMessage) || value != null;
+        filters.add(responseMessageFilter);
+
+        return filters.toArray(new SerializeFilter[filters.size()]);
+    }
 
 }

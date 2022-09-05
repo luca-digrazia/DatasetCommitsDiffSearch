@@ -112,8 +112,6 @@ public class HswebAutoConfiguration {
                 return super.getDeserializer(type);
             }
         };
-
-        //fastjson.parser.autoTypeAccept
         ParserConfig.getGlobalInstance().addAccept("org.hswebframework.web.entity.");
         ParserConfig.getGlobalInstance().addAccept("org.hsweb.");
         ParserConfig.getGlobalInstance().addDeny("org.hsweb.ezorm.core.param.SqlTerm");
