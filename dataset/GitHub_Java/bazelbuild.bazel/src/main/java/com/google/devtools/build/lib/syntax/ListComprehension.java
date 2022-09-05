@@ -122,8 +122,10 @@ public final class ListComprehension extends Expression {
   @Override
   SkylarkType validate(ValidationEnvironment env) throws EvalException {
     for (Map.Entry<LValue, Expression> list : lists) {
-      list.getValue().validate(env);
-      list.getKey().validate(env, getLocation());
+      // TODO(bazel-team): Get the type of elements
+      SkylarkType type = list.getValue().validate(env);
+      env.checkIterable(type, getLocation());
+      list.getKey().validate(env, getLocation(), SkylarkType.UNKNOWN);
     }
     elementExpression.validate(env);
     return SkylarkType.LIST;

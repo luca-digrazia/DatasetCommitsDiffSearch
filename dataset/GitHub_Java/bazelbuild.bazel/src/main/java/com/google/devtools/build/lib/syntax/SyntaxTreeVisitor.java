@@ -17,6 +17,7 @@ import com.google.devtools.build.lib.syntax.DictionaryLiteral.DictionaryEntryLit
 import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * A visitor for visiting the nodes in the syntax tree left to right, top to
@@ -60,11 +61,9 @@ public class SyntaxTreeVisitor {
 
   public void visit(ListComprehension node) {
     visit(node.getElementExpression());
-    for (ListComprehension.Clause clause : node.getClauses()) {
-      if (clause.getLValue() != null) {
-        visit(clause.getLValue().getExpression());
-      }
-      visit(clause.getExpression());
+    for (Map.Entry<LValue, Expression> list : node.getLists()) {
+      visit(list.getKey().getExpression());
+      visit(list.getValue());
     }
   }
 
