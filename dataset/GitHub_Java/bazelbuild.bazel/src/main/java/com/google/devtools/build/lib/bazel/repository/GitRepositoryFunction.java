@@ -23,30 +23,32 @@ import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
+import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
+import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Clones a Git repository.
  */
 public class GitRepositoryFunction extends RepositoryFunction {
-
   @Override
   public boolean isLocal(Rule rule) {
     return false;
   }
 
   @Override
-  public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
-      BlazeDirectories directories, Environment env, Map<String, String> markerData)
-      throws InterruptedException, RepositoryFunctionException {
+  public SkyValue fetch(
+      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
+          throws SkyFunctionException {
     createDirectory(outputDirectory, rule);
-    GitCloner.clone(rule, outputDirectory, env.getListener(), clientEnvironment);
-    return RepositoryDirectoryValue.builder().setPath(outputDirectory);
+    GitCloner.clone(rule, outputDirectory, env.getListener());
+    return RepositoryDirectoryValue.create(outputDirectory);
   }
 
-  protected static void createDirectory(Path path, Rule rule) throws RepositoryFunctionException {
+  protected void createDirectory(Path path, Rule rule)
+      throws RepositoryFunctionException {
     try {
       FileSystemUtils.createDirectoryAndParents(path);
     } catch (IOException e) {

@@ -18,6 +18,7 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfigurationCollectionFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -28,8 +29,6 @@ import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
-import com.google.devtools.build.lib.rules.cpp.FdoSupportFunction;
-import com.google.devtools.build.lib.rules.cpp.FdoSupportValue;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.LocalRepositoryRule;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -74,7 +73,8 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
     }
 
     @Override
-    public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions() {
+    public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(
+        BlazeDirectories directories) {
       // Add both the local repository and the skylark repository functions
       RepositoryFunction localRepositoryFunction = new LocalRepositoryFunction();
       SkylarkRepositoryFunction skylarkRepositoryFunction = new SkylarkRepositoryFunction();
@@ -84,10 +84,9 @@ public class SkylarkRepositoryIntegrationTest extends BuildViewTestCase {
       return ImmutableMap.of(
           SkyFunctions.REPOSITORY_DIRECTORY,
           new RepositoryDelegatorFunction(
-              repositoryHandlers, skylarkRepositoryFunction, new AtomicBoolean(true)),
+              directories, repositoryHandlers, skylarkRepositoryFunction, new AtomicBoolean(true)),
           SkyFunctions.REPOSITORY,
-          new RepositoryLoaderFunction(),
-          FdoSupportValue.SKYFUNCTION, new FdoSupportFunction());
+          new RepositoryLoaderFunction());
     }
 
     @Override

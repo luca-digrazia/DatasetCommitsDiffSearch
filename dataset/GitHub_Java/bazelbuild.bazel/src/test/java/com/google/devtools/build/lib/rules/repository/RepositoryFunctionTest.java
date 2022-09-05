@@ -27,11 +27,13 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
-import java.util.Map;
-import javax.annotation.Nullable;
+import com.google.devtools.build.skyframe.SkyValue;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import javax.annotation.Nullable;
 
 /**
  * Tests for @{link RepositoryFunction}
@@ -46,9 +48,9 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
   static class TestingRepositoryFunction extends RepositoryFunction {
     @Nullable
     @Override
-    public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
-        BlazeDirectories directories, SkyFunction.Environment env, Map<String, String> markerData)
-        throws SkyFunctionException, InterruptedException {
+    public SkyValue fetch(
+        Rule rule, Path outputDirectory, BlazeDirectories directories, SkyFunction.Environment env)
+            throws SkyFunctionException, InterruptedException {
       return null;
     }
 
@@ -89,28 +91,10 @@ public class RepositoryFunctionTest extends BuildViewTestCase {
         "    name = 'abc',",
         "    path = '/a/b/c',",
         ")");
-    RepositoryFunction.createWorkspaceFile(rootDirectory, rule.getTargetKind(), rule.getName());
+    TestingRepositoryFunction repositoryFunction = new TestingRepositoryFunction();
+    repositoryFunction.createWorkspaceFile(rootDirectory, rule);
     String workspaceContent = new String(
         FileSystemUtils.readContentAsLatin1(rootDirectory.getRelative("WORKSPACE")));
     assertThat(workspaceContent).contains("workspace(name = \"abc\")");
-  }
-
-  private static void assertMarkerFileEscaping(String testCase) {
-    String escaped = RepositoryDelegatorFunction.escape(testCase);
-    assertThat(RepositoryDelegatorFunction.unescape(escaped)).isEqualTo(testCase);
-  }
-
-  @Test
-  public void testMarkerFileEscaping() throws Exception {
-    assertMarkerFileEscaping(null);
-    assertMarkerFileEscaping("\\0");
-    assertMarkerFileEscaping("a\\0");
-    assertMarkerFileEscaping("a b");
-    assertMarkerFileEscaping("a b c");
-    assertMarkerFileEscaping("a \\b");
-    assertMarkerFileEscaping("a \\nb");
-    assertMarkerFileEscaping("a \\\\nb");
-    assertMarkerFileEscaping("a \\\nb");
-    assertMarkerFileEscaping("a \nb");
   }
 }

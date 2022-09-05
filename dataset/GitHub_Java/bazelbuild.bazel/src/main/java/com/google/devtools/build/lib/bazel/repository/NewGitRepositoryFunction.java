@@ -20,16 +20,17 @@ import com.google.devtools.build.lib.rules.repository.NewRepositoryBuildFileHand
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
-import java.util.Map;
+import com.google.devtools.build.skyframe.SkyFunctionException;
+import com.google.devtools.build.skyframe.SkyValue;
 
 /**
  * Clones a Git repository, creates a WORKSPACE file, and adds a BUILD file for it.
  */
 public class NewGitRepositoryFunction extends GitRepositoryFunction {
   @Override
-  public RepositoryDirectoryValue.Builder fetch(Rule rule, Path outputDirectory,
-      BlazeDirectories directories, Environment env, Map<String, String> markerData)
-      throws InterruptedException, RepositoryFunctionException {
+  public SkyValue fetch(
+      Rule rule, Path outputDirectory, BlazeDirectories directories, Environment env)
+          throws SkyFunctionException { 
     NewRepositoryBuildFileHandler buildFileHandler =
         new NewRepositoryBuildFileHandler(directories.getWorkspace());
     if (!buildFileHandler.prepareBuildFile(rule, env)) {
@@ -37,10 +38,10 @@ public class NewGitRepositoryFunction extends GitRepositoryFunction {
     }
 
     createDirectory(outputDirectory, rule);
-    GitCloner.clone(rule, outputDirectory, env.getListener(), clientEnvironment);
-    createWorkspaceFile(outputDirectory, rule.getTargetKind(), rule.getName());
+    GitCloner.clone(rule, outputDirectory, env.getListener());
+    createWorkspaceFile(outputDirectory, rule);
     buildFileHandler.finishBuildFile(outputDirectory);
 
-    return RepositoryDirectoryValue.builder().setPath(outputDirectory);
+    return RepositoryDirectoryValue.create(outputDirectory);
   }
 }

@@ -16,11 +16,10 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
+import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.repository.NewRepositoryBuildFileHandler;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
-import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -29,6 +28,7 @@ import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyValue;
 
 import java.io.IOException;
+
 import javax.annotation.Nullable;
 
 /**
@@ -36,10 +36,6 @@ import javax.annotation.Nullable;
  * file for it.
  */
 public class NewHttpArchiveFunction extends HttpArchiveFunction {
-
-  public NewHttpArchiveFunction(HttpDownloader httpDownloader) {
-    super(httpDownloader);
-  }
 
   @Nullable
   @Override
@@ -60,19 +56,15 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
     }
 
     // Download.
-    Path downloadedPath = downloader.download(
-        rule, outputDirectory, env.getListener(), clientEnvironment);
+    Path downloadedPath = HttpDownloader.download(rule, outputDirectory, env.getListener());
 
     // Decompress.
     Path decompressed;
-    WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
+    AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
     String prefix = null;
-    if (mapper.isAttributeValueExplicitlySpecified("strip_prefix")) {
-      try {
-        prefix = mapper.get("strip_prefix", Type.STRING);
-      } catch (EvalException e) {
-        throw new RepositoryFunctionException(e, Transience.PERSISTENT);
-      }
+    if (mapper.has("strip_prefix", Type.STRING)
+        && !mapper.get("strip_prefix", Type.STRING).isEmpty()) {
+      prefix = mapper.get("strip_prefix", Type.STRING);
     }
     decompressed = DecompressorValue.decompress(DecompressorDescriptor.builder()
         .setTargetKind(rule.getTargetKind())
@@ -83,7 +75,7 @@ public class NewHttpArchiveFunction extends HttpArchiveFunction {
         .build());
 
     // Finally, write WORKSPACE and BUILD files.
-    createWorkspaceFile(decompressed, rule.getTargetKind(), rule.getName());
+    createWorkspaceFile(decompressed, rule);
     buildFileHandler.finishBuildFile(outputDirectory);
 
     return RepositoryDirectoryValue.create(outputDirectory);

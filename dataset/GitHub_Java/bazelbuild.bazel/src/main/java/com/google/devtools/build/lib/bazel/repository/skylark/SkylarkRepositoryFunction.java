@@ -57,12 +57,12 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
   }
 
   /**
-   * Skylark repository context functions can throw the result of this function to notify the
+   * Skylark repository context functions can use this function to notify the
    * SkylarkRepositoryFunction that a dependency was missing and the evaluation of the function must
    * be restarted.
    */
-  static EvalException restart() {
-    return new SkylarkRepositoryMissingDependencyException();
+  static void restart() throws EvalException {
+    throw new SkylarkRepositoryMissingDependencyException();
   }
 
   private CommandEnvironment commandEnvironment = null;
@@ -137,10 +137,6 @@ public class SkylarkRepositoryFunction extends RepositoryFunction {
     if (!repositoryValue.isDirectory()) {
       throw new RepositoryFunctionException(
           new IOException(rule + " must create a directory"), Transience.TRANSIENT);
-    }
-
-    if (!outputDirectory.getRelative("WORKSPACE").exists()) {
-      createWorkspaceFile(outputDirectory, rule.getTargetKind(), rule.getName());
     }
 
     return RepositoryDirectoryValue.create(outputDirectory);
