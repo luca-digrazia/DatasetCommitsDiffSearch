@@ -138,7 +138,7 @@ public class ExponentiallyDecayingSample implements Sample {
     }
 
     private long tick() {
-        return TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
+        return System.currentTimeMillis() / 1000;
     }
 
     private double weight(long t) {
