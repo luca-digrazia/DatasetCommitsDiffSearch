@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Function;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -25,12 +26,12 @@ import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraver
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.DanglingSymlinkException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalFunction.RecursiveFilesystemTraversalException;
 import com.google.devtools.build.lib.skyframe.RecursiveFilesystemTraversalValue.ResolvedFile;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -189,21 +190,15 @@ public final class FilesetEntryFunction implements SkyFunction {
     return FilesetEntryValue.of(ImmutableSet.copyOf(outputSymlinks.values()));
   }
 
-  /** Stores an output symlink unless it would overwrite an existing one. */
-  private static void maybeStoreSymlink(
-      FilesetOutputSymlink nestedLink,
-      PathFragment destPath,
+  /** Stores an output symlink unless it's excluded or would overwrite an existing one. */
+  private static void maybeStoreSymlink(FilesetOutputSymlink nestedLink, PathFragment destPath,
       Map<PathFragment, FilesetOutputSymlink> result) {
     maybeStoreSymlink(nestedLink.name, nestedLink.target, nestedLink.metadata, destPath, result);
   }
 
-  /** Stores an output symlink unless it would overwrite an existing one. */
-  private static void maybeStoreSymlink(
-      PathFragment linkName,
-      PathFragment linkTarget,
-      String metadata,
-      PathFragment destPath,
-      Map<PathFragment, FilesetOutputSymlink> result) {
+  /** Stores an output symlink unless it's excluded or would overwrite an existing one. */
+  private static void maybeStoreSymlink(PathFragment linkName, PathFragment linkTarget,
+      String metadata, PathFragment destPath, Map<PathFragment, FilesetOutputSymlink> result) {
     linkName = destPath.getRelative(linkName);
     if (!result.containsKey(linkName)) {
       result.put(linkName, new FilesetOutputSymlink(linkName, linkTarget, metadata));
@@ -242,14 +237,11 @@ public final class FilesetEntryFunction implements SkyFunction {
   private static String createErrorInfo(FilesetTraversalParams t) {
     if (t.getDirectTraversal().isPresent()) {
       DirectTraversal direct = t.getDirectTraversal().get();
-      return String.format(
-          "Fileset '%s' traversing %s '%s'",
-          t.getOwnerLabelForErrorMessages(),
+      return String.format("Fileset '%s' traversing %s '%s'", t.getOwnerLabel(),
           direct.isPackage() ? "package" : "file (or directory)",
           direct.getRoot().getRelativePart().getPathString());
     } else {
-      return String.format(
-          "Fileset '%s' traversing another Fileset", t.getOwnerLabelForErrorMessages());
+      return String.format("Fileset '%s' traversing another Fileset", t.getOwnerLabel());
     }
   }
 

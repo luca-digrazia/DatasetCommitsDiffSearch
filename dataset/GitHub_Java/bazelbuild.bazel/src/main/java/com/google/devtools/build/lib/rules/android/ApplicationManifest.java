@@ -219,12 +219,10 @@ public final class ApplicationManifest {
         null, /* Artifact symbolsTxt */
         incremental,
         data,
-        proguardCfg,
-        null);
+        proguardCfg);
   }
 
   /** Packages up the manifest with resource and assets from the rule and dependent resources. 
-   * @param manifestOut TODO(corysmith):
    * @throws InterruptedException */
   public ResourceApk packWithDataAndResources(
       Artifact resourceApk,
@@ -238,9 +236,7 @@ public final class ApplicationManifest {
       String applicationId,
       String versionCode,
       String versionName,
-      boolean incremental,
-      Artifact proguardCfg,
-      Artifact manifestOut) throws InterruptedException {
+      boolean incremental, Artifact proguardCfg) throws InterruptedException {
     LocalResourceContainer data = new LocalResourceContainer.Builder(ruleContext)
         .withAssets(
             AndroidCommon.getAssetDir(ruleContext),
@@ -270,8 +266,7 @@ public final class ApplicationManifest {
         versionName,
         incremental,
         data,
-        proguardCfg,
-        manifestOut);
+        proguardCfg);
   }
 
   private ResourceApk createApk(Artifact resourceApk,
@@ -286,9 +281,7 @@ public final class ApplicationManifest {
       String versionCode,
       String versionName,
       boolean incremental,
-      LocalResourceContainer data,
-      Artifact proguardCfg,
-      Artifact manifestOut) throws InterruptedException {
+      LocalResourceContainer data, Artifact proguardCfg) throws InterruptedException {
     ResourceContainer resourceContainer = checkForInlinedResources(
         new AndroidResourceContainerBuilder()
             .withData(data)
@@ -312,7 +305,6 @@ public final class ApplicationManifest {
             .setUncompressedExtensions(uncompressedExtensions)
             .setJavaPackage(resourceContainer.getJavaPackage())
             .setDebug(ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT)
-            .setManifestOut(manifestOut)
             .withPrimary(resourceContainer)
             .withDependencies(resourceDeps)
             .setDensities(densities)
