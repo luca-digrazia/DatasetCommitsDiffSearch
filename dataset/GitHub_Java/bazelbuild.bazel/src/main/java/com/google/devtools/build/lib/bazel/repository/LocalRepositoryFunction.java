@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,16 +16,17 @@ package com.google.devtools.build.lib.bazel.repository;
 
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.bazel.rules.workspace.LocalRepositoryRule;
+import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
-import com.google.devtools.build.lib.packages.PackageIdentifier.RepositoryName;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.skyframe.RepositoryValue;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Symlinks;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -60,7 +61,7 @@ public class LocalRepositoryFunction extends RepositoryFunction {
     Path repositoryPath = getExternalRepositoryDirectory().getRelative(rule.getName());
     try {
       FileSystemUtils.createDirectoryAndParents(repositoryPath.getParentDirectory());
-      if (repositoryPath.exists()) {
+      if (repositoryPath.exists(Symlinks.NOFOLLOW)) {
         repositoryPath.delete();
       }
       repositoryPath.createSymbolicLink(pathFragment);
@@ -71,6 +72,8 @@ public class LocalRepositoryFunction extends RepositoryFunction {
     }
     FileValue repositoryValue = getRepositoryDirectory(repositoryPath, env);
     if (repositoryValue == null) {
+      // TODO(bazel-team): If this returns null, we unnecessarily recreate the symlink above on the
+      // second execution.
       return null;
     }
 
@@ -84,7 +87,7 @@ public class LocalRepositoryFunction extends RepositoryFunction {
 
   @Override
   public SkyFunctionName getSkyFunctionName() {
-    return SkyFunctionName.computed(LocalRepositoryRule.NAME.toUpperCase());
+    return SkyFunctionName.create(LocalRepositoryRule.NAME.toUpperCase());
   }
 
   @Override
