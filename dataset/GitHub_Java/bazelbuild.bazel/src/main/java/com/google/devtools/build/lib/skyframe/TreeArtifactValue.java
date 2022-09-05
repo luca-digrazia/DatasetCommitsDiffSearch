@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableMap;
@@ -21,7 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.cache.DigestUtils;
+import com.google.devtools.build.lib.actions.cache.Digest;
 import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -36,7 +37,7 @@ import javax.annotation.Nullable;
  * Value for TreeArtifacts, which contains a digest and the {@link FileArtifactValue}s of its child
  * {@link TreeFileArtifact}s.
  */
-class TreeArtifactValue implements SkyValue {
+public class TreeArtifactValue implements SkyValue {
   private static final Function<Artifact, PathFragment> PARENT_RELATIVE_PATHS =
       new Function<Artifact, PathFragment>() {
         @Override
@@ -57,7 +58,8 @@ class TreeArtifactValue implements SkyValue {
    * Returns a TreeArtifactValue out of the given Artifact-relative path fragments
    * and their corresponding FileArtifactValues.
    */
-  static TreeArtifactValue create(Map<TreeFileArtifact, FileArtifactValue> childFileValues) {
+  @VisibleForTesting
+  public static TreeArtifactValue create(Map<TreeFileArtifact, FileArtifactValue> childFileValues) {
     Map<String, Metadata> digestBuilder =
         Maps.newHashMapWithExpectedSize(childFileValues.size());
     for (Map.Entry<TreeFileArtifact, FileArtifactValue> e : childFileValues.entrySet()) {
@@ -67,33 +69,33 @@ class TreeArtifactValue implements SkyValue {
     }
 
     return new TreeArtifactValue(
-        DigestUtils.fromMetadata(digestBuilder).getDigestBytesUnsafe(),
+        Digest.fromMetadata(digestBuilder).asMetadata().digest,
         ImmutableMap.copyOf(childFileValues));
   }
 
-  FileArtifactValue getSelfData() {
+  public FileArtifactValue getSelfData() {
     return FileArtifactValue.createProxy(digest);
   }
 
-  Metadata getMetadata() {
+  public Metadata getMetadata() {
     return new Metadata(digest.clone());
   }
 
-  Set<PathFragment> getChildPaths() {
+  public Set<PathFragment> getChildPaths() {
     return ImmutableSet.copyOf(Iterables.transform(childData.keySet(), PARENT_RELATIVE_PATHS));
   }
 
   @Nullable
-  byte[] getDigest() {
+  public byte[] getDigest() {
     return digest.clone();
   }
 
-  Iterable<TreeFileArtifact> getChildren() {
+  public Iterable<TreeFileArtifact> getChildren() {
     return childData.keySet();
   }
 
-  Map<TreeFileArtifact, FileArtifactValue> getChildValues() {
-    return childData;
+  public FileArtifactValue getChildValue(TreeFileArtifact artifact) {
+    return childData.get(artifact);
   }
 
   @Override
@@ -134,33 +136,33 @@ class TreeArtifactValue implements SkyValue {
   static final TreeArtifactValue MISSING_TREE_ARTIFACT = new TreeArtifactValue(null,
       ImmutableMap.<TreeFileArtifact, FileArtifactValue>of()) {
     @Override
-    FileArtifactValue getSelfData() {
+    public FileArtifactValue getSelfData() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    Iterable<TreeFileArtifact> getChildren() {
+    public Iterable<TreeFileArtifact> getChildren() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    Map<TreeFileArtifact, FileArtifactValue> getChildValues() {
+    public FileArtifactValue getChildValue(TreeFileArtifact artifact) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    Metadata getMetadata() {
+    public Metadata getMetadata() {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    Set<PathFragment> getChildPaths() {
+    public Set<PathFragment> getChildPaths() {
       throw new UnsupportedOperationException();
     }
 
     @Nullable
     @Override
-    byte[] getDigest() {
+    public byte[] getDigest() {
       throw new UnsupportedOperationException();
     }
 
