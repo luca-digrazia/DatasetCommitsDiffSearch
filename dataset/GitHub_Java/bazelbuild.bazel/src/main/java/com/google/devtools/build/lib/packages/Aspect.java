@@ -43,11 +43,11 @@ public final class Aspect implements DependencyFilter.AttributeInfoProvider {
   }
 
   public static Aspect forNative(
-      NativeAspectClass nativeAspectClass, AspectParameters parameters) {
+      NativeAspectClass<?> nativeAspectClass, AspectParameters parameters) {
     return new Aspect(nativeAspectClass, nativeAspectClass.getDefinition(parameters), parameters);
   }
 
-  public static Aspect forNative(NativeAspectClass nativeAspectClass) {
+  public static Aspect forNative(NativeAspectClass<?> nativeAspectClass) {
     return forNative(nativeAspectClass, AspectParameters.EMPTY);
   }
 
@@ -55,7 +55,7 @@ public final class Aspect implements DependencyFilter.AttributeInfoProvider {
       SkylarkAspectClass skylarkAspectClass,
       AspectDefinition definition,
       AspectParameters parameters) {
-    return new Aspect(skylarkAspectClass, definition, parameters);
+    return new Aspect(skylarkAspectClass,  definition, parameters);
   }
 
   /**

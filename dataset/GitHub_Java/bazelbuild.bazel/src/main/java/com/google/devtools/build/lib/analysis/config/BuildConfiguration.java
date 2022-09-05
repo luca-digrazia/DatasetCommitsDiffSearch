@@ -708,13 +708,6 @@ public final class BuildConfiguration {
             + "If false, write only manifests when possible.")
     public boolean buildRunfiles;
 
-    @Option(name = "legacy_external_runfiles",
-        defaultValue = "true",
-        category = "strategy",
-        help = "If true, build runfiles symlink forests for external repositories under "
-            + ".runfiles/wsname/external/repo (in addition to .runfiles/repo).")
-    public boolean legacyExternalRunfiles;
-
     @Option(name = "test_arg",
         allowMultiple = true,
         defaultValue = "",
@@ -1825,9 +1818,9 @@ public final class BuildConfiguration {
       return;
     }
 
-    if (attribute.hasSplitConfigurationTransition()) {
+    if (attribute.getConfigurationTransition() instanceof SplitTransition) {
       Preconditions.checkState(attribute.getConfigurator() == null);
-      transitionApplier.split(attribute.getSplitTransition(fromRule));
+      transitionApplier.split((SplitTransition<?>) attribute.getConfigurationTransition());
     } else {
       // III. Attributes determine configurations. The configuration of a prerequisite is determined
       // by the attribute.
@@ -2187,13 +2180,6 @@ public final class BuildConfiguration {
     return options.buildRunfiles;
   }
 
-  /**
-   * Returns if we are building external runfiles symlinks using the old-style structure.
-   */
-  public boolean legacyExternalRunfiles() {
-    return options.legacyExternalRunfiles;
-  }
-
   public boolean getCheckFilesetDependenciesRecursively() {
     return options.checkFilesetDependenciesRecursively;
   }
@@ -2214,7 +2200,7 @@ public final class BuildConfiguration {
    * Returns user-specified test environment variables and their values, as
    * set by the --test_env options.
    */
-  public ImmutableMap<String, String> getTestEnv() {
+  public Map<String, String> getTestEnv() {
     return testEnvironment;
   }
 

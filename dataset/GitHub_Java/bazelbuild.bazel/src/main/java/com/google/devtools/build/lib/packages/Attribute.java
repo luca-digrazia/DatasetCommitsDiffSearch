@@ -86,18 +86,15 @@ public final class Attribute implements Comparable<Attribute> {
   }
 
   private static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
-    private final AspectDefinition definition;
-
-    public SkylarkRuleAspect(SkylarkAspectClass aspectClass, AspectDefinition definition) {
+    public SkylarkRuleAspect(SkylarkAspectClass aspectClass) {
       super(aspectClass, NO_PARAMETERS);
-      this.definition = definition;
     }
 
     @Override
     public Aspect getAspect(Rule rule) {
       return Aspect.forSkylark(
           aspectClass,
-          definition,
+          aspectClass.getDefinition(),
           parametersExtractor.apply(rule));
     }
   }
@@ -798,8 +795,8 @@ public final class Attribute implements Comparable<Attribute> {
       return this.aspect(aspect, noParameters);
     }
 
-    public Builder<TYPE> aspect(SkylarkAspectClass aspectClass, AspectDefinition definition) {
-      this.aspects.add(new SkylarkRuleAspect(aspectClass, definition));
+    public Builder<TYPE> aspect(SkylarkAspectClass aspectClass) {
+      this.aspects.add(new SkylarkRuleAspect(aspectClass));
       return this;
     }
 
@@ -981,7 +978,7 @@ public final class Attribute implements Comparable<Attribute> {
      * @param attributes interface for retrieving the values of the rule's other attributes
      * @param o the configuration to evaluate with
      */
-    Object resolve(Rule rule, AttributeMap attributes, T o)
+    Object getDefault(Rule rule, AttributeMap attributes, T o)
         throws EvalException, InterruptedException;
   }
 
@@ -1035,7 +1032,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public abstract Label resolve(Rule rule, AttributeMap attributes, T configuration);
+    public abstract Label getDefault(Rule rule, AttributeMap attributes, T configuration);
   }
 
   /**
@@ -1069,7 +1066,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public abstract List<Label> resolve(Rule rule, AttributeMap attributes, T configuration);
+    public abstract List<Label> getDefault(Rule rule, AttributeMap attributes, T configuration);
   }
 
   /**
@@ -1099,7 +1096,7 @@ public final class Attribute implements Comparable<Attribute> {
     }
 
     @Override
-    public Object resolve(Rule rule, AttributeMap attributes, Object o)
+    public Object getDefault(Rule rule, AttributeMap attributes, Object o)
         throws EvalException, InterruptedException {
       Map<String, Object> attrValues = new HashMap<>();
       for (Attribute attr : rule.getAttributes()) {

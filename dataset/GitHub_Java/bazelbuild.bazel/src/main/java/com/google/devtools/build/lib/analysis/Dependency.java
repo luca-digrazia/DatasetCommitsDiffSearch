@@ -19,8 +19,11 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.util.Preconditions;
+
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -71,7 +74,7 @@ public abstract class Dependency {
    * <p>The configuration and aspects must not be {@code null}.
    */
   public static Dependency withConfigurationAndAspects(
-      Label label, BuildConfiguration configuration, Iterable<AspectDescriptor> aspects) {
+      Label label, BuildConfiguration configuration, Set<AspectDescriptor> aspects) {
     ImmutableMap.Builder<AspectDescriptor, BuildConfiguration> aspectBuilder =
         new ImmutableMap.Builder<>();
     for (AspectDescriptor aspect : aspects) {
@@ -99,7 +102,7 @@ public abstract class Dependency {
    * configuration builds.
    */
   public static Dependency withTransitionAndAspects(
-      Label label, Attribute.Transition transition, Iterable<AspectDescriptor> aspects) {
+      Label label, Attribute.Transition transition, Set<AspectDescriptor> aspects) {
     return new DynamicConfigurationDependency(label, transition, ImmutableSet.copyOf(aspects));
   }
 

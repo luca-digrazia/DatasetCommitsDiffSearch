@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ListMultimap;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
@@ -41,10 +40,9 @@ import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
-import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkAspectClass;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.rules.SkylarkRuleClassFunctions.SkylarkAspect;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.DependencyEvaluationException;
@@ -99,7 +97,7 @@ public final class AspectFunction implements SkyFunction {
       if (skylarkImportLookupValue == null) {
         return null;
       }
-
+  
       Object skylarkValue = skylarkImportLookupValue.getEnvironmentExtension()
           .get(skylarkValueName);
       if (!(skylarkValue instanceof SkylarkAspect)) {
@@ -123,9 +121,10 @@ public final class AspectFunction implements SkyFunction {
     AspectKey key = (AspectKey) skyKey.argument();
     ConfiguredAspectFactory aspectFactory;
     Aspect aspect;
-    if (key.getAspectClass() instanceof NativeAspectClass) {
-      NativeAspectClass nativeAspectClass = (NativeAspectClass) key.getAspectClass();
-      aspectFactory = (ConfiguredAspectFactory) nativeAspectClass;
+    if (key.getAspectClass() instanceof NativeAspectClass<?>) {
+      NativeAspectClass<?> nativeAspectClass = (NativeAspectClass<?>) key.getAspectClass();
+      aspectFactory =
+          (ConfiguredAspectFactory) nativeAspectClass.newInstance();
       aspect = Aspect.forNative(nativeAspectClass, key.getParameters());
     } else if (key.getAspectClass() instanceof SkylarkAspectClass) {
       SkylarkAspectClass skylarkAspectClass = (SkylarkAspectClass) key.getAspectClass();
@@ -141,10 +140,10 @@ public final class AspectFunction implements SkyFunction {
         return null;
       }
 
-      aspectFactory = new SkylarkAspectFactory(skylarkAspect);
+      aspectFactory = new SkylarkAspectFactory(skylarkAspect.getName(), skylarkAspect);
       aspect = Aspect.forSkylark(
           skylarkAspect.getAspectClass(),
-          skylarkAspect.getDefinition(key.getParameters()),
+          skylarkAspect.getAspectClass().getDefinition(),
           key.getParameters());
     } else {
       throw new IllegalStateException();
@@ -168,11 +167,6 @@ public final class AspectFunction implements SkyFunction {
       throw new AspectFunctionException(e);
     }
 
-    Label aliasLabel = TargetUtils.getAliasTarget(target);
-    if (aliasLabel != null) {
-      return createAliasAspect(env, target, aliasLabel, aspect, key);
-    }
-    
     if (!(target instanceof Rule)) {
       throw new AspectFunctionException(new AspectCreationException(
           "aspects must be attached to rules"));
@@ -263,32 +257,6 @@ public final class AspectFunction implements SkyFunction {
     } catch (AspectCreationException e) {
       throw new AspectFunctionException(e);
     }
-  }
-
-  private SkyValue createAliasAspect(Environment env, Target originalTarget, Label aliasLabel,
-      Aspect aspect, AspectKey originalKey) {
-    SkyKey depKey = AspectValue.key(aliasLabel,
-        originalKey.getAspectConfiguration(),
-        originalKey.getBaseConfiguration(),
-        originalKey.getAspectClass(),
-        originalKey.getParameters());
-    AspectValue real = (AspectValue) env.getValue(depKey);
-    if (env.valuesMissing()) {
-      return null;
-    }
-
-    NestedSet<Package> transitivePackages = NestedSetBuilder.<Package>stableOrder()
-        .addTransitive(real.getTransitivePackages())
-        .add(originalTarget.getPackage())
-        .build();
-    return new AspectValue(
-        originalKey,
-        aspect,
-        originalTarget.getLabel(),
-        originalTarget.getLocation(),
-        ConfiguredAspect.forAlias(real.getConfiguredAspect()),
-        ImmutableList.<ActionAnalysisMetadata>of(),
-        transitivePackages);
   }
 
   @Nullable

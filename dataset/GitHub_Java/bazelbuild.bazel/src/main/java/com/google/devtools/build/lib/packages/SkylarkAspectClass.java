@@ -15,32 +15,17 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+
 import java.util.Objects;
 
-/** {@link AspectClass} for aspects defined in Skylark. */
-@AutoCodec
-@Immutable
-public final class SkylarkAspectClass implements AspectClass {
-  public static final ObjectCodec<SkylarkAspectClass> CODEC = new SkylarkAspectClass_AutoCodec();
+/**
+ * {@link AspectClass} for aspects defined in Skylark.
+ */
+public abstract class SkylarkAspectClass implements AspectClass {
 
-  private final Label extensionLabel;
-  private final String exportedName;
+  public abstract Label getExtensionLabel();
 
-  public SkylarkAspectClass(Label extensionLabel, String exportedName) {
-    this.extensionLabel = extensionLabel;
-    this.exportedName = exportedName;
-  }
-
-  public Label getExtensionLabel() {
-    return extensionLabel;
-  }
-
-  public String getExportedName() {
-    return exportedName;
-  }
+  public abstract String getExportedName();
 
   @Override
   public final String getName() {
@@ -59,12 +44,15 @@ public final class SkylarkAspectClass implements AspectClass {
 
     SkylarkAspectClass that = (SkylarkAspectClass) o;
 
-    return extensionLabel.equals(that.extensionLabel)
-        && exportedName.equals(that.exportedName);
+    return getExtensionLabel().equals(that.getExtensionLabel())
+        && getExportedName().equals(that.getExportedName());
   }
 
   @Override
   public final int hashCode() {
     return Objects.hash(getExtensionLabel(), getExportedName());
   }
+
+  @Deprecated
+  public abstract AspectDefinition getDefinition();
 }
