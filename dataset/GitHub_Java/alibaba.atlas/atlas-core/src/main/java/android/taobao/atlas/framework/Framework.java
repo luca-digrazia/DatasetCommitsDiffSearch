@@ -476,8 +476,7 @@ public final class Framework {
             if (FileUtils.getUsableSpace(Environment.getDataDirectory()) < LowDiskException.thredshold) {
                 throw new LowDiskException(FileUtils.getAvailableDisk(), e);
             }
-            throw new BundleException(
-                "Failed to install bundle." + FileUtils.getAvailableDisk() + ", location=" + location, e);
+            throw new BundleException("Failed to install bundle.", e);
         } catch (BundleException e) {
             BundleException e1 = new BundleException(
                 "Failed to install bundle." + FileUtils.getAvailableDisk() + ", location=" + location, e);
@@ -495,6 +494,7 @@ public final class Framework {
     }
 
     public static BundleImpl restoreFromExistedBundle(final String location) {
+        boolean lockSuccess = false;
         BundleImpl bundle = null;
         String bundleUniqueTag = AtlasBundleInfoManager.instance().getBundleInfo(location).getUnique_tag();
         long dexPatchVersion = BaselineInfoManager.instance().getDexPatchBundleVersion(location);
@@ -555,9 +555,10 @@ public final class Framework {
                     }
                 },1000);
             }
-        }
+        }        
         if(!installingBundles.containsKey(location) && ((bundleDir!=null&&bundleDir.exists()) || dexPatchDir!=null&&dexPatchDir.exists())){
             try {
+                lockSuccess = BundleLock.ReadLock(location);
                 BundleContext bcontext = new BundleContext();
                 bcontext.bundle_tag = bundleUniqueTag;
                 bcontext.location = location;
@@ -574,6 +575,12 @@ public final class Framework {
                     }
                 }
                 Log.e("Framework","restore bundle failed" + location, e);
+            }finally {
+                if(lockSuccess) {
+                    try {
+                        BundleLock.ReadUnLock(location);
+                    }catch(Throwable e){}
+                }
             }
         }
         return bundle;
