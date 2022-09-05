@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression;
-import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
@@ -71,10 +70,6 @@ public interface JavaSemantics {
       fromTemplates("%{name}_proguard.map");
   SafeImplicitOutputsFunction JAVA_BINARY_PROGUARD_PROTO_MAP =
       fromTemplates("%{name}_proguard.pbmap");
-  SafeImplicitOutputsFunction JAVA_BINARY_PROGUARD_SEEDS =
-      fromTemplates("%{name}_proguard.seeds");
-  SafeImplicitOutputsFunction JAVA_BINARY_PROGUARD_USAGE =
-      fromTemplates("%{name}_proguard.usage");
   SafeImplicitOutputsFunction JAVA_BINARY_PROGUARD_CONFIG =
       fromTemplates("%{name}_proguard.config");
 
@@ -384,23 +379,10 @@ public interface JavaSemantics {
    */
   String getJavaBuilderMainClass();
 
+
   /**
    * @return An artifact representing the protobuf-format version of the
    * proguard mapping, or null if the proguard version doesn't support this.
    */
   Artifact getProtoMapping(RuleContext ruleContext) throws InterruptedException;
-
-  /**
-   * Produces the proto generated extension registry artifacts, or <tt>null</tt>
-   * if no registry needs to be generated for the provided <tt>ruleContext</tt>.
-   */
-  @Nullable
-  GeneratedExtensionRegistryProvider createGeneratedExtensionRegistry(
-      RuleContext ruleContext,
-      JavaCommon common,
-      NestedSetBuilder<Artifact> filesBuilder,
-      JavaCompilationArtifacts.Builder javaCompilationArtifactsBuilder,
-      JavaRuleOutputJarsProvider.Builder javaRuleOutputJarsProviderBuilder,
-      JavaSourceJarsProvider.Builder javaSourceJarsProviderBuilder)
-      throws InterruptedException;
 }
