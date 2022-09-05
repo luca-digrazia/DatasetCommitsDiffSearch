@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
 
 package com.google.devtools.build.lib.testutil;
 
-import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -129,12 +129,6 @@ public final class Scratch {
     FileSystemUtils.writeContent(file, charset, linesAsString(lines));
     file.setLastModifiedTime(-1L);
     return file;
-  }
-
-  public String readFile(String pathName) throws IOException {
-    return new String(
-        ByteStreams.toByteArray(resolve(pathName).getInputStream()),
-        DEFAULT_CHARSET);
   }
 
   /**

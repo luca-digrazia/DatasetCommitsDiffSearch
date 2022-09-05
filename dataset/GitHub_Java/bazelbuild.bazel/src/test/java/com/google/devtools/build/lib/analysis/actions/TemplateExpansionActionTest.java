@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.analysis.actions;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -31,15 +29,10 @@ import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Su
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
-import com.google.devtools.build.lib.testutil.FoundationTestCaseForJunit4;
+import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -47,8 +40,7 @@ import java.util.List;
 /**
  * Tests {@link TemplateExpansionAction}.
  */
-@RunWith(JUnit4.class)
-public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
+public class TemplateExpansionActionTest extends FoundationTestCase {
 
   private static final String TEMPLATE = Joiner.on('\n').join("key=%key%", "value=%value%");
   private static final String SPECIAL_CHARS = "Š©±½_strøget";
@@ -61,8 +53,9 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
   private BlazeDirectories directories;
   private BinTools binTools;
 
-  @Before
-  public final void createDirectoriesAndTools() throws Exception {
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
     createArtifacts(TEMPLATE);
 
     substitutions = Lists.newArrayList();
@@ -90,17 +83,14 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
     return result;
   }
 
-  @Test
   public void testInputsIsEmpty() {
     assertThat(create().getInputs()).isEmpty();
   }
 
-  @Test
   public void testDestinationArtifactIsOutput() {
     assertEquals(ImmutableSet.of(outputArtifact), create().getOutputs());
   }
 
-  @Test
   public void testExpansion() throws Exception {
     Executor executor = new TestExecutorBuilder(directories, binTools).build();
     create().execute(createContext(executor));
@@ -109,7 +99,6 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
     assertEquals(expected, content);
   }
 
-  @Test
   public void testKeySameIfSame() throws Exception {
     Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
         outputRoot);
@@ -122,7 +111,6 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
     assertEquals(a.computeKey(), b.computeKey());
   }
 
-  @Test
   public void testKeyDiffersForSubstitution() throws Exception {
     Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
         outputRoot);
@@ -135,7 +123,6 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
     assertFalse(a.computeKey().equals(b.computeKey()));
   }
 
-  @Test
   public void testKeyDiffersForExecutable() throws Exception {
     Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
         outputRoot);
@@ -148,7 +135,6 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
     assertFalse(a.computeKey().equals(b.computeKey()));
   }
 
-  @Test
   public void testKeyDiffersForTemplates() throws Exception {
     Artifact outputArtifact2 = new Artifact(scratch.resolve("/workspace/out/destination.txt"),
         outputRoot);
@@ -187,24 +173,20 @@ public class TemplateExpansionActionTest extends FoundationTestCaseForJunit4 {
     assertThat(actual).isEqualTo(expected);
   }
 
-  @Test
   public void testArtifactTemplateHasInput() {
     assertEquals(ImmutableList.of(inputArtifact), createWithArtifact().getInputs());
   }
 
-  @Test
   public void testArtifactTemplateHasOutput() {
     assertEquals(ImmutableSet.of(outputArtifact), createWithArtifact().getOutputs());
   }
 
-  @Test
   public void testArtifactTemplateExpansion() throws Exception {
     // The trailing "" is needed because scratch.overwriteFile implicitly appends "\n".
     String expected = Joiner.on('\n').join("key=foo", "value=bar", "");
     executeTemplateExpansion(expected);
   }
 
-  @Test
   public void testWithSpecialCharacters() throws Exception {
     // We have to overwrite the artifacts since we need our template in "inputs"
     createArtifacts(SPECIAL_CHARS + "%key%");
