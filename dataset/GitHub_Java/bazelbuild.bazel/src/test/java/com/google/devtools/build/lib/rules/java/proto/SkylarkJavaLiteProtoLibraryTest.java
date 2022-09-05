@@ -66,6 +66,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         "java_import(name = 'protocol2',",
         "            jars = [ 'protocol2.jar' ])");
 
+    scratch.file("net/proto/BUILD", "exports_files(['sawzall_message_set.proto'])");
     scratch.file("net/proto2/compiler/public/BUILD", "exports_files(['protocol_compiler'])");
 
     mockToolchains();

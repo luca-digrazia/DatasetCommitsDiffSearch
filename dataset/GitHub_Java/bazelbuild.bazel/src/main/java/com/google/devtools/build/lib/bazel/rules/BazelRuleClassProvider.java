@@ -116,8 +116,6 @@ import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
 import com.google.devtools.build.lib.rules.java.JavaConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.JavaImportBaseRule;
 import com.google.devtools.build.lib.rules.java.JavaOptions;
-import com.google.devtools.build.lib.rules.java.JavaRuntimeRule;
-import com.google.devtools.build.lib.rules.java.JavaRuntimeSuiteRule;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkCommon;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
@@ -486,8 +484,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new BazelJavaTestRule());
           builder.addRuleDefinition(new BazelJavaPluginRule());
           builder.addRuleDefinition(new JavaToolchainRule());
-          builder.addRuleDefinition(new JavaRuntimeRule());
-          builder.addRuleDefinition(new JavaRuntimeSuiteRule());
 
           builder.addRuleDefinition(new ExtraActionRule());
           builder.addRuleDefinition(new ActionListenerRule());
@@ -619,7 +615,7 @@ public class BazelRuleClassProvider {
           builder.addNativeAspectClass(objcProtoAspect);
           builder.addRuleDefinition(new ObjcProtoLibraryRule(objcProtoAspect));
 
-          builder.addRuleDefinition(new AppleBinaryRule(objcProtoAspect));
+          builder.addRuleDefinition(new AppleBinaryRule());
           builder.addRuleDefinition(new AppleCcToolchainRule());
           builder.addRuleDefinition(new AppleDynamicLibraryRule());
           builder.addRuleDefinition(new AppleStaticLibraryRule());

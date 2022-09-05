@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.MiddlemanProvider;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -31,6 +29,7 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.SkylarkList;
+import java.util.LinkedList;
 import java.util.List;
 
 /** A module that contains Skylark utilities for Java support. */
@@ -57,20 +56,11 @@ public class JavaSkylarkCommon {
     mandatoryPositionals = 1,
     parameters = {
       @Param(
-          name = "source_jars",
-          positional = false,
-          named = true,
-          type = SkylarkList.class,
-          generic1 = Artifact.class,
-          defaultValue = "[]"
-      ),
-      @Param(
-        name = "source_files",
+        name = "source_jars",
         positional = false,
         named = true,
         type = SkylarkList.class,
-        generic1 = Artifact.class,
-        defaultValue = "[]"
+        generic1 = Artifact.class
       ),
       @Param(name = "output", positional = false, named = true, type = Artifact.class),
       @Param(
@@ -111,7 +101,6 @@ public class JavaSkylarkCommon {
   public JavaProvider createJavaCompileAction(
       SkylarkRuleContext skylarkRuleContext,
       SkylarkList<Artifact> sourceJars,
-      SkylarkList<Artifact> sourceFiles,
       Artifact outputJar,
       SkylarkList<String> javacOpts,
       SkylarkList<JavaProvider> deps,
@@ -122,12 +111,8 @@ public class JavaSkylarkCommon {
         new JavaLibraryHelper(skylarkRuleContext.getRuleContext())
             .setOutput(outputJar)
             .addSourceJars(sourceJars)
-            .addSourceFiles(sourceFiles)
             .setJavacOpts(javacOpts);
-
-    List<JavaCompilationArgsProvider> compilationArgsProviders =
-        JavaProvider.fetchProvidersFromList(deps, JavaCompilationArgsProvider.class);
-    helper.addAllDeps(compilationArgsProviders);
+    helper.addAllDeps(getJavaCompilationArgsProviders(deps));
     helper.setCompilationStrictDepsMode(getStrictDepsMode(strictDepsMode));
     MiddlemanProvider hostJavabaseProvider = hostJavabase.getProvider(MiddlemanProvider.class);
 
@@ -143,43 +128,7 @@ public class JavaSkylarkCommon {
             javaToolchainProvider,
             hostJavabaseArtifacts,
             SkylarkList.createImmutable(ImmutableList.<Artifact>of()));
-    return JavaProvider.Builder.create()
-             .addProvider(
-                 JavaCompilationArgsProvider.class,
-                 helper.buildCompilationArgsProvider(artifacts, true))
-             .addProvider(JavaSourceJarsProvider.class, createJavaSourceJarsProvider(sourceJars))
-             .build();
-  }
-
-  /**
-   * Creates a {@link JavaSourceJarsProvider} from the given list of source jars.
-   */
-  private static JavaSourceJarsProvider createJavaSourceJarsProvider(List<Artifact> sourceJars) {
-    NestedSet<Artifact> javaSourceJars =
-        NestedSetBuilder.<Artifact>stableOrder().addAll(sourceJars).build();
-    return JavaSourceJarsProvider.create(
-        NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER), javaSourceJars);
-  }
-
-  @SkylarkCallable(
-      name = "default_javac_opts",
-      // This function is experimental for now.
-      documented = false,
-      // There's only one mandatory positional,the Skylark context
-      mandatoryPositionals = 1,
-      parameters = {
-        @Param(name = "java_toolchain_attr", positional = false, named = true, type = String.class)
-      }
-  )
-  public static List<String> getDefaultJavacOpts(
-      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) {
-    RuleContext ruleContext = skylarkRuleContext.getRuleContext();
-    ConfiguredTarget javaToolchainConfigTarget =
-        (ConfiguredTarget) checkNotNull(skylarkRuleContext.getAttr().getValue(javaToolchainAttr));
-    JavaToolchainProvider toolchain =
-        checkNotNull(javaToolchainConfigTarget.getProvider(JavaToolchainProvider.class));
-    return ImmutableList.copyOf(Iterables.concat(
-        toolchain.getJavacOptions(), ruleContext.getTokenizedStringListAttr("javacopts")));
+    return new JavaProvider(helper.buildCompilationArgsProvider(artifacts, true));
   }
 
   @SkylarkCallable(
@@ -188,7 +137,17 @@ public class JavaSkylarkCommon {
     mandatoryPositionals = 1
   )
   public static JavaProvider mergeJavaProviders(SkylarkList<JavaProvider> providers) {
-    return JavaProvider.merge(providers);
+    return new JavaProvider(
+        JavaCompilationArgsProvider.merge(getJavaCompilationArgsProviders(providers)));
+  }
+
+  private static List<JavaCompilationArgsProvider> getJavaCompilationArgsProviders(
+      SkylarkList<JavaProvider> providers) {
+    List<JavaCompilationArgsProvider> javaCompilationArgsProviders = new LinkedList<>();
+    for (JavaProvider provider : providers) {
+      javaCompilationArgsProviders.add(provider.getJavaCompilationArgsProvider());
+    }
+    return javaCompilationArgsProviders;
   }
 
   private static StrictDepsMode getStrictDepsMode(String strictDepsMode) {
