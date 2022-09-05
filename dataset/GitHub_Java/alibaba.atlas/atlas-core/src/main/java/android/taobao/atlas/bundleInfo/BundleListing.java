@@ -258,10 +258,12 @@ public class BundleListing implements Serializable{
         private String name;
         private String pkgName;
 		private String applicationName;
+        private long size;
         private String version;
         private String desc;
         private String url;
         private String md5;
+        private String host;
         private boolean isInternal = true;
         private List<String> dependency;
         private List<String> totalDependency;
@@ -269,7 +271,7 @@ public class BundleListing implements Serializable{
         private HashMap<String,Boolean> services;
         private HashMap<String,Boolean> receivers;
         private HashMap<String,Boolean> contentProviders;
-        private String unique_tag;
+        private boolean hasSO;
 
         public boolean isInternal() {
             return isInternal;
@@ -277,6 +279,14 @@ public class BundleListing implements Serializable{
 
         public void setIsInternal(boolean isInternal) {
             this.isInternal = isInternal;
+        }
+
+        public String getHost() {
+            return host;
+        }
+
+        public void setHost(String host) {
+            this.host = host;
         }
         
         public String getApplicationName() {
@@ -303,12 +313,12 @@ public class BundleListing implements Serializable{
             this.contentProviders = contentProviders;
         }
 
-        public String getUnique_tag() {
-            return unique_tag;
+        public boolean isHasSO() {
+            return hasSO;
         }
 
-        public void setUnique_tag(String unique_tag) {
-            this.unique_tag = unique_tag;
+        public void setHasSO(boolean hasSO) {
+            this.hasSO = hasSO;
         }
 
         public String getMd5() {
@@ -324,6 +334,8 @@ public class BundleListing implements Serializable{
         }
 
         public void setUrl(String url) {
+
+            Log.d("BundleListing","url = "+url);
             this.url = url;
         }
 
@@ -349,6 +361,14 @@ public class BundleListing implements Serializable{
 
         public void setPkgName(String pkgName) {
             this.pkgName = pkgName;
+        }
+
+        public long getSize() {
+            return size;
+        }
+
+        public void setSize(long size) {
+            this.size = size;
         }
 
         public String getVersion() {
@@ -452,12 +472,14 @@ public class BundleListing implements Serializable{
             BundleInfo info = new BundleInfo();
             info.setName(source.getName());
             info.setPkgName(source.getPkgName());
+            info.setSize(source.getSize());
             info.setApplicationName(source.getApplicationName());
             info.setVersion(source.getVersion());
             info.setDesc(source.getDesc());
             info.setMd5(source.getMd5());
+            info.setHost(source.getHost());
             info.setIsInternal(source.isInternal());
-            info.setUnique_tag(source.getUnique_tag());
+            info.setHasSO(source.isHasSO());
             if(source.getDependency()!=null) {
                 ArrayList dependency = new ArrayList<String>(source.getDependency());
                 info.setDependency(dependency);
