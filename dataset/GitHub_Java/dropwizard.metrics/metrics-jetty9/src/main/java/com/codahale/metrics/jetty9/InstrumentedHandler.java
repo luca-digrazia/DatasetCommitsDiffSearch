@@ -1,7 +1,12 @@
 package com.codahale.metrics.jetty9;
 
-import com.codahale.metrics.*;
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.RatioGauge;
+import com.codahale.metrics.Timer;
 import org.eclipse.jetty.http.HttpMethod;
+import org.eclipse.jetty.server.AsyncContextState;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpChannelState;
 import org.eclipse.jetty.server.Request;
@@ -22,90 +27,199 @@ import static com.codahale.metrics.MetricRegistry.name;
  * instance.
  */
 public class InstrumentedHandler extends HandlerWrapper {
+    private static final String NAME_REQUESTS = "requests";
+    private static final String NAME_DISPATCHES = "dispatches";
+    private static final String NAME_ACTIVE_REQUESTS = "active-requests";
+    private static final String NAME_ACTIVE_DISPATCHES = "active-dispatches";
+    private static final String NAME_ACTIVE_SUSPENDED = "active-suspended";
+    private static final String NAME_ASYNC_DISPATCHES = "async-dispatches";
+    private static final String NAME_ASYNC_TIMEOUTS = "async-timeouts";
+    private static final String NAME_1XX_RESPONSES = "1xx-responses";
+    private static final String NAME_2XX_RESPONSES = "2xx-responses";
+    private static final String NAME_3XX_RESPONSES = "3xx-responses";
+    private static final String NAME_4XX_RESPONSES = "4xx-responses";
+    private static final String NAME_5XX_RESPONSES = "5xx-responses";
+    private static final String NAME_GET_REQUESTS = "get-requests";
+    private static final String NAME_POST_REQUESTS = "post-requests";
+    private static final String NAME_HEAD_REQUESTS = "head-requests";
+    private static final String NAME_PUT_REQUESTS = "put-requests";
+    private static final String NAME_DELETE_REQUESTS = "delete-requests";
+    private static final String NAME_OPTIONS_REQUESTS = "options-requests";
+    private static final String NAME_TRACE_REQUESTS = "trace-requests";
+    private static final String NAME_CONNECT_REQUESTS = "connect-requests";
+    private static final String NAME_MOVE_REQUESTS = "move-requests";
+    private static final String NAME_OTHER_REQUESTS = "other-requests";
+    private static final String NAME_PERCENT_4XX_1M = "percent-4xx-1m";
+    private static final String NAME_PERCENT_4XX_5M = "percent-4xx-5m";
+    private static final String NAME_PERCENT_4XX_15M = "percent-4xx-15m";
+    private static final String NAME_PERCENT_5XX_1M = "percent-5xx-1m";
+    private static final String NAME_PERCENT_5XX_5M = "percent-5xx-5m";
+    private static final String NAME_PERCENT_5XX_15M = "percent-5xx-15m";
+
+    private final MetricRegistry metricRegistry;
+
+    private String name;
+    private final String prefix;
+
     // the requests handled by this handler, excluding active
-    private final Timer requests;
+    private Timer requests;
 
     // the number of dispatches seen by this handler, excluding active
-    private final Timer dispatches;
+    private Timer dispatches;
 
     // the number of active requests
-    private final Counter activeRequests;
+    private Counter activeRequests;
 
     // the number of active dispatches
-    private final Counter activeDispatches;
+    private Counter activeDispatches;
 
     // the number of requests currently suspended.
-    private final Counter activeSuspended;
+    private Counter activeSuspended;
 
     // the number of requests that have been asynchronously dispatched
-    private final Meter asyncDispatches;
+    private Meter asyncDispatches;
 
     // the number of requests that expired while suspended
-    private final Meter asyncTimeouts;
+    private Meter asyncTimeouts;
 
-    private final Meter[] responses;
+    private Meter[] responses;
 
-    private final Timer getRequests;
-    private final Timer postRequests;
-    private final Timer headRequests;
-    private final Timer putRequests;
-    private final Timer deleteRequests;
-    private final Timer optionsRequests;
-    private final Timer traceRequests;
-    private final Timer connectRequests;
-    private final Timer otherRequests;
+    private Timer getRequests;
+    private Timer postRequests;
+    private Timer headRequests;
+    private Timer putRequests;
+    private Timer deleteRequests;
+    private Timer optionsRequests;
+    private Timer traceRequests;
+    private Timer connectRequests;
+    private Timer moveRequests;
+    private Timer otherRequests;
 
-    private final AsyncListener listener;
+    private AsyncListener listener;
+
+    private HttpChannelState.State DISPATCHED_HACK;
 
     /**
-     * Create a new instrumented handler using a given metrics registry. The name of the metric will
-     * be derived from the class of the Handler.
+     * Create a new instrumented handler using a given metrics registry.
      *
-     * @param registry   the registry for the metrics
-     * @param underlying the handler about which metrics will be collected
+     * @param registry the registry for the metrics
      */
-    public InstrumentedHandler(MetricRegistry registry, Handler underlying) {
-        this(registry, underlying, name(underlying.getClass()));
+    public InstrumentedHandler(MetricRegistry registry) {
+        this(registry, null);
     }
 
     /**
-     * Create a new instrumented handler using a given metrics registry and a custom prefix.
+     * Create a new instrumented handler using a given metrics registry.
      *
-     * @param registry   the registry for the metrics
-     * @param underlying the handler about which metrics will be collected
-     * @param prefix     the prefix to use for the metrics names
+     * @param registry the registry for the metrics
+     * @param prefix   the prefix to use for the metrics names
      */
-    public InstrumentedHandler(MetricRegistry registry, Handler underlying, String prefix) {
-        super();
-        this.requests = registry.timer(name(prefix, "requests"));
-        this.dispatches = registry.timer(name(prefix, "dispatches"));
+    public InstrumentedHandler(MetricRegistry registry, String prefix) {
+        this.metricRegistry = registry;
+        this.prefix = prefix;
 
-        this.activeRequests = registry.counter(name(prefix, "active-requests"));
-        this.activeDispatches = registry.counter(name(prefix, "active-dispatches"));
-        this.activeSuspended = registry.counter(name(prefix, "active-suspended"));
+        try {
+            DISPATCHED_HACK = HttpChannelState.State.valueOf("HANDLING");
+        } catch (IllegalArgumentException e) {
+            DISPATCHED_HACK = HttpChannelState.State.valueOf("DISPATCHED");
+        }
+    }
 
-        this.asyncDispatches = registry.meter(name(prefix, "async-dispatches"));
-        this.asyncTimeouts = registry.meter(name(prefix, "async-timeouts"));
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+
+        final String prefix = getMetricPrefix();
+
+        this.requests = metricRegistry.timer(name(prefix, NAME_REQUESTS));
+        this.dispatches = metricRegistry.timer(name(prefix, NAME_DISPATCHES));
+
+        this.activeRequests = metricRegistry.counter(name(prefix, NAME_ACTIVE_REQUESTS));
+        this.activeDispatches = metricRegistry.counter(name(prefix, NAME_ACTIVE_DISPATCHES));
+        this.activeSuspended = metricRegistry.counter(name(prefix, NAME_ACTIVE_SUSPENDED));
+
+        this.asyncDispatches = metricRegistry.meter(name(prefix, NAME_ASYNC_DISPATCHES));
+        this.asyncTimeouts = metricRegistry.meter(name(prefix, NAME_ASYNC_TIMEOUTS));
 
         this.responses = new Meter[]{
-                registry.meter(name(prefix, "1xx-responses")), // 1xx
-                registry.meter(name(prefix, "2xx-responses")), // 2xx
-                registry.meter(name(prefix, "3xx-responses")), // 3xx
-                registry.meter(name(prefix, "4xx-responses")), // 4xx
-                registry.meter(name(prefix, "5xx-responses"))  // 5xx
+                metricRegistry.meter(name(prefix, NAME_1XX_RESPONSES)), // 1xx
+                metricRegistry.meter(name(prefix, NAME_2XX_RESPONSES)), // 2xx
+                metricRegistry.meter(name(prefix, NAME_3XX_RESPONSES)), // 3xx
+                metricRegistry.meter(name(prefix, NAME_4XX_RESPONSES)), // 4xx
+                metricRegistry.meter(name(prefix, NAME_5XX_RESPONSES))  // 5xx
         };
 
-        this.getRequests = registry.timer(name(prefix, "get-requests"));
-        this.postRequests = registry.timer(name(prefix, "post-requests"));
-        this.headRequests = registry.timer(name(prefix, "head-requests"));
-        this.putRequests = registry.timer(name(prefix, "put-requests"));
-        this.deleteRequests = registry.timer(name(prefix, "delete-requests"));
-        this.optionsRequests = registry.timer(name(prefix, "options-requests"));
-        this.traceRequests = registry.timer(name(prefix, "trace-requests"));
-        this.connectRequests = registry.timer(name(prefix, "connect-requests"));
-        this.otherRequests = registry.timer(name(prefix, "other-requests"));
+        this.getRequests = metricRegistry.timer(name(prefix, NAME_GET_REQUESTS));
+        this.postRequests = metricRegistry.timer(name(prefix, NAME_POST_REQUESTS));
+        this.headRequests = metricRegistry.timer(name(prefix, NAME_HEAD_REQUESTS));
+        this.putRequests = metricRegistry.timer(name(prefix, NAME_PUT_REQUESTS));
+        this.deleteRequests = metricRegistry.timer(name(prefix, NAME_DELETE_REQUESTS));
+        this.optionsRequests = metricRegistry.timer(name(prefix, NAME_OPTIONS_REQUESTS));
+        this.traceRequests = metricRegistry.timer(name(prefix, NAME_TRACE_REQUESTS));
+        this.connectRequests = metricRegistry.timer(name(prefix, NAME_CONNECT_REQUESTS));
+        this.moveRequests = metricRegistry.timer(name(prefix, NAME_MOVE_REQUESTS));
+        this.otherRequests = metricRegistry.timer(name(prefix, NAME_OTHER_REQUESTS));
+
+        metricRegistry.register(name(prefix, NAME_PERCENT_4XX_1M), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[3].getOneMinuteRate(),
+                        requests.getOneMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, NAME_PERCENT_4XX_5M), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[3].getFiveMinuteRate(),
+                        requests.getFiveMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, NAME_PERCENT_4XX_15M), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[3].getFifteenMinuteRate(),
+                        requests.getFifteenMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, NAME_PERCENT_5XX_1M), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[4].getOneMinuteRate(),
+                        requests.getOneMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, NAME_PERCENT_5XX_5M), new RatioGauge() {
+            @Override
+            protected Ratio getRatio() {
+                return Ratio.of(responses[4].getFiveMinuteRate(),
+                        requests.getFiveMinuteRate());
+            }
+        });
+
+        metricRegistry.register(name(prefix, NAME_PERCENT_5XX_15M), new RatioGauge() {
+            @Override
+            public Ratio getRatio() {
+                return Ratio.of(responses[4].getFifteenMinuteRate(),
+                        requests.getFifteenMinuteRate());
+            }
+        });
+
 
         this.listener = new AsyncListener() {
+            private long startTime;
+
             @Override
             public void onTimeout(AsyncEvent event) throws IOException {
                 asyncTimeouts.mark();
@@ -113,6 +227,7 @@ public class InstrumentedHandler extends HandlerWrapper {
 
             @Override
             public void onStartAsync(AsyncEvent event) throws IOException {
+                startTime = System.currentTimeMillis();
                 event.getAsyncContext().addListener(this);
             }
 
@@ -122,17 +237,52 @@ public class InstrumentedHandler extends HandlerWrapper {
 
             @Override
             public void onComplete(AsyncEvent event) throws IOException {
-                final HttpChannelState state = (HttpChannelState) event.getAsyncContext();
-                final Request request = state.getBaseRequest();
-                activeRequests.dec();
-                updateResponses(request);
-                if (!state.isDispatched()) {
+                final AsyncContextState state = (AsyncContextState) event.getAsyncContext();
+                final HttpServletRequest request = (HttpServletRequest) state.getRequest();
+                final HttpServletResponse response = (HttpServletResponse) state.getResponse();
+                updateResponses(request, response, startTime, true);
+                if (state.getHttpChannelState().getState() != DISPATCHED_HACK &&
+                        state.getHttpChannelState().isSuspended()) {
                     activeSuspended.dec();
                 }
             }
         };
+    }
 
-        setHandler(underlying);
+    @Override
+    protected void doStop() throws Exception {
+        final String prefix = getMetricPrefix();
+
+        metricRegistry.remove(name(prefix, NAME_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_DISPATCHES));
+        metricRegistry.remove(name(prefix, NAME_ACTIVE_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_ACTIVE_DISPATCHES));
+        metricRegistry.remove(name(prefix, NAME_ACTIVE_SUSPENDED));
+        metricRegistry.remove(name(prefix, NAME_ASYNC_DISPATCHES));
+        metricRegistry.remove(name(prefix, NAME_ASYNC_TIMEOUTS));
+        metricRegistry.remove(name(prefix, NAME_1XX_RESPONSES));
+        metricRegistry.remove(name(prefix, NAME_2XX_RESPONSES));
+        metricRegistry.remove(name(prefix, NAME_3XX_RESPONSES));
+        metricRegistry.remove(name(prefix, NAME_4XX_RESPONSES));
+        metricRegistry.remove(name(prefix, NAME_5XX_RESPONSES));
+        metricRegistry.remove(name(prefix, NAME_GET_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_POST_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_HEAD_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_PUT_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_DELETE_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_OPTIONS_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_TRACE_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_CONNECT_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_MOVE_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_OTHER_REQUESTS));
+        metricRegistry.remove(name(prefix, NAME_PERCENT_4XX_1M));
+        metricRegistry.remove(name(prefix, NAME_PERCENT_4XX_5M));
+        metricRegistry.remove(name(prefix, NAME_PERCENT_4XX_15M));
+        metricRegistry.remove(name(prefix, NAME_PERCENT_5XX_1M));
+        metricRegistry.remove(name(prefix, NAME_PERCENT_5XX_5M));
+        metricRegistry.remove(name(prefix, NAME_PERCENT_5XX_15M));
+
+        super.doStop();
     }
 
     @Override
@@ -149,11 +299,12 @@ public class InstrumentedHandler extends HandlerWrapper {
             // new request
             activeRequests.inc();
             start = request.getTimeStamp();
+            state.addListener(listener);
         } else {
             // resumed request
             start = System.currentTimeMillis();
             activeSuspended.dec();
-            if (state.isDispatched()) {
+            if (state.getState() == DISPATCHED_HACK) {
                 asyncDispatches.mark();
             }
         }
@@ -168,14 +319,9 @@ public class InstrumentedHandler extends HandlerWrapper {
             dispatches.update(dispatched, TimeUnit.MILLISECONDS);
 
             if (state.isSuspended()) {
-                if (state.isInitial()) {
-                    state.addListener(listener);
-                }
                 activeSuspended.inc();
             } else if (state.isInitial()) {
-                activeRequests.dec();
-                requests.update(dispatched, TimeUnit.MILLISECONDS);
-                updateResponses(request);
+                updateResponses(httpRequest, httpResponse, start, request.isHandled());
             }
             // else onCompletion will handle it.
         }
@@ -203,20 +349,31 @@ public class InstrumentedHandler extends HandlerWrapper {
                     return traceRequests;
                 case CONNECT:
                     return connectRequests;
+                case MOVE:
+                    return moveRequests;
                 default:
                     return otherRequests;
             }
         }
     }
 
-    private void updateResponses(Request request) {
-        final int response = request.getResponse().getStatus() / 100;
-        if (response >= 1 && response <= 5) {
-            responses[response - 1].mark();
+    private void updateResponses(HttpServletRequest request, HttpServletResponse response, long start, boolean isHandled) {
+        final int responseStatus;
+        if (isHandled) {
+            responseStatus = response.getStatus() / 100;
+        } else {
+            responseStatus = 4; // will end up with a 404 response sent by HttpChannel.handle
+        }
+        if (responseStatus >= 1 && responseStatus <= 5) {
+            responses[responseStatus - 1].mark();
         }
         activeRequests.dec();
-        final long elapsedTime = System.currentTimeMillis() - request.getTimeStamp();
+        final long elapsedTime = System.currentTimeMillis() - start;
         requests.update(elapsedTime, TimeUnit.MILLISECONDS);
         requestTimer(request.getMethod()).update(elapsedTime, TimeUnit.MILLISECONDS);
+    }
+
+    private String getMetricPrefix() {
+        return this.prefix == null ? name(getHandler().getClass(), name) : name(this.prefix, name);
     }
 }

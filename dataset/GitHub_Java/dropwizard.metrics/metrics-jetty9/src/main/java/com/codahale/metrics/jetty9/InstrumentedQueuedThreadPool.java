@@ -11,61 +11,111 @@ import java.util.concurrent.BlockingQueue;
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class InstrumentedQueuedThreadPool extends QueuedThreadPool {
-    public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
-                                        @Name("name") String name) {
-        this(registry, name, 200);
+    private static final String NAME_UTILIZATION = "utilization";
+    private static final String NAME_UTILIZATION_MAX = "utilization-max";
+    private static final String NAME_SIZE = "size";
+    private static final String NAME_JOBS = "jobs";
+    private static final String NAME_JOBS_QUEUE_UTILIZATION = "jobs-queue-utilization";
+
+    private final MetricRegistry metricRegistry;
+    private String prefix;
+
+    public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry) {
+        this(registry, 200);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
-                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads) {
-        this(registry, name, maxThreads, 8);
+        this(registry, maxThreads, 8);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
-                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads,
                                         @Name("minThreads") int minThreads) {
-        this(registry, name, maxThreads, minThreads, 60000);
+        this(registry, maxThreads, minThreads, 60000);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
-                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads,
                                         @Name("minThreads") int minThreads,
                                         @Name("idleTimeout") int idleTimeout) {
-        this(registry, name, maxThreads, minThreads, idleTimeout, null);
+        this(registry, maxThreads, minThreads, idleTimeout, null);
     }
 
     public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
-                                        @Name("name") String name,
                                         @Name("maxThreads") int maxThreads,
                                         @Name("minThreads") int minThreads,
                                         @Name("idleTimeout") int idleTimeout,
                                         @Name("queue") BlockingQueue<Runnable> queue) {
-        super(maxThreads, minThreads, idleTimeout, queue);
+        this(registry, maxThreads, minThreads, idleTimeout, queue, null);
+    }
 
-        registry.register(name(QueuedThreadPool.class, name, "utilization"), new RatioGauge() {
+    public InstrumentedQueuedThreadPool(@Name("registry") MetricRegistry registry,
+                                        @Name("maxThreads") int maxThreads,
+                                        @Name("minThreads") int minThreads,
+                                        @Name("idleTimeout") int idleTimeout,
+                                        @Name("queue") BlockingQueue<Runnable> queue,
+                                        @Name("prefix") String prefix) {
+        super(maxThreads, minThreads, idleTimeout, queue);
+        this.metricRegistry = registry;
+        this.prefix = prefix;
+    }
+
+    public String getPrefix() {
+        return prefix;
+    }
+
+    public void setPrefix(String prefix) {
+        this.prefix = prefix;
+    }
+
+    @Override
+    protected void doStart() throws Exception {
+        super.doStart();
+
+        final String prefix = getMetricPrefix();
+
+        metricRegistry.register(name(prefix, NAME_UTILIZATION), new RatioGauge() {
             @Override
             protected Ratio getRatio() {
                 return Ratio.of(getThreads() - getIdleThreads(), getThreads());
             }
         });
-        registry.register(name(QueuedThreadPool.class, name, "size"), new Gauge<Integer>() {
+        metricRegistry.register(name(prefix, NAME_UTILIZATION_MAX), new RatioGauge() {
             @Override
-            public Integer getValue() {
-                return getThreads();
+            protected Ratio getRatio() {
+                return Ratio.of(getThreads() - getIdleThreads(), getMaxThreads());
             }
         });
-        registry.register(name(QueuedThreadPool.class, name, "jobs"), new Gauge<Integer>() {
+        metricRegistry.register(name(prefix, NAME_SIZE), (Gauge<Integer>) this::getThreads);
+        metricRegistry.register(name(prefix, NAME_JOBS), (Gauge<Integer>) () -> {
+            // This assumes the QueuedThreadPool is using a BlockingArrayQueue or
+            // ArrayBlockingQueue for its queue, and is therefore a constant-time operation.
+            return getQueue().size();
+        });
+        metricRegistry.register(name(prefix, NAME_JOBS_QUEUE_UTILIZATION), new RatioGauge() {
             @Override
-            public Integer getValue() {
-                // This assumes the QueuedThreadPool is using a BlockingArrayQueue or
-                // ArrayBlockingQueue for its queue, and is therefore a constant-time operation.
-                return getQueue().size();
+            protected Ratio getRatio() {
+                BlockingQueue<Runnable> queue = getQueue();
+                return Ratio.of(queue.size(), queue.size() + queue.remainingCapacity());
             }
         });
+    }
 
-        setName(name);
+    @Override
+    protected void doStop() throws Exception {
+        final String prefix = getMetricPrefix();
+
+        metricRegistry.remove(name(prefix, NAME_UTILIZATION));
+        metricRegistry.remove(name(prefix, NAME_UTILIZATION_MAX));
+        metricRegistry.remove(name(prefix, NAME_SIZE));
+        metricRegistry.remove(name(prefix, NAME_JOBS));
+        metricRegistry.remove(name(prefix, NAME_JOBS_QUEUE_UTILIZATION));
+
+        super.doStop();
+    }
+
+    private String getMetricPrefix() {
+        return this.prefix == null ? name(QueuedThreadPool.class, getName()) : name(this.prefix, getName());
     }
 }
