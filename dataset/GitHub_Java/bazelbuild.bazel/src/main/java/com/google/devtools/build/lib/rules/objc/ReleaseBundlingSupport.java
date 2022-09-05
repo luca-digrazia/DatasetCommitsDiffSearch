@@ -58,6 +58,7 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplic
 import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.Platform;
 import com.google.devtools.build.lib.rules.apple.Platform.PlatformType;
@@ -1055,16 +1056,18 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+
     CustomCommandLine.Builder commandLine =
         CustomCommandLine.builder()
             .addPath(intermediateArtifacts.swiftFrameworksFileZip().getExecPath())
             .add("Frameworks")
             .add("--platform")
-            .add(platform.getLowerCaseNameInPlist())
+            .add(AppleToolchain.swiftPlatform(appleConfiguration))
             .addExecPath("--scan-executable", intermediateArtifacts.combinedArchitectureBinary());
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext)
             .setMnemonic("SwiftStdlibCopy")
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())
@@ -1079,16 +1082,18 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+
     CustomCommandLine.Builder commandLine =
         CustomCommandLine.builder()
             .addPath(intermediateArtifacts.swiftSupportZip().getExecPath())
-            .add("SwiftSupport/" + platform.getLowerCaseNameInPlist())
+            .add("SwiftSupport/" + AppleToolchain.swiftPlatform(appleConfiguration))
             .add("--platform")
-            .add(platform.getLowerCaseNameInPlist())
+            .add(AppleToolchain.swiftPlatform(appleConfiguration))
             .addExecPath("--scan-executable", intermediateArtifacts.combinedArchitectureBinary());
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext)
             .setMnemonic("SwiftCopySwiftSupport")
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .setCommandLine(commandLine.build())

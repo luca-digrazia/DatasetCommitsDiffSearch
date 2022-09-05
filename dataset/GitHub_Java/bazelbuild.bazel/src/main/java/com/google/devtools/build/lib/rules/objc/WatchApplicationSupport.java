@@ -214,10 +214,7 @@ final class WatchApplicationSupport {
   }
 
   /**
-   * Returns the {@link TargetDeviceFamily} that the watch application bundle is targeting. This
-   * is always {@code TargetDeviceFamily.WATCH}, except for WatchOS1, which has the following
-   * special rules:
-   *
+   * Returns the {@link TargetDeviceFamily} that the watch application bundle is targeting.
    * For simulator builds, this returns a set of {@code TargetDeviceFamily.IPHONE} and
    * {@code TargetDeviceFamily.WATCH} and for non-simulator builds, this returns
    * {@code TargetDeviceFamily.WATCH}.
@@ -225,7 +222,7 @@ final class WatchApplicationSupport {
   private ImmutableSet<TargetDeviceFamily> families() {
     Platform platform =
         ruleContext.getFragment(AppleConfiguration.class).getMultiArchPlatform(PlatformType.IOS);
-    if (watchOSVersion != WatchOSVersion.OS1 || platform == Platform.IOS_DEVICE) {
+    if (platform == Platform.IOS_DEVICE) {
       return ImmutableSet.of(TargetDeviceFamily.WATCH);
     } else {
       return ImmutableSet.of(TargetDeviceFamily.IPHONE, TargetDeviceFamily.WATCH);
