@@ -212,11 +212,10 @@ import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
 import android.taobao.atlas.framework.bundlestorage.Archive;
 import android.taobao.atlas.framework.bundlestorage.BundleArchive;
 import android.taobao.atlas.framework.bundlestorage.BundleArchiveRevision;
-import android.taobao.atlas.runtime.RuntimeVariables;
-import android.taobao.atlas.runtime.newcomponent.AdditionalPackageManager;
+import android.taobao.atlas.runtime.newcomponent.BundlePackageManager;
 import android.taobao.atlas.runtime.DelegateResources;
+import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.util.FileUtils;
-import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.util.Log;
 
@@ -234,9 +233,9 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.security.ProtectionDomain;
-import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.List;
@@ -302,7 +301,7 @@ public final class BundleImpl implements Bundle {
      */
     List<BundleListener>            registeredBundleListeners    = null;
 
-    AdditionalPackageManager packageManager = null;
+    BundlePackageManager            packageManager = null;
 
     boolean                         updated        = false;
 
@@ -394,8 +393,6 @@ public final class BundleImpl implements Bundle {
             if(e instanceof BundleArchive.MisMatchException){
                 this.archive = null;
                 BaselineInfoManager.instance().rollbackHardly();
-                AtlasMonitor.getInstance().trace(AtlasMonitor.DD_BUNDLE_MISMATCH,
-                        false, "0", e==null?"":e.getMessage(), "");
                 throw e;
             }else {
                 throw new BundleException("Could not load bundle " + location, e.getCause());
@@ -426,21 +423,7 @@ public final class BundleImpl implements Bundle {
 
     	if ( this.classloader == null){
 	        // create the bundle classloader
-            List<String> dependencies = AtlasBundleInfoManager.instance().getDependencyForBundle(location);
-            String nativeLibDir = getArchive().getCurrentRevision().getRevisionDir().getAbsolutePath()+"/lib"+":"
-                    + RuntimeVariables.androidApplication.getApplicationInfo().nativeLibraryDir+":"
-                    +System.getProperty("java.library.path");
-            if(dependencies!=null) {
-                for (String str : dependencies) {
-                    BundleImpl impl = (BundleImpl) Atlas.getInstance().getBundle(str);
-                    if (impl != null) {
-                        nativeLibDir += ":";
-                        File dependencyLibDir = new File(impl.getArchive().getCurrentRevision().getRevisionDir(), "lib");
-                        nativeLibDir += dependencyLibDir;
-                    }
-                }
-            }
-	        this.classloader = new BundleClassLoader(this,dependencies,nativeLibDir);
+	        this.classloader = new BundleClassLoader(this);
     	}
         state = RESOLVED;
         // notify the listeners
@@ -861,6 +844,17 @@ public final class BundleImpl implements Bundle {
                 }
             }
         }
+    }
+
+    public synchronized BundlePackageManager getPackageManager(){
+        if(packageManager==null){
+            try {
+                packageManager = BundlePackageManager.parseBundle(RuntimeVariables.androidApplication,this);
+            } catch (InvocationTargetException e) {
+                e.printStackTrace();
+            }
+        }
+        return packageManager;
     }
 
     public boolean isUpdated(){
