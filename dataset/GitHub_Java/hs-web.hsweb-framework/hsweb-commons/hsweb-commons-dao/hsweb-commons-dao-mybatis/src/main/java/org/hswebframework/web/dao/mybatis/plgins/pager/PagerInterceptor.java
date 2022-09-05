@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2016 http://www.hswebframework.org
+ *  * Copyright 2019 http://www.hswebframework.org
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import org.apache.ibatis.reflection.MetaObject;
 import org.apache.ibatis.reflection.SystemMetaObject;
 import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.RowBounds;
+import org.hswebframework.ezorm.core.param.QueryParam;
 import org.hswebframework.web.dao.mybatis.builder.EasyOrmSqlBuilder;
 import org.springframework.stereotype.Component;
 
@@ -48,12 +49,26 @@ public class PagerInterceptor implements Interceptor {
             MetaObject metaStatementHandler = SystemMetaObject.forObject(statementHandler);
             String sql = statementHandler.getBoundSql().getSql();
             Pager pager = Pager.getAndReset();
-            if (pager != null && sql.trim().toLowerCase().startsWith("select")) {
-                String newSql = EasyOrmSqlBuilder.getInstance()
-                        .getActiveDatabase().getDialect()
-                        .doPaging(sql, pager.pageIndex(), pager.pageSize());
+
+            String lower = sql.trim();
+
+            if (lower.startsWith("select")) {
+                if (lower.contains("count(")) {
+                    return Plugin.wrap(target, this);
+                }
+                String newSql = sql;
+                if (pager != null) {
+                    newSql = EasyOrmSqlBuilder.getInstance()
+                            .getActiveDatabase().getDialect()
+                            .doPaging(sql, pager.pageIndex(), pager.pageSize());
+                }
+                Object queryEntity = statementHandler.getParameterHandler().getParameterObject();
+                if (queryEntity instanceof QueryParam && ((QueryParam) queryEntity).isForUpdate()) {
+                    newSql = newSql + " for update";
+                }
                 metaStatementHandler.setValue("delegate.boundSql.sql", newSql);
             }
+
         }
         return Plugin.wrap(target, this);
     }
