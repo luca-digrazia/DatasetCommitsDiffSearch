@@ -73,7 +73,7 @@ public final class AndroidResourceContainerBuilder {
             data.getResources(),
             data.getAssetRoots(),
             data.getResourceRoots(),
-            getExportsManifest(ruleContext),
+            ruleContext.attributes().get("exports_manifest", Type.BOOLEAN),
             rOutput,
             symbolsFile);
   }
@@ -94,13 +94,6 @@ public final class AndroidResourceContainerBuilder {
 
   private boolean hasCustomPackage(RuleContext ruleContext) {
     return ruleContext.attributes().isAttributeValueExplicitlySpecified("custom_package");
-  }
-
-  private boolean getExportsManifest(RuleContext ruleContext) {
-    // AndroidLibraryBaseRule has exports_manifest but AndroidBinaryBaseRule does not.
-    // ResourceContainers are built for both, so we must check if exports_manifest is present.
-    return ruleContext.attributes().has("exports_manifest", Type.BOOLEAN)
-        && ruleContext.attributes().get("exports_manifest", Type.BOOLEAN);
   }
 
   @Nullable

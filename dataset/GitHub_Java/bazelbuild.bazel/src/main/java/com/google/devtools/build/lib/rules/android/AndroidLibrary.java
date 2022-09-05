@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarProvider.Aar;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
@@ -52,8 +51,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
   protected abstract AndroidSemantics createAndroidSemantics();
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
     if (!AndroidSdkProvider.verifyPresence(ruleContext)) {
@@ -72,13 +70,16 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
 
     boolean definesLocalResources =
       LocalResourceContainer.definesAndroidResources(ruleContext.attributes());
-    if (definesLocalResources) {
-      LocalResourceContainer.validateRuleContext(ruleContext);
+    if (definesLocalResources && !LocalResourceContainer.validateRuleContext(ruleContext)) {
+      return null;
     }
 
     final ResourceApk resourceApk;
     if (definesLocalResources) {
       ApplicationManifest applicationManifest = androidSemantics.getManifestForRule(ruleContext);
+      if (applicationManifest == null) {
+        return null;
+      }
       resourceApk = applicationManifest.packWithDataAndResources(
           null, /* resourceApk -- not needed for library */
           ruleContext,
