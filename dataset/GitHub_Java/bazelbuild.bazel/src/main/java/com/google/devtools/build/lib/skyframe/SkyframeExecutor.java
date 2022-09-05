@@ -106,7 +106,6 @@ import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
-import com.google.devtools.build.lib.skyframe.PackageFunction.CacheEntryWithGlobDeps;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.util.AbruptExitException;
@@ -197,10 +196,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   // package twice (first time loading to find subincludes and declare value dependencies).
   // TODO(bazel-team): remove this cache once we have skyframe-native package loading
   // [skyframe-loading]
-  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.LegacyBuilder>>
-      packageFunctionCache = newPkgFunctionCache();
-  private final Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache =
-      newAstCache();
+  private final Cache<PackageIdentifier, Package.LegacyBuilder> packageFunctionCache =
+      newPkgFunctionCache();
+  private final Cache<PackageIdentifier, AstAfterPreprocessing> astCache = newAstCache();
 
   private final AtomicInteger numPackagesLoaded = new AtomicInteger(0);
 
@@ -412,8 +410,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       PackageFactory pkgFactory,
       PackageManager packageManager,
       AtomicBoolean showLoadingProgress,
-      Cache<PackageIdentifier, CacheEntryWithGlobDeps<LegacyBuilder>> packageFunctionCache,
-      Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> astCache,
+      Cache<PackageIdentifier, LegacyBuilder> packageFunctionCache,
+      Cache<PackageIdentifier, AstAfterPreprocessing> astCache,
       AtomicInteger numPackagesLoaded,
       RuleClassProvider ruleClassProvider) {
     return new PackageFunction(
@@ -657,12 +655,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     }
   }
 
-  protected Cache<PackageIdentifier, CacheEntryWithGlobDeps<Package.LegacyBuilder>>
-      newPkgFunctionCache() {
+  protected Cache<PackageIdentifier, Package.LegacyBuilder> newPkgFunctionCache() {
     return CacheBuilder.newBuilder().build();
   }
 
-  protected Cache<PackageIdentifier, CacheEntryWithGlobDeps<AstAfterPreprocessing>> newAstCache() {
+  protected Cache<PackageIdentifier, Preprocessor.AstAfterPreprocessing> newAstCache() {
     return CacheBuilder.newBuilder().build();
   }
 

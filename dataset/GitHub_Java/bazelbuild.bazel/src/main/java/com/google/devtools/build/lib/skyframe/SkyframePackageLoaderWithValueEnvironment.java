@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigura
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
@@ -50,11 +49,6 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
     this.ruleClassProvider = ruleClassProvider;
   }
 
-  @Override
-  public EventHandler getEventHandler() {
-    return env.getListener();
-  }
-
   private Package getPackage(final PackageIdentifier pkgIdentifier)
       throws NoSuchPackageException {
     SkyKey key = PackageValue.key(pkgIdentifier);
@@ -66,7 +60,8 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   }
 
   @Override
-  public Target getTarget(Label label) throws NoSuchPackageException, NoSuchTargetException {
+  public Target getTarget(Label label) throws NoSuchPackageException,
+      NoSuchTargetException {
     Package pkg = getPackage(label.getPackageIdentifier());
     return pkg == null ? null : pkg.getTarget(label.getName());
   }
@@ -74,7 +69,7 @@ class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForCon
   @Override
   public void addDependency(Package pkg, String fileName) throws LabelSyntaxException, IOException {
     RootedPath fileRootedPath = RootedPath.toRootedPath(pkg.getSourceRoot(),
-        pkg.getPackageIdentifier().getSourceRoot().getRelative(fileName));
+        pkg.getPackageIdentifier().getPathFragment().getRelative(fileName));
     FileValue result = (FileValue) env.getValue(FileValue.key(fileRootedPath));
     if (result != null && !result.exists()) {
       throw new IOException();

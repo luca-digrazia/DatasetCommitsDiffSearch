@@ -29,6 +29,7 @@ import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
+
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -51,8 +52,7 @@ public class BuildConfigurationFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws InterruptedException, BuildConfigurationFunctionException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws SkyFunctionException {
     BuildConfigurationValue.Key key = (BuildConfigurationValue.Key) skyKey.argument();
     Set<Fragment> fragments;
     try {
@@ -70,7 +70,7 @@ public class BuildConfigurationFunction implements SkyFunction {
     }
 
     BuildConfiguration config = new BuildConfiguration(directories, fragmentsMap,
-        key.getBuildOptions());
+        key.getBuildOptions(), !key.actionsEnabled());
     // Unlike static configurations, dynamic configurations don't need to embed transition logic
     // within the configuration itself. However we still use this interface to provide a mapping
     // between Transition types (e.g. HOST) and the dynamic transitions that apply those
@@ -83,7 +83,7 @@ public class BuildConfigurationFunction implements SkyFunction {
   }
 
   private Set<Fragment> getConfigurationFragments(BuildConfigurationValue.Key key, Environment env)
-      throws InvalidConfigurationException, InterruptedException {
+      throws InvalidConfigurationException {
 
     // Get SkyKeys for the fragments we need to load.
     Set<SkyKey> fragmentKeys = new LinkedHashSet<>();
