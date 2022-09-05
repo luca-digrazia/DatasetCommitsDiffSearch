@@ -213,12 +213,10 @@ import java.util.List;
 import java.util.Map;
 
 import android.app.Application;
-import android.app.ContentProviderHolder;
 import android.app.IActivityManager;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.ContextWrapper;
-import android.content.IContentProvider;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.ProviderInfo;
 import android.content.res.Resources;
@@ -230,7 +228,6 @@ import android.taobao.atlas.hack.Hack.HackDeclaration;
 import android.taobao.atlas.hack.Hack.HackedClass;
 import android.taobao.atlas.hack.Hack.HackedField;
 import android.taobao.atlas.hack.Hack.HackedMethod;
-import android.util.Log;
 import android.view.ContextThemeWrapper;
 
 public class AtlasHacks extends HackDeclaration implements AssertionFailureHandler {
@@ -269,6 +266,7 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
     public static HackedClass<Object>                           ActivityThread$AppBindData;
     public static HackedClass<Object>                           ActivityManager;
     public static HackedClass<Object>                           StringBlock;
+    public static HackedClass<Object> ApplicationLoaders;
 
     // Fields
     public static HackedField<Object, Instrumentation>          ActivityThread_mInstrumentation;
@@ -305,6 +303,7 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
     public static HackedField<Object,Object>  ActivityThread_mBoundApplication;
     public static HackedField<Object,Object>  ContextImpl_mPackageInfo;
     public static HackedField<Object,Object>                                  ActivityManager_IActivityManagerSingleton;
+    public static HackedField<Object, Map<String, ClassLoader>> ApplicationLoaders_mLoaders;
 
 
 
@@ -333,6 +332,7 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
     public static HackedMethod                                  AssetManager_addAssetPathNativeSamSung;
     public static HackedMethod                                  AssetManager_getStringBlockCount;
     public static HackedMethod                                  AssetManager_getNativeStringBlock;
+    public static HackedMethod ApplicationLoaders_getDefault;
 
 
 
@@ -410,6 +410,7 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
         ActivityThread$AppBindData = Hack.into("android.app.ActivityThread$AppBindData");
         ActivityManager = Hack.into("android.app.ActivityManager");
         StringBlock=Hack.into("android.content.res.StringBlock");
+        ApplicationLoaders = Hack.into("android.app.ApplicationLoaders");
         sIsIgnoreFailure = false;
     }
 
@@ -466,6 +467,7 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
         ActivityThread_mBoundApplication = ActivityThread.field("mBoundApplication");
         ContextImpl_mPackageInfo = ContextImpl.field("mPackageInfo");
         AssetManager_mStringBlocks = AssetManager.field("mStringBlocks");
+        ApplicationLoaders_mLoaders = ApplicationLoaders.field("mLoaders").ofGenericType(Map.class);
     }
 
     public static void allMethods() throws HackAssertionException {
@@ -496,29 +498,19 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
         }
 
         ActivityThread_installContentProviders = ActivityThread.method("installContentProviders",Context.class,List.class);
-
-        try {
-            if (Build.VERSION.SDK_INT > 25 || (Build.VERSION.SDK_INT == 25
-                    && Build.VERSION.PREVIEW_SDK_INT > 0)) {
-                ActivityThread_installProvider = ActivityThread.method("installProvider",
-                        Context.class, ContentProviderHolder.class, ProviderInfo.class,
-                        boolean.class, boolean.class, boolean.class);
-            } else if (Build.VERSION.SDK_INT == 14) {
-                ActivityThread_installProvider = ActivityThread.method("installProvider",
-                        Context.class, IContentProvider.class, ProviderInfo.class, boolean.class);
-            } else if (Build.VERSION.SDK_INT == 15) {
-                ActivityThread_installProvider = ActivityThread.method("installProvider",
-                        Context.class, IContentProvider.class, ProviderInfo.class, boolean.class,
-                        boolean.class);
-            } else {
-                ActivityThread_installProvider = ActivityThread.method("installProvider",
-                        Context.class, IActivityManager.ContentProviderHolder.class,
-                        ProviderInfo.class, boolean.class, boolean.class, boolean.class);
-            }
-        } catch (Throwable t) {
-            Log.w("AtlasHacks", "Error getting ActivityThread_installProvider", t);
+        if(Build.VERSION.SDK_INT>25 || (Build.VERSION.SDK_INT==25 && Build.VERSION.PREVIEW_SDK_INT>0)) {
+            ActivityThread_installProvider = ActivityThread.method("installProvider", Context.class, android.app.ContentProviderHolder.class,
+                    ProviderInfo.class, boolean.class, boolean.class, boolean.class);
+        }else if(Build.VERSION.SDK_INT==14){
+            ActivityThread_installProvider = ActivityThread.method("installProvider", Context.class, android.app.ContentProviderHolder.class,
+                    ProviderInfo.class, boolean.class);
+        }else if(Build.VERSION.SDK_INT==15){
+            ActivityThread_installProvider = ActivityThread.method("installProvider", Context.class, android.app.ContentProviderHolder.class,
+                    ProviderInfo.class, boolean.class,boolean.class);
+        }else{
+            ActivityThread_installProvider = ActivityThread.method("installProvider", Context.class, IActivityManager.ContentProviderHolder.class,
+                    ProviderInfo.class, boolean.class, boolean.class, boolean.class);
         }
-
         Service_attach = Service.method("attach",Context.class,ActivityThread.getmClass(),String.class,IBinder.class,Application.getmClass(),Object.class);
 
         AssetManager_addAssetPathNative = AssetManager.method("addAssetPathNative", String.class);
@@ -531,7 +523,7 @@ public class AtlasHacks extends HackDeclaration implements AssertionFailureHandl
         }
         AssetManager_getStringBlockCount=AssetManager.method("getStringBlockCount");
         AssetManager_getNativeStringBlock = AssetManager.method("getNativeStringBlock",int.class);
-
+        ApplicationLoaders_getDefault = ApplicationLoaders.method("getDefault");
     }
 
     public static void allConstructors() throws HackAssertionException {
