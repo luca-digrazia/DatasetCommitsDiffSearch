@@ -230,8 +230,6 @@ import com.google.wireless.android.sdk.stats.GradleBuildProject;
 import com.google.wireless.android.sdk.stats.GradleBuildVariant;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.tools.ReflectUtils;
-import org.gradle.api.Action;
-import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.tasks.compile.JavaCompile;
@@ -245,7 +243,9 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ArtifactScope.ALL;
-import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ArtifactType.*;
+import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ArtifactType.DATA_BINDING_ARTIFACT;
+import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ArtifactType.JAR;
+import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ArtifactType.MANIFEST;
 import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ConsumedConfigType.ANNOTATION_PROCESSOR;
 import static com.android.build.gradle.internal.publishing.AndroidArtifacts.ConsumedConfigType.COMPILE_CLASSPATH;
 import static com.android.build.gradle.internal.scope.TaskOutputHolder.TaskOutputType.ANNOTATION_PROCESSOR_LIST;
@@ -304,7 +304,11 @@ public class AwbJavaCompileConfigAction implements TaskConfigAction<AwbAndroidJa
 
 //        ConventionMappingHelper.map(javacTask, "classpath", (Callable<FileCollection>) () -> getInputJars());
 
-        FileCollection classpath = getInputJars();
+        javacTask.setClasspath(getInputJars());
+
+        javacTask.setSourceCompatibility("1.8");
+
+        javacTask.setTargetCompatibility("1.8");
 
         javacTask.setDestinationDir(appVariantOutputContext.getJAwbavaOutputDir(awbBundle));
 
@@ -323,14 +327,6 @@ public class AwbJavaCompileConfigAction implements TaskConfigAction<AwbAndroidJa
                                                     .getBootClasspathAsStrings(false)));
         }
 
-//        FileCollection classpath = scope.getJavaClasspath(COMPILE_CLASSPATH, CLASSES);
-        if (keepDefaultBootstrap) {
-            classpath =
-                    classpath.plus(
-                            appVariantOutputContext.getVariantContext().getProject().files(appVariantOutputContext.getScope().getGlobalScope().getAndroidBuilder().getBootClasspath(false)));
-        }
-        javacTask.setClasspath(classpath);
-
         appVariantOutputContext.getScope().getTransformManager().addStream(OriginalStream.builder(appVariantOutputContext.getVariantContext().getProject(), "awb-classes")
                 .addContentType(QualifiedContent.DefaultContentType.CLASSES)
                 .addScope(QualifiedContent.Scope.PROJECT)
@@ -343,7 +339,7 @@ public class AwbJavaCompileConfigAction implements TaskConfigAction<AwbAndroidJa
                 scope.getGlobalScope()
                         .getExtension()
                         .getCompileSdkVersion(),
-                scope.getJava8LangSupportType());
+                VariantScope.Java8LangSupport.UNUSED);
         javacTask.getOptions().setEncoding(compileOptions.getEncoding());
 
         Boolean includeCompileClasspath =
@@ -393,7 +389,7 @@ public class AwbJavaCompileConfigAction implements TaskConfigAction<AwbAndroidJa
                 String key = arg.getKey();
                 String value = arg.getValue();
 
-                if ("android.databinding.modulePackage".equals(key)) {
+                if ("android.databindiDng.modulePackage".equals(key)) {
                     value = awbBundle.getPackageName() + "._bundleapp_";
                 } else if ("android.databinding.artifactType".equals(key)) {
                     //value = "LIBRARY";
@@ -422,16 +418,7 @@ public class AwbJavaCompileConfigAction implements TaskConfigAction<AwbAndroidJa
                 && appVariantOutputContext.getVariantContext().isDataBindEnabled(awbBundle)) {
             File file = appVariantOutputContext.getVariantContext().getAwbDataBindingMergeArtifacts(awbBundle);
             ReflectUtils.updateField(javacTask, "dataBindingDependencyArtifacts", scope.getGlobalScope().getProject().files(file));
-              javacTask.doLast(new Action<Task>() {
-                  @Override
-                  public void execute(Task task) {
-                      try {
-                          org.apache.commons.io.FileUtils.deleteDirectory(new File(appVariantOutputContext.getJAwbavaOutputDir(awbBundle),"android/databinding"));
-                      } catch (IOException e) {
-                          e.printStackTrace();
-                      }
-                  }
-              });
+//
 
 
 //            FileCollection files =
