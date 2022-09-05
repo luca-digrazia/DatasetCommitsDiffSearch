@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -232,9 +232,9 @@ public final class XcodeSupport {
       @Override
       public InputStream openStream() {
         XcodeGenProtos.Control.Builder builder = XcodeGenProtos.Control.newBuilder();
-        String workspaceRoot = objcConfiguration.getXcodeWorkspaceRoot();
+        Path workspaceRoot = objcConfiguration.getClientWorkspaceRoot();
         if (workspaceRoot != null) {
-          builder.setWorkspaceRoot(workspaceRoot);
+          builder.setWorkspaceRoot(workspaceRoot.getPathString());
         }
 
         List<String> multiCpus = objcConfiguration.getIosMultiCpus();

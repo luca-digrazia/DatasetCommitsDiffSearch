@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,16 +15,13 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
-
-import javax.annotation.Nullable;
 
 /**
  * Pluggable semantics for Android rules.
@@ -34,42 +31,19 @@ import javax.annotation.Nullable;
  */
 public interface AndroidSemantics {
   /**
-   * Name of the output group used for idl jars (the jars containing the class files for sources
-   * generated from annotation processors).
-   */
-  String IDL_JARS_OUTPUT_GROUP =
-      OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX + "idl_jars";
-
-  /**
    * Adds transitive info providers for {@code android_binary} and {@code android_library} rules.
-   * @throws InterruptedException
+   * @throws InterruptedException 
    */
-  void addTransitiveInfoProviders(
-      RuleConfiguredTargetBuilder builder,
-      RuleContext ruleContext,
-      JavaCommon javaCommon,
-      AndroidCommon androidCommon,
-      Artifact jarWithAllClasses)
-      throws InterruptedException;
-
-  /**
-   * Add additional resources to IDE info for {@code android_binary} and {@code android_library}
-   *
-   * @param ruleContext rule context for target rule
-   * @param resourceApk resource apk directly provided by the rule
-   * @param ideInfoProviderBuilder
-   */
-  void addNonLocalResources(
-      RuleContext ruleContext,
-      @Nullable ResourceApk resourceApk,
-      AndroidIdeInfoProvider.Builder ideInfoProviderBuilder);
+  void addTransitiveInfoProviders(RuleConfiguredTargetBuilder builder,
+      RuleContext ruleContext, JavaCommon javaCommon, AndroidCommon androidCommon,
+      Artifact jarWithAllClasses, ResourceApk resourceApk, Artifact zipAlignedApk,
+      Iterable<Artifact> apksUnderTest) throws InterruptedException;
 
   /**
    * Returns the manifest to be used when compiling a given rule.
    * @throws InterruptedException 
    */
-  ApplicationManifest getManifestForRule(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException;
+  ApplicationManifest getManifestForRule(RuleContext ruleContext) throws InterruptedException;
 
   /**
    * Returns the name of the file in which the file names of native dependencies are listed.
@@ -91,10 +65,12 @@ public interface AndroidSemantics {
   ImmutableList<String> getDxJvmArguments();
 
   /**
-   * Returns the artifact for the debug key for signing the APK.
+   * Adds command line arguments and inputs to a {@code ApkBuilder} invocation to control how to
+   * sign the app.
    */
-  Artifact getApkDebugSigningKey(RuleContext ruleContext);
-  
+  void addSigningArguments(
+      RuleContext ruleContext, boolean sign, SpawnAction.Builder actionBuilder);
+
   /**
    * Add coverage instrumentation to the Java compilation of an Android binary.
    * @throws InterruptedException 

@@ -46,8 +46,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.TriState;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
@@ -57,9 +57,7 @@ import com.google.devtools.build.lib.rules.java.DeployArchiveBuilder;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
-import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -257,7 +255,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         resourceApk,
         AndroidIdlProvider.EMPTY,
         ruleContext.getConfiguration().isCodeCoverageEnabled(),
-        true /* collectJavaCompilationArgs */);
+        true /* collectJavaCompilationArgs */,
+        AndroidRuleClasses.ANDROID_BINARY_GEN_JAR);
     if (resourceClasses == null) {
       return null;
     }
@@ -265,9 +264,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     Artifact deployJar = createDeployJar(ruleContext, javaSemantics, androidCommon, resourceClasses,
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR));
 
-
-    return createAndroidBinary(
-        ruleContext,
+    return createAndroidBinary(ruleContext,
         filesBuilder,
         deployJar,
         javaCommon,
@@ -508,10 +505,9 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         .add(splitDeployMarker)
         .build();
 
-    androidCommon.addTransitiveInfoProviders(
-        builder, androidSemantics, resourceApk, zipAlignedApk, apksUnderTest);
-    androidSemantics.addTransitiveInfoProviders(
-        builder, ruleContext, javaCommon, androidCommon, jarToDex);
+    androidCommon.addTransitiveInfoProviders(builder);
+    androidSemantics.addTransitiveInfoProviders(builder, ruleContext, javaCommon, androidCommon,
+        jarToDex, resourceApk, zipAlignedApk, apksUnderTest);
 
     if (proguardOutput.mapping != null) {
       builder.add(ProguardMappingProvider.class,
@@ -520,20 +516,14 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     return builder
         .setFilesToBuild(filesToBuild)
-        .add(
-            RunfilesProvider.class,
-            RunfilesProvider.simple(
-                new Runfiles.Builder(ruleContext.getWorkspaceName())
-                    .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES)
-                    .addTransitiveArtifacts(filesToBuild)
-                    .build()))
-        .add(
-            JavaSourceInfoProvider.class,
-            JavaSourceInfoProvider.fromJavaTargetAttributes(resourceClasses, javaSemantics))
-        .add(
-            ApkProvider.class,
-            new ApkProvider(
-                NestedSetBuilder.create(Order.STABLE_ORDER, zipAlignedApk), coverageMetadata))
+        .add(RunfilesProvider.class, RunfilesProvider.simple(
+            new Runfiles.Builder(ruleContext.getWorkspaceName())
+            .addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES)
+            .addTransitiveArtifacts(filesToBuild)
+            .build()))
+        .add(ApkProvider.class,
+            new ApkProvider(NestedSetBuilder.create(Order.STABLE_ORDER, zipAlignedApk),
+                coverageMetadata))
         .add(AndroidPreDexJarProvider.class, new AndroidPreDexJarProvider(jarToDex))
         .addOutputGroup("mobile_install_full", fullDeployMarker)
         .addOutputGroup("mobile_install_incremental", incrementalDeployMarker)
@@ -1259,8 +1249,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
    * Returns whether to use NativeDepsHelper to link native dependencies.
    */
   public static boolean shouldLinkNativeDeps(RuleContext ruleContext) {
-    TriState attributeValue = ruleContext.attributes().get(
-        "legacy_native_support", BuildType.TRISTATE);
+    TriState attributeValue = ruleContext.attributes().get("legacy_native_support", Type.TRISTATE);
     if (attributeValue == TriState.AUTO) {
       return !ruleContext.getFragment(AndroidConfiguration.class).getLegacyNativeSupport();
     } else {

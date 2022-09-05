@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.packages.Rule;
 
 import java.util.Deque;
 import java.util.LinkedList;
@@ -71,20 +72,16 @@ public class EvalExceptionWithStackTrace extends EvalException {
   }
 
   /**
-   * Makes sure the stack trace is rooted in a function call.
-   *
-   * In some cases (rule implementation application, aspect implementation application)
-   * bazel calls into the function directly (using BaseFunction.call). In that case, since
-   * there is no FuncallExpression to evaluate, stack trace mechanism cannot record this call.
-   * This method allows to augument the stack trace with information about the call.
+   * Adds the given {@code Rule} to the stack trace.
    */
-  public void registerPhantomFuncall(
-      String funcallDescription, Location location, BaseFunction function) {
-    /*
+  public void registerRule(Rule rule, BaseFunction ruleImpl) {
+    /* We have to model the transition from BUILD file to bzl file manually since the stack trace
+     * mechanism cannot do that by itself (because, for example, the rule implementation does not
+     * have a corresponding FuncallExpression).
      *
-     * We add two new frames to the stack:
-     * 1. Pseudo-function call (for example, rule definition)
-     * 2. Function entry (Rule implementation)
+     * Consequently, we add two new frames to the stack:
+     * 1. Rule definition
+     * 2. Rule implementation
      *
      * Similar to Python, all functions that were entered (except for the top-level ones) appear
      * twice in the stack trace output. This would lead to the following trace:
@@ -107,8 +104,9 @@ public class EvalExceptionWithStackTrace extends EvalException {
      *     ...
      *
      * */
-    addStackFrame(function.getName(), function.getLocation());
-    addStackFrame(funcallDescription, location, false);
+    addStackFrame(ruleImpl.getName(), ruleImpl.getLocation());
+    addStackFrame(String.format("%s(name = '%s')", rule.getRuleClass(), rule.getName()),
+        rule.getLocation(), false);
   }
 
   /**

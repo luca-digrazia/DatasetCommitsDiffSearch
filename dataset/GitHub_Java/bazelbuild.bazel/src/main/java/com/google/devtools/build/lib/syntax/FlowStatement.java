@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,18 +17,11 @@ package com.google.devtools.build.lib.syntax;
  * A class for flow statements (e.g. break and continue)
  */
 public final class FlowStatement extends Statement {
-  public enum Kind {
-    BREAK("break"),
-    CONTINUE("continue");
 
-    private String name;
+  public static final FlowStatement BREAK = new FlowStatement("break", true);
+  public static final FlowStatement CONTINUE = new FlowStatement("continue", false);
 
-    private Kind(String name) {
-      this.name = name;
-    }
-  };
-
-  private final Kind kind;
+  private final String name;
   private final FlowException ex;
 
   /**
@@ -37,13 +30,9 @@ public final class FlowStatement extends Statement {
    * @param terminateLoop Determines whether the enclosing loop should be terminated completely
    *        (break)
    */
-  public FlowStatement(Kind kind) {
-    this.kind = kind;
-    this.ex = new FlowException(kind);
-  }
-
-  Kind getKind() {
-    return kind;
+  protected FlowStatement(String name, boolean terminateLoop) {
+    this.name = name;
+    this.ex = new FlowException(terminateLoop);
   }
 
   @Override
@@ -54,13 +43,13 @@ public final class FlowStatement extends Statement {
   @Override
   void validate(ValidationEnvironment env) throws EvalException {
     if (!env.isInsideLoop()) {
-      throw new EvalException(getLocation(), kind.name + " statement must be inside a for loop");
+      throw new EvalException(getLocation(), name + " statement must be inside a for loop");
     }
   }
 
   @Override
   public String toString() {
-    return kind.name;
+    return name;
   }
 
   @Override
@@ -72,16 +61,17 @@ public final class FlowStatement extends Statement {
    * An exception that signals changes in the control flow (e.g. break or continue)
    */
   class FlowException extends EvalException {
-    private final Kind kind;
+    private final boolean terminateLoop;
 
     /**
      *
      * @param terminateLoop Determines whether the enclosing loop should be terminated completely
      *        (break)
      */
-    public FlowException(Kind kind) {
-      super(FlowStatement.this.getLocation(), "FlowException with kind = " + kind.name);
-      this.kind = kind;
+    public FlowException(boolean terminateLoop) {
+      super(FlowStatement.this.getLocation(), "FlowException with terminateLoop = "
+          + terminateLoop);
+      this.terminateLoop = terminateLoop;
     }
 
     /**
@@ -90,7 +80,7 @@ public final class FlowStatement extends Statement {
      * @return {@code True} for 'break', {@code false} for 'continue'
      */
     public boolean mustTerminateLoop() {
-      return kind == Kind.BREAK;
+      return terminateLoop;
     }
 
     @Override

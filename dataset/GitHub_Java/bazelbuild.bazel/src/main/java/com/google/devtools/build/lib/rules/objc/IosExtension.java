@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,10 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
 
@@ -48,7 +46,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
 
   // Apple only accepts extensions starting at 8.0.
   @VisibleForTesting
-  static final DottedVersion EXTENSION_MINIMUM_OS_VERSION = DottedVersion.fromString("8.0");
+  static final String EXTENSION_MINIMUM_OS_VERSION = "8.0";
 
   public IosExtension() {
     super(ReleaseBundlingSupport.EXTENSION_BUNDLE_DIR_FORMAT, XcodeProductType.EXTENSION,
@@ -56,7 +54,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
   }
 
   @Override
-  protected DottedVersion bundleMinimumOsVersion(RuleContext ruleContext) {
+  protected String bundleMinimumOsVersion(RuleContext ruleContext) {
     return determineMinimumOsVersion(ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs());
   }
 
@@ -68,12 +66,15 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
         .build();
   }
 
-  private static DottedVersion determineMinimumOsVersion(DottedVersion fromFlag) {
-    // Extensions are not accepted by Apple below version 8.0. While applications built with a
-    // minimum iOS version of less than 8.0 may contain extensions in their bundle, the extension
-    // itself needs to be built with 8.0 or higher. This logic overrides (if necessary) any
-    // flag-set minimum iOS version for extensions only so that this requirement is not violated.
-    return Ordering.natural().max(fromFlag, EXTENSION_MINIMUM_OS_VERSION);
+  private static String determineMinimumOsVersion(String fromFlag) {
+    if (Double.parseDouble(fromFlag) < Double.parseDouble(EXTENSION_MINIMUM_OS_VERSION)) {
+      // Extensions are not accepted by Apple below version 8.0. While applications built with a
+      // minimum iOS version of less than 8.0 may contain extensions in their bundle, the extension
+      // itself needs to be built with 8.0 or higher. This logic overrides (if necessary) any
+      // flag-set minimum iOS version for extensions only so that this requirement is not violated.
+      return EXTENSION_MINIMUM_OS_VERSION;
+    }
+    return fromFlag;
   }
 
   /**
@@ -85,7 +86,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
     @Override
     protected ImmutableList<BuildOptions> defaultOptions(BuildOptions originalOptions) {
       ObjcCommandLineOptions objcOptions = originalOptions.get(ObjcCommandLineOptions.class);
-      DottedVersion newMinimumVersion = determineMinimumOsVersion(objcOptions.iosMinimumOs);
+      String newMinimumVersion = determineMinimumOsVersion(objcOptions.iosMinimumOs);
 
       if (newMinimumVersion.equals(objcOptions.iosMinimumOs)) {
         return ImmutableList.of();
@@ -100,7 +101,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
 
     @Override
     protected void setAdditionalOptions(BuildOptions splitOptions, BuildOptions originalOptions) {
-      DottedVersion fromFlag = originalOptions.get(ObjcCommandLineOptions.class).iosMinimumOs;
+      String fromFlag = originalOptions.get(ObjcCommandLineOptions.class).iosMinimumOs;
       setMinimumOsVersion(splitOptions, determineMinimumOsVersion(fromFlag));
     }
 
@@ -109,7 +110,7 @@ public class IosExtension extends ReleaseBundlingTargetFactory {
       return ConfigurationDistinguisher.EXTENSION;
     }
 
-    private void setMinimumOsVersion(BuildOptions splitOptions, DottedVersion newMinimumVersion) {
+    private void setMinimumOsVersion(BuildOptions splitOptions, String newMinimumVersion) {
       splitOptions.get(ObjcCommandLineOptions.class).iosMinimumOs = newMinimumVersion;
     }
   }

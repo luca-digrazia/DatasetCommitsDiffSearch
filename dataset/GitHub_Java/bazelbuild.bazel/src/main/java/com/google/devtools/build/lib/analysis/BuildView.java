@@ -154,25 +154,25 @@ public class BuildView {
             abbrev = 'k',
             defaultValue = "false",
             category = "strategy",
-            help = "Continue as much as possible after an error.  While the"
-                + " target that failed, and those that depend on it, cannot be"
-                + " analyzed (or built), the other prerequisites of these"
-                + " targets can be analyzed (or built) all the same.")
+            help = "Continue as much as possible after an error.  While the "
+            + "target that failed, and those that depend on it, cannot be "
+            + "analyzed (or built), the other prerequisites of these "
+            + "targets can be analyzed (or built) all the same.")
     public boolean keepGoing;
 
     @Option(name = "analysis_warnings_as_errors",
             deprecationWarning = "analysis_warnings_as_errors is now a no-op and will be removed in"
-                              + " an upcoming Blaze release",
+                + " an upcoming Blaze release",
             defaultValue = "false",
             category = "strategy",
             help = "Treat visible analysis warnings as errors.")
     public boolean analysisWarningsAsErrors;
 
     @Option(name = "discard_analysis_cache",
-            defaultValue = "false",
-            category = "strategy",
-            help = "Discard the analysis cache immediately after the analysis phase completes."
-                + " Reduces memory usage by ~10%, but makes further incremental builds slower.")
+        defaultValue = "false",
+        category = "strategy",
+        help = "Discard the analysis cache immediately after the analysis phase completes. "
+        + "Reduces memory usage by ~10%, but makes further incremental builds slower.")
     public boolean discardAnalysisCache;
 
     @Option(name = "experimental_extra_action_filter",
@@ -187,13 +187,6 @@ public class BuildView {
             category = "experimental",
             help = "Only schedules extra_actions for top level targets.")
     public boolean extraActionTopLevelOnly;
-
-    @Option(name = "experimental_interleave_loading_and_analysis",
-            defaultValue = "false",
-            category = "experimental",
-            help = "Interleave loading and analysis phases, so that one target may be analyzed at"
-                + " the same time as an unrelated target is loaded.")
-    public boolean interleaveLoadingAndAnalysis;
 
     @Option(name = "version_window_for_dirty_node_gc",
             defaultValue = "0",
@@ -211,7 +204,6 @@ public class BuildView {
   private final SkyframeExecutor skyframeExecutor;
   private final SkyframeBuildView skyframeBuildView;
 
-  // Same as skyframeExecutor.getPackageManager().
   private final PackageManager packageManager;
 
   private final BinTools binTools;
@@ -231,13 +223,13 @@ public class BuildView {
    * Used only for testing that we clear Skyframe caches correctly.
    * TODO(bazel-team): Remove this once we get rid of legacy Skyframe synchronization.
    */
-  private boolean skyframeCacheWasInvalidated;
+  private boolean skyframeCacheWasInvalidated = false;
 
   /**
    * If the last build was executed with {@code Options#discard_analysis_cache} and we are not
    * running Skyframe full, we should clear the legacy data since it is out-of-sync.
    */
-  private boolean skyframeAnalysisWasDiscarded;
+  private boolean skyframeAnalysisWasDiscarded = false;
 
   @VisibleForTesting
   public Set<SkyKey> getSkyframeEvaluatedTargetKeysForTesting() {
@@ -258,12 +250,12 @@ public class BuildView {
     return skyframeCacheWasInvalidated;
   }
 
-  public BuildView(BlazeDirectories directories,
+  public BuildView(BlazeDirectories directories, PackageManager packageManager,
       ConfiguredRuleClassProvider ruleClassProvider,
       SkyframeExecutor skyframeExecutor,
       BinTools binTools, CoverageReportActionFactory coverageReportActionFactory) {
     this.directories = directories;
-    this.packageManager = skyframeExecutor.getPackageManager();
+    this.packageManager = packageManager;
     this.binTools = binTools;
     this.coverageReportActionFactory = coverageReportActionFactory;
     this.artifactFactory = new ArtifactFactory(directories.getExecRoot());
@@ -463,8 +455,7 @@ public class BuildView {
             ImmutableList.<Artifact>of(),
             ImmutableList.<ConfiguredTarget>of(),
             ImmutableList.<ConfiguredTarget>of(),
-            null,
-            ImmutableMap.<PackageIdentifier, Path>of());
+            null);
 
     private final ImmutableList<ConfiguredTarget> targetsToBuild;
     @Nullable private final ImmutableList<ConfiguredTarget> targetsToTest;
@@ -475,7 +466,6 @@ public class BuildView {
     private final ImmutableSet<ConfiguredTarget> exclusiveTests;
     @Nullable private final TopLevelArtifactContext topLevelContext;
     private final ImmutableList<AspectValue> aspects;
-    private final ImmutableMap<PackageIdentifier, Path> packageRoots;
 
     private AnalysisResult(
         Collection<ConfiguredTarget> targetsToBuild,
@@ -486,8 +476,7 @@ public class BuildView {
         Collection<Artifact> artifactsToBuild,
         Collection<ConfiguredTarget> parallelTests,
         Collection<ConfiguredTarget> exclusiveTests,
-        TopLevelArtifactContext topLevelContext,
-        ImmutableMap<PackageIdentifier, Path> packageRoots) {
+        TopLevelArtifactContext topLevelContext) {
       this.targetsToBuild = ImmutableList.copyOf(targetsToBuild);
       this.aspects = ImmutableList.copyOf(aspects);
       this.targetsToTest = targetsToTest == null ? null : ImmutableList.copyOf(targetsToTest);
@@ -497,7 +486,6 @@ public class BuildView {
       this.parallelTests = ImmutableSet.copyOf(parallelTests);
       this.exclusiveTests = ImmutableSet.copyOf(exclusiveTests);
       this.topLevelContext = topLevelContext;
-      this.packageRoots = packageRoots;
     }
 
     /**
@@ -505,14 +493,6 @@ public class BuildView {
      */
     public Collection<ConfiguredTarget> getTargetsToBuild() {
       return targetsToBuild;
-    }
-
-    /**
-     * The map from package names to the package root where each package was found; this is used to
-     * set up the symlink tree.
-     */
-    public ImmutableMap<PackageIdentifier, Path> getPackageRoots() {
-      return packageRoots;
     }
 
     /**
@@ -587,8 +567,7 @@ public class BuildView {
         });
   }
 
-  private void prepareToBuild(BuildConfigurationCollection configurations,
-      PackageRootResolver resolver) throws ViewCreationFailedException {
+  private void prepareToBuild(PackageRootResolver resolver) throws ViewCreationFailedException {
     for (BuildConfiguration config : configurations.getAllConfigurations()) {
       config.prepareToBuild(directories.getExecRoot(), getArtifactFactory(), resolver);
     }
@@ -602,8 +581,7 @@ public class BuildView {
       Options viewOptions,
       TopLevelArtifactContext topLevelOptions,
       EventHandler eventHandler,
-      EventBus eventBus,
-      boolean loadingEnabled)
+      EventBus eventBus)
       throws ViewCreationFailedException, InterruptedException {
     LOG.info("Starting analysis");
     pollInterruptedStatus();
@@ -631,11 +609,12 @@ public class BuildView {
       clear();
     }
     skyframeAnalysisWasDiscarded = false;
+    ImmutableMap<PackageIdentifier, Path> packageRoots = loadingResult.getPackageRoots();
     this.configurations = configurations;
     skyframeBuildView.setTopLevelHostConfiguration(this.configurations.getHostConfiguration());
-
+    setArtifactRoots(packageRoots);
     // Determine the configurations.
-    List<TargetAndConfiguration> nodes = nodesForTargets(configurations, targets);
+    List<TargetAndConfiguration> nodes = nodesForTargets(targets);
 
     List<ConfiguredTargetKey> targetSpecs =
         Lists.transform(nodes, new Function<TargetAndConfiguration, ConfiguredTargetKey>() {
@@ -662,20 +641,13 @@ public class BuildView {
       }
     }
 
-    // Configuration of some BuildConfiguration.Fragments may require information about
-    // artifactRoots, so we need to set them before calling prepareToBuild. In that case loading
-    // phase has to be enabled.
-    if (loadingEnabled) {
-      setArtifactRoots(loadingResult.getPackageRoots(), configurations);
-    }
-    prepareToBuild(configurations, new SkyframePackageRootResolver(skyframeExecutor));
+    prepareToBuild(new SkyframePackageRootResolver(skyframeExecutor));
     skyframeExecutor.injectWorkspaceStatusData();
     SkyframeAnalysisResult skyframeAnalysisResult;
     try {
       skyframeAnalysisResult =
           skyframeBuildView.configureTargets(
               targetSpecs, aspectKeys, eventBus, viewOptions.keepGoing);
-      setArtifactRoots(skyframeAnalysisResult.getPackageRoots(), configurations);
     } finally {
       skyframeBuildView.clearInvalidatedConfiguredTargets();
     }
@@ -698,7 +670,6 @@ public class BuildView {
             skyframeAnalysisResult.getConfiguredTargets(),
             skyframeAnalysisResult.getAspects(),
             skyframeAnalysisResult.getWalkableGraph(),
-            skyframeAnalysisResult.getPackageRoots(),
             analysisSuccessful);
     LOG.info("Finished analysis");
     return result;
@@ -711,7 +682,6 @@ public class BuildView {
       Collection<ConfiguredTarget> configuredTargets,
       Collection<AspectValue> aspects,
       final WalkableGraph graph,
-      ImmutableMap<PackageIdentifier, Path> packageRoots,
       boolean analysisSuccessful)
       throws InterruptedException {
     Collection<Target> testsToRun = loadingResult.getTestsToRun();
@@ -782,8 +752,7 @@ public class BuildView {
         artifactsToBuild,
         parallelTests,
         exclusiveTests,
-        topLevelOptions,
-        packageRoots);
+        topLevelOptions);
   }
 
   private static NestedSet<Artifact> getBaselineCoverageArtifacts(
@@ -856,8 +825,7 @@ public class BuildView {
   }
 
   @VisibleForTesting
-  List<TargetAndConfiguration> nodesForTargets(BuildConfigurationCollection configurations,
-      Collection<Target> targets) {
+  List<TargetAndConfiguration> nodesForTargets(Collection<Target> targets) {
     // We use a hash set here to remove duplicate nodes; this can happen for input files and package
     // groups.
     LinkedHashSet<TargetAndConfiguration> nodes = new LinkedHashSet<>(targets.size());
@@ -940,8 +908,7 @@ public class BuildView {
    * </em>
    */
   @VisibleForTesting // for BuildViewTestCase
-  public void setArtifactRoots(ImmutableMap<PackageIdentifier, Path> packageRoots,
-      BuildConfigurationCollection configurations) {
+  public void setArtifactRoots(ImmutableMap<PackageIdentifier, Path> packageRoots) {
     Map<Path, Root> rootMap = new HashMap<>();
     Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
     for (Map.Entry<PackageIdentifier, Path> entry : packageRoots.entrySet()) {

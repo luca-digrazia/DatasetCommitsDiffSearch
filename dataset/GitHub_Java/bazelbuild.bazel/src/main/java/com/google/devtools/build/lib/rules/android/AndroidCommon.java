@@ -35,14 +35,12 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
-import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceType;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMode;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -59,13 +57,11 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaNativeLibraryProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeJarProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
-import com.google.devtools.build.lib.rules.java.JavaUtil;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -100,8 +96,8 @@ public class AndroidCommon {
   private JackCompilationHelper jackCompilationHelper;
   private Artifact classJar;
   private Artifact srcJar;
-  private Artifact genClassJar;
-  private Artifact genSourceJar;
+  private Artifact genJar;
+  private Artifact gensrcJar;
 
   private Collection<Artifact> idls;
   private AndroidIdlProvider transitiveIdlImportData;
@@ -210,55 +206,6 @@ public class AndroidCommon {
     ruleContext.registerAction(builder.build(ruleContext));
   }
 
-  public static AndroidIdeInfoProvider createAndroidIdeInfoProvider(
-      RuleContext ruleContext,
-      AndroidSemantics semantics,
-      ResourceApk resourceApk,
-      Artifact zipAlignedApk,
-      Iterable<Artifact> apksUnderTest) {
-    AndroidIdeInfoProvider.Builder ideInfoProviderBuilder =
-        new AndroidIdeInfoProvider.Builder()
-            .addIdlParcelables(getIdlParcelables(ruleContext))
-            .addIdlSrcs(getIdlSrcs(ruleContext))
-            .addAllApksUnderTest(apksUnderTest);
-
-    if (zipAlignedApk != null) {
-      ideInfoProviderBuilder.setApk(zipAlignedApk);
-    }
-
-    // If the rule defines resources, put those in the IDE info. Otherwise, proxy the data coming
-    // from the android_resources rule in its direct dependencies, if such a thing exists.
-    if (LocalResourceContainer.definesAndroidResources(ruleContext.attributes())) {
-      ideInfoProviderBuilder
-          .addResourceSources(resourceApk.getPrimaryResource().getArtifacts(ResourceType.RESOURCES))
-          .addAssetSources(
-              resourceApk.getPrimaryResource().getArtifacts(ResourceType.ASSETS),
-              getAssetDir(ruleContext))
-          // Sets the possibly merged manifest and the raw manifest.
-          .setGeneratedManifest(resourceApk.getPrimaryResource().getManifest())
-          .setManifest(ruleContext.getPrerequisiteArtifact("manifest", Mode.TARGET));
-    } else {
-      semantics.addNonLocalResources(ruleContext, resourceApk, ideInfoProviderBuilder);
-    }
-
-    return ideInfoProviderBuilder.build();
-  }
-
-  public static String getJavaPackage(RuleContext ruleContext) {
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("custom_package")) {
-      return ruleContext.attributes().get("custom_package", Type.STRING);
-    } else {
-      PathFragment nameFragment = ruleContext.getRule().getPackage().getNameFragment();
-      String packageName = JavaUtil.getJavaFullClassname(nameFragment);
-      if (packageName != null) {
-        return packageName;
-      } else {
-        // This is a workaround for libraries that don't follow the standard Bazel package format
-        return nameFragment.getPathString().replace('/', '.');
-      }
-    }
-  }
-
   Artifact compileDexWithJack(
       MultidexMode mode, Optional<Artifact> mainDexList, Collection<Artifact> proguardSpecs) {
     return jackCompilationHelper.compileAsDex(mode, mainDexList, proguardSpecs);
@@ -275,8 +222,8 @@ public class AndroidCommon {
     }
 
     for (String attribute : attributes) {
-      if (!ruleContext.attributes().has(attribute, BuildType.LABEL)
-          && !ruleContext.attributes().has(attribute, BuildType.LABEL_LIST)) {
+      if (!ruleContext.attributes().has(attribute, Type.LABEL)
+          && !ruleContext.attributes().has(attribute, Type.LABEL_LIST)) {
         continue;
       }
 
@@ -324,7 +271,7 @@ public class AndroidCommon {
       javacHelper.createCompileActionWithInstrumentation(
           binaryResourcesJar,
           null /* manifestProtoOutput */,
-          null /* genSourceJar */,
+          null /* gensrcJar */,
           outputDepsProto,
           javaArtifactsBuilder);
   }
@@ -548,22 +495,22 @@ public class AndroidCommon {
 
     // The gensrc jar is created only if the target uses annotation processing. Otherwise,
     // it is null, and the source jar action will not depend on the compile action.
-    genSourceJar = helper.createGensrcJar(classJar);
+    gensrcJar = helper.createGensrcJar(classJar);
     Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
 
     // AndroidBinary will pass its -gen.jar output, and AndroidLibrary will pass its own.
-    genClassJar = ruleContext.getImplicitOutputArtifact(genClassJarImplicitOutput);
-    helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
+    genJar = ruleContext.getImplicitOutputArtifact(genClassJarImplicitOutput);
+    helper.createGenJarAction(classJar, manifestProtoOutput, genJar);
 
     srcJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_SOURCE_JAR);
-    helper.createSourceJarAction(srcJar, genSourceJar);
+    helper.createSourceJarAction(srcJar, gensrcJar);
 
     NestedSetBuilder<Artifact> compileTimeDependenciesBuilder = NestedSetBuilder.stableOrder();
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
     if (outputDepsProto != null) {
       compileTimeDependenciesBuilder.add(outputDepsProto);
     }
-    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, genSourceJar,
+    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, gensrcJar,
         outputDepsProto, javaArtifactsBuilder);
 
     compileTimeDependencyArtifacts = compileTimeDependenciesBuilder.build();
@@ -598,11 +545,7 @@ public class AndroidCommon {
   }
 
   public RuleConfiguredTargetBuilder addTransitiveInfoProviders(
-      RuleConfiguredTargetBuilder builder,
-      AndroidSemantics androidSemantics,
-      ResourceApk resourceApk,
-      Artifact zipAlignedApk,
-      Iterable<Artifact> apksUnderTest) {
+      RuleConfiguredTargetBuilder builder) {
     if (!idls.isEmpty()) {
       generateAndroidIdlActions(
           ruleContext, idls, transitiveIdlImportData, translatedIdlSources);
@@ -613,10 +556,6 @@ public class AndroidCommon {
         .build();
 
     javaCommon.addTransitiveInfoProviders(builder, filesToBuild, classJar);
-    javaCommon.addGenJarsProvider(builder, genClassJar, genSourceJar);
-    builder.add(
-        JavaRuleOutputJarsProvider.class,
-        new JavaRuleOutputJarsProvider(classJar, srcJar, genClassJar, genSourceJar));
 
     return builder
         .setFilesToBuild(filesToBuild)
@@ -627,10 +566,6 @@ public class AndroidCommon {
         .add(
             AndroidResourcesProvider.class,
             new AndroidResourcesProvider(ruleContext.getLabel(), transitiveResources))
-        .add(
-            AndroidIdeInfoProvider.class,
-            createAndroidIdeInfoProvider(
-                ruleContext, androidSemantics, resourceApk, zipAlignedApk, apksUnderTest))
         .add(AndroidIdlProvider.class, transitiveIdlImportData)
         .add(
             JavaCompilationArgsProvider.class,
@@ -646,7 +581,8 @@ public class AndroidCommon {
                 : jackCompilationHelper.compileAsLibrary())
         .addOutputGroup(
             OutputGroupProvider.HIDDEN_TOP_LEVEL, collectHiddenTopLevelArtifacts(ruleContext))
-        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars);
+        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
+        .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genJar);
   }
 
   public static PathFragment getAssetDir(RuleContext ruleContext) {
@@ -656,14 +592,14 @@ public class AndroidCommon {
   }
 
   public static ImmutableList<Artifact> getIdlParcelables(RuleContext ruleContext) {
-    return ruleContext.getRule().isAttrDefined("idl_parcelables", BuildType.LABEL_LIST)
+    return ruleContext.getRule().isAttrDefined("idl_parcelables", Type.LABEL_LIST)
         ? ImmutableList.copyOf(ruleContext.getPrerequisiteArtifacts(
             "idl_parcelables", Mode.TARGET).filter(AndroidRuleClasses.ANDROID_IDL).list())
         : ImmutableList.<Artifact>of();
   }
 
   public static Collection<Artifact> getIdlSrcs(RuleContext ruleContext) {
-    if (!ruleContext.getRule().isAttrDefined("idl_srcs", BuildType.LABEL_LIST)) {
+    if (!ruleContext.getRule().isAttrDefined("idl_srcs", Type.LABEL_LIST)) {
       return ImmutableList.of();
     }
     checkIdlSrcsSamePackage(ruleContext);
@@ -721,7 +657,7 @@ public class AndroidCommon {
   }
 
   public static AndroidResourcesProvider getAndroidResources(RuleContext ruleContext) {
-    if (!ruleContext.attributes().has("resources", BuildType.LABEL)) {
+    if (!ruleContext.attributes().has("resources", Type.LABEL)) {
       return null;
     }
 
@@ -854,12 +790,12 @@ public class AndroidCommon {
     return javaCommon.getJavacOpts();
   }
 
-  public Artifact getGenClassJar() {
-    return genClassJar;
+  public Artifact getGenJar() {
+    return genJar;
   }
 
-  @Nullable public Artifact getGenSourceJar() {
-    return genSourceJar;
+  @Nullable public Artifact getGensrcJar() {
+    return gensrcJar;
   }
 
   public ImmutableList<Artifact> getRuntimeJars() {

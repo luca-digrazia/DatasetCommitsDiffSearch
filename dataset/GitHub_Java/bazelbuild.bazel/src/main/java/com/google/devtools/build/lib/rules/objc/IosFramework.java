@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,13 +26,11 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
-import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -42,8 +40,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 public class IosFramework extends ReleaseBundlingTargetFactory {
 
-  @VisibleForTesting
-  static final DottedVersion MINIMUM_OS_VERSION = DottedVersion.fromString("8.0");
+  @VisibleForTesting static final String MINIMUM_OS_VERSION = "8.0";
 
   public IosFramework() {
     super(
@@ -67,13 +64,11 @@ public class IosFramework extends ReleaseBundlingTargetFactory {
   }
 
   @Override
-  protected DottedVersion bundleMinimumOsVersion(RuleContext ruleContext) {
-    // Frameworks are not accepted by Apple below version 8.0. While applications built with a
-    // minimum iOS version of less than 8.0 may contain frameworks in their bundle, the framework
-    // itself needs to be built with 8.0 or higher. This logic overrides (if necessary) any
-    // flag-set minimum iOS version for framework only so that this requirement is not violated.
-    DottedVersion fromFlag = ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs();
-    return Ordering.natural().max(fromFlag, MINIMUM_OS_VERSION);
+  protected String bundleMinimumOsVersion(RuleContext ruleContext) {
+    String flagValue = ObjcRuleClasses.objcConfiguration(ruleContext).getMinimumOs();
+
+    return String.valueOf(
+        Math.max(Double.parseDouble(MINIMUM_OS_VERSION), Double.parseDouble(flagValue)));
   }
 
   /**

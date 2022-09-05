@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,12 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidResourcesProvider.ResourceContainer;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
-import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.Preconditions;
 
 import javax.annotation.Nullable;
 
@@ -55,20 +55,19 @@ public final class AndroidResourceContainerBuilder {
 
   /** Creates a {@link ResourceContainer} from a {@link RuleContext}. 
    * @throws InterruptedException */
-  public ResourceContainer buildFromRule(RuleContext ruleContext, @Nullable Artifact apk)
+  public ResourceContainer buildFromRule(RuleContext ruleContext, Artifact apk)
       throws InterruptedException {
     Preconditions.checkNotNull(this.manifest);
     Preconditions.checkNotNull(this.data);
-    Artifact rJavaSrcJar = ruleContext.getImplicitOutputArtifact(
-        AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR);
     return new AndroidResourcesProvider.ResourceContainer(
             ruleContext.getLabel(),
-            getJavaPackage(ruleContext, rJavaSrcJar),
+            getJavaPackage(ruleContext, apk),
             getRenameManifestPackage(ruleContext),
             inlineConstants,
             apk,
             manifest,
-            rJavaSrcJar,
+            ruleContext.getImplicitOutputArtifact(
+                AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR),
             data.getAssets(),
             data.getResources(),
             data.getAssetRoots(),
@@ -78,18 +77,18 @@ public final class AndroidResourceContainerBuilder {
             symbolsFile);
   }
 
-  private String getJavaPackage(RuleContext ruleContext, Artifact rJavaSrcJar) {
+  private String getJavaPackage(RuleContext ruleContext, Artifact apk) {
     if (hasCustomPackage(ruleContext)) {
       return ruleContext.attributes().get("custom_package", Type.STRING);
     }
     // TODO(bazel-team): JavaUtil.getJavaPackageName does not check to see if the path is valid.
     // So we need to check for the JavaRoot.
-    if (JavaUtil.getJavaRoot(rJavaSrcJar.getExecPath()) == null) {
+    if (JavaUtil.getJavaRoot(apk.getExecPath()) == null) {
       ruleContext.ruleError("You must place your code under a directory named 'java' or "
           + "'javatests' for blaze to work. That directory (java,javatests) will be treated as "
           + "your java source root. Alternatively, you can set the 'custom_package' attribute.");
     }
-    return JavaUtil.getJavaPackageName(rJavaSrcJar.getExecPath());
+    return JavaUtil.getJavaPackageName(apk.getExecPath());
   }
 
   private boolean hasCustomPackage(RuleContext ruleContext) {

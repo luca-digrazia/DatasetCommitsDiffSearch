@@ -34,7 +34,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleClass.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.vfs.Path;
 
 import java.util.ArrayList;
@@ -78,7 +78,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
 
   private static final Predicate<String> PREFERRED_DEPENDENCY_PREDICATE = Predicates.alwaysFalse();
 
-  private static RuleClass createRuleClassA() throws LabelSyntaxException {
+  private static RuleClass createRuleClassA() throws Label.SyntaxException {
     return new RuleClass("ruleA", false, false, false, false, false, false,
         ImplicitOutputsFunction.NONE, RuleClass.NO_CHANGE,
         DUMMY_CONFIGURED_TARGET_FACTORY, PredicatesWithMessage.<Rule>alwaysTrue(),
@@ -650,12 +650,12 @@ public class RuleClassTest extends PackageLoadingTestCase {
   }
 
   private Rule createRule(RuleClass ruleClass, String name, Map<String, Object> attributeValues,
-      Location location) throws LabelSyntaxException, InterruptedException {
+      Location location) throws SyntaxException, InterruptedException {
     Package.Builder pkgBuilder = createDummyPackageBuilder();
     Label ruleLabel;
     try {
       ruleLabel = pkgBuilder.createLabel(name);
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       throw new IllegalArgumentException("Rule has illegal label");
     }
     return ruleClass.createRuleWithLabel(pkgBuilder, ruleLabel, attributeValues,

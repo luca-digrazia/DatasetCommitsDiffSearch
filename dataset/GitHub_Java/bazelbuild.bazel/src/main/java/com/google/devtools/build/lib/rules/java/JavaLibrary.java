@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
@@ -120,7 +120,7 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     // The gensrc jar is created only if the target uses annotation processing.
     // Otherwise, it is null, and the source jar action will not depend on the compile action.
-    Artifact genSourceJar = helper.createGensrcJar(classJar);
+    Artifact gensrcJar = helper.createGensrcJar(classJar);
     Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
 
     Artifact genClassJar = ruleContext.getImplicitOutputArtifact(
@@ -129,9 +129,9 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
 
     Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
 
-    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, genSourceJar,
+    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, gensrcJar,
         outputDepsProto, javaArtifactsBuilder);
-    helper.createSourceJarAction(srcJar, genSourceJar);
+    helper.createSourceJarAction(srcJar, gensrcJar);
 
     if ((attributes.hasSourceFiles() || attributes.hasSourceJars()) && jar != null) {
       helper.createCompileTimeJarAction(jar, outputDepsProto,
@@ -190,10 +190,10 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
       runfilesBuilder.add(ruleContext, JavaRunfilesProvider.TO_RUNFILES);
 
       List<TransitiveInfoCollection> depsForRunfiles = new ArrayList<>();
-      if (ruleContext.getRule().isAttrDefined("runtime_deps", BuildType.LABEL_LIST)) {
+      if (ruleContext.getRule().isAttrDefined("runtime_deps", Type.LABEL_LIST)) {
         depsForRunfiles.addAll(ruleContext.getPrerequisites("runtime_deps", Mode.TARGET));
       }
-      if (ruleContext.getRule().isAttrDefined("exports", BuildType.LABEL_LIST)) {
+      if (ruleContext.getRule().isAttrDefined("exports", Type.LABEL_LIST)) {
         depsForRunfiles.addAll(ruleContext.getPrerequisites("exports", Mode.TARGET));
       }
 
@@ -213,17 +213,15 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         new RuleConfiguredTargetBuilder(ruleContext);
 
     semantics.addProviders(
-        ruleContext, common, ImmutableList.<String>of(), classJar, srcJar, 
-        genClassJar, genSourceJar, ImmutableMap.<Artifact, Artifact>of(), 
-        helper, filesBuilder, builder);
+        ruleContext, common, ImmutableList.<String>of(), classJar, srcJar, genClassJar, gensrcJar,
+        ImmutableMap.<Artifact, Artifact>of(), helper, filesBuilder, builder);
 
     builder.add(
         JavaRuleOutputJarsProvider.class,
-        new JavaRuleOutputJarsProvider(classJar, srcJar, genClassJar, genSourceJar));
+        new JavaRuleOutputJarsProvider(classJar, srcJar, genClassJar, gensrcJar));
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
     common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
-    common.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
     builder
         .add(JavaRuntimeJarProvider.class,
@@ -246,7 +244,8 @@ public class JavaLibrary implements RuleConfiguredTargetFactory {
         // TODO(bazel-team): this should only happen for java_plugin
         .add(JavaPluginInfoProvider.class, new JavaPluginInfoProvider(
             exportedProcessorClasses, exportedProcessorClasspath))
-        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars);
+        .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
+        .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genClassJar);
 
     if (ruleContext.hasErrors()) {
       return null;

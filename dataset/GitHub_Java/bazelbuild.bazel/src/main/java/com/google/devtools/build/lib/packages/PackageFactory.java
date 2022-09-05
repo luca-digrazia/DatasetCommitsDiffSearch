@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Event;
@@ -627,7 +626,7 @@ public final class PackageFactory {
                 context.pkgBuilder.addEnvironmentGroup(
                     name, environments, defaults, context.eventHandler, loc);
                 return Runtime.NONE;
-              } catch (LabelSyntaxException e) {
+              } catch (Label.SyntaxException e) {
                 throw new EvalException(loc,
                     "environment group has invalid name: " + name + ": " + e.getMessage());
               } catch (Package.NameConflictException e) {
@@ -820,7 +819,7 @@ public final class PackageFactory {
       context.pkgBuilder.addPackageGroup(name, packages, includes, context.eventHandler,
           ast.getLocation());
       return Runtime.NONE;
-    } catch (LabelSyntaxException e) {
+    } catch (Label.SyntaxException e) {
       throw new EvalException(ast.getLocation(),
           "package group has invalid name: " + name + ": " + e.getMessage());
     } catch (Package.NameConflictException e) {

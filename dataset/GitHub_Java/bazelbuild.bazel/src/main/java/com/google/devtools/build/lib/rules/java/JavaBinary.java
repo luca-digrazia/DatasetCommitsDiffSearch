@@ -32,13 +32,12 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgs.ClasspathType;
-import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 import java.util.ArrayList;
@@ -91,7 +90,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         collectNativeLibraries(common.targetsTreatedAsDeps(ClasspathType.BOTH)));
 
     // deploy_env is valid for java_binary, but not for java_test.
-    if (ruleContext.getRule().isAttrDefined("deploy_env", BuildType.LABEL_LIST)) {
+    if (ruleContext.getRule().isAttrDefined("deploy_env", Type.LABEL_LIST)) {
       for (JavaRuntimeClasspathProvider envTarget : ruleContext.getPrerequisites(
                "deploy_env", Mode.TARGET, JavaRuntimeClasspathProvider.class)) {
         attributesBuilder.addExcludedArtifacts(envTarget.getRuntimeClasspath());
@@ -167,12 +166,12 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     // The gensrc jar is created only if the target uses annotation processing. Otherwise,
     // it is null, and the source jar action will not depend on the compile action.
-    Artifact genSourceJar = helper.createGensrcJar(classJar);
+    Artifact gensrcJar = helper.createGensrcJar(classJar);
     Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
 
     helper.createCompileAction(
-        classJar, manifestProtoOutput, genSourceJar, outputDepsProto, instrumentationMetadata);
-    helper.createSourceJarAction(srcJar, genSourceJar);
+        classJar, manifestProtoOutput, gensrcJar, outputDepsProto, instrumentationMetadata);
+    helper.createSourceJarAction(srcJar, gensrcJar);
 
     Artifact genClassJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_GEN_JAR);
     helper.createGenJarAction(classJar, manifestProtoOutput, genClassJar);
@@ -208,13 +207,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
 
-    semantics.addProviders(ruleContext, common, jvmFlags, classJar, srcJar, 
-            genClassJar, genSourceJar, ImmutableMap.<Artifact, Artifact>of(), 
-            helper, filesBuilder, builder);
-
-    builder.add(
-        JavaRuleOutputJarsProvider.class,
-        new JavaRuleOutputJarsProvider(classJar, srcJar, genClassJar, genSourceJar));
+    semantics.addProviders(ruleContext, common, jvmFlags, classJar, srcJar, genClassJar, gensrcJar,
+        ImmutableMap.<Artifact, Artifact>of(), helper, filesBuilder, builder);
 
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
 
@@ -277,21 +271,17 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     }
 
     common.addTransitiveInfoProviders(builder, filesToBuild, classJar);
-    common.addGenJarsProvider(builder, genClassJar, genSourceJar);
 
     return builder
         .setFilesToBuild(filesToBuild)
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, executable)
-        .add(
-            JavaRuntimeClasspathProvider.class,
+        .add(JavaRuntimeClasspathProvider.class,
             new JavaRuntimeClasspathProvider(common.getRuntimeClasspath()))
-        .add(
-            JavaSourceInfoProvider.class,
-            JavaSourceInfoProvider.fromJavaTargetAttributes(attributes, semantics))
-        .add(
-            JavaSourceJarsProvider.class, new JavaSourceJarsProvider(transitiveSourceJars, srcJars))
+        .add(JavaSourceJarsProvider.class,
+            new JavaSourceJarsProvider(transitiveSourceJars, srcJars))
         .addOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP, transitiveSourceJars)
+        .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genClassJar)
         .build();
   }
 

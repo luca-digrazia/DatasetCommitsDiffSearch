@@ -18,15 +18,16 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier.RepositoryName;
+import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.vfs.Path;
 
 import java.util.Map;
@@ -35,15 +36,9 @@ import java.util.Map;
  * This creates the //external package, where targets not homed in this repository can be bound.
  */
 public class ExternalPackage extends Package {
-  public static final PackageIdentifier PACKAGE_IDENTIFIER;
-
-  static {
-    try {
-      PACKAGE_IDENTIFIER = PackageIdentifier.parse("//external");
-    } catch (LabelSyntaxException e) {
-      throw new IllegalStateException();
-    }
-  }
+  public static final String NAME = "external";
+  public static final PackageIdentifier PACKAGE_IDENTIFIER =
+      PackageIdentifier.createInDefaultRepo(NAME);
 
   private Map<RepositoryName, Rule> repositoryMap;
 
@@ -138,16 +133,15 @@ public class ExternalPackage extends Package {
      */
     public Builder createAndAddRepositoryRule(RuleClass ruleClass, RuleClass bindRuleClass,
         Map<String, Object> kwargs, FuncallExpression ast, Environment env)
-        throws InvalidRuleException, NameConflictException, LabelSyntaxException,
-            InterruptedException {
+        throws InvalidRuleException, NameConflictException, SyntaxException, InterruptedException {
       StoredEventHandler eventHandler = new StoredEventHandler();
       Rule tempRule = RuleFactory.createRule(
           this, ruleClass, kwargs, eventHandler, ast, ast.getLocation(), env);
       addEvents(eventHandler.getEvents());
       try {
         repositoryMap.put(RepositoryName.create("@" + tempRule.getName()), tempRule);
-      } catch (LabelSyntaxException e) {
-        throw new LabelSyntaxException(e.getMessage());
+      } catch (TargetParsingException e) {
+        throw new SyntaxException(e.getMessage());
       }
       for (Map.Entry<String, Label> entry :
         ruleClass.getExternalBindingsFunction().apply(tempRule).entrySet()) {

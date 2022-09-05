@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,8 +56,8 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
     CcLinkParamsStore ccLinkParamsStore = initializeCcLinkParamStore(ruleContext);
 
     List<Artifact> srcs = common.validateSrcs();
-    List<Artifact> allOutputs =
-        new ArrayList<>(semantics.precompiledPythonFiles(ruleContext, srcs, common));
+    List<Artifact> allOutputs = new ArrayList<>(srcs);
+    allOutputs.addAll(semantics.precompiledPythonFiles(ruleContext, srcs, common));
 
     common.initBinary(allOutputs);
     semantics.validate(ruleContext, common);
