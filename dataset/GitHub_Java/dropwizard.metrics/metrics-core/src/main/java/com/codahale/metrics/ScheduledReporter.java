@@ -1,12 +1,7 @@
 package com.codahale.metrics;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.Closeable;
-import java.util.Collections;
 import java.util.Locale;
-import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -16,6 +11,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The abstract base class for all scheduled reporters (i.e., reporters which process a registry's
@@ -60,12 +58,11 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
     private final MetricRegistry registry;
     private final ScheduledExecutorService executor;
     private final boolean shutdownExecutorOnStop;
-    private final Set<MetricAttribute> disabledMetricAttributes;
     private ScheduledFuture<?> scheduledFuture;
     private final MetricFilter filter;
-    private final long durationFactor;
+    private final double durationFactor;
     private final String durationUnit;
-    private final long rateFactor;
+    private final double rateFactor;
     private final String rateUnit;
 
     /**
@@ -121,28 +118,14 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
                                 TimeUnit durationUnit,
                                 ScheduledExecutorService executor,
                                 boolean shutdownExecutorOnStop) {
-       this(registry, name, filter, rateUnit, durationUnit, executor, shutdownExecutorOnStop,
-               Collections.<MetricAttribute>emptySet());
-    }
-
-    protected ScheduledReporter(MetricRegistry registry,
-                                String name,
-                                MetricFilter filter,
-                                TimeUnit rateUnit,
-                                TimeUnit durationUnit,
-                                ScheduledExecutorService executor,
-                                boolean shutdownExecutorOnStop,
-                                Set<MetricAttribute> disabledMetricAttributes) {
         this.registry = registry;
         this.filter = filter;
         this.executor = executor == null? createDefaultExecutor(name) : executor;
         this.shutdownExecutorOnStop = shutdownExecutorOnStop;
         this.rateFactor = rateUnit.toSeconds(1);
         this.rateUnit = calculateRateUnit(rateUnit);
-        this.durationFactor = durationUnit.toNanos(1);
+        this.durationFactor = 1.0 / durationUnit.toNanos(1);
         this.durationUnit = durationUnit.toString().toLowerCase(Locale.US);
-        this.disabledMetricAttributes = disabledMetricAttributes != null ? disabledMetricAttributes :
-                Collections.<MetricAttribute>emptySet();
     }
 
     /**
@@ -280,7 +263,7 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
     }
 
     protected double convertDuration(double duration) {
-        return duration / durationFactor;
+        return duration * durationFactor;
     }
 
     protected double convertRate(double rate) {
@@ -289,10 +272,6 @@ public abstract class ScheduledReporter implements Closeable, Reporter {
 
     protected boolean isShutdownExecutorOnStop() {
         return shutdownExecutorOnStop;
-    }
-
-    protected Set<MetricAttribute> getDisabledMetricAttributes() {
-        return disabledMetricAttributes;
     }
 
     private String calculateRateUnit(TimeUnit unit) {
