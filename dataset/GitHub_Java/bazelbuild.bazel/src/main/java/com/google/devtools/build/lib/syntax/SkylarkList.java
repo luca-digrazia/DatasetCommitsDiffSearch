@@ -282,7 +282,9 @@ import javax.annotation.Nullable;
      * Assumes that you already checked for Mutability.
      */
     private void addAllUnsafe(Iterable<? extends E> elements) {
-      Iterables.addAll(contents, elements);
+      for (E elem : elements) {
+        contents.add(elem);
+      }
     }
 
     @Override

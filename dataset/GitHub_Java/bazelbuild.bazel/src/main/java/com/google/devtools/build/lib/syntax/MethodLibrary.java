@@ -2032,14 +2032,11 @@ public class MethodLibrary {
   @SkylarkSignature(name = "select",
       doc = "Creates a SelectorValue from the dict parameter.",
       mandatoryPositionals = {
-        @Param(name = "x", type = SkylarkDict.class, doc = "The parameter to convert.")},
-      optionalNamedOnly = {
-        @Param(name = "no_match_error", type = String.class, defaultValue = "''",
-            doc = "Optional custom error to report if no condition matches.")})
+        @Param(name = "x", type = SkylarkDict.class, doc = "The parameter to convert.")})
   private static final BuiltinFunction select = new BuiltinFunction("select") {
-    public Object invoke(SkylarkDict<?, ?> dict, String noMatchError) throws EvalException {
+    public Object invoke(SkylarkDict<?, ?> dict) throws EvalException {
       return SelectorList
-          .of(new SelectorValue(dict, noMatchError));
+          .of(new SelectorValue(dict));
     }
   };
 
