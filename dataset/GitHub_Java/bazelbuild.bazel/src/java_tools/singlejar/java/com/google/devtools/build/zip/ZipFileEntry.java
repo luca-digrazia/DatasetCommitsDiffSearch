@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package com.google.devtools.build.zip;
 
 import java.util.EnumSet;
+
 import javax.annotation.Nullable;
 
 /**
@@ -319,11 +320,12 @@ public final class ZipFileEntry {
    * @param set whether the flag is to be set or cleared
    */
   public void setFlag(Flag flag, boolean set) {
-    short mask = (short) (1 << flag.getBit());
+    short mask = 0x0000;
+    mask |= 1 << flag.getBit();
     if (set) {
       flags |= mask;
     } else {
-      flags = (short) (flags & ~mask);
+      flags &= ~mask;
     }
   }
 

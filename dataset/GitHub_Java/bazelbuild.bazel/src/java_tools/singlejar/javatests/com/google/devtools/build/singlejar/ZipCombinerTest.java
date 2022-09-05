@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,10 @@ package com.google.devtools.build.singlejar;
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -27,6 +31,14 @@ import com.google.devtools.build.zip.ExtraData;
 import com.google.devtools.build.zip.ZipFileEntry;
 import com.google.devtools.build.zip.ZipReader;
 import com.google.devtools.build.zip.ZipUtil;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.junit.rules.TemporaryFolder;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -51,12 +63,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
 /**
  * Unit tests for {@link ZipCombiner}.
@@ -107,16 +113,16 @@ public class ZipCombinerTest {
   private void assertEntry(ZipInputStream zipInput, String filename, long time, byte[] content)
       throws IOException {
     ZipEntry zipEntry = zipInput.getNextEntry();
-    assertThat(zipEntry).isNotNull();
-    assertThat(zipEntry.getName()).isEqualTo(filename);
-    assertThat(zipEntry.getTime()).isEqualTo(time);
+    assertNotNull(zipEntry);
+    assertEquals(filename, zipEntry.getName());
+    assertEquals(time, zipEntry.getTime());
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     byte[] buffer = new byte[1024];
     int bytesCopied;
     while ((bytesCopied = zipInput.read(buffer)) != -1) {
       out.write(buffer, 0, bytesCopied);
     }
-    assertThat(out.toByteArray()).isEqualTo(content);
+    assertTrue(Arrays.equals(content, out.toByteArray()));
   }
 
   private void assertEntry(ZipInputStream zipInput, String filename, byte[] content)
@@ -203,7 +209,7 @@ public class ZipCombinerTest {
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -215,7 +221,7 @@ public class ZipCombinerTest {
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -228,7 +234,7 @@ public class ZipCombinerTest {
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -240,7 +246,7 @@ public class ZipCombinerTest {
     }
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -252,7 +258,7 @@ public class ZipCombinerTest {
       zipCombiner.addZip(writeInputStreamToFile(new ByteArrayInputStream(new byte[] {1, 2, 3, 4})));
     }
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   private InputStream asStream(String content) {
@@ -267,7 +273,7 @@ public class ZipCombinerTest {
     }
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -279,7 +285,7 @@ public class ZipCombinerTest {
     }
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   static final class MergeStrategyPlaceHolder implements CustomMergeStrategy {
@@ -346,7 +352,7 @@ public class ZipCombinerTest {
     try (ZipCombiner zipCombiner = new ZipCombiner(mockFilter, out)) {
       zipCombiner.addZip(sampleZip());
     }
-    assertThat(mockFilter.calls).containsExactly("hello.txt");
+    assertEquals(Arrays.asList("hello.txt"), mockFilter.calls);
   }
 
   @Test
@@ -357,7 +363,7 @@ public class ZipCombinerTest {
       zipCombiner.addZip(sampleZip());
       zipCombiner.addZip(sampleZip());
     }
-    assertThat(mockFilter.calls).containsExactly("hello.txt");
+    assertEquals(Arrays.asList("hello.txt"), mockFilter.calls);
   }
 
   @Test
@@ -369,11 +375,11 @@ public class ZipCombinerTest {
       zipCombiner.addZip(sampleZip());
       zipCombiner.addZip(sampleZipWithTwoEntries());
     }
-    assertThat(mockFilter.calls).containsExactly("hello.txt", "hello2.txt").inOrder();
+    assertEquals(Arrays.asList("hello.txt", "hello2.txt"), mockFilter.calls);
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
     assertEntry(zipInput, "hello.txt", "Hello World!\nHello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -386,10 +392,10 @@ public class ZipCombinerTest {
       zipCombiner.addZip(sampleZipWithTwoUncompressedEntries());
       zipCombiner.addZip(sampleZipWithTwoUncompressedEntries());
     }
-    assertThat(mockFilter.calls).isEqualTo(Arrays.asList("hello.txt", "hello2.txt"));
+    assertEquals(Arrays.asList("hello.txt", "hello2.txt"), mockFilter.calls);
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!\nHello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -401,11 +407,11 @@ public class ZipCombinerTest {
       zipCombiner.addZip(sampleZip());
       zipCombiner.addZip(sampleZipWithTwoEntries());
     }
-    assertThat(mockFilter.calls).isEqualTo(Arrays.asList("hello.txt", "hello2.txt"));
+    assertEquals(Arrays.asList("hello.txt", "hello2.txt"), mockFilter.calls);
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
     assertEntry(zipInput, "hello.txt", "Hello World!Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -418,10 +424,10 @@ public class ZipCombinerTest {
       zipCombiner.addZip(sampleZipWithTwoUncompressedEntries());
       zipCombiner.addZip(sampleZipWithTwoUncompressedEntries());
     }
-    assertThat(mockFilter.calls).containsExactly("hello.txt", "hello2.txt").inOrder();
+    assertEquals(Arrays.asList("hello.txt", "hello2.txt"), mockFilter.calls);
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   private File specialZipWithMinusOne() throws IOException {
@@ -438,30 +444,29 @@ public class ZipCombinerTest {
     try (ZipCombiner zipCombiner = new ZipCombiner(mockFilter, out)) {
       zipCombiner.addZip(specialZipWithMinusOne());
     }
-    assertThat(mockFilter.calls).containsExactly("hello.txt");
+    assertEquals(Arrays.asList("hello.txt"), mockFilter.calls);
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", new byte[] { -1 });
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
   public void testCopyDateHandling() throws IOException {
     final Date date = new GregorianCalendar(2009, 8, 2, 0, 0, 0).getTime();
-    ZipEntryFilter mockFilter =
-        new ZipEntryFilter() {
-          @Override
-          public void accept(String filename, StrategyCallback callback) throws IOException {
-            assertThat(filename).isEqualTo("hello.txt");
-            callback.copy(date);
-          }
-        };
+    ZipEntryFilter mockFilter = new ZipEntryFilter() {
+      @Override
+      public void accept(String filename, StrategyCallback callback) throws IOException {
+        assertEquals("hello.txt", filename);
+        callback.copy(date);
+      }
+    };
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     try (ZipCombiner zipCombiner = new ZipCombiner(mockFilter, out)) {
       zipCombiner.addZip(sampleZip());
     }
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", date, "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -474,11 +479,11 @@ public class ZipCombinerTest {
       zipCombiner.addZip(sampleZip());
       zipCombiner.addZip(sampleZipWithTwoEntries());
     }
-    assertThat(mockFilter.calls).containsExactly("hello.txt", "hello2.txt").inOrder();
+    assertEquals(Arrays.asList("hello.txt", "hello2.txt"), mockFilter.calls);
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello2.txt", ZipCombiner.DOS_EPOCH, "Hello World 2!");
     assertEntry(zipInput, "hello.txt", mockFilter.date, "Hello World!\nHello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   @Test
@@ -538,7 +543,7 @@ public class ZipCombinerTest {
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   // This test verifies that multiple entries with the same name can be
@@ -563,7 +568,7 @@ public class ZipCombinerTest {
     assertEntry(zipInput, "world1.txt", "Hello World 2!");
     assertEntry(zipInput, "hello2.txt", "Hello World!");
     assertEntry(zipInput, "world2.txt", "Hello World 2!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   // This tests verifies that an attempt to rename an entry to a
@@ -591,7 +596,7 @@ public class ZipCombinerTest {
     assertEntry(zipInput, "hello1.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
     assertEntry(zipInput, "hello3.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   // This tests verifies that if an entry has been copied, then
@@ -617,7 +622,7 @@ public class ZipCombinerTest {
     assertEntry(zipInput, "hello1.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
     assertEntry(zipInput, "hello3.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   // This tests verifies that if an entry has been skipped, then
@@ -642,7 +647,7 @@ public class ZipCombinerTest {
     ZipInputStream zipInput = new ZipInputStream(new ByteArrayInputStream(out.toByteArray()));
     assertEntry(zipInput, "hello1.txt", "Hello World!");
     assertEntry(zipInput, "hello3.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   // This test verifies that renaming works when input and output
@@ -670,7 +675,7 @@ public class ZipCombinerTest {
     assertEntry(zipInput, "hello1.txt", "Hello World!");
     assertEntry(zipInput, "hello2.txt", "Hello World 2!");
     assertEntry(zipInput, "hello3.txt", "Hello World!");
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
   }
 
   // The next two tests check that ZipCombiner can handle a ZIP with an data
@@ -745,20 +750,17 @@ public class ZipCombinerTest {
     byte[] zipCombinerRaw = out.toByteArray();
 
     new ZipTester(zipCombinerRaw).validate();
-    assertZipFilesEquivalent(zipCombinerFile, javaFile);
+    assertZipFilesEquivalent(new ZipReader(zipCombinerFile), new ZipReader(javaFile));
   }
 
-  void assertZipFilesEquivalent(File a, File b) throws IOException {
-    try (ZipReader x = new ZipReader(a);
-        ZipReader y = new ZipReader(b)) {
-      Collection<ZipFileEntry> xEntries = x.entries();
-      Collection<ZipFileEntry> yEntries = y.entries();
-      assertThat(xEntries).hasSize(yEntries.size());
-      Iterator<ZipFileEntry> xIter = xEntries.iterator();
-      Iterator<ZipFileEntry> yIter = yEntries.iterator();
-      for (int i = 0; i < xEntries.size(); i++) {
-        assertZipEntryEquivalent(xIter.next(), yIter.next());
-      }
+  void assertZipFilesEquivalent(ZipReader x, ZipReader y) {
+    Collection<ZipFileEntry> xEntries = x.entries();
+    Collection<ZipFileEntry> yEntries = y.entries();
+    assertThat(xEntries).hasSize(yEntries.size());
+    Iterator<ZipFileEntry> xIter = xEntries.iterator();
+    Iterator<ZipFileEntry> yIter = yEntries.iterator();
+    for (int i = 0; i < xEntries.size(); i++) {
+      assertZipEntryEquivalent(xIter.next(), yIter.next());
     }
   }
 
@@ -800,7 +802,7 @@ public class ZipCombinerTest {
     for (int i = 0; i < fileCount; i++) {
       assertEntry(zipInput, "hello" + i, "Hello " + i + "!");
     }
-    assertThat(zipInput.getNextEntry()).isNull();
+    assertNull(zipInput.getNextEntry());
     new ZipTester(out.toByteArray()).validate();
   }
 }
