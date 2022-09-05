@@ -14,29 +14,22 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
+import com.google.devtools.build.lib.syntax.FunctionSignature.WithValues;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import java.util.Map;
-import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
  * A constructor for {@link SkylarkClassObject}.
  */
-@SkylarkModule(name = "provider",
-    doc = "A constructor for simple value objects. "
-        + "See the global <a href=\"globals.html#provider\">provider</a> function "
-        + "for more details."
-)
-public final class SkylarkClassObjectConstructor extends BaseFunction implements SkylarkExportable {
+public final class SkylarkClassObjectConstructor extends BaseFunction {
   /**
    * "struct" function.
    */
@@ -45,10 +38,7 @@ public final class SkylarkClassObjectConstructor extends BaseFunction implements
 
 
   private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
-      FunctionSignature.WithValues.create(FunctionSignature.KWARGS);
-
-  @Nullable
-  private Key key;
+      WithValues.create(FunctionSignature.KWARGS);
 
   public SkylarkClassObjectConstructor(String name, Location location) {
     super(name, SIGNATURE, location);
@@ -60,7 +50,7 @@ public final class SkylarkClassObjectConstructor extends BaseFunction implements
 
   @Override
   protected Object call(Object[] args, @Nullable FuncallExpression ast, @Nullable Environment env)
-      throws EvalException, InterruptedException {
+      throws EvalException, ConversionException, InterruptedException {
     @SuppressWarnings("unchecked")
     Map<String, Object> kwargs = (Map<String, Object>) args[0];
     return new SkylarkClassObject(this, kwargs, ast != null ? ast.getLocation() : Location.BUILTIN);
@@ -75,26 +65,6 @@ public final class SkylarkClassObjectConstructor extends BaseFunction implements
   }
 
   @Override
-  public boolean isExported() {
-    return key != null;
-  }
-
-  public Key getKey() {
-    Preconditions.checkState(isExported());
-    return key;
-  }
-
-  public String getPrintableName() {
-    return key != null ? key.exportedName : getName();
-  }
-
-  @Override
-  public void export(Label extensionLabel, String exportedName) {
-    Preconditions.checkState(!isExported());
-    this.key = new Key(extensionLabel, exportedName);
-  }
-
-  @Override
   public int hashCode() {
     return System.identityHashCode(this);
   }
@@ -102,47 +72,5 @@ public final class SkylarkClassObjectConstructor extends BaseFunction implements
   @Override
   public boolean equals(@Nullable Object other) {
     return other == this;
-  }
-
-  /**
-   * A serializable representation of {@link SkylarkClassObjectConstructor}
-   * that uniquely identifies all {@link SkylarkClassObjectConstructor}s that
-   * are exposed to SkyFrame.
-   */
-  public static class Key {
-    private final Label extensionLabel;
-    private final String exportedName;
-
-    public Key(Label extensionLabel, String exportedName) {
-      this.extensionLabel = Preconditions.checkNotNull(extensionLabel);
-      this.exportedName = Preconditions.checkNotNull(exportedName);
-    }
-
-    public Label getExtensionLabel() {
-      return extensionLabel;
-    }
-
-    public String getExportedName() {
-      return exportedName;
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(extensionLabel, exportedName);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-      if (this == obj) {
-        return true;
-      }
-
-      if (!(obj instanceof Key)) {
-        return false;
-      }
-      Key other = (Key) obj;
-      return Objects.equals(this.extensionLabel, other.extensionLabel)
-          && Objects.equals(this.exportedName, other.exportedName);
-    }
   }
 }

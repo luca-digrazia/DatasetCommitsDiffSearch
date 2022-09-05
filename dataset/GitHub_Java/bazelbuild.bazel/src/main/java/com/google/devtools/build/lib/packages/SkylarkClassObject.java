@@ -123,10 +123,6 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
   public Concatter getConcatter() {
     return StructConcatter.INSTANCE;
   }
-  
-  public SkylarkClassObjectConstructor getConstructor() {
-    return constructor;
-  }
 
   private static class StructConcatter implements Concatter {
     private static final StructConcatter INSTANCE = new StructConcatter();
@@ -138,12 +134,6 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
         Concatable left, Concatable right, Location loc) throws EvalException {
       SkylarkClassObject lval = (SkylarkClassObject) left;
       SkylarkClassObject rval = (SkylarkClassObject) right;
-      if (!lval.constructor.equals(rval.constructor)) {
-        throw new EvalException(loc,
-            String.format("Cannot concat %s with %s",
-                lval.constructor.getPrintableName(),
-                rval.constructor.getPrintableName()));
-      }
       SetView<String> commonFields = Sets
           .intersection(lval.values.keySet(), rval.values.keySet());
       if (!commonFields.isEmpty()) {
@@ -184,7 +174,7 @@ public class SkylarkClassObject implements ClassObject, SkylarkValue, Concatable
   @Override
   public void write(Appendable buffer, char quotationMark) {
     boolean first = true;
-    Printer.append(buffer, constructor.getPrintableName());
+    Printer.append(buffer, constructor.getName());
     Printer.append(buffer, "(");
     // Sort by key to ensure deterministic output.
     for (String key : Ordering.natural().sortedCopy(values.keySet())) {
