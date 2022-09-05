@@ -278,7 +278,6 @@ public class Slf4jReporter extends ScheduledReporter {
 
     private void logTimer(StringBuilder b, String name, Timer timer) {
         final Snapshot snapshot = timer.getSnapshot();
-        b.setLength(0);
         b.append("type=TIMER");
         append(b, "name", prefix(name));
         appendCountIfEnabled(b, timer);
@@ -299,7 +298,6 @@ public class Slf4jReporter extends ScheduledReporter {
     }
 
     private void logMeter(StringBuilder b, String name, Meter meter) {
-        b.setLength(0);
         b.append("type=METER");
         append(b, "name", prefix(name));
         appendCountIfEnabled(b, meter);
@@ -310,7 +308,6 @@ public class Slf4jReporter extends ScheduledReporter {
 
     private void logHistogram(StringBuilder b, String name, Histogram histogram) {
         final Snapshot snapshot = histogram.getSnapshot();
-        b.setLength(0);
         b.append("type=HISTOGRAM");
         append(b, "name", prefix(name));
         appendCountIfEnabled(b, histogram);
@@ -328,7 +325,6 @@ public class Slf4jReporter extends ScheduledReporter {
     }
 
     private void logCounter(StringBuilder b, String name, Counter counter) {
-        b.setLength(0);
         b.append("type=COUNTER");
         append(b, "name", prefix(name));
         append(b, COUNT.getCode(), counter.getCount());
@@ -336,7 +332,6 @@ public class Slf4jReporter extends ScheduledReporter {
     }
 
     private void logGauge(StringBuilder b, String name, Gauge<?> gauge) {
-        b.setLength(0);
         b.append("type=GAUGE");
         append(b, "name", prefix(name));
         append(b, "value", gauge.getValue());
