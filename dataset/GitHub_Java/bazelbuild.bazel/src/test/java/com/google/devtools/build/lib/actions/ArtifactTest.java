@@ -24,7 +24,7 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
+import com.google.devtools.build.lib.actions.Action.MiddlemanType;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.LabelArtifactOwner;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -33,13 +33,15 @@ import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @RunWith(JUnit4.class)
 public class ArtifactTest {
@@ -66,8 +68,8 @@ public class ArtifactTest {
 
   @Test
   public void testEquivalenceRelation() throws Exception {
-    PathFragment aPath = PathFragment.create("src/a");
-    PathFragment bPath = PathFragment.create("src/b");
+    PathFragment aPath = new PathFragment("src/a");
+    PathFragment bPath = new PathFragment("src/b");
     assertEquals(new Artifact(aPath, rootDir),
                  new Artifact(aPath, rootDir));
     assertEquals(new Artifact(bPath, rootDir),
@@ -78,14 +80,14 @@ public class ArtifactTest {
 
   @Test
   public void testEmptyLabelIsNone() throws Exception {
-    Artifact artifact = new Artifact(PathFragment.create("src/a"), rootDir);
+    Artifact artifact = new Artifact(new PathFragment("src/a"), rootDir);
     assertThat(artifact.getOwnerLabel()).isNull();
   }
 
   @Test
   public void testComparison() throws Exception {
-    PathFragment aPath = PathFragment.create("src/a");
-    PathFragment bPath = PathFragment.create("src/b");
+    PathFragment aPath = new PathFragment("src/a");
+    PathFragment bPath = new PathFragment("src/b");
     Artifact aArtifact = new Artifact(aPath, rootDir);
     Artifact bArtifact = new Artifact(bPath, rootDir);
     assertEquals(-1, Artifact.EXEC_PATH_COMPARATOR.compare(aArtifact, bArtifact));
@@ -147,13 +149,6 @@ public class ArtifactTest {
   }
 
   @Test
-  public void testGetExtension() throws Exception {
-    Root root = Root.asSourceRoot(scratch.dir("/foo"));
-    Artifact javaFile = new Artifact(scratch.file("/foo/Bar.java"), root);
-    assertThat(javaFile.getExtension()).isEqualTo("java");
-  }
-
-  @Test
   public void testMangledPath() {
     String path = "dir/sub_dir/name:end";
     assertEquals("dir_Ssub_Udir_Sname_Cend", Actions.escapedPath(path));
@@ -165,7 +160,7 @@ public class ArtifactTest {
     Artifact aHeader1 = new Artifact(scratch.file("/foo/bar1.h"), root);
     Artifact aHeader2 = new Artifact(scratch.file("/foo/bar2.h"), root);
     Artifact aHeader3 = new Artifact(scratch.file("/foo/bar3.h"), root);
-    Artifact middleman = new Artifact(PathFragment.create("middleman"),
+    Artifact middleman = new Artifact(new PathFragment("middleman"),
         Root.middlemanRoot(scratch.dir("/foo"), scratch.dir("/foo/out")));
     actionGraph.registerAction(new MiddlemanAction(ActionsTestUtil.NULL_ACTION_OWNER,
         ImmutableList.of(aHeader1, aHeader2, aHeader3), middleman, "desc",
@@ -198,15 +193,15 @@ public class ArtifactTest {
     Artifact.addExpandedExecPaths(getFooBarArtifacts(actionGraph, true), paths,
         ActionInputHelper.actionGraphArtifactExpander(actionGraph));
     assertThat(paths).containsExactly(
-        PathFragment.create("bar1.h"),
-        PathFragment.create("bar1.h"),
-        PathFragment.create("bar2.h"),
-        PathFragment.create("bar3.h"));
+        new PathFragment("bar1.h"),
+        new PathFragment("bar1.h"),
+        new PathFragment("bar2.h"),
+        new PathFragment("bar3.h"));
   }
 
   @Test
   public void testAddExpandedArtifacts() throws Exception {
-    List<Artifact> expanded = new ArrayList<>();
+    List<ArtifactFile> expanded = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     List<Artifact> original = getFooBarArtifacts(actionGraph, true);
     Artifact.addExpandedArtifacts(original, expanded,
@@ -214,7 +209,7 @@ public class ArtifactTest {
 
     List<Artifact> manuallyExpanded = new ArrayList<>();
     for (Artifact artifact : original) {
-      ActionAnalysisMetadata action = actionGraph.getGeneratingAction(artifact);
+      Action action = actionGraph.getGeneratingAction(artifact);
       if (artifact.isMiddlemanArtifact()) {
         Iterables.addAll(manuallyExpanded, action.getInputs());
       } else {
@@ -248,16 +243,16 @@ public class ArtifactTest {
     Artifact.addExpandedExecPaths(getFooBarArtifacts(actionGraph, true), paths,
         ActionInputHelper.actionGraphArtifactExpander(actionGraph));
     assertThat(paths).containsExactly(
-        PathFragment.create("bar1.h"),
-        PathFragment.create("bar1.h"),
-        PathFragment.create("bar2.h"),
-        PathFragment.create("bar3.h"));
+        new PathFragment("bar1.h"),
+        new PathFragment("bar1.h"),
+        new PathFragment("bar2.h"),
+        new PathFragment("bar3.h"));
   }
 
   // TODO consider tests for the future
   @Test
   public void testAddExpandedArtifactsNewActionGraph() throws Exception {
-    List<Artifact> expanded = new ArrayList<>();
+    List<ArtifactFile> expanded = new ArrayList<>();
     MutableActionGraph actionGraph = new MapBasedActionGraph();
     List<Artifact> original = getFooBarArtifacts(actionGraph, true);
     Artifact.addExpandedArtifacts(original, expanded,
@@ -265,7 +260,7 @@ public class ArtifactTest {
 
     List<Artifact> manuallyExpanded = new ArrayList<>();
     for (Artifact artifact : original) {
-      ActionAnalysisMetadata action = actionGraph.getGeneratingAction(artifact);
+      Action action = actionGraph.getGeneratingAction(artifact);
       if (artifact.isMiddlemanArtifact()) {
         Iterables.addAll(manuallyExpanded, action.getInputs());
       } else {
@@ -285,7 +280,7 @@ public class ArtifactTest {
   @Test
   public void testToDetailString() throws Exception {
     Artifact a = new Artifact(scratch.file("/a/b/c"), Root.asDerivedRoot(scratch.dir("/a/b")),
-        PathFragment.create("b/c"));
+        new PathFragment("b/c"));
     assertEquals("[[/a]b]c", a.toDetailString());
   }
 
@@ -293,7 +288,7 @@ public class ArtifactTest {
   public void testWeirdArtifact() throws Exception {
     try {
       new Artifact(scratch.file("/a/b/c"), Root.asDerivedRoot(scratch.dir("/a")),
-          PathFragment.create("c"));
+          new PathFragment("c"));
       fail();
     } catch (IllegalArgumentException e) {
       assertThat(e).hasMessage(
@@ -312,7 +307,7 @@ public class ArtifactTest {
   public void testSerializeToStringWithExecPath() throws Exception {
     Path path = scratch.file("/aaa/bbb/ccc");
     Root root = Root.asDerivedRoot(scratch.dir("/aaa/bbb"));
-    PathFragment execPath = PathFragment.create("bbb/ccc");
+    PathFragment execPath = new PathFragment("bbb/ccc");
 
     assertEquals("bbb/ccc /3", new Artifact(path, root, execPath).serializeToString());
   }
@@ -321,7 +316,7 @@ public class ArtifactTest {
   public void testSerializeToStringWithOwner() throws Exception {
     assertEquals("b/c /3 //foo:bar",
         new Artifact(scratch.file("/aa/b/c"), Root.asDerivedRoot(scratch.dir("/aa")),
-            PathFragment.create("b/c"),
+            new PathFragment("b/c"),
             new LabelArtifactOwner(Label.parseAbsoluteUnchecked("//foo:bar"))).serializeToString());
   }
 
@@ -353,7 +348,7 @@ public class ArtifactTest {
   public void testIsSourceArtifact() throws Exception {
     assertThat(
         new Artifact(scratch.file("/src/foo.cc"), Root.asSourceRoot(scratch.dir("/")),
-            PathFragment.create("src/foo.cc"))
+            new PathFragment("src/foo.cc"))
             .isSourceArtifact())
         .isTrue();
     assertThat(
