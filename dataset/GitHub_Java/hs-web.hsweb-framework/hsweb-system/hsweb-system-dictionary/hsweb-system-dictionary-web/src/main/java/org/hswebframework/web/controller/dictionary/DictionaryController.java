@@ -63,13 +63,6 @@ public class DictionaryController implements SimpleGenericEntityController<Dicti
         return dictionaryService;
     }
 
-    @GetMapping("/define/all")
-    @Authorize(merge = false)
-    @ApiOperation("获取数据全部字典定义信息")
-    public ResponseMessage<List<DictDefine>> getAllDefineById() {
-        return ok(repository.getAllDefine());
-    }
-
 
     @GetMapping("/define/{id:.+}")
     @Authorize(merge = false)
