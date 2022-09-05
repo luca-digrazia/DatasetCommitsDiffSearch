@@ -1505,12 +1505,10 @@ public final class ParallelEvaluator implements Evaluator {
       }
 
       // This node is not yet known to be in a cycle. So process its children.
-      Iterable<SkyKey> children = entry.getTemporaryDirectDeps();
+      Iterable<? extends SkyKey> children = entry.getTemporaryDirectDeps();
       if (Iterables.isEmpty(children)) {
         continue;
       }
-      // Prefetch all children, in case our graph performs better with a primed cache.
-      graph.getBatch(children);
 
       // This marker flag will tell us when all this node's children have been processed.
       toVisit.push(CHILDREN_FINISHED);
