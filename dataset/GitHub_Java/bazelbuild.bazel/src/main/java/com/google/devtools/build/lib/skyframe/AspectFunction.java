@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
@@ -112,11 +111,9 @@ public final class AspectFunction implements SkyFunction {
             loadSkylarkAspect(
                 env, skylarkAspectClass.getExtensionLabel(), skylarkAspectClass.getExportedName());
       } catch (SkylarkImportFailedException e) {
-        env.getListener().handle(Event.error(e.getMessage()));
-        throw new AspectFunctionException(new AspectCreationException(e.getMessage()));
+        throw new AspectFunctionException(skyKey, e);
       } catch (ConversionException e) {
-        env.getListener().handle(Event.error(e.getMessage()));
-        throw new AspectFunctionException(new AspectCreationException(e.getMessage()));
+        throw new AspectFunctionException(skyKey, e);
       }
       if (skylarkAspect == null) {
         return null;
@@ -127,22 +124,23 @@ public final class AspectFunction implements SkyFunction {
       throw new IllegalStateException();
     }
 
-    // Keep this in sync with the same code in ConfiguredTargetFunction.
     PackageValue packageValue =
         (PackageValue) env.getValue(PackageValue.key(key.getLabel().getPackageIdentifier()));
     if (packageValue == null) {
       return null;
     }
+
     Package pkg = packageValue.getPackage();
     if (pkg.containsErrors()) {
       throw new AspectFunctionException(
-          new BuildFileContainsErrorsException(key.getLabel().getPackageIdentifier()));
+          skyKey, new BuildFileContainsErrorsException(key.getLabel().getPackageIdentifier()));
     }
+
     Target target;
     try {
       target = pkg.getTarget(key.getLabel().getName());
     } catch (NoSuchTargetException e) {
-      throw new AspectFunctionException(e);
+      throw new AspectFunctionException(skyKey, e);
     }
 
     if (!(target instanceof Rule)) {
@@ -304,12 +302,18 @@ public final class AspectFunction implements SkyFunction {
    * Used to indicate errors during the computation of an {@link AspectValue}.
    */
   private static final class AspectFunctionException extends SkyFunctionException {
-    public AspectFunctionException(NoSuchThingException e) {
+    public AspectFunctionException(AspectCreationException e) {
       super(e, Transience.PERSISTENT);
     }
 
-    public AspectFunctionException(AspectCreationException e) {
-      super(e, Transience.PERSISTENT);
+    /** Used to rethrow a child error that we cannot handle. */
+    public AspectFunctionException(SkyKey childKey, Exception transitiveError) {
+      super(transitiveError, childKey);
+    }
+
+    /** Used to rethrow a child error that we cannot handle. */
+    public AspectFunctionException(SkyKey childKey, NoSuchThingException e) {
+      super(e, childKey);
     }
   }
 }
