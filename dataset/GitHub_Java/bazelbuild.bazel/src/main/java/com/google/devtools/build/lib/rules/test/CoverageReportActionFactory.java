@@ -20,9 +20,7 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.events.EventHandler;
 
 import java.util.Collection;
 
@@ -68,8 +66,6 @@ public interface CoverageReportActionFactory {
    */
   @Nullable
   CoverageReportActionsWrapper createCoverageReportActionsWrapper(
-      EventHandler eventHandler,
-      BlazeDirectories directories,
       Collection<ConfiguredTarget> targetsToTest,
       Iterable<Artifact> baselineCoverageArtifacts,
       ArtifactFactory artifactFactory, ArtifactOwner artifactOwner);
