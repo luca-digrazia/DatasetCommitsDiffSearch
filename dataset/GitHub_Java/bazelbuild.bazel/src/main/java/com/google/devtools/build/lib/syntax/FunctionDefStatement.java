@@ -117,7 +117,7 @@ public class FunctionDefStatement extends Statement {
           }
         }
       }
-      localEnv.declare(name, getLocation());
+      localEnv.update(name, argType, getLocation());
     }
     for (Statement stmts : statements) {
       stmts.validate(localEnv);

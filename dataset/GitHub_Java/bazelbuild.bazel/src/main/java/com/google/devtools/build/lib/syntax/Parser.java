@@ -75,10 +75,6 @@ class Parser {
   private static final EnumSet<TokenKind> DICT_TERMINATOR_SET =
     EnumSet.of(TokenKind.EOF, TokenKind.RBRACE, TokenKind.SEMI);
 
-  private static final EnumSet<TokenKind> EXPR_LIST_TERMINATOR_SET =
-      EnumSet.of(TokenKind.EOF, TokenKind.RBRACE, TokenKind.RBRACKET,
-          TokenKind.RPAREN, TokenKind.NEWLINE, TokenKind.SEMI);
-
   private static final EnumSet<TokenKind> EXPR_TERMINATOR_SET = EnumSet.of(
       TokenKind.EOF,
       TokenKind.COMMA,
@@ -358,20 +354,20 @@ class Parser {
     return setLocation(new FuncallExpression(receiver, function, args), start, end);
   }
 
-  // arg ::= IDENTIFIER '=' nontupleexpr
+  // arg ::= IDENTIFIER '=' expr
   //       | expr
   private Argument.Passed parseFuncallArgument() {
     final int start = token.left;
     // parse **expr
     if (token.kind == TokenKind.STAR_STAR) {
       nextToken();
-      Expression expr = parseNonTupleExpression();
+      Expression expr = parseExpression();
       return setLocation(new Argument.StarStar(expr), start, expr);
     }
     // parse *expr
     if (token.kind == TokenKind.STAR) {
       nextToken();
-      Expression expr = parseNonTupleExpression();
+      Expression expr = parseExpression();
       return setLocation(new Argument.Star(expr), start, expr);
     }
     // parse keyword = expr
@@ -381,18 +377,18 @@ class Parser {
       nextToken();
       if (token.kind == TokenKind.EQUALS) { // it's a named argument
         nextToken();
-        Expression expr = parseNonTupleExpression();
+        Expression expr = parseExpression();
         return setLocation(new Argument.Keyword(name, expr), start, expr);
       } else { // oops, back up!
         pushToken(identToken);
       }
     }
     // parse a positional argument
-    Expression expr = parseNonTupleExpression();
+    Expression expr = parseExpression();
     return setLocation(new Argument.Positional(expr), start, expr);
   }
 
-  // arg ::= IDENTIFIER '=' nontupleexpr
+  // arg ::= IDENTIFIER '=' expr
   //       | IDENTIFIER
   private Parameter<Expression, Expression> parseFunctionParameter() {
     // TODO(bazel-team): optionally support type annotations
@@ -416,7 +412,7 @@ class Parser {
       Ident ident = parseIdent();
       if (token.kind == TokenKind.EQUALS) { // there's a default value
         nextToken();
-        Expression expr = parseNonTupleExpression();
+        Expression expr = parseExpression();
         return setLocation(new Parameter.Optional<Expression, Expression>(
             ident.getName(), expr), start, expr);
       } else {
@@ -476,19 +472,17 @@ class Parser {
     return arguments;
   }
 
-  // expr_list parses a comma-separated list of expression. It assumes that the
-  // first expression was already parsed, so it starts with a comma.
-  // It is used to parse tuples and list elements.
-  // expr_list ::= ( ',' expr )* ','?
+  // expr_list ::= ( (expr ',')* expr ','? )?
   private List<Expression> parseExprList() {
     List<Expression> list = new ArrayList<>();
     //  terminating tokens for an expression list
-    while (token.kind == TokenKind.COMMA) {
-      expect(TokenKind.COMMA);
-      if (EXPR_LIST_TERMINATOR_SET.contains(token.kind)) {
+    while (token.kind != TokenKind.RPAREN && token.kind != TokenKind.RBRACKET) {
+      list.add(parseExpression());
+      if (token.kind == TokenKind.COMMA) {
+        nextToken();
+      } else {
         break;
       }
-      list.add(parseNonTupleExpression());
     }
     return list;
   }
@@ -508,12 +502,12 @@ class Parser {
     return list;
   }
 
-  // dict_entry ::= nontupleexpr ':' nontupleexpr
+  // dict_entry ::= expression ':' expression
   private DictionaryEntryLiteral parseDictEntry() {
     int start = token.left;
-    Expression key = parseNonTupleExpression();
+    Expression key = parseExpression();
     expect(TokenKind.COLON);
-    Expression value = parseNonTupleExpression();
+    Expression value = parseExpression();
     return setLocation(new DictionaryEntryLiteral(key, value), start, value);
   }
 
@@ -577,6 +571,7 @@ class Parser {
   //            | list_expression
   //            | '(' ')'                    // a tuple with zero elements
   //            | '(' expr ')'               // a parenthesized expression
+  //            | '(' expr ',' expr_list ')' // a tuple with n elements
   //            | dict_expression
   //            | '-' primary_with_suffix
   private Expression parsePrimary() {
@@ -610,7 +605,7 @@ class Parser {
         }
       }
       case LBRACKET: { // it's a list
-        return parseListMaker();
+        return parseListExpression();
       }
       case LBRACE: { // it's a dictionary
         return parseDictExpression();
@@ -627,6 +622,16 @@ class Parser {
         }
         // parse the first expression
         Expression expression = parseExpression();
+        if (token.kind == TokenKind.COMMA) {  // it's a tuple
+          nextToken();
+          // parse the rest of the expression tuple
+          List<Expression> tuple = parseExprList();
+          // add the first expression to the front of the tuple
+          tuple.add(0, expression);
+          expect(TokenKind.RPAREN);
+          return setLocation(
+              ListLiteral.makeTuple(tuple), start, token.right);
+        }
         setLocation(expression, start, token.right);
         if (token.kind == TokenKind.RPAREN) {
           nextToken();
@@ -681,7 +686,7 @@ class Parser {
     if (token.kind == TokenKind.COLON) {
       startExpr = setLocation(new IntegerLiteral(0), token.left, token.right);
     } else {
-      startExpr = parseNonTupleExpression();
+      startExpr = parseExpression();
     }
     args.add(setLocation(new Argument.Positional(startExpr), loc1, startExpr));
     // This is a dictionary access
@@ -696,7 +701,7 @@ class Parser {
     if (token.kind == TokenKind.RBRACKET) {
       endExpr = setLocation(new IntegerLiteral(Integer.MAX_VALUE), token.left, token.right);
     } else {
-      endExpr = parseNonTupleExpression();
+      endExpr = parseExpression();
     }
     expect(TokenKind.RBRACKET);
 
@@ -738,11 +743,11 @@ class Parser {
     return multipleVariables ? makeErrorExpression(start, end) : firstIdent;
   }
 
-  // list_maker ::= '[' ']'
-  //               |'[' expr ']'
-  //               |'[' expr expr_list ']'
-  //               |'[' expr ('FOR' loop_variables 'IN' expr)+ ']'
-  private Expression parseListMaker() {
+  // list_expression ::= '[' ']'
+  //                    |'[' expr ']'
+  //                    |'[' expr ',' expr_list ']'
+  //                    |'[' expr ('FOR' loop_variables 'IN' expr)+ ']'
+  private Expression parseListExpression() {
     int start = token.left;
     expect(TokenKind.LBRACKET);
     if (token.kind == TokenKind.RBRACKET) { // empty List
@@ -751,7 +756,7 @@ class Parser {
       nextToken();
       return literal;
     }
-    Expression expression = parseNonTupleExpression();
+    Expression expression = parseExpression();
     Preconditions.checkNotNull(expression,
         "null element in list in AST at %s:%s", token.left, token.right);
     switch (token.kind) {
@@ -786,6 +791,7 @@ class Parser {
         return makeErrorExpression(start, end);
       }
       case COMMA: {
+        nextToken();
         List<Expression> list = parseExprList();
         Preconditions.checkState(!list.contains(null),
             "null element in list in AST at %s:%s", token.left, token.right);
@@ -865,7 +871,7 @@ class Parser {
   // the order), and it assumes left-to-right associativity.
   private Expression parseBinOpExpression(int prec) {
     int start = token.left;
-    Expression expr = parseNonTupleExpression(prec + 1);
+    Expression expr = parseExpression(prec + 1);
     // The loop is not strictly needed, but it prevents risks of stack overflow. Depth is
     // limited to number of different precedence levels (operatorPrecedence.size()).
     for (;;) {
@@ -877,7 +883,7 @@ class Parser {
         return expr;
       }
       nextToken();
-      Expression secondary = parseNonTupleExpression(prec + 1);
+      Expression secondary = parseExpression(prec + 1);
       expr = optimizeBinOpExpression(operator, expr, secondary);
       setLocation(expr, start, secondary);
     }
@@ -900,33 +906,15 @@ class Parser {
     return new BinaryOperatorExpression(operator, expr, secondary);
   }
 
-  // Equivalent to 'testlist' rule in Python grammar. It can parse every
-  // kind of expression.
-  // In many cases, we need to use parseNonTupleExpression to avoid ambiguity
-  // e.g.  fct(x, y)  vs  fct((x, y))
   private Expression parseExpression() {
     int start = token.left;
-    Expression expression = parseNonTupleExpression();
-    if (token.kind != TokenKind.COMMA) {
-      return expression;
-    }
-
-    // It's a tuple
-    List<Expression> tuple = parseExprList();
-    tuple.add(0, expression);  // add the first expression to the front of the tuple
-    return setLocation(ListLiteral.makeTuple(tuple), start, token.right);
-  }
-
-  // Equivalent to 'test' rule in Python grammar.
-  private Expression parseNonTupleExpression() {
-    int start = token.left;
-    Expression expr = parseNonTupleExpression(0);
+    Expression expr = parseExpression(0);
     if (token.kind == TokenKind.IF) {
       nextToken();
-      Expression condition = parseNonTupleExpression(0);
+      Expression condition = parseExpression(0);
       if (token.kind == TokenKind.ELSE) {
         nextToken();
-        Expression elseClause = parseNonTupleExpression();
+        Expression elseClause = parseExpression();
         return setLocation(new ConditionalExpression(expr, condition, elseClause),
             start, elseClause);
       } else {
@@ -938,7 +926,7 @@ class Parser {
     return expr;
   }
 
-  private Expression parseNonTupleExpression(int prec) {
+  private Expression parseExpression(int prec) {
     if (prec >= operatorPrecedence.size()) {
       return parsePrimaryWithSuffix();
     }
@@ -952,7 +940,7 @@ class Parser {
   private Expression parseNotExpression(int prec) {
     int start = token.left;
     expect(TokenKind.NOT);
-    Expression expression = parseNonTupleExpression(prec + 1);
+    Expression expression = parseExpression(prec + 1);
     NotExpression notExpression = new NotExpression(expression);
     return setLocation(notExpression, start, token.right);
   }
@@ -1133,7 +1121,7 @@ class Parser {
   private ConditionalStatements parseConditionalStatements(TokenKind tokenKind) {
     int start = token.left;
     expect(tokenKind);
-    Expression expr = parseNonTupleExpression();
+    Expression expr = parseExpression();
     expect(TokenKind.COLON);
     List<Statement> thenBlock = parseSuite();
     ConditionalStatements stmt = new ConditionalStatements(expr, thenBlock);

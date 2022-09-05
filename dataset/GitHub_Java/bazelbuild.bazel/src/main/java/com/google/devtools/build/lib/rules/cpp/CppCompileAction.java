@@ -836,7 +836,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   @Override
-  public Iterable<Artifact> resolveInputsFromCache(
+  public boolean updateInputsFromCache(
       ArtifactResolver artifactResolver, PackageRootResolver resolver,
       Collection<PathFragment> inputPaths) {
     // Note that this method may trigger a violation of the desirable invariant that getInputs()
@@ -859,7 +859,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         artifactResolver.resolveSourceArtifacts(unresolvedPaths, resolver);
     if (resolvedArtifacts == null) {
       // We are missing some dependencies. We need to rerun this update later.
-      return null;
+      return false;
     }
 
     for (PathFragment execPath : unresolvedPaths) {
@@ -873,15 +873,11 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         inputs.add(artifact);
       }
     }
-    return inputs;
-  }
-
-  @Override
-  public synchronized void updateInputs(Iterable<Artifact> inputs) {
     inputsKnown = true;
     synchronized (this) {
       setInputs(inputs);
     }
+    return true;
   }
 
   private Map<PathFragment, Artifact> getAllowedDerivedInputsMap() {

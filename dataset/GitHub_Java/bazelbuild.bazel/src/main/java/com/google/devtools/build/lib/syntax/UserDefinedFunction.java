@@ -25,7 +25,7 @@ public class UserDefinedFunction extends BaseFunction {
   private final ImmutableList<Statement> statements;
   private final SkylarkEnvironment definitionEnv;
 
-  protected UserDefinedFunction(Identifier function,
+  protected UserDefinedFunction(Ident function,
       FunctionSignature.WithValues<Object, SkylarkType> signature,
       ImmutableList<Statement> statements, SkylarkEnvironment definitionEnv) {
     super(function.getName(), signature, function.getLocation());
@@ -46,33 +46,27 @@ public class UserDefinedFunction extends BaseFunction {
     return location;
   }
 
+
   @Override
   public Object call(Object[] arguments, FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
+    SkylarkEnvironment functionEnv = SkylarkEnvironment.createEnvironmentForFunctionCalling(
+        env, definitionEnv, this);
     ImmutableList<String> names = signature.getSignature().getNames();
 
     // Registering the functions's arguments as variables in the local Environment
     int i = 0;
     for (String name : names) {
-      env.update(name, arguments[i++]);
+      functionEnv.update(name, arguments[i++]);
     }
 
     try {
       for (Statement stmt : statements) {
-        stmt.exec(env);
+        stmt.exec(functionEnv);
       }
     } catch (ReturnStatement.ReturnException e) {
       return e.getValue();
     }
     return Environment.NONE;
-  }
-
-  /**
-   * Creates a new environment for the execution of this function.
-   */
-  @Override
-  protected Environment getOrCreateChildEnvironment(Environment parent) throws EvalException {
-   return SkylarkEnvironment.createEnvironmentForFunctionCalling(
-       parent, definitionEnv, this);
   }
 }
