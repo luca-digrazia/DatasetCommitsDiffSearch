@@ -4,16 +4,13 @@ import com.yammer.metrics.core.*;
 
 import javax.management.*;
 import java.lang.management.ManagementFactory;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
  * A reporter which exposes application metric as JMX MBeans.
  */
-public class JmxReporter extends AbstractReporter implements MetricsRegistryListener,
-                                                             MetricsProcessor<JmxReporter.Context> {
+public class JmxReporter extends AbstractReporter implements MetricsRegistryListener {
 
     private final Map<MetricName, ObjectName> registeredBeans;
     private final MBeanServer server;
@@ -73,17 +70,11 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     public static interface MeterMBean extends MetricMBean {
         public long getCount();
-
         public String getEventType();
-
         public TimeUnit getRateUnit();
-
         public double getMeanRate();
-
         public double getOneMinuteRate();
-
         public double getFiveMinuteRate();
-
         public double getFifteenMinuteRate();
     }
 
@@ -133,27 +124,16 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
 
     public static interface HistogramMBean extends MetricMBean {
         public long getCount();
-
         public double getMin();
-
         public double getMax();
-
         public double getMean();
-
         public double getStdDev();
-
         public double get50thPercentile();
-
         public double get75thPercentile();
-
         public double get95thPercentile();
-
         public double get98thPercentile();
-
         public double get99thPercentile();
-
         public double get999thPercentile();
-
         public List<?> values();
     }
 
@@ -306,7 +286,6 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     }
 
     private static JmxReporter INSTANCE;
-
     public static void startDefault(MetricsRegistry defaultMetricsRegistry) {
         INSTANCE = new JmxReporter(defaultMetricsRegistry);
         INSTANCE.start();
@@ -328,50 +307,20 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
     public void onMetricAdded(MetricName name, Metric metric) {
         if (metric != null) {
             try {
-                metric.processWith(this,
-                                   name,
-                                   new Context(name, new ObjectName(name.getMBeanName())));
+                final ObjectName objectName = new ObjectName(name.getMBeanName());
+                if (metric instanceof GaugeMetric) {
+                    registerBean(name, new Gauge((GaugeMetric<?>) metric, objectName), objectName);
+                } else if (metric instanceof CounterMetric) {
+                    registerBean(name, new Counter((CounterMetric) metric, objectName), objectName);
+                } else if (metric instanceof HistogramMetric) {
+                    registerBean(name, new Histogram((HistogramMetric) metric, objectName), objectName);
+                } else if (metric instanceof MeterMetric) {
+                    registerBean(name, new Meter((MeterMetric) metric, objectName), objectName);
+                } else if (metric instanceof TimerMetric) {
+                    registerBean(name, new Timer((TimerMetric) metric, objectName), objectName);
+                }
             } catch (Exception ignored) {
             }
-        }
-    }
-
-    @Override
-    public void processMeter(MetricName name, Metered meter, Context context) throws Exception {
-        registerBean(context.metricName, new Meter(meter, context.objectName), context.objectName);
-    }
-
-    @Override
-    public void processCounter(MetricName name, CounterMetric counter, Context context) throws Exception {
-        registerBean(context.metricName,
-                     new Counter(counter, context.objectName),
-                     context.objectName);
-    }
-
-    @Override
-    public void processHistogram(MetricName name, HistogramMetric histogram, Context context) throws Exception {
-        registerBean(context.metricName,
-                     new Histogram(histogram, context.objectName),
-                     context.objectName);
-    }
-
-    @Override
-    public void processTimer(MetricName name, TimerMetric timer, Context context) throws Exception {
-        registerBean(context.metricName, new Timer(timer, context.objectName), context.objectName);
-    }
-
-    @Override
-    public void processGauge(MetricName name, GaugeMetric<?> gauge, Context context) throws Exception {
-        registerBean(context.metricName, new Gauge(gauge, context.objectName), context.objectName);
-    }
-
-    public static final class Context {
-        public final MetricName metricName;
-        public final ObjectName objectName;
-
-        public Context(final MetricName metricName, final ObjectName objectName) {
-            this.metricName = metricName;
-            this.objectName = objectName;
         }
     }
 
@@ -407,4 +356,5 @@ public class JmxReporter extends AbstractReporter implements MetricsRegistryList
         }
         registeredBeans.clear();
     }
+
 }
