@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -30,9 +32,9 @@ import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.skyframe.InterruptibleSupplier;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -207,24 +209,21 @@ public final class TargetPatternValue implements SkyValue {
       return excludedSubdirectories;
     }
 
-    ImmutableSet<PathFragment> getAllSubdirectoriesToExclude(
-        Iterable<PathFragment> blacklistedPackagePrefixes) throws InterruptedException {
-      return getAllSubdirectoriesToExclude(
-          new InterruptibleSupplier.Instance<>(blacklistedPackagePrefixes));
+    public ImmutableSet<PathFragment> getAllSubdirectoriesToExclude(
+        Iterable<PathFragment> blacklistedPackagePrefixes) {
+      return getAllSubdirectoriesToExclude(Suppliers.ofInstance(blacklistedPackagePrefixes));
     }
 
     public ImmutableSet<PathFragment> getAllSubdirectoriesToExclude(
-        InterruptibleSupplier<? extends Iterable<PathFragment>> blacklistedPackagePrefixes)
-        throws InterruptedException {
+        Supplier<? extends Iterable<PathFragment>> blacklistedPackagePrefixes) {
       ImmutableSet.Builder<PathFragment> excludedPathsBuilder = ImmutableSet.builder();
       excludedPathsBuilder.addAll(getExcludedSubdirectories());
       if (parsedPattern.getType() == Type.TARGETS_BELOW_DIRECTORY) {
         for (PathFragment blacklistedPackagePrefix : blacklistedPackagePrefixes.get()) {
           PackageIdentifier pkgIdForBlacklistedDirectorPrefix = PackageIdentifier.create(
-              parsedPattern.getDirectoryForTargetsUnderDirectory().getRepository(),
+              parsedPattern.getDirectory().getRepository(),
               blacklistedPackagePrefix);
-          if (parsedPattern.containsAllTransitiveSubdirectoriesForTBD(
-              pkgIdForBlacklistedDirectorPrefix)) {
+          if (parsedPattern.containsBelowDirectory(pkgIdForBlacklistedDirectorPrefix)) {
             excludedPathsBuilder.add(blacklistedPackagePrefix);
           }
         }
