@@ -204,7 +204,6 @@ public class MaterialCalendarView extends ViewGroup {
     private OnDateSelectedListener listener;
     private OnMonthChangedListener monthListener;
 
-    CharSequence calendarContentDescription;
     private int accentColor = 0;
     private int arrowColor = Color.BLACK;
     private Drawable leftArrowMask;
@@ -231,10 +230,8 @@ public class MaterialCalendarView extends ViewGroup {
         }
 
         buttonPast = new DirectionButton(getContext());
-        buttonPast.setContentDescription(getContext().getString(R.string.previous));
         title = new TextView(getContext());
         buttonFuture = new DirectionButton(getContext());
-        buttonFuture.setContentDescription(getContext().getString(R.string.next));
         pager = new CalendarPager(getContext());
 
         setupChildren();
@@ -425,28 +422,6 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     /**
-     * Go to previous month or week without using the button {@link #buttonPast}. Should only go to
-     * previous if {@link #isPreviousAccessible()} is true, meaning it's possible to go to the previous month
-     * or week.
-     */
-    public void goToPrevious() {
-        if (canGoBack()) {
-            pager.setCurrentItem(pager.getCurrentItem() - 1, true);
-        }
-    }
-
-    /**
-     * Go to next month or week without using the button {@link #buttonFuture}. Should only go to
-     * next if {@link #buttonFuture} is enabled, meaning it's possible to go to the next month or
-     * week.
-     */
-    public void goToNext() {
-        if (canGoForward()) {
-            pager.setCurrentItem(pager.getCurrentItem() + 1, true);
-        }
-    }
-
-    /**
      * Set calendar display mode. The default mode is Months.
      * When switching between modes will select todays date, or the selected date,
      * if selection mode is single.
@@ -472,9 +447,10 @@ public class MaterialCalendarView extends ViewGroup {
         adapter = adapter.migrateStateAndReturn(newAdapter);
         pager.setAdapter(adapter);
         calendarMode = mode;
-        setCurrentDate(selectionMode == SELECTION_MODE_SINGLE
-                ? adapter.getSelectedDates().get(0)
-                : CalendarDay.today());
+        setCurrentDate(
+                selectionMode == SELECTION_MODE_SINGLE && !adapter.getSelectedDates().isEmpty()
+                        ? adapter.getSelectedDates().get(0)
+                        : CalendarDay.today());
         invalidateDecorators();
         updateUi();
     }
@@ -531,7 +507,7 @@ public class MaterialCalendarView extends ViewGroup {
      *
      * @return true if there is a future month that can be shown
      */
-    public boolean canGoForward() {
+    private boolean canGoForward() {
         return pager.getCurrentItem() < (adapter.getCount() - 1);
     }
 
@@ -551,7 +527,7 @@ public class MaterialCalendarView extends ViewGroup {
      *
      * @return true if there is a previous month that can be shown
      */
-    public boolean canGoBack() {
+    private boolean canGoBack() {
         return pager.getCurrentItem() > 0;
     }
 
@@ -596,44 +572,6 @@ public class MaterialCalendarView extends ViewGroup {
         buttonPast.setColor(color);
         buttonFuture.setColor(color);
         invalidate();
-    }
-
-    /**
-     * Set content description for button past
-     *
-     * @param description String to use as content description
-     */
-    public void setContentDescriptionArrowPast(final CharSequence description) {
-        buttonPast.setContentDescription(description);
-    }
-
-    /**
-     * Set content description for button future
-     *
-     * @param description String to use as content description
-     */
-    public void setContentDescriptionArrowFuture(final CharSequence description) {
-        buttonFuture.setContentDescription(description);
-    }
-
-    /**
-     * Set content description for calendar
-     *
-     * @param description String to use as content description
-     */
-    public void setContentDescriptionCalendar(final CharSequence description) {
-        calendarContentDescription = description;
-    }
-
-    /**
-     * Get content description for calendar
-     *
-     * @return calendar's content description
-     */
-    public CharSequence getCalendarContentDescription() {
-        return calendarContentDescription != null
-                ? calendarContentDescription
-                : getContext().getString(R.string.calendar);
     }
 
     /**
@@ -1051,6 +989,7 @@ public class MaterialCalendarView extends ViewGroup {
         currentMonth = c;
         int position = adapter.getIndexForDay(c);
         pager.setCurrentItem(position, false);
+        updateUi();
     }
 
     public static class SavedState extends BaseSavedState {
@@ -1133,7 +1072,7 @@ public class MaterialCalendarView extends ViewGroup {
 
     /**
      * Sets the first day of the week.
-     * <p>
+     * <p/>
      * Uses the java.util.Calendar day constants.
      *
      * @param day The first day of the week as a java.util.Calendar day constant.
@@ -1153,7 +1092,7 @@ public class MaterialCalendarView extends ViewGroup {
     /**
      * By default, the calendar will take up all the space needed to show any month (6 rows).
      * By enabling dynamic height, the view will change height dependant on the visible month.
-     * <p>
+     * <p/>
      * This means months that only need 5 or 4 rows to show the entire month will only take up
      * that many rows, and will grow and shrink as necessary.
      *
