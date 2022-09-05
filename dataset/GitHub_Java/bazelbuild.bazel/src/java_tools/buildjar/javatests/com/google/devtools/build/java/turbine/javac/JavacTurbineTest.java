@@ -170,7 +170,6 @@ public class JavacTurbineTest {
       "",
       "  // access flags 0x9",
       "  public static main([Ljava/lang/String;)V",
-      "    // parameter  args",
       "}",
       ""
     };
@@ -317,7 +316,6 @@ public class JavacTurbineTest {
         "",
         "  // access flags 0x9",
         "  public static main([Ljava/lang/String;)V",
-        "    // parameter  args",
         "}",
         ""
       };
@@ -755,7 +753,6 @@ public class JavacTurbineTest {
       "",
       "  // access flags 0x9",
       "  public static valueOf(Ljava/lang/String;)LTheEnum;",
-      "    // parameter mandated  name",
       "}",
       ""
     };
@@ -1353,7 +1350,6 @@ public class JavacTurbineTest {
       "",
       "  // access flags 0x9",
       "  public static valueOf(Ljava/lang/String;)LP;",
-      "    // parameter mandated  name",
       "}",
       ""
     };
@@ -1396,7 +1392,6 @@ public class JavacTurbineTest {
       "",
       "  // access flags 0x9",
       "  public static valueOf(Ljava/lang/String;)LP;",
-      "    // parameter mandated  name",
       "}",
       ""
     };
