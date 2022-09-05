@@ -4,8 +4,6 @@ import com.alibaba.fastjson.JSON;
 import org.hsweb.concurrent.lock.annotation.LockName;
 import org.hsweb.concurrent.lock.annotation.ReadLock;
 import org.hsweb.concurrent.lock.annotation.WriteLock;
-import org.hsweb.expands.office.excel.ExcelIO;
-import org.hsweb.expands.office.excel.config.Header;
 import org.hsweb.ezorm.meta.FieldMetaData;
 import org.hsweb.ezorm.meta.TableMetaData;
 import org.hsweb.ezorm.meta.expand.OptionConverter;
@@ -32,7 +30,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.hsweb.commons.StringUtils;
+import org.webbuilder.office.excel.ExcelIO;
+import org.webbuilder.office.excel.config.Header;
+import org.webbuilder.utils.common.StringUtils;
 
 import javax.annotation.Resource;
 import java.io.InputStream;
@@ -278,10 +278,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         PropertyWrapper valueWrapper = fieldMetaData.getProperty("export-excel", false);
         if (fieldPrefix.length() > 0) fieldPrefix += ".";
         if (valueWrapper.isTrue()) {
-            String title = fieldMetaData.getProperty("excel-header").getValue();
-            if (StringUtils.isNullOrEmpty(title)) {
-                title = fieldMetaData.getComment();
-            }
+            String title = fieldMetaData.getProperty("export-header", fieldMetaData.getComment()).toString();
             if (StringUtils.isNullOrEmpty(title)) {
                 title = fieldMetaData.getName();
             }
@@ -309,11 +306,11 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
                 ((Map) value).forEach((k, v) -> {
                     String fieldName = key + "." + k;
                     FieldMetaData field = metaData.findFieldByName(fieldName);
-                    putExcelHeader(fieldName, field, headers);
+                    putExcelHeader(fieldName,field, headers);
                 });
             } else {
                 FieldMetaData field = metaData.findFieldByName(key);
-                putExcelHeader("", field, headers);
+                putExcelHeader("",field, headers);
             }
         });
         if (metaData.triggerIsSupport("export.excel")) {
@@ -348,13 +345,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         metaData.getFields().forEach(fieldMetaData -> {
             PropertyWrapper valueWrapper = fieldMetaData.getProperty("importExcel", true);
             if (valueWrapper.isTrue()) {
-                String title = fieldMetaData.getProperty("excel-header").getValue();
-                if (StringUtils.isNullOrEmpty(title)) {
-                    title = fieldMetaData.getComment();
-                }
-                if (StringUtils.isNullOrEmpty(title)) {
-                    title = fieldMetaData.getName();
-                }
+                String title = fieldMetaData.getProperty("excelHeader", fieldMetaData.getComment()).toString();
                 String field = fieldMetaData.getName();
                 headerMapper.put(title, field);
             }
@@ -416,5 +407,4 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         result.put("errorMessage", errorMessage);
         return result;
     }
-
 }
