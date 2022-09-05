@@ -43,11 +43,11 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector.LocalMetadataCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -395,8 +395,10 @@ public final class PyCommon {
     }
   }
 
-  /** @return A String that is the full path to the main python entry point. */
-  public String determineMainExecutableSource(boolean withWorkspaceName) {
+  /**
+   * @return A String that is the full path to the main python entry point.
+   */
+  public String determineMainExecutableSource() {
     String mainSourceName;
     Rule target = ruleContext.getRule();
     boolean explicitMain = target.isAttributeValueExplicitlySpecified("main");
@@ -432,26 +434,14 @@ public final class PyCommon {
       ruleContext.attributeError("srcs", buildNoMainMatchesErrorText(explicitMain, mainSourceName));
       return null;
     }
-    if (!withWorkspaceName) {
-      return mainArtifact.getRunfilesPath().getPathString();
-    }
+
     PathFragment workspaceName = new PathFragment(
         ruleContext.getRule().getPackage().getWorkspaceName());
     return workspaceName.getRelative(mainArtifact.getRunfilesPath()).getPathString();
   }
 
-  public String determineMainExecutableSource() {
-    return determineMainExecutableSource(true);
-  }
-
   public Artifact getExecutable() {
     return executable;
-  }
-  /** @return An artifact next to the executable file with ".zip" suffix */
-  public Artifact getPythonZipArtifact() {
-    PathFragment original = executable.getRootRelativePath();
-    return ruleContext.getDerivedArtifact(
-        original.replaceName(original.getBaseName() + ".zip"), executable.getRoot());
   }
 
   public Map<PathFragment, Artifact> getConvertedFiles() {

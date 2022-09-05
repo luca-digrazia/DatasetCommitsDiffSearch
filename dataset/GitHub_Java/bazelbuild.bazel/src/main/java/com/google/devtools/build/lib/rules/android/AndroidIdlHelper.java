@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -31,6 +30,7 @@ import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -106,13 +107,6 @@ public class AndroidIdlHelper {
   }
 
   /**
-   * Returns the root directory under which idl_srcs and idl_parcelables are located in this rule.
-   */
-  public String getIdlImportRoot() {
-    return hasExplicitlySpecifiedIdlImportRoot(ruleContext) ? getIdlImportRoot(ruleContext) : null;
-  }
-
-  /**
    * Returns the raw (non-processed) idl_srcs, not including parcelable marker files.
    */
   public Collection<Artifact> getIdlSources() {
@@ -153,25 +147,6 @@ public class AndroidIdlHelper {
     return idlSourceJar;
   }
 
-  public static boolean hasIdlSrcs(RuleContext ruleContext) {
-    return ruleContext.getRule().isAttrDefined("idl_srcs", BuildType.LABEL_LIST);
-  }
-
-  /**
-   * Returns a new list with the idl libs added to the given list if necessary, or the same list.
-   */
-  public static ImmutableList<TransitiveInfoCollection> addSupportLibs(RuleContext ruleContext,
-      ImmutableList<TransitiveInfoCollection> deps) {
-    TransitiveInfoCollection aidlLib = AndroidSdkProvider.fromRuleContext(ruleContext).getAidlLib();
-    if (aidlLib == null) {
-      return deps;
-    }
-    return ImmutableList.<TransitiveInfoCollection>builder()
-        .addAll(deps)
-        .add(aidlLib)
-        .build();
-  }
-
   /**
    * Generates an artifact by replacing the extension of the input with the suffix.
    */
@@ -195,7 +170,7 @@ public class AndroidIdlHelper {
    * Returns the idl_srcs defined on the given rule.
    */
   private static Collection<Artifact> getIdlSrcs(RuleContext ruleContext) {
-    if (!hasIdlSrcs(ruleContext)) {
+    if (!ruleContext.getRule().isAttrDefined("idl_srcs", BuildType.LABEL_LIST)) {
       return ImmutableList.of();
     }
     checkIdlSrcsSamePackage(ruleContext);
@@ -238,7 +213,8 @@ public class AndroidIdlHelper {
       PathFragment javaOutputPath = FileSystemUtils.replaceExtension(
           new PathFragment(ruleName + "_aidl").getRelative(idl.getRootRelativePath()),
           ".java");
-      Artifact output = ruleContext.getGenfilesArtifact(javaOutputPath.getPathString());
+      Artifact output = ruleContext.getPackageRelativeArtifact(
+          javaOutputPath, ruleContext.getConfiguration().getGenfilesDirectory());
       outputJavaSources.put(idl, output);
     }
     return outputJavaSources.build();
@@ -292,9 +268,7 @@ public class AndroidIdlHelper {
       Artifact idlClassJar,
       Artifact idlSourceJar) {
     String basename = FileSystemUtils.removeExtension(classJar.getExecPath().getBaseName());
-    PathFragment idlTempDir = ruleContext.getConfiguration()
-        .getBinDirectory(ruleContext.getRule().getRepository())
-        .getExecPath()
+    PathFragment idlTempDir = ruleContext.getConfiguration().getBinDirectory().getExecPath()
         .getRelative(ruleContext.getUniqueDirectory("_idl"))
         .getRelative(basename + "_temp");
     ruleContext.registerAction(new SpawnAction.Builder()
@@ -412,8 +386,8 @@ public class AndroidIdlHelper {
     }
     importsBuilder.addAll(idlImports);
 
-    return AndroidIdlProvider.create(
-        rootsBuilder.build(), importsBuilder.build(), jarsBuilder.build());
+    return new AndroidIdlProvider(rootsBuilder.build(),
+        importsBuilder.build(), jarsBuilder.build());
   }
 
   /**
