@@ -399,19 +399,17 @@ public final class SkylarkRuleContext {
   }
 
   @SkylarkCallable(doc =
-      "Creates a new file object, derived from the given file and suffix. " + DOC_NEW_FILE_TAIL
-      + " Deprecated.")
+      "Creates a new file object, derived from the given file and suffix. " + DOC_NEW_FILE_TAIL)
   public Artifact newFileSuffix(Artifact baseArtifact, String suffix) {
-    return newFile(baseArtifact, baseArtifact.getRootRelativePath().getBaseName() + suffix);
+    return newFile(baseArtifact, suffix);
   }
 
   @SkylarkCallable(doc =
-      "Creates a new file object in the same directory as the original file. "
-      + DOC_NEW_FILE_TAIL)
-
-  public Artifact newFile(Artifact baseArtifact, String newBaseName) {
+      "Creates a new file object, derived from the given file and suffix. " + DOC_NEW_FILE_TAIL
+      + " Deprecated: Please use ctx.new_file_suffix() instead.")
+  public Artifact newFile(Artifact baseArtifact, String suffix) {
     PathFragment original = baseArtifact.getRootRelativePath();
-    PathFragment fragment = original.replaceName(newBaseName);
+    PathFragment fragment = original.replaceName(original.getBaseName() + suffix);
     Root root = ruleContext.getBinOrGenfilesDirectory();
     return ruleContext.getDerivedArtifact(fragment, root);
   }
