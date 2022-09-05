@@ -300,7 +300,8 @@ public class CppCompileActionBuilder {
           actionContext,
           ImmutableList.copyOf(copts),
           getNocoptPredicate(nocopts),
-          ruleContext);
+          ruleContext,
+          usePic);
     } else {
       NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
 
@@ -327,6 +328,7 @@ public class CppCompileActionBuilder {
           specialInputsHandler,
           getLipoScannables(realMandatoryInputs),
           actionClassId,
+          usePic,
           executionRequirements,
           getActionName(),
           ruleContext);
@@ -396,10 +398,6 @@ public class CppCompileActionBuilder {
   public CppCompileActionBuilder setOutputFile(Artifact outputFile) {
     this.outputFile = outputFile;
     return this;
-  }
-
-  Artifact getOutputFile() {
-    return outputFile;
   }
 
   /**
