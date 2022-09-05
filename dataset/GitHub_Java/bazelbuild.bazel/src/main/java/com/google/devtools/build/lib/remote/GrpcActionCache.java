@@ -73,7 +73,11 @@ public final class GrpcActionCache implements RemoteActionCache {
   /** Channel over which to send gRPC CAS queries. */
   private final ManagedChannel channel;
 
-  private final RemoteOptions options;
+  // TODO(olaola): proper profiling to determine the best values for these.
+  private final int grpcTimeoutSeconds;
+  private final int maxBatchInputs;
+  private final int maxChunkSizeBytes;
+  private final int maxBatchSizeBytes;
 
   private static final int MAX_MEMORY_KBYTES = 512 * 1024;
 
@@ -134,7 +138,7 @@ public final class GrpcActionCache implements RemoteActionCache {
       } else {
         chunk.setOffset(offset);
       }
-      int size = Math.min(currentBlob.length - offset, options.grpcMaxChunkSizeBytes);
+      int size = Math.min(currentBlob.length - offset, maxChunkSizeBytes);
       if (size > 0) {
         chunk.setData(ByteString.copyFrom(currentBlob, offset, size));
         offset += size;
@@ -199,7 +203,7 @@ public final class GrpcActionCache implements RemoteActionCache {
         chunk.setOffset(offset);
       }
       if (bytesLeft > 0) {
-        byte[] blob = new byte[(int) Math.min(bytesLeft, (long) options.grpcMaxChunkSizeBytes)];
+        byte[] blob = new byte[(int) Math.min(bytesLeft, (long) maxChunkSizeBytes)];
         currentStream.read(blob);
         chunk.setData(ByteString.copyFrom(blob));
         bytesLeft -= blob.length;
@@ -214,8 +218,11 @@ public final class GrpcActionCache implements RemoteActionCache {
 
   @VisibleForTesting
   public GrpcActionCache(ManagedChannel channel, RemoteOptions options) {
-    this.options = options;
     this.channel = channel;
+    maxBatchInputs = options.grpcMaxBatchInputs;
+    maxChunkSizeBytes = options.grpcMaxChunkSizeBytes;
+    maxBatchSizeBytes = options.grpcMaxBatchSizeBytes;
+    grpcTimeoutSeconds = options.grpcTimeoutSeconds;
   }
 
   public GrpcActionCache(RemoteOptions options) throws InvalidConfigurationException {
@@ -228,12 +235,11 @@ public final class GrpcActionCache implements RemoteActionCache {
 
   private CasServiceBlockingStub getBlockingStub() {
     return CasServiceGrpc.newBlockingStub(channel)
-        .withDeadlineAfter(options.grpcTimeoutSeconds, TimeUnit.SECONDS);
+        .withDeadlineAfter(grpcTimeoutSeconds, TimeUnit.SECONDS);
   }
 
   private CasServiceStub getStub() {
-    return CasServiceGrpc.newStub(channel).withDeadlineAfter(
-        options.grpcTimeoutSeconds, TimeUnit.SECONDS);
+    return CasServiceGrpc.newStub(channel).withDeadlineAfter(grpcTimeoutSeconds, TimeUnit.SECONDS);
   }
 
   private ImmutableSet<ContentDigest> getMissingDigests(Iterable<ContentDigest> digests) {
@@ -502,15 +508,13 @@ public final class GrpcActionCache implements RemoteActionCache {
     int currentBatchBytes = 0;
     int batchedInputs = 0;
     int batches = 0;
-    CasServiceStub stub = getStub();
     try {
       while (blobs.hasNext()) {
         BlobChunk chunk = blobs.next();
         if (chunk.hasDigest()) {
           // Determine whether to start next batch.
-          final long batchSize = chunk.getDigest().getSizeBytes() + currentBatchBytes;
-          if (batchedInputs % options.grpcMaxBatchInputs == 0
-              || batchSize > options.grpcMaxBatchSizeBytes) {
+          if (batchedInputs % maxBatchInputs == 0
+              || chunk.getDigest().getSizeBytes() + currentBatchBytes > maxBatchSizeBytes) {
             // The batches execute simultaneously.
             if (requestObserver != null) {
               batchedInputs = 0;
@@ -519,7 +523,7 @@ public final class GrpcActionCache implements RemoteActionCache {
             }
             batches++;
             responseObserver = new UploadBlobReplyStreamObserver(finishLatch, exception);
-            requestObserver = stub.uploadBlob(responseObserver);
+            requestObserver = getStub().uploadBlob(responseObserver);
           }
           batchedInputs++;
         }
@@ -545,7 +549,7 @@ public final class GrpcActionCache implements RemoteActionCache {
     while (batches++ < numItems) {
       finishLatch.countDown(); // Non-sent batches.
     }
-    finishLatch.await(options.grpcTimeoutSeconds, TimeUnit.SECONDS);
+    finishLatch.await(grpcTimeoutSeconds, TimeUnit.SECONDS);
     if (exception.get() != null) {
       throw exception.get(); // Re-throw the first encountered exception.
     }
@@ -619,12 +623,13 @@ public final class GrpcActionCache implements RemoteActionCache {
   public ActionResult getCachedActionResult(ActionKey actionKey) {
     ExecutionCacheServiceBlockingStub stub =
         ExecutionCacheServiceGrpc.newBlockingStub(channel)
-            .withDeadlineAfter(options.grpcTimeoutSeconds, TimeUnit.SECONDS);
+            .withDeadlineAfter(grpcTimeoutSeconds, TimeUnit.SECONDS);
     ExecutionCacheRequest request =
         ExecutionCacheRequest.newBuilder().setActionDigest(actionKey.getDigest()).build();
     ExecutionCacheReply reply = stub.getCachedResult(request);
     ExecutionCacheStatus status = reply.getStatus();
     if (!status.getSucceeded()
+        && status.getError() != ExecutionCacheStatus.ErrorCode.UNSUPPORTED
         && status.getError() != ExecutionCacheStatus.ErrorCode.MISSING_RESULT) {
       throw new RuntimeException(status.getErrorDetail());
     }
@@ -637,7 +642,7 @@ public final class GrpcActionCache implements RemoteActionCache {
       throws InterruptedException {
     ExecutionCacheServiceBlockingStub stub =
         ExecutionCacheServiceGrpc.newBlockingStub(channel)
-            .withDeadlineAfter(options.grpcTimeoutSeconds, TimeUnit.SECONDS);
+            .withDeadlineAfter(grpcTimeoutSeconds, TimeUnit.SECONDS);
     ExecutionCacheSetRequest request =
         ExecutionCacheSetRequest.newBuilder()
             .setActionDigest(actionKey.getDigest())
@@ -645,8 +650,7 @@ public final class GrpcActionCache implements RemoteActionCache {
             .build();
     ExecutionCacheSetReply reply = stub.setCachedResult(request);
     ExecutionCacheStatus status = reply.getStatus();
-    if (!status.getSucceeded()
-        && status.getError() != ExecutionCacheStatus.ErrorCode.UNSUPPORTED) {
+    if (!status.getSucceeded()) {
       throw new RuntimeException(status.getErrorDetail());
     }
   }
