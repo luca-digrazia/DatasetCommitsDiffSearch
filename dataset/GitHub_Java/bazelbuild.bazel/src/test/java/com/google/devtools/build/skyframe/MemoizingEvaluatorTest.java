@@ -217,84 +217,6 @@ public class MemoizingEvaluatorTest {
   }
 
   @Test
-  public void crashAfterInterruptCrashes() throws Exception {
-    SkyKey failKey = GraphTester.skyKey("fail");
-    SkyKey badInterruptkey = GraphTester.skyKey("bad-interrupt");
-    tester.getOrCreate(failKey).setHasError(true);
-    // Given a SkyFunction implementation which is improperly coded to throw a runtime exception
-    // when it is interrupted,
-    tester
-        .getOrCreate(badInterruptkey)
-        .setBuilder(
-            new SkyFunction() {
-              @Nullable
-              @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) {
-                try {
-                  Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
-                  throw new AssertionError("Shouldn't have slept so long");
-                } catch (InterruptedException e) {
-                  throw new RuntimeException("I don't like being woken up!");
-                }
-              }
-
-              @Nullable
-              @Override
-              public String extractTag(SkyKey skyKey) {
-                return null;
-              }
-            });
-
-    try {
-      // When it is interrupted during evaluation (here, caused by the failure of a sibling node
-      // during a no-keep-going evaluation),
-      EvaluationResult<StringValue> unexpectedResult =
-          tester.eval(/*keepGoing=*/ false, badInterruptkey, failKey);
-      fail(unexpectedResult.toString());
-    } catch (RuntimeException e) {
-      // Then the Evaluator#evaluate call throws a RuntimeException e where e.getCause() is the
-      // RuntimeException thrown by that SkyFunction.
-      assertThat(e.getCause()).hasMessage("I don't like being woken up!");
-    }
-  }
-
-  @Test
-  public void interruptAfterFailFails() throws Exception {
-    SkyKey failKey = GraphTester.skyKey("fail");
-    SkyKey interruptedKey = GraphTester.skyKey("interrupted");
-    tester.getOrCreate(failKey).setHasError(true);
-    // Given a SkyFunction implementation that is properly coded to as not to throw a
-    // runtime exception when it is interrupted,
-    tester
-        .getOrCreate(interruptedKey)
-        .setBuilder(
-            new SkyFunction() {
-              @Nullable
-              @Override
-              public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
-                Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
-                throw new AssertionError("Shouldn't have slept so long");
-              }
-
-              @Nullable
-              @Override
-              public String extractTag(SkyKey skyKey) {
-                return null;
-              }
-            });
-
-    // When it is interrupted during evaluation (here, caused by the failure of a sibling node
-    // during a no-keep-going evaluation),
-    EvaluationResult<StringValue> result =
-        tester.eval(/*keepGoing=*/ false, interruptedKey, failKey);
-    // Then the Evaluator#evaluate call returns an EvaluationResult that has no error for the
-    // interrupted SkyFunction.
-    assertWithMessage(result.toString()).that(result.hasError()).isTrue();
-    assertWithMessage(result.toString()).that(result.getError(failKey)).isNotNull();
-    assertWithMessage(result.toString()).that(result.getError(interruptedKey)).isNull();
-  }
-
-  @Test
   public void deleteValues() throws Exception {
     tester.getOrCreate("top").setComputedValue(CONCATENATE)
         .addDependency("d1").addDependency("d2").addDependency("d3");
@@ -415,7 +337,7 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(false, "top");
       assertTrue(result.hasError());
-      if (rootCausesStored()) {
+      if (i == 0 || rootCausesStored()) {
         assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
       }
       assertEquals(topKey.toString(), result.getError(topKey).getException().getMessage());
@@ -435,7 +357,7 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(false, "top");
       assertTrue(result.hasError());
-      if (rootCausesStored()) {
+      if (i == 0 || rootCausesStored()) {
         assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
       }
       assertEquals(topKey.toString(), result.getError(topKey).getException().getMessage());
@@ -455,7 +377,7 @@ public class MemoizingEvaluatorTest {
       initializeReporter();
       EvaluationResult<StringValue> result = tester.eval(i == 0, "top");
       assertTrue(result.hasError());
-      if (rootCausesStored()) {
+      if (i == 0 || rootCausesStored()) {
         assertThat(result.getError(topKey).getRootCauses()).containsExactly(topKey);
       }
       assertEquals(topKey.toString(), result.getError(topKey).getException().getMessage());
@@ -3670,7 +3592,10 @@ public class MemoizingEvaluatorTest {
     public void initialize() {
       this.differencer = new RecordingDifferencer();
       this.evaluator =
-          getMemoizingEvaluator(getSkyFunctionMap(), differencer, invalidationReceiver);
+          getMemoizingEvaluator(
+              ImmutableMap.of(NODE_TYPE, createDelegatingFunction()),
+              differencer,
+              invalidationReceiver);
       this.driver = getBuildDriver(evaluator);
     }
 
@@ -3681,7 +3606,7 @@ public class MemoizingEvaluatorTest {
 
     public void invalidate() {
       differencer.invalidate(getModifiedValues());
-      clearModifiedValues();
+      getModifiedValues().clear();
       invalidationReceiver.clear();
     }
 
