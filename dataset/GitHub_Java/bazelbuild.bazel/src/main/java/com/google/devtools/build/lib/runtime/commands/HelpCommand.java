@@ -139,7 +139,7 @@ public final class HelpCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(OptionsParser optionsParser) {}
+  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
 
   @Override
   public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
