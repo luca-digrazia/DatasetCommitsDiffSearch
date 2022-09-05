@@ -82,19 +82,9 @@ public interface PersonnelAuthorization extends Serializable {
     Set<TreeNode<String>> getDepartmentIds();
 
     /**
-     * 获取人员的所有职位信息
-     *
-     * @return 职位信息
-     */
-    Set<Position> getPositions();
-
-    default Optional<Position> getPosition(String id) {
-        return getPositions().stream().filter(position -> position.getId().equals(id)).findFirst();
-    }
-
-    /**
      * @return 根地区ID
      */
+    @Deprecated
     default Set<String> getRootDistrictId() {
         return getDistrictIds().stream().map(TreeNode::getValue).collect(Collectors.toSet());
     }
