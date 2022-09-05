@@ -210,12 +210,10 @@ package android.taobao.atlas.framework;
 
 import android.os.*;
 import android.taobao.atlas.bundleInfo.AtlasBundleInfoManager;
-import android.taobao.atlas.bundleInfo.BundleListing;
 import android.taobao.atlas.runtime.LowDiskException;
 import android.taobao.atlas.runtime.RuntimeVariables;
 import android.taobao.atlas.util.ApkUtils;
 import android.taobao.atlas.util.FileUtils;
-import android.taobao.atlas.util.log.impl.AtlasMonitor;
 import android.taobao.atlas.versionInfo.BaselineInfoManager;
 import android.util.Log;
 import android.util.Pair;
@@ -616,6 +614,11 @@ public class BundleInstaller implements Callable{
 
     /**
      * 获取bundle源文件地址
+     *
+     * bundle finding order by follwing paths:
+     * 1) ${getApplicationInfo().dataDir}/lib/
+     * 2) ${getApplicationInfo().nativeLibraryDir}
+     * 3) apk's "lib/armeabi" path.
      * @param location
      */
     private void findBundleSource(String location) throws IOException{
@@ -625,10 +628,13 @@ public class BundleInstaller implements Callable{
         String bundleFileName = String.format("lib%s.so",location.replace(".","_"));
         String bundlePath = String.format("%s/lib/%s", dataDir,bundleFileName);
         File bundleFile = new File(bundlePath);
-        BundleListing.BundleInfo info = AtlasBundleInfoManager.instance().getBundleInfo(location);
-        if(bundleFile.exists() && info.isInternal() && (info.getSize()>0 && info.getSize() == bundleFile.length())){
+
+
+        if(!bundleFile.exists()){
+            bundleFile = new File(RuntimeVariables.androidApplication.getApplicationInfo().nativeLibraryDir,bundleFileName);
+        }
+        if(bundleFile.exists() && AtlasBundleInfoManager.instance().isInternalBundle(location)){
             mTmpBundleSourceFile = bundleFile;
-            Log.e("BundleInstaller","find valid bundle : "+bundleFile.getAbsolutePath());
         }else{
             if(ApkUtils.getApk()!=null){
                 ZipEntry entry = ApkUtils.getApk().getEntry("lib/armeabi/" + bundleFileName);
@@ -647,8 +653,6 @@ public class BundleInstaller implements Callable{
         }else if(mTmpBundleSourceInputStream!=null){
             bundle = Framework.installNewBundle(bundleName,mTmpBundleSourceInputStream);
         }else{
-            AtlasMonitor.getInstance().trace(AtlasMonitor.CONTAINER_BUNDLE_SOURCE_MISMATCH,
-                    false, "0", "can not find bundle source file!", "");
             throw new IOException("can not find bundle source file");
         }
         return bundle;
