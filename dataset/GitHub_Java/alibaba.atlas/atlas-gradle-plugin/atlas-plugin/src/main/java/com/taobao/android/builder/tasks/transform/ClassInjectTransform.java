@@ -237,15 +237,15 @@ import javassist.ClassPool;
 import javassist.NotFoundException;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.gradle.api.GradleException;
+import org.dom4j.DocumentException;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.tasks.StopExecutionException;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
- * Code injection classes
- * Created by shenghua.nish on 2016-06-15 Instant in the afternoon.
+ * 做代码注入的类
+ * Created by shenghua.nish on 2016-06-15 下午2:38.
  */
 public class ClassInjectTransform extends MtlInjectTransform {
 
@@ -273,8 +273,8 @@ public class ClassInjectTransform extends MtlInjectTransform {
     }
 
     @Override
-    public Set<QualifiedContent.ScopeType> getScopes() {
-        return TransformManager.SCOPE_FULL_INSTANT_RUN_PROJECT;
+    public Set<QualifiedContent.Scope> getScopes() {
+        return TransformManager.SCOPE_FULL_PROJECT;
     }
 
     @Override
@@ -301,13 +301,8 @@ public class ClassInjectTransform extends MtlInjectTransform {
 
         InjectParam injectParam = null;
         try {
-
-            injectParam = AtlasBuildContext.sBuilderAdapter.apkInjectInfoCreator.creteInjectParam(appVariantContext);
-
-            injectParam.outputFile = new File(appVariantContext.getProject().getBuildDir(),
-                                              "outputs/atlasFrameworkProperties.json");
-
-        } catch (Exception e) {
+            injectParam = AtlasBuildContext.sApkInjectInfoCreator.creteInjectParam(appVariantContext);
+        } catch (DocumentException e) {
             throw new TransformException(e);
         }
 
@@ -315,37 +310,29 @@ public class ClassInjectTransform extends MtlInjectTransform {
 
             File to = getOutputFile(outputProvider, jarInput);
 
-            //Only to atlas Code injection, No more jarmerge
+            //只对 atlas 做代码注入, 没有做多jarmerge
             if (injectParam.removePreverify && !isAtlasDependency(jarInput.getFile(), to) && jarInputs.size() > 1) {
                 FileUtils.copyFile(jarInput.getFile(), to);
             } else {
-                try {
-                    CodeInjectByJavassist.inject(classPool, jarInput.getFile(), to, injectParam);
-                } catch (Exception e) {
-                    throw new GradleException(e.getMessage(), e);
-                }
+                CodeInjectByJavassist.inject(classPool, jarInput.getFile(), to, injectParam);
             }
         }
 
-        // Inject the code in the directory
+        // 注入目录中的代码
         for (DirectoryInput directoryInput : directoryInputs) {
             if (null != logger) {
                 logger.debug("[ClassInject]" + directoryInput.getFile().getAbsolutePath());
             }
             String folderName = directoryInput.getFile().getName();
             File to = outputProvider.getContentLocation(folderName,
-                                                        directoryInput.getContentTypes(),
-                                                        directoryInput.getScopes(),
+                                                        getOutputTypes(),
+                                                        getScopes(),
                                                         Format.DIRECTORY);
             if (!injectParam.removePreverify) {
-                try {
-                    CodeInjectByJavassist.injectFolder(classPool,
-                                                       directoryInput.getFile(),
-                                                       to,
-                                                       injectParam);
-                } catch (Exception e) {
-                    throw new GradleException(e.getMessage(), e);
-                }
+                CodeInjectByJavassist.injectFolder(classPool,
+                                                   directoryInput.getFile(),
+                                                   to,
+                                                   injectParam);
             } else {
 
                 FileUtils.copyDirectory(directoryInput.getFile(), to);
@@ -376,7 +363,7 @@ public class ClassInjectTransform extends MtlInjectTransform {
                 e.printStackTrace();
             }
         } else {
-            //logger.warn(">>> Do not open daemon <<<<");
+            //logger.warn(">>> 请勿开启daemon <<<<");
         }
 
         final ClassPool pool = ClassPool.getDefault();

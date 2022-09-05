@@ -221,14 +221,18 @@ import com.android.builder.core.ErrorReporter;
 import com.taobao.android.builder.AtlasBuildContext;
 import com.taobao.android.builder.AtlasPlugin;
 import com.taobao.android.builder.extension.AtlasExtension;
+import com.taobao.android.builder.extension.PatchConfig;
 import com.taobao.android.builder.extension.TBuildConfig;
+import com.taobao.android.builder.extension.TBuildType;
+import com.taobao.android.builder.extension.factory.PatchConfigFactory;
+import com.taobao.android.builder.extension.factory.TBuildTypeFactory;
 import com.taobao.android.builder.hook.AppPluginHook;
 import com.taobao.android.builder.tools.PluginTypeUtils;
 import com.taobao.android.builder.tools.ReflectUtils;
-
 import org.codehaus.groovy.runtime.DefaultGroovyMethods;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
+import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.internal.reflect.Instantiator;
@@ -241,7 +245,7 @@ import org.gradle.internal.reflect.Instantiator;
  */
 public class AtlasConfigurationHelper {
 
-    private final AppPluginHook appPluginHook;
+    private AppPluginHook appPluginHook;
 
     public AtlasConfigurationHelper(Project project, Instantiator instantiator, String creator) {
         this.project = project;
@@ -253,22 +257,19 @@ public class AtlasConfigurationHelper {
 
     public void createLibCompenents() {
 
-        Configuration compileConfiguration = project.getConfigurations()
-                .getByName(COMPILE_CONFIGURATION_NAME);
+        Configuration compileConfiguration = project.getConfigurations().getByName(COMPILE_CONFIGURATION_NAME);
 
-        project.getComponents()
-                .add(new AndroidComponent(compileConfiguration,
-                                          compileConfiguration.getAllDependencies()));
+        project.getComponents().add(
+            new AndroidComponent(compileConfiguration, compileConfiguration.getAllDependencies()));
 
         //add provided compile
         if (null == project.getConfigurations().findByName(AtlasPlugin.PROVIDED_COMPILE)) {
-            project.getConfigurations()
-                    .create(AtlasPlugin.PROVIDED_COMPILE, new Action<Configuration>() {
-                        @Override
-                        public void execute(Configuration config) {
-                            compileConfiguration.extendsFrom(config);
-                        }
-                    });
+            project.getConfigurations().create(AtlasPlugin.PROVIDED_COMPILE, new Action<Configuration>() {
+                @Override
+                public void execute(Configuration config) {
+                    compileConfiguration.extendsFrom(config);
+                }
+            });
         }
 
         //project.getConfigurations().create(AtlasPlugin.BUNDLE_COMPILE);
@@ -279,6 +280,7 @@ public class AtlasConfigurationHelper {
                 compileConfiguration.extendsFrom(config);
             }
         });
+
     }
 
     /**
@@ -286,9 +288,18 @@ public class AtlasConfigurationHelper {
      **/
     public AtlasExtension createExtendsion() {
 
-        this.atlasExtension = AtlasBuildContext.sBuilderAdapter.extensionFactory.createExtendsion(
-                project,
-                instantiator);
+        final NamedDomainObjectContainer<TBuildType> buildTypeContainer = project.container(TBuildType.class,
+                                                                                            new TBuildTypeFactory(
+                                                                                                instantiator, project,
+                                                                                                project.getLogger()));
+        final NamedDomainObjectContainer<PatchConfig> patchConfigContainer = project.container(PatchConfig.class,
+                                                                                               new PatchConfigFactory(
+                                                                                                   instantiator,
+                                                                                                   project, project
+                                                                                                       .getLogger()));
+
+        this.atlasExtension = project.getExtensions().create("atlas", AtlasExtension.class, project, instantiator,
+                                                             buildTypeContainer, patchConfigContainer);
 
         return atlasExtension;
     }
@@ -310,15 +321,16 @@ public class AtlasConfigurationHelper {
         if (atlasExtension.isAtlasEnabled()) {
             TBuildConfig tBuildConfig = atlasExtension.getTBuildConfig();
             //            tBuildConfig.setAaptConstantId(false);
-            //tBuildConfig.setClassInject(true);
-            // tBuildConfig.setCreateAP(true);
+            tBuildConfig.setClassInject(true);
+            tBuildConfig.setCreateAP(true);
             tBuildConfig.setUseCustomAapt(true);
             atlasExtension.getManifestOptions().setAddMultiDexMetaData(true);
-            //atlasExtension.getManifestOptions().setAddBundleLocation(true);
+            atlasExtension.getManifestOptions().setAddBundleLocation(true);
             atlasExtension.getManifestOptions().setReplaceApplication(true);
         } else {
             atlasExtension.getManifestOptions().setReplaceApplication(false);
         }
+
     }
 
     public void createBuilderAfterEvaluate() throws Exception {
@@ -329,44 +341,30 @@ public class AtlasConfigurationHelper {
             return;
         }
 
-        AndroidBuilder atlasBuilder = new AtlasBuilder(project.equals(project.getRootProject()) ? project
-                .getName() : project.getPath(),
-                                                       creator,
-                                                       new GradleProcessExecutor(project),
-                                                       new GradleJavaProcessExecutor(project),
-                                                       DefaultGroovyMethods.asType(ReflectUtils.getField(
-                                                               androidBuilder,
-                                                               "mErrorReporter"),
-                                                                                   ErrorReporter.class),
-                                                       LoggerWrapper.getLogger(AtlasBuilder.class),
-                                                       DefaultGroovyMethods.asType(ReflectUtils.getField(
-                                                               androidBuilder,
-                                                               "mVerboseExec"), Boolean.class));
+        AndroidBuilder atlasBuilder = new AtlasBuilder(
+            project.equals(project.getRootProject()) ? project.getName() : project.getPath(), creator,
+            new GradleProcessExecutor(project), new GradleJavaProcessExecutor(project),
+            DefaultGroovyMethods.asType(ReflectUtils.getField(androidBuilder, "mErrorReporter"), ErrorReporter.class),
+            LoggerWrapper.getLogger(AtlasBuilder.class),
+            DefaultGroovyMethods.asType(ReflectUtils.getField(androidBuilder, "mVerboseExec"), Boolean.class));
 
-        ((AtlasBuilder) atlasBuilder).setDefaultBuilder(androidBuilder);
-        ((AtlasBuilder) atlasBuilder).setAtlasExtension(atlasExtension);
-        AtlasBuildContext.androidBuilderMap.put(project, (AtlasBuilder) (atlasBuilder));
+        ((AtlasBuilder)atlasBuilder).setDefaultBuilder(androidBuilder);
+        ((AtlasBuilder)atlasBuilder).setAtlasExtension(atlasExtension);
+        AtlasBuildContext.androidBuilder = ((AtlasBuilder)(atlasBuilder));
     }
 
     public void configTasksAfterEvaluate() {
 
         if (PluginTypeUtils.isAppProject(project)) {
-            AppExtension appExtension = DefaultGroovyMethods.asType(DefaultGroovyMethods.getAt(
-                    project.getExtensions(),
-                    "android"), AppExtension.class);
-            new AtlasAppTaskManager(AtlasBuildContext.androidBuilderMap.get(project),
-                                    appExtension,
-                                    project,
-                                    atlasExtension).run();
+            AppExtension appExtension = DefaultGroovyMethods.asType(
+                DefaultGroovyMethods.getAt(project.getExtensions(), "android"), AppExtension.class);
+            new AtlasAppTaskManager(AtlasBuildContext.androidBuilder, appExtension, project, atlasExtension).run();
         } else if (PluginTypeUtils.isLibraryProject(project)) {
-            LibraryExtension libExtension = DefaultGroovyMethods.asType(DefaultGroovyMethods.getAt(
-                    project.getExtensions(),
-                    "android"), LibraryExtension.class);
-            new AtlasLibTaskManager(AtlasBuildContext.androidBuilderMap.get(project),
-                                    libExtension,
-                                    project,
-                                    atlasExtension).run();
+            LibraryExtension libExtension = DefaultGroovyMethods.asType(
+                DefaultGroovyMethods.getAt(project.getExtensions(), "android"), LibraryExtension.class);
+            new AtlasLibTaskManager(AtlasBuildContext.androidBuilder, libExtension, project, atlasExtension).run();
         }
+
     }
 
     public Project getProject() {
@@ -394,12 +392,9 @@ public class AtlasConfigurationHelper {
     }
 
     private Project project;
-
     private Instantiator instantiator;
-
     private String creator;
-
     public static final String COMPILE_CONFIGURATION_NAME = "compile";
-
     protected AtlasExtension atlasExtension;
+
 }
