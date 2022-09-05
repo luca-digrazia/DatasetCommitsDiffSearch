@@ -18,14 +18,13 @@
 
 package org.hswebframework.web.authorization;
 
+import org.apache.commons.collections.CollectionUtils;
 import org.hswebframework.web.authorization.simple.SimpleAuthentication;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -42,20 +41,30 @@ import java.util.stream.Collectors;
  *
  * @author zhouhao
  * @see ReactiveAuthenticationSupplier
- * @since 3.0
+ * @since 4.0
  */
 public final class ReactiveAuthenticationHolder {
-    private static final List<ReactiveAuthenticationSupplier> suppliers = new ArrayList<>();
-
-    private static final ReadWriteLock lock = new ReentrantReadWriteLock();
+    private static final List<ReactiveAuthenticationSupplier> suppliers = new CopyOnWriteArrayList<>();
 
     private static Mono<Authentication> get(Function<ReactiveAuthenticationSupplier, Mono<Authentication>> function) {
 
-        return Flux.concat(suppliers.stream()
-                .map(function)
-                .collect(Collectors.toList()))
-                .reduceWith(SimpleAuthentication::new, Authentication::merge)
-                .filter(a -> a.getUser() != null);
+        return Flux
+                .merge(suppliers
+                               .stream()
+                               .map(function)
+                               .collect(Collectors.toList()))
+                .collectList()
+                .filter(CollectionUtils::isNotEmpty)
+                .map(all -> {
+                    if (all.size() == 1) {
+                        return all.get(0);
+                    }
+                    SimpleAuthentication authentication = new SimpleAuthentication();
+                    for (Authentication auth : all) {
+                        authentication.merge(auth);
+                    }
+                    return authentication;
+                });
     }
 
     /**
@@ -82,12 +91,12 @@ public final class ReactiveAuthenticationHolder {
      * @param supplier
      */
     public static void addSupplier(ReactiveAuthenticationSupplier supplier) {
-        lock.writeLock().lock();
-        try {
-            suppliers.add(supplier);
-        } finally {
-            lock.writeLock().unlock();
-        }
+        suppliers.add(supplier);
+    }
+
+    public static void setSupplier(ReactiveAuthenticationSupplier supplier) {
+        suppliers.clear();
+        suppliers.add(supplier);
     }
 
 }
