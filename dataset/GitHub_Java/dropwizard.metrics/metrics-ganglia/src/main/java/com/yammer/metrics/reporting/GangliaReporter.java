@@ -44,7 +44,7 @@ public class GangliaReporter implements Runnable {
     private byte[] buffer = new byte[BUFFER_SIZE];
     private int offset;
     private DatagramSocket socket;
-    private String hostLabel;
+    private String hostName;
 
 
     /**
@@ -131,7 +131,7 @@ public class GangliaReporter implements Runnable {
         this.metricsRegistry = metricsRegistry;
         this.gangliaHost = gangliaHost;
         this.port = port;
-        this.hostLabel = getHostLabel();
+        this.hostName = getHostName();
         this.predicate = predicate;
         socket = new DatagramSocket();
     }
@@ -179,9 +179,9 @@ public class GangliaReporter implements Runnable {
 
     }
 
-    private void sendToGanglia(String metricName, String metricType, String metricValue, String groupName, String units) {
+    private void sendToGanglia(String metricName, String metricType, String metricValue, String groupName) {
         try {
-            sendMetricData(metricType, metricName, metricValue, groupName, units);
+            sendMetricData(metricType, metricName, metricValue, groupName);
             if (log.isDebugEnabled()) {
                 log.debug("Emitting metric " + metricName + ", type " + metricType + ", value " + metricValue + " for gangliaHost: " + gangliaHost + ":" + port);
             }
@@ -190,19 +190,15 @@ public class GangliaReporter implements Runnable {
         }
     }
 
-    private void sendToGanglia(String metricName, String metricType, String metricValue, String groupName) {
-        sendToGanglia(metricName, metricType, metricValue, groupName, "");
-    }
-
-    private void sendMetricData(String metricType, String metricName, String metricValue, String groupName, String units) throws IOException {
+    private void sendMetricData(String metricType, String metricName, String metricValue, String groupName) throws IOException {
         offset = 0;
         xdrInt(128); // metric_id = metadata_msg
-        xdrString(hostLabel); // hostname
+        xdrString(hostName); // hostname
         xdrString(metricName); // metric name
         xdrInt(0); // spoof = True
         xdrString(metricType); // metric type
         xdrString(metricName); // metric name
-        xdrString(units); // units
+        xdrString(""); // units
         xdrInt(3); // slope see gmetric.c
         xdrInt(GANGLIA_TMAX); // tmax, the maximum time between metrics
         xdrInt(GANGLIA_DMAX); // dmax, the maximum data value
@@ -213,7 +209,7 @@ public class GangliaReporter implements Runnable {
 
         offset = 0;
         xdrInt(133); // we are sending a string value
-        xdrString(hostLabel); // hostLabel
+        xdrString(hostName); // hostName
         xdrString(metricName); // metric name
         xdrInt(0); // spoof = True
         xdrString("%s"); // format field
@@ -273,19 +269,17 @@ public class GangliaReporter implements Runnable {
 
     private void printMetered(Metered meter, String name) {
         final String sanitizedName = sanitizeName(name);
-        final String units = meter.rateUnit().name();
-        printLongField(sanitizedName + ".count", meter.count(), "metered", units);
-        printDoubleField(sanitizedName + ".meanRate", meter.meanRate(), "metered", units);
-        printDoubleField(sanitizedName + ".1MinuteRate", meter.oneMinuteRate(), "metered", units);
-        printDoubleField(sanitizedName + ".5MinuteRate", meter.fiveMinuteRate(), "metered", units);
-        printDoubleField(sanitizedName + ".15MinuteRate", meter.fifteenMinuteRate(), "metered", units);
+        printLongField(sanitizedName + ".count", meter.count(), "metered");
+        printDoubleField(sanitizedName + ".meanRate", meter.meanRate(), "metered");
+        printDoubleField(sanitizedName + ".1MinuteRate", meter.oneMinuteRate(), "metered");
+        printDoubleField(sanitizedName + ".5MinuteRate", meter.fiveMinuteRate(), "metered");
+        printDoubleField(sanitizedName + ".15MinuteRate", meter.fifteenMinuteRate(), "metered");
     }
 
     private void printHistogram(HistogramMetric histogram, String name) {
         final String sanitizedName = sanitizeName(name);
         final double[] percentiles = histogram.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
 
-        // TODO:  what units make sense for histograms?  should we add event type to the Histogram metric?
         printDoubleField(sanitizedName + ".min", histogram.min(), "histo");
         printDoubleField(sanitizedName + ".max", histogram.max(), "histo");
         printDoubleField(sanitizedName + ".mean", histogram.mean(), "histo");
@@ -302,34 +296,24 @@ public class GangliaReporter implements Runnable {
         printMetered(timer, name);
         final String sanitizedName = sanitizeName(name);
         final double[] percentiles = timer.percentiles(0.5, 0.75, 0.95, 0.98, 0.99, 0.999);
-        final String durationUnit = timer.durationUnit().name();
-        printDoubleField(sanitizedName + ".min", timer.min(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".max", timer.max(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".mean", timer.mean(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".stddev", timer.stdDev(), "timer", durationUnit);
-        printDoubleField(sanitizedName + ".median", percentiles[0], "timer", durationUnit);
-        printDoubleField(sanitizedName + ".75percentile", percentiles[1], "timer", durationUnit);
-        printDoubleField(sanitizedName + ".95percentile", percentiles[2], "timer", durationUnit);
-        printDoubleField(sanitizedName + ".98percentile", percentiles[3], "timer", durationUnit);
-        printDoubleField(sanitizedName + ".99percentile", percentiles[4], "timer", durationUnit);
-        printDoubleField(sanitizedName + ".999percentile", percentiles[5], "timer", durationUnit);
-    }
-
-    private void printDoubleField(String name, double value, String groupName, String units) {
-        sendToGanglia(sanitizeName(name), GANGLIA_DOUBLE_TYPE, String.format(locale, "%2.2f", value), groupName, units);
+        printDoubleField(sanitizedName + ".min", timer.min(), "timer");
+        printDoubleField(sanitizedName + ".max", timer.max(), "timer");
+        printDoubleField(sanitizedName + ".mean", timer.mean(), "timer");
+        printDoubleField(sanitizedName + ".stddev", timer.stdDev(), "timer");
+        printDoubleField(sanitizedName + ".median", percentiles[0], "timer");
+        printDoubleField(sanitizedName + ".75percentile", percentiles[1], "timer");
+        printDoubleField(sanitizedName + ".95percentile", percentiles[2], "timer");
+        printDoubleField(sanitizedName + ".98percentile", percentiles[3], "timer");
+        printDoubleField(sanitizedName + ".99percentile", percentiles[4], "timer");
+        printDoubleField(sanitizedName + ".999percentile", percentiles[5], "timer");
     }
 
     private void printDoubleField(String name, double value, String groupName) {
-        printDoubleField(name, value, groupName, "");
+        sendToGanglia(sanitizeName(name), GANGLIA_DOUBLE_TYPE, String.format(locale, "%2.2f", value), groupName);
     }
 
     private void printLongField(String name, long value, String groupName) {
-        printLongField(name, value, groupName, "");
-    }
-
-    private void printLongField(String name, long value, String groupName, String units) {
-        // TODO:  ganglia does not support int64, what should we do here?
-        sendToGanglia(sanitizeName(name), GANGLIA_INT_TYPE, String.format(locale, "%d", value), groupName, units);
+        sendToGanglia(sanitizeName(name), GANGLIA_INT_TYPE, String.format(locale, "%d", value), groupName);
     }
 
     private void printVmMetrics() {
@@ -354,10 +338,11 @@ public class GangliaReporter implements Runnable {
         }
     }
 
-    private String getHostLabel() {
+    public String getHostName() {
         try {
             InetAddress addr = InetAddress.getLocalHost();
-            return addr.getHostAddress() + ":" + addr.getHostName();
+            // for some reason ganglia needs a colon before hostname...
+            return "x:" + addr.getHostName();
         } catch (UnknownHostException e) {
             log.error("Unable to get local gangliaHost name: ", e);
             return "unknown";
