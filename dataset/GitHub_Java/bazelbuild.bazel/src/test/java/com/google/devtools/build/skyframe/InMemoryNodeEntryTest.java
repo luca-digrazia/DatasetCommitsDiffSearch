@@ -26,7 +26,6 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.NodeEntry.DependencyState;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
@@ -657,9 +656,8 @@ public class InMemoryNodeEntryTest {
     }
     entry.setValue(new IntegerValue(42), new IntVersion(42L));
     int i = 0;
-    GroupedList<SkyKey> entryGroupedDirectDeps = entry.getGroupedDirectDeps();
-    assertThat(Iterables.size(entryGroupedDirectDeps)).isEqualTo(groupedDirectDeps.size());
-    for (Iterable<SkyKey> depGroup : entryGroupedDirectDeps) {
+    assertThat(Iterables.size(entry.getGroupedDirectDeps())).isEqualTo(groupedDirectDeps.size());
+    for (Iterable<SkyKey> depGroup : entry.getGroupedDirectDeps()) {
       assertThat(depGroup).containsExactlyElementsIn(groupedDirectDeps.get(i++));
     }
   }
