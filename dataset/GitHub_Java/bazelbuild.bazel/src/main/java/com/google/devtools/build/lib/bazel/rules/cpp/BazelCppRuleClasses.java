@@ -107,6 +107,28 @@ public class BazelCppRuleClasses {
         }
       };
 
+  /**
+   * Label of a pseudo-filegroup that contains all crosstool and libcfiles for
+   * all configurations, as specified on the command-line.
+   */
+  public static final String CROSSTOOL_LABEL = "//tools/defaults:crosstool";
+
+  public static final LateBoundLabel<BuildConfiguration> DEFAULT_MALLOC =
+      new LateBoundLabel<BuildConfiguration>() {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          return configuration.getFragment(CppConfiguration.class).customMalloc();
+        }
+      };
+
+  public static final LateBoundLabel<BuildConfiguration> CC_TOOLCHAIN =
+      new LateBoundLabel<BuildConfiguration>(CROSSTOOL_LABEL) {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+          return configuration.getFragment(CppConfiguration.class).getCcToolchainRuleLabel();
+        }
+      };
+
   public static final LateBoundLabel<BuildConfiguration> STL =
       new LateBoundLabel<BuildConfiguration>() {
         @Override
@@ -156,11 +178,7 @@ public class BazelCppRuleClasses {
 
   static final String[] DEPS_ALLOWED_RULES =
       new String[] {
-        "cc_inc_library",
-        "cc_library",
-        "objc_library",
-        "experimental_objc_library",
-        "cc_proto_library",
+        "cc_inc_library", "cc_library", "objc_library", "experimental_objc_library",
       };
 
   /**
@@ -172,7 +190,7 @@ public class BazelCppRuleClasses {
     @SuppressWarnings("unchecked")
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          .add(attr(":cc_toolchain", LABEL).value(CppRuleClasses.CC_TOOLCHAIN))
+          .add(attr(":cc_toolchain", LABEL).value(CC_TOOLCHAIN))
           .setPreferredDependencyPredicate(Predicates.<String>or(CPP_SOURCE, C_SOURCE, CPP_HEADER))
           .build();
     }
@@ -474,29 +492,6 @@ public class BazelCppRuleClasses {
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr("hdrs", LABEL_LIST).orderIndependent().direct_compile_time_input()
               .allowedFileTypes(FileTypeSet.ANY_FILE))
-          /* <!-- #BLAZE_RULE($cc_library).ATTRIBUTE(strip_include_prefix) -->
-          The prefix to strip from the paths of the headers of this rule.
-
-          <p>When set, the headers in the <code>hdrs</code> attribute of this rule are accessible
-          at their path with this prefix cut off.
-
-          <p>If it's a relative path, it's taken as a package-relative one. If it's an absolute one,
-          it's understood as a repository-relative path.
-
-          <p>The prefix in the <code>include_prefix</code> attribute is added after this prefix is
-          stripped.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(attr("strip_include_prefix", STRING))
-          /* <!-- #BLAZE_RULE($cc_library).ATTRIBUTE(include_prefix) -->
-          The prefix to add to the paths of the headers of this rule.
-
-          <p>When set, the headers in the <code>hdrs</code> attribute of this rule are accessible
-          at is the value of this attribute prepended to their repository-relative path.
-
-          <p>The prefix in the <code>strip_include_prefix</code> attribute is removed beforethis
-          prefix is added.
-          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(attr("include_prefix", STRING))
           /* <!-- #BLAZE_RULE($cc_library).ATTRIBUTE(textual_hdrs) -->
            The list of header files published by
            this library to be textually included by sources in dependent rules.
@@ -541,7 +536,7 @@ public class BazelCppRuleClasses {
                   .value(env.getToolsLabel("//tools/cpp:malloc"))
                   .allowedFileTypes()
                   .allowedRuleClasses("cc_library"))
-          .add(attr(":default_malloc", LABEL).value(CppRuleClasses.DEFAULT_MALLOC))
+          .add(attr(":default_malloc", LABEL).value(DEFAULT_MALLOC))
           /*<!-- #BLAZE_RULE($cc_binary_base).ATTRIBUTE(stamp) -->
           Enable link stamping.
           Whether to encode build information into the binary. Possible values:
