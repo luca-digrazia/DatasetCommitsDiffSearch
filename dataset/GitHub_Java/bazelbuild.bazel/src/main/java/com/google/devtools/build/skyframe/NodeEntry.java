@@ -16,8 +16,10 @@ package com.google.devtools.build.skyframe;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
+
 import java.util.Collection;
 import java.util.Set;
+
 import javax.annotation.Nullable;
 
 /**
@@ -25,9 +27,6 @@ import javax.annotation.Nullable;
  *
  * <p>This interface is public only for the benefit of alternative graph implementations outside of
  * the package.
- *
- * <p>Certain graph implementations' node entries can throw {@link InterruptedException} on various
- * accesses. Such exceptions should not be caught locally -- they should be allowed to propagate up.
  */
 public interface NodeEntry extends ThinNodeEntry {
   /**
@@ -82,39 +81,8 @@ public interface NodeEntry extends ThinNodeEntry {
    * this node is complete, i.e., after {@link #setValue} has been called.
    */
   @ThreadSafe
-  SkyValue getValue() throws InterruptedException;
+  SkyValue getValue();
 
-  /**
-   * Returns an immutable iterable of the direct deps of this node. This method may only be called
-   * after the evaluation of this node is complete.
-   *
-   * <p>This method is not very efficient, but is only be called in limited circumstances -- when
-   * the node is about to be deleted, or when the node is expected to have no direct deps (in which
-   * case the overhead is not so bad). It should not be called repeatedly for the same node, since
-   * each call takes time proportional to the number of direct deps of the node.
-   */
-  @ThreadSafe
-  Iterable<SkyKey> getDirectDeps() throws InterruptedException;
-
-  /** Removes a reverse dependency. */
-  @ThreadSafe
-  void removeReverseDep(SkyKey reverseDep) throws InterruptedException;
-
-  /**
-   * Removes a reverse dependency.
-   *
-   * <p>May only be called if this entry is not done (i.e. {@link #isDone} is false) and {@param
-   * reverseDep} is present in {@link #getReverseDeps}
-   */
-  @ThreadSafe
-  void removeInProgressReverseDep(SkyKey reverseDep);
-
-  /**
-   * Returns a copy of the set of reverse dependencies. Note that this introduces a potential
-   * check-then-act race; {@link #removeReverseDep} may fail for a key that is returned here.
-   */
-  @ThreadSafe
-  Iterable<SkyKey> getReverseDeps() throws InterruptedException;
 
   /**
    * Returns raw {@link SkyValue} stored in this entry, which may include metadata associated with
@@ -124,19 +92,21 @@ public interface NodeEntry extends ThinNodeEntry {
    * <p>Use the static methods of {@link ValueWithMetadata} to extract metadata if necessary.
    */
   @ThreadSafe
-  SkyValue getValueMaybeWithMetadata() throws InterruptedException;
-
-  /** Returns the value, even if dirty or changed. Returns null otherwise. */
-  @ThreadSafe
-  SkyValue toValue() throws InterruptedException;
+  SkyValue getValueMaybeWithMetadata();
 
   /**
-   * Returns the error, if any, associated to this node. This method may only be called after the
-   * evaluation of this node is complete, i.e., after {@link #setValue} has been called.
+   * Returns the value, even if dirty or changed. Returns null otherwise.
+   */
+  @ThreadSafe
+  SkyValue toValue();
+
+  /**
+   * Returns the error, if any, associated to this node. This method may only be called after
+   * the evaluation of this node is complete, i.e., after {@link #setValue} has been called.
    */
   @Nullable
   @ThreadSafe
-  ErrorInfo getErrorInfo() throws InterruptedException;
+  ErrorInfo getErrorInfo();
 
   /**
    * Returns the set of reverse deps that have been declared so far this build. Only for use in
@@ -152,9 +122,10 @@ public interface NodeEntry extends ThinNodeEntry {
    * signaled.
    *
    * <p>This is an atomic operation to avoid a race where two threads work on two nodes, where one
-   * node depends on another (b depends on a). When a finishes, it signals <b>exactly</b> the set of
-   * reverse dependencies that are registered at the time of the {@code setValue} call. If b comes
-   * in before a, it is signaled (and re-scheduled) by a, otherwise it needs to do that itself.
+   * node depends on another (b depends on a). When a finishes, it signals <b>exactly</b> the set
+   * of reverse dependencies that are registered at the time of the {@code setValue} call. If b
+   * comes in before a, it is signaled (and re-scheduled) by a, otherwise it needs to do that
+   * itself.
    *
    * <p>{@code version} indicates the graph version at which this node is being written. If the
    * entry determines that the new value is equal to the previous value, the entry will keep its
@@ -162,13 +133,13 @@ public interface NodeEntry extends ThinNodeEntry {
    * changed.
    */
   @ThreadSafe
-  Set<SkyKey> setValue(SkyValue value, Version version) throws InterruptedException;
+  Set<SkyKey> setValue(SkyValue value, Version version);
 
   /**
    * Queries if the node is done and adds the given key as a reverse dependency. The return code
-   * indicates whether a) the node is done, b) the reverse dependency is the first one, so the node
-   * needs to be scheduled, or c) the reverse dependency was added, and the node does not need to be
-   * scheduled.
+   * indicates whether a) the node is done, b) the reverse dependency is the first one, so the
+   * node needs to be scheduled, or c) the reverse dependency was added, and the node does not
+   * need to be scheduled.
    *
    * <p>This method <b>must</b> be called before any processing of the entry. This encourages
    * callers to check that the entry is ready to be processed.
@@ -179,15 +150,14 @@ public interface NodeEntry extends ThinNodeEntry {
    * However, a may complete first, in which case b has to re-schedule itself. Also see {@link
    * #setValue}.
    *
-   * <p>If the parameter is {@code null}, then no reverse dependency is added, but we still check if
-   * the node needs to be scheduled.
+   * <p>If the parameter is {@code null}, then no reverse dependency is added, but we still check
+   * if the node needs to be scheduled.
    *
    * <p>If {@code reverseDep} is a rebuilding dirty entry that was already a reverse dep of this
    * entry, then {@link #checkIfDoneForDirtyReverseDep} must be called instead.
    */
   @ThreadSafe
-  DependencyState addReverseDepAndCheckIfDone(@Nullable SkyKey reverseDep)
-      throws InterruptedException;
+  DependencyState addReverseDepAndCheckIfDone(@Nullable SkyKey reverseDep);
 
   /**
    * Similar to {@link #addReverseDepAndCheckIfDone}, except that {@param reverseDep} must already
@@ -197,7 +167,7 @@ public interface NodeEntry extends ThinNodeEntry {
    * node for evaluation if needed.
    */
   @ThreadSafe
-  DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep) throws InterruptedException;
+  DependencyState checkIfDoneForDirtyReverseDep(SkyKey reverseDep);
 
   /**
    * Tell this node that one of its dependencies is now done. Callers must check the return value,
@@ -237,7 +207,7 @@ public interface NodeEntry extends ThinNodeEntry {
    * @return {@link Set} of reverse dependencies to signal that this node is done.
    */
   @ThreadSafe
-  Set<SkyKey> markClean() throws InterruptedException;
+  Set<SkyKey> markClean();
 
   /**
    * Forces this node to be re-evaluated, even if none of its dependencies are known to have
@@ -266,22 +236,22 @@ public interface NodeEntry extends ThinNodeEntry {
 
   /**
    * Should only be called if the entry is dirty. During the examination to see if the entry must be
-   * re-evaluated, this method returns the next group of children to be checked. Callers should have
-   * already called {@link #getDirtyState} and received a return value of {@link
-   * DirtyState#CHECK_DEPENDENCIES} before calling this method -- any other return value from {@link
-   * #getDirtyState} means that this method must not be called, since whether or not the node needs
-   * to be rebuilt is already known.
+   * re-evaluated, this method returns the next group of children to be checked. Callers should
+   * have already called {@link #getDirtyState} and received a return value of
+   * {@link DirtyState#CHECK_DEPENDENCIES} before calling this method -- any other
+   * return value from {@link #getDirtyState} means that this method must not be called, since
+   * whether or not the node needs to be rebuilt is already known.
    *
-   * <p>Deps are returned in groups. The deps in each group were requested in parallel by the {@code
-   * SkyFunction} last build, meaning independently of the values of any other deps in this group
-   * (although possibly depending on deps in earlier groups). Thus the caller may check all the deps
-   * in this group in parallel, since the deps in all previous groups are verified unchanged. See
-   * {@link SkyFunction.Environment#getValues} for more on dependency groups.
+   * <p>Deps are returned in groups. The deps in each group were requested in parallel by the
+   * {@code SkyFunction} last build, meaning independently of the values of any other deps in this
+   * group (although possibly depending on deps in earlier groups). Thus the caller may check all
+   * the deps in this group in parallel, since the deps in all previous groups are verified
+   * unchanged. See {@link SkyFunction.Environment#getValues} for more on dependency groups.
    *
    * <p>The caller should register these as deps of this entry using {@link #addTemporaryDirectDeps}
    * before checking them.
    *
-   * @see DirtyBuildingState#getNextDirtyDirectDeps()
+   * @see BuildingState#getNextDirtyDirectDeps()
    */
   @ThreadSafe
   Collection<SkyKey> getNextDirtyDirectDeps();

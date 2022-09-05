@@ -978,7 +978,6 @@ public class MemoizingEvaluatorTest {
   /** @see ParallelEvaluatorTest#cycleAboveIndependentCycle() */
   @Test
   public void cycleAboveIndependentCycle() throws Exception {
-    makeGraphDeterministic();
     SkyKey aKey = GraphTester.toSkyKey("a");
     final SkyKey bKey = GraphTester.toSkyKey("b");
     SkyKey cKey = GraphTester.toSkyKey("c");
@@ -1038,11 +1037,8 @@ public class MemoizingEvaluatorTest {
   @Test
   public void cycleAndSelfEdgeWithDirtyValue() throws Exception {
     initializeTester();
-    // The cycle detection algorithm non-deterministically traverses into children nodes, so
-    // use explicit determinism.
-    makeGraphDeterministic();
-    SkyKey cycleKey1 = GraphTester.toSkyKey("ZcycleKey1");
-    SkyKey cycleKey2 = GraphTester.toSkyKey("AcycleKey2");
+    SkyKey cycleKey1 = GraphTester.toSkyKey("cycleKey1");
+    SkyKey cycleKey2 = GraphTester.toSkyKey("cycleKey2");
     tester.getOrCreate(cycleKey1).addDependency(cycleKey2).addDependency(cycleKey1)
     .setComputedValue(CONCATENATE);
     tester.getOrCreate(cycleKey2).addDependency(cycleKey1).setComputedValue(COPY);
@@ -1069,9 +1065,8 @@ public class MemoizingEvaluatorTest {
 
   @Test
   public void cycleAndSelfEdgeWithDirtyValueInSameGroup() throws Exception {
-    makeGraphDeterministic();
-    final SkyKey cycleKey1 = GraphTester.toSkyKey("ZcycleKey1");
-    final SkyKey cycleKey2 = GraphTester.toSkyKey("AcycleKey2");
+    final SkyKey cycleKey1 = GraphTester.toSkyKey("cycleKey1");
+    final SkyKey cycleKey2 = GraphTester.toSkyKey("cycleKey2");
     tester.getOrCreate(cycleKey2).addDependency(cycleKey2).setComputedValue(CONCATENATE);
     tester
         .getOrCreate(cycleKey1)
