@@ -74,11 +74,12 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
   private static final List<String> SPECIAL_MESSAGES =
       ImmutableList.of(
           "Reading startup options from "
-              + "HKEY_LOCAL_MACHINE\\Software\\Google\\Devtools\\CurrentVersion",
+              + "HKEY_LOCAL_MACHINE\\Software\\Google\\Devtools\\Blaze\\CurrentVersion",
           "Contacting ftp://microsoft.com/win3.1/downloadcenter",
           "Downloading MSVCR71.DLL",
           "Installing Windows Update 37 of 118...",
           "Sending request to Azure server",
+          "Checking whether your copy of Blaze is Genuine",
           "Initializing HAL",
           "Loading NDIS2SUP.VXD",
           "Initializing DRM",
@@ -96,6 +97,7 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
           "Notifying field agents",
           "Negotiating with killer robots",
           "Searching for cellular signal",
+          "Checking for outstanding GCard expenses",
           "Waiting for workstation CPU temperature to decrease");
 
   private static final Set<Character> PUNCTUATION_CHARACTERS =
@@ -263,11 +265,8 @@ public class FancyTerminalEventHandler extends BlazeCommandEventHandler {
     }
 
     LineCountingAnsiTerminalWriter countingWriter = new LineCountingAnsiTerminalWriter(terminal);
-    AnsiTerminalWriter terminalWriter = countingWriter;
-
-    if (useCursorControls) {
-      terminalWriter = new LineWrappingAnsiTerminalWriter(terminalWriter, terminalWidth - 1);
-    }
+    AnsiTerminalWriter terminalWriter =
+        new LineWrappingAnsiTerminalWriter(countingWriter, terminalWidth - 1);
 
     if (useColor) {
       terminalWriter.okStatus();
