@@ -16,33 +16,41 @@
  */
 package org.hswebframework.web.service.organizational.simple;
 
-import com.alibaba.fastjson.JSON;
-import org.hswebframework.web.commons.entity.TreeSortSupportEntity;
+import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.commons.entity.TreeSupportEntity;
-import org.hswebframework.web.dao.organizational.PersonDao;
-import org.hswebframework.web.dao.organizational.PersonPositionDao;
-import org.hswebframework.web.dao.organizational.PositionDao;
-import org.hswebframework.web.entity.organizational.PersonEntity;
-import org.hswebframework.web.entity.organizational.PersonPositionEntity;
-import org.hswebframework.web.entity.organizational.PositionEntity;
-import org.hswebframework.web.entity.organizational.SimplePositionEntity;
+import org.hswebframework.web.dao.dynamic.QueryByEntityDao;
+import org.hswebframework.web.dao.organizational.*;
+import org.hswebframework.web.entity.authorization.UserEntity;
+import org.hswebframework.web.entity.organizational.*;
 import org.hswebframework.web.id.IDGenerator;
-import org.hswebframework.web.organizational.authorization.PersonnelAuthorization;
-import org.hswebframework.web.organizational.authorization.PersonnelAuthorizationManager;
-import org.hswebframework.web.organizational.authorization.TreeNode;
-import org.hswebframework.web.organizational.authorization.simple.SimplePersonnel;
-import org.hswebframework.web.organizational.authorization.simple.SimplePersonnelAuthorization;
+import org.hswebframework.web.organizational.authorization.*;
+import org.hswebframework.web.organizational.authorization.relation.Relation;
+import org.hswebframework.web.organizational.authorization.relation.SimpleRelation;
+import org.hswebframework.web.organizational.authorization.relation.SimpleRelations;
+import org.hswebframework.web.organizational.authorization.simple.*;
 import org.hswebframework.web.service.DefaultDSLQueryService;
 import org.hswebframework.web.service.GenericEntityService;
-import org.hswebframework.web.service.organizational.PersonService;
+import org.hswebframework.web.service.authorization.UserService;
+import org.hswebframework.web.service.organizational.*;
+import org.hswebframework.web.service.organizational.event.ClearPersonCacheEvent;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 
 import java.util.*;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.hswebframework.web.service.DefaultDSLQueryService.*;
+import static org.springframework.util.StringUtils.isEmpty;
 
 /**
  * 默认的服务实现
@@ -50,8 +58,11 @@ import static org.hswebframework.web.service.DefaultDSLQueryService.*;
  * @author hsweb-generator-online
  */
 @Service("personService")
+@CacheConfig(cacheNames = "person")
 public class SimplePersonService extends GenericEntityService<PersonEntity, String>
         implements PersonService, PersonnelAuthorizationManager {
+
+
     @Autowired
     private PersonDao personDao;
 
@@ -60,6 +71,21 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
 
     @Autowired
     private PositionDao positionDao;
+
+    @Autowired
+    private DepartmentDao departmentDao;
+
+    @Autowired
+    private OrganizationalDao organizationalDao;
+
+    @Autowired
+    private DistrictDao districtDao;
+
+    @Autowired(required = false)
+    private UserService userService;
+
+    @Autowired
+    private RelationInfoDao relationInfoDao;
 
     @Override
     protected IDGenerator<String> getIDGenerator() {
@@ -72,75 +98,354 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
     }
 
     @Override
-    public String insert(PersonEntity entity) {
-        return super.insert(entity);
+    @Caching(evict = {
+            @CacheEvict(key = "'id:'+#result"),
+            @CacheEvict(key = "'auth:persion-id'+#result"),
+            @CacheEvict(key = "'auth:user-id'+#authBindEntity.userId"),
+            @CacheEvict(key = "'auth-bind'+#result"),
+            @CacheEvict(key = "'person-name'+#authBindEntity.name")
+    })
+    public String insert(PersonAuthBindEntity authBindEntity) {
+        authBindEntity.setStatus(DataStatus.STATUS_ENABLED);
+        if (authBindEntity.getPersonUser() != null) {
+            syncUserInfo(authBindEntity);
+        }
+        String id = this.insert(((PersonEntity) authBindEntity));
+        if (authBindEntity.getPositionIds() != null) {
+            syncPositionInfo(id, authBindEntity.getPositionIds());
+        }
+        return id;
     }
 
     @Override
+    @Caching(evict = {
+            @CacheEvict(key = "'id:'+#authBindEntity.id"),
+            @CacheEvict(key = "'auth:persion-id'+#authBindEntity.id"),
+            @CacheEvict(key = "'auth:user-id'+#authBindEntity.userId"),
+            @CacheEvict(key = "'auth-bind'+#authBindEntity.id"),
+            @CacheEvict(key = "'person-name'+#authBindEntity.name")
+    })
+    public int updateByPk(PersonAuthBindEntity authBindEntity) {
+        if (authBindEntity.getPositionIds() != null) {
+            personPositionDao.deleteByPersonId(authBindEntity.getId());
+            syncPositionInfo(authBindEntity.getId(), authBindEntity.getPositionIds());
+        }
+        if (authBindEntity.getPersonUser() != null) {
+            syncUserInfo(authBindEntity);
+        }
+        return this.updateByPk(((PersonEntity) authBindEntity));
+    }
+
+    @TransactionalEventListener
+    @CacheEvict(allEntries = true)
+    public void handleClearCache(ClearPersonCacheEvent event) {
+        logger.debug("clear all person cache");
+    }
+
+    @Override
+    @Cacheable(key = "'person-name'+#name")
+    public List<PersonEntity> selectByName(String name) {
+        if (StringUtils.isEmpty(name)) {
+            return new ArrayList<>();
+        }
+        return createQuery().where(PersonEntity.name, name).listNoPaging();
+    }
+
+    @Override
+    @Cacheable(key = "'auth-bind'+#id")
+    public PersonAuthBindEntity selectAuthBindByPk(String id) {
+        PersonEntity personEntity = this.selectByPk(id);
+        if (personEntity == null) {
+            return null;
+        }
+
+        if (personEntity instanceof PersonAuthBindEntity) {
+            return ((PersonAuthBindEntity) personEntity);
+        }
+
+        PersonAuthBindEntity bindEntity = entityFactory.newInstance(PersonAuthBindEntity.class, personEntity);
+        Set<String> positionIds = DefaultDSLQueryService.createQuery(personPositionDao)
+                .where(PersonPositionEntity.personId, id)
+                .listNoPaging().stream()
+                .map(PersonPositionEntity::getPositionId)
+                .collect(Collectors.toSet());
+
+        bindEntity.setPositionIds(positionIds);
+
+        if (null != userService && null != personEntity.getUserId()) {
+            UserEntity userEntity = userService.selectByPk(personEntity.getUserId());
+            if (null != userEntity) {
+                PersonUserEntity entity = entityFactory.newInstance(PersonUserEntity.class);
+                entity.setUsername(userEntity.getUsername());
+                bindEntity.setPersonUser(entity);
+            }
+        }
+        return bindEntity;
+    }
+
+    @Override
+    public List<PersonEntity> selectByPositionId(String positionId) {
+        Objects.requireNonNull(positionId);
+        return personDao.selectByPositionId(positionId);
+    }
+
+    @Override
+    public List<PersonEntity> selectByRoleId(String roleId) {
+        Objects.requireNonNull(roleId);
+        return personDao.selectByRoleId(roleId);
+    }
+
+    protected void syncPositionInfo(String personId, Set<String> positionIds) {
+        for (String positionId : positionIds) {
+            PersonPositionEntity positionEntity = entityFactory.newInstance(PersonPositionEntity.class);
+            positionEntity.setPersonId(personId);
+            positionEntity.setPositionId(positionId);
+            this.personPositionDao.insert(positionEntity);
+        }
+    }
+
+    protected void syncUserInfo(PersonAuthBindEntity bindEntity) {
+        if (isEmpty(bindEntity.getPersonUser().getUsername())) {
+            bindEntity.setUserId("");
+            return;
+        }
+
+        //是否使用了权限管理的userService.
+        if (null == userService) {
+            logger.warn("userService not ready!");
+            return;
+        }
+//        //获取所有职位
+//        Set<String> positionIds = bindEntity.getPositionIds();
+//        Set<String> roleIds;
+//
+//        if (positionIds == null) {
+//            roleIds = null;
+//        } else if (positionIds.isEmpty()) {
+//            roleIds = new HashSet<>();
+//        } else {
+//            //获取职位实体
+//            List<PositionEntity> positionEntities = DefaultDSLQueryService.createQuery(positionDao)
+//                    .where().in(PositionEntity.id, positionIds)
+//                    .listNoPaging();
+//            roleIds = positionEntities.stream()
+//                    .map(PositionEntity::getRoles)
+//                    .filter(Objects::nonNull)
+//                    .flatMap(List::stream)
+//                    .collect(Collectors.toSet());
+//        }
+        //获取用户是否存在
+        UserEntity oldUser = userService.selectByUsername(bindEntity.getPersonUser().getUsername());
+        if (null != oldUser) {
+            //判断用户是否已经绑定了其他人员
+            int userBindSize = createQuery().where()
+                    .is(PersonEntity.userId, oldUser.getId())
+                    .not(PersonEntity.id, bindEntity.getId())
+                    .total();
+            tryValidateProperty(userBindSize == 0, "personUser.username", "用户已绑定其他人员");
+        }
+        // 初始化用户后的操作方式
+        Function<UserEntity, String> userOperationFunction =
+                oldUser == null ? userService::insert : //为空新增,不为空修改
+                        user -> {
+                            userService.update(oldUser.getId(), user);
+                            return oldUser.getId();
+                        };
+        UserEntity userEntity = entityFactory.newInstance(UserEntity.class);
+//
+//        if (roleIds != null) {
+//            BindRoleUserEntity tmp = entityFactory.newInstance(BindRoleUserEntity.class);
+//            tmp.setRoles(new ArrayList<>(roleIds));
+//            userEntity = tmp;
+//        } else {
+//            userEntity = entityFactory.newInstance(UserEntity.class);
+//        }
+
+        userEntity.setUsername(bindEntity.getPersonUser().getUsername());
+        userEntity.setPassword(bindEntity.getPersonUser().getPassword());
+        userEntity.setName(bindEntity.getName());
+
+        String userId = userOperationFunction.apply(userEntity);
+        bindEntity.setUserId(userId);
+    }
+
+
+    @Override
+    @CacheEvict(allEntries = true)
+    public int deleteByPk(String id) {
+        personPositionDao.deleteByPersonId(id);
+        return super.deleteByPk(id);
+    }
+
+    @Override
+    @Cacheable(key = "'auth:persion-id'+#personId")
     public PersonnelAuthorization getPersonnelAuthorizationByPersonId(String personId) {
         SimplePersonnelAuthorization authorization = new SimplePersonnelAuthorization();
         PersonEntity entity = selectByPk(personId);
         assertNotNull(entity);
 
-        SimplePersonnel personnel = new SimplePersonnel();
-        personnel.setId(entity.getId());
-        personnel.setEmail(entity.getEmail());
-        personnel.setName(entity.getName());
-        personnel.setPhone(entity.getPhone());
-        personnel.setPhoto(entity.getPhoto());
+        Personnel personnel = entityFactory.newInstance(Personnel.class, SimplePersonnel.class, entity);
+
         authorization.setPersonnel(personnel);
 
         // 获取用户的职位ID集合(多个职位)
         Set<String> positionIds = DefaultDSLQueryService.createQuery(personPositionDao)
                 .where(PersonPositionEntity.personId, personId)
-                .list().stream()
+                .listNoPaging().stream()
                 .map(PersonPositionEntity::getPositionId)
                 .collect(Collectors.toSet());
-        Set<String> departmentIds = null;
 
-        if (!positionIds.isEmpty()) {
-            //获取用户的职位信息
-            List<PositionEntity> positions = DefaultDSLQueryService.createQuery(positionDao)
-                    .where().in(PositionEntity.id, positionIds)
-                    .list();
-            //职位被删除了但是人员信息违背
-            if (!positions.isEmpty()) {
-                departmentIds = positions.stream().map(PositionEntity::getDepartmentId).collect(Collectors.toSet());
-                //所有子节点,使用树节点的path属性进行快速查询
-                //注意:如果path全为空,则可能导致查出全部职位
-                List<PositionEntity> allPositions = DefaultDSLQueryService
-                        .createQuery(positionDao)
-                        //遍历生成查询条件: like path like ?||'%' or path like ?||'%'  ....
-                        .each(positions, (query, position) -> query.or().like$(PositionEntity.path, position.getPath()))
-                        .list();
-                //转为树形结构
-                List<PositionEntity> rootPositions = TreeSupportEntity
-                        .list2tree(allPositions, PositionEntity::setChildren,
-                                // 人员的所在职位为根节点
-                                (Predicate<PositionEntity>) node -> positionIds.contains(node.getId()));
-                // 转为treeNode后设置到权限信息
-                authorization.setPositionIds(transformationTreeNode(null, rootPositions));
+        Map<String, DepartmentEntity> departmentCache = new HashMap<>();
+        Map<String, PositionEntity> positionCache = new HashMap<>();
+        Map<String, OrganizationalEntity> orgCache = new HashMap<>();
+        Map<String, DistrictEntity> districtCache = new HashMap<>();
+
+        //获取所有职位,并得到根职位(树结构)
+        List<PositionEntity> positionEntities = getAllChildrenAndReturnRootNode(positionDao, positionIds, PositionEntity::setChildren, rootPosList -> {
+            //根据职位获取部门
+            Set<String> departmentIds = rootPosList.stream()
+                    .peek(positionEntity -> positionCache.put(positionEntity.getId(), positionEntity))
+                    .map(PositionEntity::getDepartmentId)
+                    .collect(Collectors.toSet());
+//            rootPosList.forEach(positionEntity -> positionCache.put(positionEntity.getId(), positionEntity));
+            if (!CollectionUtils.isEmpty(departmentIds)) {
+                List<DepartmentEntity> departmentEntities = getAllChildrenAndReturnRootNode(departmentDao, departmentIds, DepartmentEntity::setChildren, rootDepList -> {
+                    //rootDepList.forEach(departmentEntity -> departmentCache.put(departmentEntity.getId(), departmentEntity));
+                    //根据部门获取机构
+                    Set<String> orgIds = rootDepList.stream()
+                            .peek(departmentEntity -> departmentCache.put(departmentEntity.getId(), departmentEntity))
+                            .map(DepartmentEntity::getOrgId)
+                            .collect(Collectors.toSet());
+
+                    if (!CollectionUtils.isEmpty(orgIds)) {
+                        List<OrganizationalEntity> orgEntities = getAllChildrenAndReturnRootNode(organizationalDao, orgIds, OrganizationalEntity::setChildren, rootOrgList -> {
+//                            rootOrgList.forEach(org -> orgCache.put(org.getId(), org));
+                            //根据机构获取行政区域
+                            Set<String> districtIds = rootOrgList.stream()
+                                    .peek(org -> orgCache.put(org.getId(), org))
+                                    .map(OrganizationalEntity::getDistrictId)
+                                    .filter(Objects::nonNull)
+                                    .collect(Collectors.toSet());
+                            if (!CollectionUtils.isEmpty(districtIds)) {
+                                List<DistrictEntity> districtEntities =
+                                        getAllChildrenAndReturnRootNode(districtDao, districtIds, DistrictEntity::setChildren,
+                                                rootDistrictList -> rootDistrictList.forEach(dist -> districtCache.put(dist.getId(), dist)));
+
+                                authorization.setDistrictIds(transformationTreeNode(null, districtEntities));
+                            }
+                        });
+                        authorization.setOrgIds(transformationTreeNode(null, orgEntities));
+                    }
+                });
+                authorization.setDepartmentIds(transformationTreeNode(null, departmentEntities));
             }
-            // TODO: 17-5-24 初始化部门信息
-        }
+        });
+        authorization.setPositionIds(transformationTreeNode(null, positionEntities));
 
+        Set<Position> positions = positionEntities.parallelStream()
+                .map(positionEntity -> {
+                    DepartmentEntity departmentEntity = departmentCache.get(positionEntity.getDepartmentId());
+                    if (departmentEntity == null) {
+                        return null;
+                    }
+                    OrganizationalEntity organizationalEntity = orgCache.get(departmentEntity.getOrgId());
+                    if (organizationalEntity == null) {
+                        return null;
+                    }
+                    DistrictEntity districtEntity = districtCache.get(organizationalEntity.getDistrictId());
+                    District district = districtEntity == null ? null : SimpleDistrict.builder()
+                            .code(districtEntity.getCode())
+                            .id(districtEntity.getId())
+                            .name(districtEntity.getName())
+                            .fullName(districtEntity.getFullName())
+                            .build();
+
+                    Organization organization = SimpleOrganization.builder()
+                            .id(organizationalEntity.getId())
+                            .name(organizationalEntity.getName())
+                            .fullName(organizationalEntity.getFullName())
+                            .code(organizationalEntity.getCode())
+                            .district(district)
+                            .build();
+                    Department department = SimpleDepartment
+                            .builder()
+                            .id(departmentEntity.getId())
+                            .name(departmentEntity.getName())
+                            .code(departmentEntity.getCode())
+                            .org(organization)
+                            .build();
+
+                    return SimplePosition
+                            .builder()
+                            .id(positionEntity.getId())
+                            .name(positionEntity.getName())
+                            .department(department)
+                            .code("")
+                            .build();
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        authorization.setPositions(positions);
+        //获取关系
+        List<RelationInfoEntity> relationInfoList = DefaultDSLQueryService.createQuery(relationInfoDao)
+                .where(RelationInfoEntity.relationFrom, personId)
+                .or(RelationInfoEntity.relationTo, personId)
+                .listNoPaging();
+        List<Relation> relations = relationInfoList.stream()
+                .map(info -> {
+                    SimpleRelation relation = new SimpleRelation();
+                    relation.setType(info.getRelationTypeFrom());
+                    relation.setTarget(info.getRelationTo());
+                    relation.setRelation(info.getRelationId());
+                    if (personId.equals(info.getRelationFrom())) {
+                        relation.setDirection(Relation.Direction.POSITIVE);
+                    } else {
+                        relation.setDirection(Relation.Direction.REVERSE);
+                    }
+                    return relation;
+                }).collect(Collectors.toList());
+        authorization.setRelations(new SimpleRelations(relations));
         return authorization;
     }
 
-    public static void main(String[] args) {
-        String json = "[{'id':'1','name':'test','parentId':'-1'},{'id':'2','name':'test2','parentId':'-1'}" +
-                ",{'id':'101','name':'test1-1','parentId':'1'},{'id':'102','name':'test1-2','parentId':'1'}]";
-
-        List<PositionEntity> positionEntities = (List) JSON.parseArray(json, SimplePositionEntity.class);
-
-        List<PositionEntity> rootPositions = TreeSupportEntity.list2tree(positionEntities,
-                PositionEntity::setChildren,
-                (Predicate<PositionEntity>) node -> "-1".equals(node.getParentId()));
-
-        System.out.println(JSON.toJSONString(rootPositions));
-
-        System.out.println(JSON.toJSONString(transformationTreeNode(null, rootPositions)));
-
+    /**
+     * 获取一个树形结构的数据,并返回根节点集合
+     *
+     * @param dao           查询dao接口
+     * @param rootIds       根节点ID集合
+     * @param childAccepter 子节点接收方法
+     * @param rootConsumer  根节点消费回调
+     * @param <T>           节点类型
+     * @return 根节点集合
+     */
+    protected <T extends TreeSupportEntity<String>> List<T> getAllChildrenAndReturnRootNode(QueryByEntityDao<T> dao,
+                                                                                            Set<String> rootIds,
+                                                                                            BiConsumer<T, List<T>> childAccepter,
+                                                                                            Consumer<List<T>> rootConsumer) {
+        if (CollectionUtils.isEmpty(rootIds)) {
+            return Collections.emptyList();
+        }
+        //获取根节点
+        List<T> root = DefaultDSLQueryService.createQuery(dao)
+                .where()
+                .in(TreeSupportEntity.id, rootIds)
+                .listNoPaging();
+        //节点不存在?
+        if (!root.isEmpty()) {
+            //所有子节点,使用节点的path属性进行快速查询,查询结果包含了根节点
+            List<T> allNode = DefaultDSLQueryService
+                    .createQuery(dao)
+                    //遍历生成查询条件: like path like ?||'%' or path like ?||'%'  ....
+                    .each(root, (query, data) -> query.or().like$(TreeSupportEntity.path, data.getPath()))
+                    .listNoPaging();
+            //转为树形结构
+            List<T> tree = TreeSupportEntity
+                    .list2tree(allNode, childAccepter,
+                            (Predicate<T>) node -> rootIds.contains(node.getId()));  // 根节点判定
+            rootConsumer.accept(root);
+            return tree;
+        }
+        return Collections.emptyList();
     }
 
     public static <V extends TreeSupportEntity<String>> Set<TreeNode<String>> transformationTreeNode(V parent, List<V> data) {
@@ -163,7 +468,14 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
     }
 
     @Override
+    @Cacheable(key = "'auth:user-id'+#userId")
     public PersonnelAuthorization getPersonnelAuthorizationByUserId(String userId) {
-        return null;
+        PersonEntity entity = createQuery().where(PersonEntity.userId, userId).single();
+        if (entity == null) {
+            return null;
+        }
+        return getPersonnelAuthorizationByPersonId(entity.getId());
     }
+
+
 }
