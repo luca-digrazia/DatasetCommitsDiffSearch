@@ -1,21 +1,25 @@
 package org.hsweb.web.service.impl.form;
 
+import org.hsweb.commons.file.FileUtils;
+import org.hsweb.ezorm.executor.SqlExecutor;
+import org.hsweb.ezorm.run.Database;
+import org.hsweb.ezorm.run.Table;
+import org.hsweb.web.core.authorize.ExpressionScopeBean;
 import org.hsweb.web.bean.po.form.Form;
+import org.hsweb.web.service.form.DynamicFormService;
+import org.hsweb.web.service.form.FormService;
 import org.hsweb.web.service.impl.AbstractTestCase;
-import org.hsweb.web.utils.RandomUtil;
+import org.hsweb.web.core.utils.RandomUtil;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.transaction.annotation.Transactional;
-import org.webbuilder.sql.DataBase;
-import org.webbuilder.sql.param.insert.InsertParam;
-import org.webbuilder.sql.param.query.QueryParam;
-import org.webbuilder.sql.support.common.CommonSql;
-import org.webbuilder.sql.support.executor.SqlExecutor;
 
 import javax.annotation.Resource;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -26,51 +30,82 @@ import java.util.Map;
 public class FormServiceImplTest extends AbstractTestCase {
 
     @Resource
-    private FormServiceImpl formService;
+    protected FormService formService;
+    @Resource
+    private DynamicFormService dynamicFormService;
+    @Resource
+    protected Database dataBase;
 
     @Resource
-    private DataBase dataBase;
+    protected SqlExecutor sqlExecutor;
 
-    @Resource
-    private SqlExecutor sqlExecutor;
+    @Autowired(required = false)
+    private Map<String, ExpressionScopeBean> expressionScopeBeanMap;
 
-    private Form form;
+    protected Form form;
+
+    private String[] meta = {
+            "{" +
+                    "\"id1\":[" +
+                    "{\"key\":\"name\",\"value\":\"u_id\",\"describe\":\"名称\"}," +
+                    "{\"key\":\"comment\",\"value\":\"ID\",\"describe\":\"ID\"}," +
+                    "{\"key\":\"javaType\",\"value\":\"string\",\"describe\":\"java类型\"}," +
+                    "{\"key\":\"dataType\",\"value\":\"varchar(32)\",\"describe\":\"数据库类型\"}" +
+                    "]" +
+                    ",\"id2\":[" +
+                    "{\"key\":\"name\",\"value\":\"name\",\"describe\":\"名称\"}," +
+                    "{\"key\":\"comment\",\"value\":\"姓名\",\"describe\":\"姓名\"}," +
+                    "{\"key\":\"javaType\",\"value\":\"string\",\"describe\":\"java类型\"}," +
+                    "{\"key\":\"validator-list\",\"value\":\"[{\\\"validator\\\":\\\"NotNull\\\"}]\",,\"describe\":\"java类型\"}," +
+                    "{\"key\":\"dataType\",\"value\":\"varchar(32)\",\"describe\":\"数据库类型\"}" +
+                    "]" +
+                    "}",
+            "{" +
+                    "\"id1\":[" +
+                    "{\"key\":\"name\",\"value\":\"u_id\",\"describe\":\"名称\"}," +
+                    "{\"key\":\"comment\",\"value\":\"ID\",\"describe\":\"ID\"}," +
+                    "{\"key\":\"javaType\",\"value\":\"string\",\"describe\":\"java类型\"}," +
+                    "{\"key\":\"dataType\",\"value\":\"varchar(32)\",\"describe\":\"数据库类型\"}" +
+                    "]" +
+                    ",\"id2\":[" +
+                    "{\"key\":\"name\",\"value\":\"name\",\"describe\":\"名称\"}," +
+                    "{\"key\":\"comment\",\"value\":\"姓名\",\"describe\":\"字段描述\"}," +
+                    "{\"key\":\"javaType\",\"value\":\"string\",\"describe\":\"java类型\"}," +
+                    "{\"key\":\"dataType\",\"value\":\"varchar(32)\",\"describe\":\"数据库类型\"}" +
+                    "]" +
+                    ",\"id3\":[" +
+                    "{\"key\":\"name\",\"value\":\"sex\",\"describe\":\"名称\"}," +
+                    "{\"key\":\"comment\",\"value\":\"性别\",\"describe\":\"性别\"}," +
+                    "{\"key\":\"javaType\",\"value\":\"string\",\"describe\":\"java类型\"}," +
+                    "{\"key\":\"dataType\",\"value\":\"varchar(32)\",\"describe\":\"数据库类型\"}" +
+                    "]" +
+                    "}"
+    };
 
     @Before
     public void setup() throws Exception {
-        sqlExecutor.exec(new CommonSql("drop table if exists s_form"));
-        sqlExecutor.exec(new CommonSql("create table s_form\n" +
-                "(\n" +
-                "  u_id        varchar(256) not null,\n" +
-                "  name        varchar(256) not null,\n" +
-                "  html        clob,\n" +
-                "  meta        clob,\n" +
-                "  config      clob,\n" +
-                "  version     number(32),\n" +
-                "  using       int,\n" +
-                "  create_date date not null,\n" +
-                "  update_date date,\n" +
-                "  remark      varchar2(200)\n" +
-                ")"));
-
         form = new Form();
         form.setName("test_form");
-        form.setCreate_date(new Date());
-        form.setMeta("{\"ehFpAHYTFXZcPBBzyRmSBtmQSWdjMXxM\":[{\"key\":\"name\",\"value\":\"name\",\"describe\":\"名称\",\"_id\":45,\"_uid\":45,\"_state\":\"modified\"},{\"key\":\"comment\",\"value\":\"test\",\"describe\":\"字段描述\",\"_id\":46,\"_uid\":46,\"_state\":\"modified\"},{\"key\":\"javaType\",\"value\":\"string\",\"describe\":\"java类型\",\"_id\":47,\"_uid\":47},{\"key\":\"dataType\",\"value\":\"varchar2(32)\",\"describe\":\"数据库类型\",\"_id\":48,\"_uid\":48},{\"key\":\"_meta\",\"value\":\"textbox\",\"describe\":\"控件类型\",\"_id\":49,\"_uid\":49},{\"key\":\"validator-list\",\"value\":\"[]\",\"describe\":\"验证器\",\"_id\":50,\"_uid\":50},{\"key\":\"domProperty\",\"value\":\"[]\",\"describe\":\"其他控件配置\",\"_id\":51,\"_uid\":51}]}");
-        form.setU_id(RandomUtil.randomChar());
+        form.setCreateDate(new Date());
+        form.setHtml("<input fieldId='id1'/><input fieldId='id2'/>");
+        form.setMeta(meta[0]);
+        form.setId(RandomUtil.randomChar());
         formService.insert(form);
     }
 
     @Test
     public void testDeploy() throws Exception {
-        //部署
-        formService.deploy(form.getU_id());
-        dataBase.getTable("test_form").createInsert()
-                .insert(new InsertParam().value("name", "张三"));
+        formService.deploy(form.getId());
+        dataBase.getTable("test_form").createInsert().value(new HashMap<String, Object>() {{
+            put("u_id", "test");
+            put("name", "张三2");
+        }}).exec();
 
-        Map<String, Object> data = dataBase.getTable("test_form")
-                .createQuery().single(new QueryParam().where("name$LIKE", "张三"));
-
+        Table<Map<String, Object>> table = dataBase.getTable("test_form");
+        table.createUpdate().set("name", "张三").where("u_id", "test").exec();
+        Map<String, Object> data = table.createQuery().where("name$LIKE", "张三").single();
         Assert.assertEquals("张三", data.get("name"));
     }
+
+
 }
