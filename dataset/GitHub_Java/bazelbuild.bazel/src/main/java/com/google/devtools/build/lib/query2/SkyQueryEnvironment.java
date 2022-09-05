@@ -23,7 +23,6 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSet.Builder;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
@@ -194,11 +193,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
   }
 
   private Map<Target, Collection<Target>> getRawFwdDeps(Iterable<Target> targets) {
-    return makeTargetsMap(graph.getDirectDeps(makeTransitiveTraversalKeys(targets)));
+    return makeTargetsMap(graph.getDirectDeps(makeKeys(targets)));
   }
 
   private Map<Target, Collection<Target>> getRawReverseDeps(Iterable<Target> targets) {
-    return makeTargetsMap(graph.getReverseDeps(makeTransitiveTraversalKeys(targets)));
+    return makeTargetsMap(graph.getReverseDeps(makeKeys(targets)));
   }
 
   private Set<Label> getAllowedDeps(Rule rule) {
@@ -395,40 +394,12 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       throws QueryException {
     // Everything has already been loaded, so here we just check for errors so that we can
     // pre-emptively throw/report if needed.
-    Iterable<SkyKey> transitiveTraversalKeys = makeTransitiveTraversalKeys(targets);
-    ImmutableList.Builder<String> errorMessagesBuilder = ImmutableList.builder();
-
-    // First, look for errors in the successfully evaluated TransitiveTraversalValues. They may
-    // have encountered errors that they were able to recover from.
-    Set<Entry<SkyKey, SkyValue>> successfulEntries =
-        graph.getSuccessfulValues(transitiveTraversalKeys).entrySet();
-    Builder<SkyKey> successfulKeysBuilder = ImmutableSet.builder();
-    for (Entry<SkyKey, SkyValue> successfulEntry : successfulEntries) {
-      successfulKeysBuilder.add(successfulEntry.getKey());
-      TransitiveTraversalValue value = (TransitiveTraversalValue) successfulEntry.getValue();
-      String firstErrorMessage = value.getFirstErrorMessage();
-      if (firstErrorMessage != null) {
-        errorMessagesBuilder.add(firstErrorMessage);
-      }
-    }
-    ImmutableSet<SkyKey> successfulKeys = successfulKeysBuilder.build();
-
-    // Next, look for errors from the unsuccessfully evaluated TransitiveTraversal skyfunctions.
-    Iterable<SkyKey> unsuccessfulKeys =
-        Iterables.filter(transitiveTraversalKeys, Predicates.not(Predicates.in(successfulKeys)));
-    Set<Entry<SkyKey, Exception>> errorEntries =
-        graph.getMissingAndExceptions(unsuccessfulKeys).entrySet();
-    for (Map.Entry<SkyKey, Exception> entry : errorEntries) {
+    for (Map.Entry<SkyKey, Exception> entry :
+      graph.getMissingAndExceptions(makeKeys(targets)).entrySet()) {
       if (entry.getValue() == null) {
         throw new QueryException(entry.getKey().argument() + " does not exist in graph");
       }
-      errorMessagesBuilder.add(entry.getValue().getMessage());
-    }
-
-    // Lastly, report all found errors.
-    ImmutableList<String> errorMessages = errorMessagesBuilder.build();
-    for (String errorMessage : errorMessages) {
-      reportBuildFileError(caller, errorMessage);
+      reportBuildFileError(caller, entry.getValue().getMessage());
     }
   }
 
@@ -447,7 +418,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
       QueryExpression caller, Collection<String> patterns)
       throws QueryException, TargetParsingException {
     GraphBackedRecursivePackageProvider provider =
-        new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys, pkgPath);
+        new GraphBackedRecursivePackageProvider(graph, universeTargetPatternKeys);
     Map<String, Set<Target>> result = Maps.newHashMapWithExpectedSize(patterns.size());
 
     Map<String, SkyKey> keys = new HashMap<>(patterns.size());
@@ -486,7 +457,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
 
         RecursivePackageProviderBackedTargetPatternResolver resolver =
             new RecursivePackageProviderBackedTargetPatternResolver(provider, eventHandler,
-                targetPatternKey.getPolicy());
+                targetPatternKey.getPolicy(), pkgPath);
         TargetPattern parsedPattern = targetPatternKey.getParsedPattern();
         try {
           patternsWithTargetsToFilter.put(pattern, parsedPattern.eval(resolver).getTargets());
@@ -576,7 +547,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
         }
       };
 
-  private static Iterable<SkyKey> makeTransitiveTraversalKeys(Iterable<Target> targets) {
+  private static Iterable<SkyKey> makeKeys(Iterable<Target> targets) {
     return Iterables.transform(targets, TARGET_TO_SKY_KEY);
   }
 
