@@ -217,7 +217,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.Callable;
-import java.util.concurrent.TimeUnit;
 
 import com.android.build.gradle.internal.api.ApContext;
 import com.android.build.gradle.internal.api.VariantContext;
@@ -237,7 +236,6 @@ import com.taobao.android.builder.tools.zip.BetterZip;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
 import org.dom4j.DocumentException;
-import org.gradle.api.GradleException;
 import org.gradle.api.Nullable;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
@@ -310,7 +308,7 @@ public class PrepareAPTask extends BaseTask {
     }
 
     /**
-     * Directory of so
+     * 生成so的目录
      */
     @TaskAction
     void generate() throws IOException, DocumentException {
@@ -327,8 +325,6 @@ public class PrepareAPTask extends BaseTask {
                 Dependency dependency = project.getDependencies().create(apDependency);
                 Configuration configuration = project.getConfigurations().detachedConfiguration(dependency);
                 configuration.setTransitive(false);
-                configuration.getResolutionStrategy().cacheChangingModulesFor(0, TimeUnit.MILLISECONDS);
-                configuration.getResolutionStrategy().cacheDynamicVersionsFor(0, TimeUnit.MILLISECONDS);
                 for (File file : configuration.getFiles()) {
                     if (file.getName().endsWith(".ap")) {
                         apBaseFile = file;
@@ -339,36 +335,26 @@ public class PrepareAPTask extends BaseTask {
         }
 
         if (null != apBaseFile && apBaseFile.exists()) {
-
-            try {
-                explodedDir = getExplodedDir();
-                BetterZip.unzipDirectory(apBaseFile, explodedDir);
-                apContext.setApExploredFolder(explodedDir);
-                Set<String> awbBundles = getAwbBundles();
-                if (awbBundles != null) {
-                    // Unzip the baseline Bundle
-                    for (String awbBundle : awbBundles) {
-                        File awbFile = BetterZip.extractFile(new File(explodedDir, AP_INLINE_APK_FILENAME),
-                                                             "lib/armeabi/" + awbBundle,
-                                                             new File(explodedDir, AP_INLINE_AWB_EXTRACT_DIRECTORY));
-                        File awbExplodedDir = new File(new File(explodedDir, AP_INLINE_AWB_EXPLODED_DIRECTORY),
-                                                       FilenameUtils.getBaseName(awbBundle));
-                        BetterZip.unzipDirectory(awbFile, awbExplodedDir);
-                        FileUtils.renameTo(new File(awbExplodedDir, FN_APK_CLASSES_DEX),
-                                           new File(awbExplodedDir, "classes2.dex"));
-                    }
-                    // Preprocessing increment androidmanifest.xml
-                    ManifestFileUtils.updatePreProcessBaseManifestFile(
-                        FileUtils.join(explodedDir, "manifest-modify", ANDROID_MANIFEST_XML),
-                        new File(explodedDir, ANDROID_MANIFEST_XML));
+            explodedDir = getExplodedDir();
+            BetterZip.unzipDirectory(apBaseFile, explodedDir);
+            apContext.setApExploredFolder(explodedDir);
+            Set<String> awbBundles = getAwbBundles();
+            if (awbBundles != null) {
+                // 解压基线Bundle
+                for (String awbBundle : awbBundles) {
+                    File awbFile = BetterZip.extractFile(new File(explodedDir, AP_INLINE_APK_FILENAME),
+                                                         "lib/armeabi/" + awbBundle,
+                                                         new File(explodedDir, AP_INLINE_AWB_EXTRACT_DIRECTORY));
+                    File awbExplodedDir = new File(new File(explodedDir, AP_INLINE_AWB_EXPLODED_DIRECTORY),
+                                                   FilenameUtils.getBaseName(awbBundle));
+                    BetterZip.unzipDirectory(awbFile, awbExplodedDir);
+                    FileUtils.renameTo(new File(awbExplodedDir, FN_APK_CLASSES_DEX),
+                                       new File(awbExplodedDir, "classes2.dex"));
                 }
-                if (explodedDir.listFiles().length == 0){
-                    throw new RuntimeException("unzip ap exception, no files found");
-                }
-            }catch (Throwable e){
-                FileUtils.deleteIfExists(apBaseFile);
-                throw new GradleException(e.getMessage(),e);
-
+                // 预处理增量AndroidManifest.xml
+                ManifestFileUtils.updatePreProcessBaseManifestFile(
+                    FileUtils.join(explodedDir, "manifest-modify", ANDROID_MANIFEST_XML),
+                    new File(explodedDir, ANDROID_MANIFEST_XML));
             }
         }
     }
