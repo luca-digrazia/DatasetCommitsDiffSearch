@@ -108,11 +108,6 @@ public interface ActionMetadata {
   Iterable<Artifact> getInputs();
 
   /**
-   * Get the {@link RunfilesSupplier} providing runfiles needed by this action.
-   */
-  RunfilesSupplier getRunfilesSupplier();
-
-  /**
    * Returns the (unordered, immutable) set of output Artifacts that
    * this action generates.  (It would not make sense for this to be empty.)
    */
