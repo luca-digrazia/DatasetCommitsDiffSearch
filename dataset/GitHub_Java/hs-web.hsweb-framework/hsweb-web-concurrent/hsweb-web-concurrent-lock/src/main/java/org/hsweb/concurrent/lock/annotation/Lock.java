@@ -14,7 +14,7 @@ public @interface Lock {
 
     String condition() default "";
 
-    long waitTime() default 5;
+    long waitTime() default Long.MAX_VALUE;
 
     TimeUnit timeUnit() default TimeUnit.SECONDS;
 }
