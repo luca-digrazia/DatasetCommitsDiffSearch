@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.bazel;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.GotOptionsEvent;
-import com.google.devtools.build.lib.util.NetUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsBase;
@@ -59,10 +57,6 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     private final Artifact stableStatus;
     private final Artifact volatileStatus;
     private final AtomicReference<Options> options;
-    
-    private final String username;
-    private final String hostname;
-    private final long timestamp;
 
     private BazelWorkspaceStatusAction(
         AtomicReference<WorkspaceStatusAction.Options> options,
@@ -73,9 +67,6 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
       this.options = options;
       this.stableStatus = stableStatus;
       this.volatileStatus = volatileStatus;
-      this.username = System.getProperty("user.name");
-      this.hostname = NetUtil.findShortHostName();
-      this.timestamp = System.currentTimeMillis();
     }
 
     @Override
@@ -87,17 +78,10 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
     public void execute(ActionExecutionContext actionExecutionContext)
         throws ActionExecutionException {
       try {
-        Joiner joiner = Joiner.on('\n');
-        String info =
-            joiner.join(
-                BuildInfo.BUILD_EMBED_LABEL + " " + options.get().embedLabel,
-                BuildInfo.BUILD_HOST + " " + hostname,
-                BuildInfo.BUILD_USER + " " + username);
-        FileSystemUtils.writeContent(stableStatus.getPath(), info.getBytes(StandardCharsets.UTF_8));
-        String volatileInfo = BuildInfo.BUILD_TIMESTAMP + " " + timestamp + "\n";
-
+        String embedLabelLine = String.format("BUILD_EMBED_LABEL %s\n", options.get().embedLabel);
         FileSystemUtils.writeContent(
-            volatileStatus.getPath(), volatileInfo.getBytes(StandardCharsets.UTF_8));
+            stableStatus.getPath(), embedLabelLine.getBytes(StandardCharsets.UTF_8));
+        FileSystemUtils.writeContent(volatileStatus.getPath(), new byte[] {});
       } catch (IOException e) {
         throw new ActionExecutionException(e, this, true);
       }
@@ -180,18 +164,13 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
   private class BazelWorkspaceStatusActionContext implements WorkspaceStatusAction.Context {
     @Override
     public ImmutableMap<String, Key> getStableKeys() {
-      return ImmutableMap.of(
-          BuildInfo.BUILD_EMBED_LABEL,
-          Key.of(KeyType.STRING, options.get().embedLabel, "redacted"),
-          BuildInfo.BUILD_HOST,
-          Key.of(KeyType.STRING, "hostname", "redacted"),
-          BuildInfo.BUILD_USER,
-          Key.of(KeyType.STRING, "username", "redacted"));
+      return ImmutableMap.of(BuildInfo.BUILD_EMBED_LABEL,
+          Key.of(KeyType.STRING, options.get().embedLabel, "redacted"));
     }
 
     @Override
     public ImmutableMap<String, Key> getVolatileKeys() {
-      return ImmutableMap.of(BuildInfo.BUILD_TIMESTAMP, Key.of(KeyType.INTEGER, "0", "0"));
+      return ImmutableMap.of();
     }
   }
 
