@@ -103,31 +103,7 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
     assertNotNull(packageManifest);
     assertEquals(packageManifest.getRelativePath(), "com/google/example/simple.manifest");
   }
-
-  @Test
-  public void testPackageManifestNotCreatedForOnlyGeneratedSources() throws Exception {
-    if (!isNativeTest()) {
-      return;
-    }
-
-    scratch.file(
-        "com/google/example/BUILD",
-        "genrule(",
-        "   name = 'gen_sources',",
-        "   outs = ['Gen.java'],",
-        "   cmd = '',",
-        ")",
-        "java_library(",
-        "    name = 'simple',",
-        "    srcs = [':gen_sources']",
-        ")");
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo("//com/google/example:simple");
-    assertThat(ruleIdeInfos.size()).isEqualTo(1);
-    RuleIdeInfo ruleIdeInfo = getRuleInfoAndVerifyLabel(
-        "//com/google/example:simple", ruleIdeInfos);
-    assertThat(ruleIdeInfo.getJavaRuleIdeInfo().hasPackageManifest()).isFalse();
-  }
-
+  
   @Test
   public void testJavaLibraryWithDependencies() throws Exception {
     scratch.file(
@@ -1062,6 +1038,8 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
     assertThat(relativePathsForCSourcesOf(ruleIdeInfo))
         .containsExactly("com/google/example/simple/simple.cc");
+    assertThat(relativePathsForExportedCHeadersOf(ruleIdeInfo))
+        .containsExactly("com/google/example/simple/simple.h");
 
     assertThat(ruleIdeInfo.hasCRuleIdeInfo()).isTrue();
     assertThat(ruleIdeInfo.hasJavaRuleIdeInfo()).isFalse();
@@ -1528,20 +1506,6 @@ public class AndroidStudioInfoAspectTest extends AndroidStudioInfoAspectTestBase
 
     assertThat(ruleInfo.hasCToolchainIdeInfo()).isFalse();
     assertThat(toolchainInfo.hasCToolchainIdeInfo()).isTrue();
-  }
-
-  @Test
-  public void testJavaLibraryDoesNotHaveCInfo() throws Exception {
-    scratch.file(
-        "com/google/example/BUILD",
-        "java_library(",
-        "    name = 'simple',",
-        "    srcs = ['simple/Simple.java']",
-        ")");
-    Map<String, RuleIdeInfo> ruleIdeInfos = buildRuleIdeInfo("//com/google/example:simple");
-    RuleIdeInfo ruleIdeInfo = getRuleInfoAndVerifyLabel(
-        "//com/google/example:simple", ruleIdeInfos);
-    assertThat(ruleIdeInfo.hasCRuleIdeInfo()).isFalse();
   }
 
   /**

@@ -62,7 +62,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       new PathFragment("include/stdc-predef.h");
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws RuleErrorException {
+  public ConfiguredTarget create(RuleContext ruleContext) {
     CppConfiguration cppConfiguration =
         Preconditions.checkNotNull(ruleContext.getFragment(CppConfiguration.class));
     Path fdoZip = ruleContext.getConfiguration().getCompilationMode() == CompilationMode.OPT

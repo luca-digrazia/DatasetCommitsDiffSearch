@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -58,8 +57,7 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
           false,
           false,
           ImmutableMap.<String, String>of(),
-          ImmutableList.<Artifact>of(),
-          NestedSetBuilder.<Pair<String, String>>emptySet(Order.COMPILE_ORDER));
+          ImmutableList.<Artifact>of());
 
   @Nullable private final CppConfiguration cppConfiguration;
   private final NestedSet<Artifact> crosstool;
@@ -80,7 +78,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
   private final boolean supportsHeaderParsing;
   private final Map<String, String> buildVariables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
-  private final NestedSet<Pair<String, String>> coverageEnvironment;
 
   public CcToolchainProvider(
       @Nullable CppConfiguration cppConfiguration,
@@ -101,8 +98,7 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
       boolean supportsParamFiles,
       boolean supportsHeaderParsing,
       Map<String, String> buildVariables,
-      ImmutableList<Artifact> builtinIncludeFiles,
-      NestedSet<Pair<String, String>> coverageEnvironment) {
+      ImmutableList<Artifact> builtinIncludeFiles) {
     this.cppConfiguration = cppConfiguration;
     this.crosstool = Preconditions.checkNotNull(crosstool);
     this.crosstoolMiddleman = Preconditions.checkNotNull(crosstoolMiddleman);
@@ -122,7 +118,6 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
     this.supportsHeaderParsing = supportsHeaderParsing;
     this.buildVariables = buildVariables;
     this.builtinIncludeFiles = builtinIncludeFiles;
-    this.coverageEnvironment = coverageEnvironment;
   }
 
   /**
@@ -267,12 +262,5 @@ public final class CcToolchainProvider implements TransitiveInfoProvider {
    */
   public ImmutableList<Artifact> getBuiltinIncludeFiles() {
     return builtinIncludeFiles;
-  }
-
-  /**
-   * Returns the environment variables that need to be added to tests that collect code coverage.
-   */
-  public NestedSet<Pair<String, String>> getCoverageEnvironment() {
-    return coverageEnvironment;
   }
 }
