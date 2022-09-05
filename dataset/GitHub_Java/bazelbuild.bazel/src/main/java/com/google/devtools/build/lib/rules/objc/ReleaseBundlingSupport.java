@@ -123,7 +123,6 @@ public final class ReleaseBundlingSupport {
   private final LinkedBinary linkedBinary;
   private final IntermediateArtifacts intermediateArtifacts;
   private final ReleaseBundling releaseBundling;
-  private final Platform platform;
 
   /**
    * Indicator as to whether this rule generates a binary directly or whether only dependencies
@@ -143,7 +142,7 @@ public final class ReleaseBundlingSupport {
   }
 
   /**
-   * Creates a new release bundling support within the given rule context.
+   * Creates a new application support within the given rule context.
    *
    * @param ruleContext context for the application-generating rule
    * @param objcProvider provider containing all dependencies' information as well as some of this
@@ -158,7 +157,6 @@ public final class ReleaseBundlingSupport {
    *    through the configuration)
    * @param releaseBundling the {@link ReleaseBundling} containing information for creating a
    *    releaseable bundle.
-   * @param platform the platform that bundles will be created for using this support
    */
   ReleaseBundlingSupport(
       RuleContext ruleContext,
@@ -167,9 +165,7 @@ public final class ReleaseBundlingSupport {
       String bundleDirFormat,
       String bundleName,
       DottedVersion bundleMinimumOsVersion,
-      ReleaseBundling releaseBundling,
-      Platform platform) {
-    this.platform = platform;
+      ReleaseBundling releaseBundling) {
     this.linkedBinary = linkedBinary;
     this.attributes = new Attributes(ruleContext);
     this.ruleContext = ruleContext;
@@ -192,7 +188,6 @@ public final class ReleaseBundlingSupport {
    * @param bundleDirFormat format string representing the bundle's directory with a single
    *    placeholder for the target name (e.g. {@code "Payload/%s.app"})
    * @param bundleName name of the bundle, used with bundleDirFormat
-   * @param platform the platform that bundles will be created for using this support
    */
   ReleaseBundlingSupport(
       RuleContext ruleContext,
@@ -200,8 +195,7 @@ public final class ReleaseBundlingSupport {
       LinkedBinary linkedBinary,
       String bundleDirFormat,
       String bundleName,
-      DottedVersion bundleMinimumOsVersion,
-      Platform platform) throws InterruptedException {
+      DottedVersion bundleMinimumOsVersion) throws InterruptedException {
     this(
         ruleContext,
         objcProvider,
@@ -209,8 +203,7 @@ public final class ReleaseBundlingSupport {
         bundleDirFormat,
         bundleName,
         bundleMinimumOsVersion,
-        ReleaseBundling.releaseBundling(ruleContext),
-        platform);
+        ReleaseBundling.releaseBundling(ruleContext));
   }
 
   /**
@@ -228,7 +221,6 @@ public final class ReleaseBundlingSupport {
    * @param bundleMinimumOsVersion the minimum OS version this bundle's plist should be generated
    *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
    *    through the configuration)
-   * @param platform the platform that bundles will be created for using this support
    * @throws InterruptedException
    */
   ReleaseBundlingSupport(
@@ -236,10 +228,9 @@ public final class ReleaseBundlingSupport {
       ObjcProvider objcProvider,
       LinkedBinary linkedBinary,
       String bundleDirFormat,
-      DottedVersion bundleMinimumOsVersion,
-      Platform platform) throws InterruptedException {
+      DottedVersion bundleMinimumOsVersion) throws InterruptedException {
     this(ruleContext, objcProvider, linkedBinary, bundleDirFormat, ruleContext.getLabel().getName(),
-        bundleMinimumOsVersion, platform);
+        bundleMinimumOsVersion);
   }
 
   /**
@@ -264,7 +255,9 @@ public final class ReleaseBundlingSupport {
       }
     }
 
-    if (releaseBundling.getProvisioningProfile() == null && platform.isDevice()) {
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    if (releaseBundling.getProvisioningProfile() == null
+        && appleConfiguration.getMultiArchPlatform(PlatformType.IOS) != Platform.IOS_SIMULATOR) {
       ruleContext.attributeError(releaseBundling.getProvisioningProfileAttrName(),
           DEVICE_NO_PROVISIONING_PROFILE);
     }
@@ -376,8 +369,8 @@ public final class ReleaseBundlingSupport {
     String platformWithVersion =
         String.format(
             "%s%s",
-            platform.getLowerCaseNameInPlist(),
-            configuration.getSdkVersionForPlatform(platform));
+            configuration.getMultiArchPlatform(PlatformType.IOS).getLowerCaseNameInPlist(),
+            configuration.getIosSdkVersion());
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext)
             .setMnemonic("EnvironmentPlist")
@@ -405,6 +398,7 @@ public final class ReleaseBundlingSupport {
     List<Integer> uiDeviceFamily =
         TargetDeviceFamily.UI_DEVICE_FAMILY_VALUES.get(bundleSupport.targetDeviceFamilies());
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+    Platform platform = appleConfiguration.getMultiArchPlatform(PlatformType.IOS);
 
     NSDictionary result = new NSDictionary();
 
@@ -414,7 +408,7 @@ public final class ReleaseBundlingSupport {
     result.put("DTPlatformName", platform.getLowerCaseNameInPlist());
     result.put(
         "DTSDKName",
-        platform.getLowerCaseNameInPlist() + appleConfiguration.getSdkVersionForPlatform(platform));
+        platform.getLowerCaseNameInPlist() + appleConfiguration.getIosSdkVersion());
     result.put("CFBundleSupportedPlatforms", new NSArray(NSObject.wrap(platform.getNameInPlist())));
     result.put("MinimumOSVersion", bundling.getMinimumOsVersion().toString());
 
@@ -432,7 +426,7 @@ public final class ReleaseBundlingSupport {
    * <p>Note that multiple "actions" on the IPA contents may be run in a single blaze action to
    * avoid excessive zipping/unzipping of IPA contents.
    */
-  private void registerPostProcessAndSigningActions() {
+  private void registerPostProcessAndSigningActions() throws InterruptedException {
     Artifact processedIpa = releaseBundling.getIpaArtifact();
     Artifact unprocessedIpa = intermediateArtifacts.unprocessedIpa();
 
@@ -459,7 +453,7 @@ public final class ReleaseBundlingSupport {
     }
 
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    if (platform.isDevice()) {
+    if (appleConfiguration.getMultiArchPlatform(PlatformType.IOS) == Platform.IOS_DEVICE) {
       processingNeeded = true;
       registerEntitlementsActions();
       actionCommandLine += signingCommandLine();
@@ -472,8 +466,10 @@ public final class ReleaseBundlingSupport {
     if (processingNeeded) {
       SpawnAction.Builder processAction =
           ObjcRuleClasses.spawnBashOnDarwinActionBuilder(actionCommandLine)
-              .setEnvironment(
-                  ObjcRuleClasses.appleToolchainEnvironment(appleConfiguration, platform))
+              // TODO(cparsons): This bundling support is used for other platform types, as well.
+              // The platform type should be passed from the caller.
+              .setEnvironment(ObjcRuleClasses.appleToolchainEnvironment(appleConfiguration,
+                  appleConfiguration.getMultiArchPlatform(PlatformType.IOS)))
               .setMnemonic("ObjcProcessIpa")
               .setProgressMessage("Processing iOS IPA: " + ruleContext.getLabel())
               .addTransitiveInputs(inputs.build())
@@ -620,7 +616,8 @@ public final class ReleaseBundlingSupport {
    * @return this application support
    */
   ReleaseBundlingSupport addFilesToBuild(
-      NestedSetBuilder<Artifact> filesToBuild, DsymOutputType dsymOutputType) {
+      NestedSetBuilder<Artifact> filesToBuild, DsymOutputType dsymOutputType)
+      throws InterruptedException {
     NestedSetBuilder<Artifact> debugSymbolBuilder = NestedSetBuilder.<Artifact>stableOrder();
 
     for (Artifact linkmapFile : getLinkmapFiles().values()) {
@@ -675,7 +672,7 @@ public final class ReleaseBundlingSupport {
    * Creates the {@link XcTestAppProvider} that can be used if this application is used as an
    * {@code xctest_app}.
    */
-  XcTestAppProvider xcTestAppProvider() {
+  XcTestAppProvider xcTestAppProvider() throws InterruptedException {
     // We want access to #import-able things from our test rig's dependency graph, but we don't
     // want to link anything since that stuff is shared automatically by way of the
     // -bundle_loader linker flag.
@@ -729,7 +726,7 @@ public final class ReleaseBundlingSupport {
   /**
    * Returns a {@link RunfilesSupport} that uses the provided runner script as the executable.
    */
-  RunfilesSupport runfilesSupport(Artifact runnerScript) {
+  RunfilesSupport runfilesSupport(Artifact runnerScript) throws InterruptedException {
     Runfiles runfiles = new Runfiles.Builder(
         ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles())
         .addArtifact(releaseBundling.getIpaArtifact())
@@ -759,7 +756,7 @@ public final class ReleaseBundlingSupport {
       DottedVersion minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
-    if (platform.isDevice()) {
+    if (appleConfiguration.getMultiArchPlatform(PlatformType.IOS) == Platform.IOS_DEVICE) {
       extraBundleFiles = ImmutableList.of(new BundleableFile(
           releaseBundling.getProvisioningProfile(), PROVISIONING_PROFILE_BUNDLE_FILE));
     } else {
@@ -811,9 +808,10 @@ public final class ReleaseBundlingSupport {
     }
 
     Artifact resultingLinkedBinary = intermediateArtifacts.combinedArchitectureBinary();
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     new LipoSupport(ruleContext).registerCombineArchitecturesAction(linkedBinaries(),
-        resultingLinkedBinary, platform);
+        resultingLinkedBinary, appleConfiguration.getMultiArchPlatform(PlatformType.IOS));
   }
 
   private NestedSet<Artifact> linkedBinaries() {
