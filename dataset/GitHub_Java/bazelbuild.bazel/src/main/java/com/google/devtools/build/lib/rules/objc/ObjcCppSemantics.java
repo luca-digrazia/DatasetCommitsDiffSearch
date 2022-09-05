@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAME
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionBuilder;
 import com.google.devtools.build.lib.rules.cpp.CppCompileActionContext;
@@ -29,7 +28,6 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingM
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
-import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -37,7 +35,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  */
 public class ObjcCppSemantics implements CppSemantics {
 
-  private final IncludeProcessing includeProcessing;
   private final ObjcProvider objcProvider;
   private final ObjcConfiguration config;
 
@@ -47,16 +44,12 @@ public class ObjcCppSemantics implements CppSemantics {
    * @param objcProvider the provider that should be used in determining objc-specific inputs to
    *     actions
    * @param config the ObjcConfiguration for this build
-   * @param includeProcessing the closure providing the strategy for processing of includes for
-   *     actions
    */
-  public ObjcCppSemantics(
-      ObjcProvider objcProvider, IncludeProcessing includeProcessing, ObjcConfiguration config) {
-    this.includeProcessing = includeProcessing;
+  public ObjcCppSemantics(ObjcProvider objcProvider, ObjcConfiguration config) {
     this.objcProvider = objcProvider;
     this.config = config;
   }
-
+  
   @Override
   public PathFragment getEffectiveSourcePath(Artifact source) {
     return source.getRootRelativePath();
@@ -72,6 +65,7 @@ public class ObjcCppSemantics implements CppSemantics {
     actionBuilder.addTransitiveMandatoryInputs(CppHelper.getToolchain(ruleContext).getCrosstool());
     actionBuilder.setShouldScanIncludes(false);
 
+    actionBuilder.addTransitiveMandatoryInputs(objcProvider.get(HEADER));
     actionBuilder.addTransitiveMandatoryInputs(objcProvider.get(STATIC_FRAMEWORK_FILE));
     actionBuilder.addTransitiveMandatoryInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
   }
@@ -82,20 +76,10 @@ public class ObjcCppSemantics implements CppSemantics {
   }
 
   @Override
-  public NestedSet<Artifact> getAdditionalPrunableIncludes() {
-    return objcProvider.get(HEADER);
-  }
-
-  @Override
   public HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext) {
     // Currently, objc builds do not enforce strict deps.  To begin enforcing strict deps in objc,
     // switch this flag to STRICT.
     return HeadersCheckingMode.WARN;
-  }
-
-  @Override
-  public IncludeProcessing getIncludeProcessing() {
-    return includeProcessing;
   }
 
   @Override
@@ -107,7 +91,7 @@ public class ObjcCppSemantics implements CppSemantics {
   public boolean needsDotdInputPruning() {
     return config.getDotdPruningPlan() == DotdPruningMode.USE;
   }
-
+  
   @Override
   public void validateAttributes(RuleContext ruleContext) {
   }
