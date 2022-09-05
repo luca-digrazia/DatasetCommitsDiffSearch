@@ -91,7 +91,7 @@ final class ProtobufSupport {
    * @param ruleContext context this proto library is constructed in
    */
   public ProtobufSupport(RuleContext ruleContext) throws RuleErrorException {
-    this(ruleContext, ruleContext.getConfiguration());
+    this(ruleContext, null);
   }
 
   /**
@@ -110,8 +110,13 @@ final class ProtobufSupport {
     this.buildConfiguration = buildConfiguration;
     this.attributes = new ProtoAttributes(ruleContext);
     this.inputsToOutputsMap = getInputsToOutputsMap();
-    this.intermediateArtifacts =
-        ObjcRuleClasses.intermediateArtifacts(ruleContext, buildConfiguration);
+    if (buildConfiguration != null) {
+      this.intermediateArtifacts =
+          ObjcRuleClasses.intermediateArtifacts(ruleContext, buildConfiguration);
+    } else {
+      this.intermediateArtifacts =
+          ObjcRuleClasses.intermediateArtifacts(ruleContext, ruleContext.getConfiguration());
+    }
   }
 
   /**
@@ -143,18 +148,15 @@ final class ProtobufSupport {
             .addAdditionalHdrs(
                 getGeneratedProtoOutputs(inputsToOutputsMap.values(), ".pbobjc.h"));
 
-    new LegacyCompilationSupport(
+    new CompilationSupport(
             ruleContext,
             intermediateArtifacts,
             new CompilationAttributes.Builder().build())
         .registerGenerateModuleMapAction(Optional.of(moduleMapCompilationArtifacts.build()));
   }
 
-  /**
-   * Registers the actions that will compile the generated code.
-   */
-  public ProtobufSupport registerCompilationActions()
-      throws RuleErrorException, InterruptedException {
+  /** Registers the actions that will compile the generated code. */
+  public ProtobufSupport registerCompilationActions() {
     int actionId = 0;
     Iterable<PathFragment> userHeaderSearchPaths =
         ImmutableList.of(getWorkspaceRelativeOutputDir());
@@ -168,11 +170,8 @@ final class ProtobufSupport {
 
       ObjcCommon common = getCommon(intermediateArtifacts, compilationArtifacts);
 
-      new LegacyCompilationSupport(
-              ruleContext,
-              buildConfiguration,
-              intermediateArtifacts,
-              new CompilationAttributes.Builder().build())
+      new CompilationSupport(
+              ruleContext, intermediateArtifacts, new CompilationAttributes.Builder().build())
           .registerCompileAndArchiveActions(common, userHeaderSearchPaths);
 
       actionId++;
@@ -417,11 +416,18 @@ final class ProtobufSupport {
   }
 
   private IntermediateArtifacts getUniqueIntermediateArtifacts(int actionId) {
+    if (buildConfiguration != null) {
+      return new IntermediateArtifacts(
+          ruleContext,
+          getUniqueBundledProtosSuffix(actionId),
+          getUniqueBundledProtosPrefix(actionId),
+          buildConfiguration);
+    }
     return new IntermediateArtifacts(
         ruleContext,
         getUniqueBundledProtosSuffix(actionId),
         getUniqueBundledProtosPrefix(actionId),
-        buildConfiguration);
+        ruleContext.getConfiguration());
   }
 
   private ObjcCommon getCommon(
@@ -518,7 +524,10 @@ final class ProtobufSupport {
   }
 
   private String getGenfilesPathString() {
-    return buildConfiguration.getGenfilesDirectory().getExecPathString();
+    if (buildConfiguration != null) {
+      return buildConfiguration.getGenfilesDirectory().getExecPathString();
+    }
+    return ruleContext.getConfiguration().getGenfilesDirectory().getExecPathString();
   }
 
   private PathFragment getWorkspaceRelativeOutputDir() {
@@ -528,7 +537,7 @@ final class ProtobufSupport {
     PathFragment rootRelativeOutputDir = ruleContext.getUniqueDirectory(UNIQUE_DIRECTORY_NAME);
 
     return new PathFragment(
-        buildConfiguration.getBinDirectory().getExecPath(), rootRelativeOutputDir);
+        ruleContext.getBinOrGenfilesDirectory().getExecPath(), rootRelativeOutputDir);
   }
 
   private Iterable<Artifact> getGeneratedProtoOutputs(
@@ -548,18 +557,27 @@ final class ProtobufSupport {
       if (outputFile != null) {
         builder.add(
             ruleContext.getUniqueDirectoryArtifact(
-                UNIQUE_DIRECTORY_NAME, outputFile, buildConfiguration.getBinDirectory()));
-
+                UNIQUE_DIRECTORY_NAME, outputFile, ruleContext.getBinOrGenfilesDirectory()));
       }
     }
     return builder.build();
   }
 
   private Iterable<ObjcProtoProvider> getObjcProtoProviders() {
+    if (buildConfiguration != null) {
+      return ruleContext
+          .getPrerequisitesByConfiguration("deps", Mode.SPLIT, ObjcProtoProvider.class)
+          .get(buildConfiguration);
+    }
     return ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.class);
   }
 
   private Iterable<ProtoSourcesProvider> getProtoSourcesProviders() {
+    if (buildConfiguration != null) {
+      return ruleContext
+          .getPrerequisitesByConfiguration("deps", Mode.SPLIT, ProtoSourcesProvider.class)
+          .get(buildConfiguration);
+    }
     return ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoSourcesProvider.class);
   }
 
