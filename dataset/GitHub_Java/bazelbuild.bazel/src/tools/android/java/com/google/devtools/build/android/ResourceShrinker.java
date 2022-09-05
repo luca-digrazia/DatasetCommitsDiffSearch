@@ -121,10 +121,11 @@ import javax.xml.parsers.ParserConfigurationException;
 public class ResourceShrinker {
 
   public static final int TYPICAL_RESOURCE_COUNT = 200;
-  private List<ResourceFile> resourceFiles;
+  private final Path rTxt;
   private final Path classesJar;
   private final Path mergedManifest;
   private final Path mergedResourceDir;
+  private final String rPackagePath;
 
   /**
    * The computed set of unused resources
@@ -151,31 +152,22 @@ public class ResourceShrinker {
    */
   private Map<String, ResourceType> resourceClassOwners = Maps.newHashMapWithExpectedSize(20);
 
-  public static class ResourceFile {
-
-    public ResourceFile(Path rTxt, String packageName) {
-      this.rTxt = rTxt;
-      this.packageName = packageName;
-    }
-
-    @NonNull Path rTxt;
-    @NonNull String packageName;
-  }
-
   public ResourceShrinker(
-      List<ResourceFile> resourceFiles,
+      @NonNull Path rTxt,
       @NonNull Path classesJar,
       @NonNull Path manifest,
-      @NonNull Path resources) {
-    this.resourceFiles = resourceFiles;
+      @NonNull Path resources,
+      @NonNull String rPackageName) {
+    this.rTxt = rTxt;
     this.classesJar = classesJar;
-    this.mergedManifest = manifest;
-    this.mergedResourceDir = resources;
+    mergedManifest = manifest;
+    mergedResourceDir = resources;
+    this.rPackagePath = rPackageName.replace('.', '/');
   }
 
   public void shrink(Path destinationDir) throws IOException,
       ParserConfigurationException, SAXException {
-    parseResources(resourceFiles);
+    parseResourceTxtFile(rTxt);
     recordUsages(classesJar);
     recordManifestUsages(mergedManifest);
     recordResources(mergedResourceDir);
@@ -865,13 +857,7 @@ public class ResourceShrinker {
     }
   }
 
-  private void parseResources(List<ResourceFile> resourceFiles) throws IOException {
-    for (ResourceFile resourceFile : resourceFiles) {
-      parseResourceTxtFile(resourceFile.rTxt, resourceFile.packageName.replace('.', '/'));
-    }
-  }
-
-  private void parseResourceTxtFile(Path file, String rPackagePath) throws IOException {
+  private void parseResourceTxtFile(Path file) throws IOException {
     BufferedReader reader = java.nio.file.Files.newBufferedReader(file, Charset.defaultCharset());
     String line;
     while ((line = reader.readLine()) != null) {
