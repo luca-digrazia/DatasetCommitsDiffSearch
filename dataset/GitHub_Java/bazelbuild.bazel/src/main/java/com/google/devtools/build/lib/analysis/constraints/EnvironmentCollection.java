@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,12 @@
 
 package com.google.devtools.build.lib.analysis.constraints;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.EnvironmentGroup;
+import com.google.devtools.build.lib.syntax.Label;
 
 import java.util.Map;
 
@@ -38,13 +37,15 @@ public class EnvironmentCollection {
   /**
    * Stores an environment's build label along with the group it belongs to.
    */
-  @AutoValue
-  abstract static class EnvironmentWithGroup {
-    static EnvironmentWithGroup create(Label environment, EnvironmentGroup group) {
-      return new AutoValue_EnvironmentCollection_EnvironmentWithGroup(environment, group);
+  static class EnvironmentWithGroup {
+    private final Label environment;
+    private final EnvironmentGroup group;
+    EnvironmentWithGroup(Label environment, EnvironmentGroup group) {
+      this.environment = environment;
+      this.group = group;
     }
-    abstract Label environment();
-    abstract EnvironmentGroup group();
+    Label environment() { return environment; }
+    EnvironmentGroup group() { return group; }
   }
 
   /**
@@ -70,7 +71,7 @@ public class EnvironmentCollection {
   ImmutableCollection<EnvironmentWithGroup> getGroupedEnvironments() {
     ImmutableSet.Builder<EnvironmentWithGroup> builder = ImmutableSet.builder();
     for (Map.Entry<EnvironmentGroup, Label> entry : map.entries()) {
-      builder.add(EnvironmentWithGroup.create(entry.getValue(), entry.getKey()));
+      builder.add(new EnvironmentWithGroup(entry.getValue(), entry.getKey()));
     }
     return builder.build();
   }

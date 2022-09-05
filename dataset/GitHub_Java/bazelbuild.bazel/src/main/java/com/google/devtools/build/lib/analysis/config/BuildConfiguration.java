@@ -391,33 +391,6 @@ public final class BuildConfiguration implements Serializable {
   }
 
   /**
-   * Converter for default --host_cpu to the auto-detected host cpu.
-   *
-   * <p>This detects the host cpu of the Blaze's server but if the compilation happens in a
-   * compilation cluster then the host cpu of the compilation cluster might be different than
-   * the auto-detected one and the --host_cpu option must then be set explicitly.
-   */
-  public static class HostCpuConverter implements Converter<String> {
-    @Override
-    public String convert(String input) throws OptionsParsingException {
-      if (input.isEmpty()) {
-        switch (OS.getCurrent()) {
-          case DARWIN:
-            return "darwin";
-          default:
-            return "k8";
-        }
-      }
-      return input;
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "a string";
-    }
-  }
-
-  /**
    * Options that affect the value of a BuildConfiguration instance.
    *
    * <p>(Note: any client that creates a view will also need to declare
@@ -518,9 +491,8 @@ public final class BuildConfiguration implements Serializable {
     public boolean showCachedAnalysisResults;
 
     @Option(name = "host_cpu",
-        defaultValue = "",
+        defaultValue = "null",
         category = "semantics",
-        converter = HostCpuConverter.class,
         help = "The host CPU.")
     public String hostCpu;
 
@@ -781,9 +753,9 @@ public final class BuildConfiguration implements Serializable {
         // In the fallback case, we have already tried the target options and they didn't work, so
         // now we try the default options; the hostCpu field has the default value, because we use
         // getDefault() above.
-        host.cpu = host.hostCpu;
+        host.cpu = computeHostCpu(host.hostCpu);
       } else {
-        host.cpu = hostCpu;
+        host.cpu = computeHostCpu(hostCpu);
       }
 
       // === Runfiles ===
@@ -812,6 +784,18 @@ public final class BuildConfiguration implements Serializable {
       return host;
     }
 
+    private static String computeHostCpu(String explicitHostCpu) {
+      if (explicitHostCpu != null) {
+        return explicitHostCpu;
+      }
+      switch (OS.getCurrent()) {
+        case DARWIN:
+          return "darwin";
+        default:
+          return "k8";
+      }
+    }
+
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       labelMap.putAll("action_listener", actionListeners);
@@ -823,36 +807,8 @@ public final class BuildConfiguration implements Serializable {
   }
 
   /**
-   * All the output directories pertinent to a configuration.
+   * A list of build configurations that only contains the null element.
    */
-  private static final class OutputRoots implements Serializable {
-    private final Root outputDirectory; // the configuration-specific output directory.
-    private final Root binDirectory;
-    private final Root genfilesDirectory;
-    private final Root coverageMetadataDirectory; // for coverage-related metadata, artifacts, etc.
-    private final Root testLogsDirectory;
-    private final Root includeDirectory;
-    private final Root middlemanDirectory;
-
-    private OutputRoots(BlazeDirectories directories, String outputDirName) {
-      Path execRoot = directories.getExecRoot();
-      // configuration-specific output tree
-      Path outputDir = directories.getOutputPath().getRelative(outputDirName);
-      this.outputDirectory = Root.asDerivedRoot(execRoot, outputDir);
-
-      // specific subdirs under outputDirectory
-      this.binDirectory = Root.asDerivedRoot(execRoot, outputDir.getRelative("bin"));
-      this.genfilesDirectory = Root.asDerivedRoot(execRoot, outputDir.getRelative("genfiles"));
-      this.coverageMetadataDirectory = Root.asDerivedRoot(execRoot,
-          outputDir.getRelative("coverage-metadata"));
-      this.testLogsDirectory = Root.asDerivedRoot(execRoot, outputDir.getRelative("testlogs"));
-      this.includeDirectory = Root.asDerivedRoot(execRoot,
-          outputDir.getRelative(BlazeDirectories.RELATIVE_INCLUDE_DIR));
-      this.middlemanDirectory = Root.middlemanRoot(execRoot, outputDir);
-    }
-  }
-
-  /** A list of build configurations that only contains the null element. */
   private static final List<BuildConfiguration> NULL_LIST =
       Collections.unmodifiableList(Arrays.asList(new BuildConfiguration[] { null }));
 
@@ -864,22 +820,28 @@ public final class BuildConfiguration implements Serializable {
 
   private final ImmutableMap<Class<? extends Fragment>, Fragment> fragments;
 
-  /** Directories in the output tree. */
-  private final OutputRoots outputRoots;
+  // Directories in the output tree
+  private final Root outputDirectory; // the configuration-specific output directory.
+  private final Root binDirectory;
+  private final Root genfilesDirectory;
+  private final Root coverageMetadataDirectory; // for coverage-related metadata, artifacts, etc.
+  private final Root testLogsDirectory;
+  private final Root includeDirectory;
+  private final Root middlemanDirectory;
 
-  /** If false, AnalysisEnviroment doesn't register any actions created by the ConfiguredTarget. */
+  private final PathFragment binFragment;
+  private final PathFragment genfilesFragment;
+
+  // If false, AnalysisEnviroment doesn't register any actions created by the ConfiguredTarget.
   private final boolean actionsEnabled;
 
   private final ImmutableSet<Label> coverageLabels;
   private final ImmutableSet<Label> coverageReportGeneratorLabels;
 
-  // TODO(bazel-team): Move this to a configuration fragment.
-  private final PathFragment shExecutable;
+  // Executables like "perl" or "sh"
+  private final ImmutableMap<String, PathFragment> executables;
 
-  /**
-   * The global "make variables" such as "$(TARGET_CPU)"; these get applied to all rules analyzed in
-   * this configuration.
-   */
+  // All the "defglobals" in //tools:GLOBALS for this platform/configuration:
   private final ImmutableMap<String, String> globalMakeEnv;
 
   private final ImmutableMap<String, String> defaultShellEnvironment;
@@ -997,11 +959,27 @@ public final class BuildConfiguration implements Serializable {
     this.mnemonic = buildMnemonic();
     String outputDirName = (options.shortName != null) ? options.shortName : mnemonic;
     this.shortName = buildShortName(outputDirName);
-    this.platformName = buildPlatformName();
 
-    this.shExecutable = collectExecutables().get("sh");
+    this.executables = collectExecutables();
 
-    this.outputRoots = new OutputRoots(directories, outputDirName);
+    Path execRoot = directories.getExecRoot();
+    // configuration-specific output tree
+    Path outputDir = directories.getOutputPath().getRelative(outputDirName);
+    this.outputDirectory = Root.asDerivedRoot(execRoot, outputDir);
+
+    // specific subdirs under outputDirectory
+    this.binDirectory = Root.asDerivedRoot(execRoot, outputDir.getRelative("bin"));
+    this.genfilesDirectory = Root.asDerivedRoot(execRoot, outputDir.getRelative("genfiles"));
+    this.coverageMetadataDirectory = Root.asDerivedRoot(execRoot,
+        outputDir.getRelative("coverage-metadata"));
+    this.testLogsDirectory = Root.asDerivedRoot(execRoot, outputDir.getRelative("testlogs"));
+    this.includeDirectory = Root.asDerivedRoot(execRoot,
+        outputDir.getRelative(BlazeDirectories.RELATIVE_INCLUDE_DIR));
+    this.middlemanDirectory = Root.middlemanRoot(execRoot, outputDir);
+
+    // precompute some frequently-used relative paths
+    this.binFragment = getBinDirectory().getExecPath();
+    this.genfilesFragment = getGenfilesDirectory().getExecPath();
 
     ImmutableSet.Builder<Label> coverageLabelsBuilder = ImmutableSet.builder();
     ImmutableSet.Builder<Label> coverageReportGeneratorLabelsBuilder = ImmutableSet.builder();
@@ -1011,6 +989,13 @@ public final class BuildConfiguration implements Serializable {
     }
     this.coverageLabels = coverageLabelsBuilder.build();
     this.coverageReportGeneratorLabels = coverageReportGeneratorLabelsBuilder.build();
+
+    // Platform name
+    StringBuilder platformNameBuilder = new StringBuilder();
+    for (Fragment fragment : fragments.values()) {
+      platformNameBuilder.append(fragment.getPlatformName());
+    }
+    this.platformName = platformNameBuilder.toString();
 
     this.defaultShellEnvironment = setupShellEnvironment();
 
@@ -1036,10 +1021,10 @@ public final class BuildConfiguration implements Serializable {
     // the bin directory and the genfiles directory
     // These variables will be used on Windows as well, so we need to make sure
     // that paths use the correct system file-separator.
-    globalMakeEnvBuilder.put("BINDIR", getBinDirectory().getExecPath().getPathString());
+    globalMakeEnvBuilder.put("BINDIR", binFragment.getPathString());
     globalMakeEnvBuilder.put("INCDIR",
         getIncludeDirectory().getExecPath().getPathString());
-    globalMakeEnvBuilder.put("GENDIR", getGenfilesDirectory().getExecPath().getPathString());
+    globalMakeEnvBuilder.put("GENDIR", genfilesFragment.getPathString());
     globalMakeEnv = globalMakeEnvBuilder.build();
 
     cacheKey = computeCacheKey(
@@ -1105,14 +1090,6 @@ public final class BuildConfiguration implements Serializable {
     }
     nameParts.add(getCompilationMode() + platformSuffix);
     return Joiner.on('-').skipNulls().join(nameParts);
-  }
-
-  private String buildPlatformName() {
-    StringBuilder platformNameBuilder = new StringBuilder();
-    for (Fragment fragment : fragments.values()) {
-      platformNameBuilder.append(fragment.getPlatformName());
-    }
-    return platformNameBuilder.toString();
   }
 
   /**
@@ -1361,7 +1338,7 @@ public final class BuildConfiguration implements Serializable {
    * Returns the output directory for this build configuration.
    */
   public Root getOutputDirectory() {
-    return outputRoots.outputDirectory;
+    return outputDirectory;
   }
 
   /**
@@ -1370,21 +1347,21 @@ public final class BuildConfiguration implements Serializable {
   @SkylarkCallable(name = "bin_dir", structField = true,
       doc = "The root corresponding to bin directory.")
   public Root getBinDirectory() {
-    return outputRoots.binDirectory;
+    return binDirectory;
   }
 
   /**
    * Returns a relative path to the bin directory at execution time.
    */
   public PathFragment getBinFragment() {
-    return getBinDirectory().getExecPath();
+    return binFragment;
   }
 
   /**
    * Returns the include directory for this build configuration.
    */
   public Root getIncludeDirectory() {
-    return outputRoots.includeDirectory;
+    return includeDirectory;
   }
 
   /**
@@ -1393,7 +1370,7 @@ public final class BuildConfiguration implements Serializable {
   @SkylarkCallable(name = "genfiles_dir", structField = true,
       doc = "The root corresponding to genfiles directory.")
   public Root getGenfilesDirectory() {
-    return outputRoots.genfilesDirectory;
+    return genfilesDirectory;
   }
 
   /**
@@ -1402,21 +1379,21 @@ public final class BuildConfiguration implements Serializable {
    * needed for Jacoco's coverage reporting tools.
    */
   public Root getCoverageMetadataDirectory() {
-    return outputRoots.coverageMetadataDirectory;
+    return coverageMetadataDirectory;
   }
 
   /**
    * Returns the testlogs directory for this build configuration.
    */
   public Root getTestLogsDirectory() {
-    return outputRoots.testLogsDirectory;
+    return testLogsDirectory;
   }
 
   /**
    * Returns a relative path to the genfiles directory at execution time.
    */
   public PathFragment getGenfilesFragment() {
-    return getGenfilesDirectory().getExecPath();
+    return genfilesFragment;
   }
 
   /**
@@ -1436,7 +1413,7 @@ public final class BuildConfiguration implements Serializable {
    * Returns the internal directory (used for middlemen) for this build configuration.
    */
   public Root getMiddlemanDirectory() {
-    return outputRoots.middlemanDirectory;
+    return middlemanDirectory;
   }
 
   public boolean getAllowRuntimeDepsOnNeverLink() {
@@ -1534,7 +1511,7 @@ public final class BuildConfiguration implements Serializable {
    * Returns the path to sh.
    */
   public PathFragment getShExecutable() {
-    return shExecutable;
+    return executables.get("sh");
   }
 
   /**
