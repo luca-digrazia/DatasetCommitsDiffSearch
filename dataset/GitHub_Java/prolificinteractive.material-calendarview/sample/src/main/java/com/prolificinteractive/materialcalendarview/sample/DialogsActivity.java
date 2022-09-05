@@ -4,8 +4,8 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.v4.app.DialogFragment;
 import android.support.v7.app.AppCompatActivity;
-import android.support.v7.app.AppCompatDialogFragment;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,7 +13,7 @@ import android.widget.TextView;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
 import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
-import com.prolificinteractive.materialcalendarview.OnDateSelectedListener;
+import com.prolificinteractive.materialcalendarview.OnDateChangedListener;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -27,12 +27,13 @@ import butterknife.OnClick;
 public class DialogsActivity extends AppCompatActivity {
 
     private static final DateFormat FORMATTER = SimpleDateFormat.getDateInstance();
+    private TextView textView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_dialogs);
-        ButterKnife.bind(this);
+        ButterKnife.inject(this);
     }
 
     @OnClick(R.id.button_normal_dialog)
@@ -45,7 +46,7 @@ public class DialogsActivity extends AppCompatActivity {
         new SimpleCalendarDialogFragment().show(getSupportFragmentManager(), "test-simple-calendar");
     }
 
-    public static class SimpleDialogFragment extends AppCompatDialogFragment {
+    public static class SimpleDialogFragment extends DialogFragment {
 
         @NonNull
         @Override
@@ -58,7 +59,7 @@ public class DialogsActivity extends AppCompatActivity {
         }
     }
 
-    public static class SimpleCalendarDialogFragment extends AppCompatDialogFragment implements OnDateSelectedListener {
+    public static class SimpleCalendarDialogFragment extends DialogFragment implements OnDateChangedListener {
 
         private TextView textView;
 
@@ -79,7 +80,7 @@ public class DialogsActivity extends AppCompatActivity {
         }
 
         @Override
-        public void onDateSelected(@NonNull MaterialCalendarView widget, @NonNull CalendarDay date, boolean selected) {
+        public void onDateChanged(MaterialCalendarView widget, CalendarDay date) {
             textView.setText(FORMATTER.format(date.getDate()));
         }
     }

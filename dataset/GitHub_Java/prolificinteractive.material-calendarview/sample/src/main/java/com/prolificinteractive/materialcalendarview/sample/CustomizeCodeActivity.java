@@ -3,33 +3,34 @@ package com.prolificinteractive.materialcalendarview.sample;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.TypedValue;
+import android.widget.TextView;
 
 import com.prolificinteractive.materialcalendarview.CalendarDay;
-import com.prolificinteractive.materialcalendarview.CalendarMode;
 import com.prolificinteractive.materialcalendarview.MaterialCalendarView;
+import com.prolificinteractive.materialcalendarview.OnDateChangedListener;
 import com.prolificinteractive.materialcalendarview.format.ArrayWeekDayFormatter;
 import com.prolificinteractive.materialcalendarview.format.MonthArrayTitleFormatter;
 
-import java.util.Calendar;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 
-import butterknife.Bind;
-import butterknife.ButterKnife;
+public class CustomizeCodeActivity extends AppCompatActivity implements OnDateChangedListener {
 
-public class CustomizeCodeActivity extends AppCompatActivity {
-
-    @Bind(R.id.calendarView)
-    MaterialCalendarView widget;
+    private static final DateFormat FORMATTER = SimpleDateFormat.getDateInstance();
+    private TextView textView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_basic);
-        ButterKnife.bind(this);
 
-        widget.setShowOtherDates(MaterialCalendarView.SHOW_ALL);
+        textView = (TextView) findViewById(R.id.textView);
+
+        MaterialCalendarView widget = (MaterialCalendarView) findViewById(R.id.calendarView);
+        widget.setOnDateChangedListener(this);
+
+        widget.setShowOtherDates(true);
         widget.setArrowColor(getResources().getColor(R.color.sample_primary));
-        widget.setLeftArrowMask(getResources().getDrawable(R.drawable.ic_navigation_arrow_back));
-        widget.setRightArrowMask(getResources().getDrawable(R.drawable.ic_navigation_arrow_forward));
         widget.setSelectionColor(getResources().getColor(R.color.sample_primary));
         widget.setHeaderTextAppearance(R.style.TextAppearance_AppCompat_Medium);
         widget.setWeekDayTextAppearance(R.style.TextAppearance_AppCompat_Medium);
@@ -37,15 +38,11 @@ public class CustomizeCodeActivity extends AppCompatActivity {
         widget.setTitleFormatter(new MonthArrayTitleFormatter(getResources().getTextArray(R.array.custom_months)));
         widget.setWeekDayFormatter(new ArrayWeekDayFormatter(getResources().getTextArray(R.array.custom_weekdays)));
         widget.setTileSize((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 36, getResources().getDisplayMetrics()));
+    }
 
-        CalendarDay today = CalendarDay.from(2016, 5, 2);
-        widget.setCurrentDate(today);
-        widget.setSelectedDate(today);
-
-        widget.setFirstDayOfWeek(Calendar.WEDNESDAY);
-        widget.setMinimumDate(CalendarDay.from(2016, 4, 3));
-        widget.setMaximumDate(CalendarDay.from(2016, 5, 12));
-        widget.setCalendarDisplayMode(CalendarMode.WEEKS);
+    @Override
+    public void onDateChanged(MaterialCalendarView widget, CalendarDay date) {
+        textView.setText(FORMATTER.format(date.getDate()));
     }
 
 }
