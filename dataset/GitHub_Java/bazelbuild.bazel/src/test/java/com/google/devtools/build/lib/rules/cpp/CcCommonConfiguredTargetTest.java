@@ -36,8 +36,8 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -116,15 +116,14 @@ public class CcCommonConfiguredTargetTest extends BuildViewTestCase {
             .isEmpty());
   }
 
-  protected boolean emptyShouldOutputStaticLibrary() {
-    return !getAnalysisMock().isThisBazel();
+  protected static boolean emptyShouldOutputStaticLibrary() {
+    return !TestConstants.THIS_IS_BAZEL;
   }
 
   @Test
   public void testEmptyBinary() throws Exception {
     ConfiguredTarget emptybin = getConfiguredTarget("//empty:emptybinary");
-    assertEquals(
-        "emptybinary" + OsUtils.executableExtension(), baseNamesOf(getFilesToBuild(emptybin)));
+    assertEquals("emptybinary", baseNamesOf(getFilesToBuild(emptybin)));
   }
 
   private List<String> getCopts(String target) throws Exception {
