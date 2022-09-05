@@ -209,36 +209,37 @@
 
 package com.taobao.android.builder;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
+import com.android.build.api.transform.QualifiedContent;
 import com.android.builder.core.AtlasBuilder;
 import com.android.builder.model.MavenCoordinates;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.taobao.android.builder.adapter.BuilderAdapter;
 import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
-import com.taobao.android.object.ApkFileList;
+import com.taobao.android.builder.manager.AtlasConfigurationHelper;
+import com.taobao.android.builder.tasks.app.BuildAtlasEnvTask;
+import com.taobao.android.builder.tools.process.ApkProcessor;
 import org.gradle.api.Project;
 
+import java.io.File;
+import java.util.*;
+
 /**
- * Created by shenghua.nish on 2016-05-09 下午3:50.
+ * Created by shenghua.nish on 2016-05-09 At 3:50 p.m.
  */
 public class AtlasBuildContext {
 
     /**
-     * 外部插件可以更改该类的具体的实现
+     * External plug-ins can change the specific implementation of this class
      */
     public static BuilderAdapter sBuilderAdapter = new BuilderAdapter();
+
+    public static Map<String,File>bundleExploadDir = new HashMap<>();
 
     public static Map<String, AtlasDependencyTree> androidDependencyTrees = Maps.newHashMap();
 
     public static Map<String, AtlasDependencyTree> libDependencyTrees = Maps.newHashMap();
-
-    public static ApkFileList apkFileList = new ApkFileList();
-
-    public static ApkFileList finalApkFileList = new ApkFileList();
 
     public static Map<String, String> customPackageIdMaps = new HashMap<String, String>();
 
@@ -246,18 +247,46 @@ public class AtlasBuildContext {
 
     public static Map<String, AwbBundle> awbBundleMap = new HashMap<String, AwbBundle>();
 
+    public static AtlasMainDexHelper atlasMainDexHelper = new AtlasMainDexHelper();
+
+    public static ApkProcessor atlasApkProcessor = new ApkProcessor.AtlasApkProcessor();
+
     public static Set<String> conflictDependencies;
 
+
+    public static AtlasConfigurationHelper atlasConfigurationHelper;
+
+
+    public static STATUS status;
+
     /**
-     * 依赖对应原始的坐标地址， classInject 需要查找到atlas。
+     * Depending on the original coordinate address, classInject You need to find atlas.
      *
-     * 文件展开目录 -> 坐标地址
+     * File open directory -> Coordinates the address
      */
     public static Map<String, MavenCoordinates> dependencyTraceMap = new HashMap<>();
 
     /**
-     * 修改后的文件 -> 原始文件
+     * Modified file -> The original file
      */
     public static Map<String, String> jarTraceMap = new HashMap<String, String>();
+
+    public static Set<File> localLibs = new HashSet<>();
+
+    public static void reset(){
+        dependencyTraceMap.clear();
+        jarTraceMap.clear();
+        conflictDependencies = null;
+        awbBundleMap.clear();
+        androidBuilderMap.clear();
+        customPackageIdMaps.clear();
+        libDependencyTrees.clear();
+        androidBuilderMap.clear();
+    }
+
+    public enum STATUS{
+        MULTIDEX,DEXARCHIVE,PREDEX,DEX,EXTERNALLIBSMERGE,DEXMERGE
+
+    }
 
 }
