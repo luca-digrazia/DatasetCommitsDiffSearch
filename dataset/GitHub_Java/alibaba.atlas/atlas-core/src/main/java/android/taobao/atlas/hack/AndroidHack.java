@@ -452,14 +452,12 @@ public class AndroidHack {
                         sAssetsField.set(res, resources.getAssets());
                     }
                 }else{
-                    if(res!=null) {
-                        Field resourcesImplField = Resources.class.getDeclaredField("mResourcesImpl");
-                        resourcesImplField.setAccessible(true);
-                        Object resourceImpl = resourcesImplField.get(res);
-                        Field implAssets = findField(resourceImpl, "mAssets");
-                        implAssets.setAccessible(true);
-                        implAssets.set(resourceImpl, resources.getAssets());
-                    }
+                    Field resourcesImplField = Resources.class.getDeclaredField("mResourcesImpl");
+                    resourcesImplField.setAccessible(true);
+                    Object resourceImpl = resourcesImplField.get(res);
+                    Field implAssets = findField(resourceImpl, "mAssets");
+                    implAssets.setAccessible(true);
+                    implAssets.set(resourceImpl, resources.getAssets());
                 }
 
                 if(Build.VERSION.SDK_INT>19 && Build.VERSION.SDK_INT<24) {
@@ -473,6 +471,7 @@ public class AndroidHack {
                         final Object newTypedArrayPool = typedArrayConstructor.newInstance(poolSize);
                         typedArrayPoolField.set(resources, newTypedArrayPool);
                     } catch (Throwable ignored) {
+                        ignored.printStackTrace();
                     }
                 }
                 if(res!=null) {
