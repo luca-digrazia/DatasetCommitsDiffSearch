@@ -23,6 +23,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Interners;
 import com.google.common.collect.Sets;
+import com.google.common.hash.HashCode;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -202,7 +203,7 @@ public class PackageDeserializer {
       }
     }
     AttributeContainerWithoutLocation attributeContainer =
-        new AttributeContainerWithoutLocation(ruleClass, hasher.hash().asBytes());
+        new AttributeContainerWithoutLocation(ruleClass, hasher.hash());
 
     Label ruleLabel = deserializeLabel(rulePb.getName());
     try {
@@ -672,10 +673,10 @@ public class PackageDeserializer {
   public static class AttributeContainerWithoutLocation extends AttributeContainer {
 
     @Nullable
-    private final byte[] syntheticAttrHash;
+    private final HashCode syntheticAttrHash;
 
     private AttributeContainerWithoutLocation(RuleClass ruleClass,
-        @Nullable byte[] syntheticAttrHash) {
+        @Nullable HashCode syntheticAttrHash) {
       super(ruleClass, null);
       this.syntheticAttrHash = syntheticAttrHash;
     }
@@ -695,8 +696,9 @@ public class PackageDeserializer {
       throw new UnsupportedOperationException("Setting location not supported");
     }
 
+
     @Nullable
-    public byte[] getSyntheticAttrHash() {
+    public HashCode getSyntheticAttrHash() {
       return syntheticAttrHash;
     }
 

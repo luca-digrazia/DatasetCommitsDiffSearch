@@ -61,6 +61,16 @@ import java.util.Set;
  */
 public class Package {
 
+  public static PackageIdentifier EXTERNAL_PACKAGE_IDENTIFIER;
+
+  static {
+    try {
+      Package.EXTERNAL_PACKAGE_IDENTIFIER = PackageIdentifier.parse("//external");
+    } catch (LabelSyntaxException e) {
+      throw new IllegalStateException();
+    }
+  }
+
   /**
    * Common superclass for all name-conflict exceptions.
    */
@@ -678,16 +688,6 @@ public class Package {
     }
 
     /**
-     * Derive a LegacyBuilder from a normal Builder.
-     */
-    LegacyBuilder(Builder builder) {
-      super(builder.pkg);
-      if (builder.getFilename() != null) {
-        setFilename(builder.getFilename());
-      }
-    }
-
-    /**
      * Sets the globber used for this package's glob expansions.
      */
     LegacyBuilder setGlobber(Globber globber) {
@@ -717,8 +717,8 @@ public class Package {
     }
   }
 
-  public static LegacyBuilder newExternalPackageBuilder(Path workspacePath, String runfilesPrefix) {
-    LegacyBuilder b = new LegacyBuilder(Label.EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix);
+  public static Builder newExternalPackageBuilder(Path workspacePath, String runfilesPrefix) {
+    Builder b = new Builder(new Package(EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix));
     b.setFilename(workspacePath);
     b.setMakeEnv(new MakeEnvironment.Builder());
     return b;
@@ -797,11 +797,6 @@ public class Package {
 
     protected PackageIdentifier getPackageIdentifier() {
       return pkg.getPackageIdentifier();
-    }
-
-    /** Determine if we are in the WORKSPACE file or not */
-    public boolean isWorkspace() {
-      return pkg.getPackageIdentifier().equals(Label.EXTERNAL_PACKAGE_IDENTIFIER);
     }
 
     /**

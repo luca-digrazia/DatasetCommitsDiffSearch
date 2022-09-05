@@ -14,11 +14,6 @@
 package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
@@ -27,27 +22,21 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.util.PackageLoadingTestCaseForJunit4;
+import com.google.devtools.build.lib.packages.util.PackageLoadingTestCase;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.Path;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
-
 import java.util.HashMap;
 import java.util.Map;
 
-@RunWith(JUnit4.class)
-public class RuleFactoryTest extends PackageLoadingTestCaseForJunit4 {
+public class RuleFactoryTest extends PackageLoadingTestCase {
 
   private ConfiguredRuleClassProvider provider = TestRuleClassProvider.getRuleClassProvider();
   private RuleFactory ruleFactory = new RuleFactory(provider);
 
   public static final Location LOCATION_42 = Location.fromFileAndOffsets(null, 42, 42);
 
-  @Test
   public void testCreateRule() throws Exception {
     Path myPkgPath = scratch.resolve("/foo/workspace/mypkg/BUILD");
     Package.Builder pkgBuilder =
@@ -109,7 +98,6 @@ public class RuleFactoryTest extends PackageLoadingTestCaseForJunit4 {
     assertThat(attributes.get("srcs", BuildType.LABEL_LIST)).isEmpty();
   }
 
-  @Test
   public void testCreateWorkspaceRule() throws Exception {
     Path myPkgPath = scratch.resolve("/foo/workspace/WORKSPACE");
     Package.Builder pkgBuilder = Package.newExternalPackageBuilder(myPkgPath, "TESTING");
@@ -130,7 +118,6 @@ public class RuleFactoryTest extends PackageLoadingTestCaseForJunit4 {
     assertFalse(rule.containsErrors());
   }
 
-  @Test
   public void testWorkspaceRuleFailsInBuildFile() throws Exception {
     Path myPkgPath = scratch.resolve("/foo/workspace/mypkg/BUILD");
     Package.Builder pkgBuilder =
@@ -157,11 +144,10 @@ public class RuleFactoryTest extends PackageLoadingTestCaseForJunit4 {
     }
   }
 
-  @Test
   public void testBuildRuleFailsInWorkspaceFile() throws Exception {
     Path myPkgPath = scratch.resolve("/foo/workspace/WORKSPACE");
     Package.Builder pkgBuilder =
-        new Package.Builder(Package.EXTERNAL_PACKAGE_IDENTIFIER, "TESTING")
+        new Package.Builder(PackageIdentifier.createInDefaultRepo("mypkg"), "TESTING")
             .setFilename(myPkgPath)
             .setMakeEnv(new MakeEnvironment.Builder());
 
@@ -196,7 +182,6 @@ public class RuleFactoryTest extends PackageLoadingTestCaseForJunit4 {
         ruleClass.hasAttr(attrName, type));
   }
 
-  @Test
   public void testOutputFileNotEqualDot() throws Exception {
     Path myPkgPath = scratch.resolve("/foo");
     Package.Builder pkgBuilder =
@@ -227,7 +212,6 @@ public class RuleFactoryTest extends PackageLoadingTestCaseForJunit4 {
    */
   // TODO(ulfjack): Remove this check when we switch over to the builder
   // pattern, which will always guarantee that these attributes are present.
-  @Test
   public void testTestRules() throws Exception {
     Path myPkgPath = scratch.resolve("/foo/workspace/mypkg/BUILD");
     Package pkg =
