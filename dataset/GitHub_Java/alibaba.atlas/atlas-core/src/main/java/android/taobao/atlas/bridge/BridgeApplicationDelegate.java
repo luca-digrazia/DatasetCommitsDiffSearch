@@ -354,18 +354,18 @@ public class BridgeApplicationDelegate {
             RuntimeVariables.sInstalledVersionName = mInstalledVersionName;
         }
         AtlasCrashManager.forceStopAppWhenCrashed();
-//        System.out.print(SoLoader.class.getName());
-//        try {
-//            String preLaunchStr = (String) RuntimeVariables.getFrameworkProperty("preLaunch");
-//            if (!TextUtils.isEmpty(preLaunchStr)) {
-//                AtlasPreLauncher launcher = (AtlasPreLauncher) Class.forName(preLaunchStr).newInstance();
-//                if (launcher != null) {
-//                    launcher.initBeforeAtlas(mRawApplication.getBaseContext());
-//                }
-//            }
-//        } catch (Throwable e) {
-//            throw new RuntimeException(e);
-//        }
+        System.out.print(SoLoader.class.getName());
+        try {
+            String preLaunchStr = (String) RuntimeVariables.getFrameworkProperty("preLaunch");
+            if (!TextUtils.isEmpty(preLaunchStr)) {
+                AtlasPreLauncher launcher = (AtlasPreLauncher) Class.forName(preLaunchStr).newInstance();
+                if (launcher != null) {
+                    launcher.initBeforeAtlas(mRawApplication.getBaseContext());
+                }
+            }
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
 
 
         // *2 init atlas use reflect
@@ -413,11 +413,7 @@ public class BridgeApplicationDelegate {
                 AtlasHacks.ActivityThread$AppBindData_providers.set(mBoundApplication,null);
             }
         } catch (Exception e) {
-            if(e instanceof InvocationTargetException){
-                throw new RuntimeException(((InvocationTargetException)e).getTargetException());
-            }else {
-                throw new RuntimeException(e);
-            }
+            throw new RuntimeException(e);
         }
     }
 
@@ -486,11 +482,7 @@ public class BridgeApplicationDelegate {
             }
 
         }catch(Throwable e){
-            if(e instanceof InvocationTargetException){
-                throw new RuntimeException(((InvocationTargetException)e).getTargetException());
-            }else {
-                throw new RuntimeException(e);
-            }
+            throw new RuntimeException(e);
         }
 
         if(mRealApplication instanceof IMonitor){

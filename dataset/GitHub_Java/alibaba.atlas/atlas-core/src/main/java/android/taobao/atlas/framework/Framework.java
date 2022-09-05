@@ -613,6 +613,7 @@ public final class Framework {
                 continue;
             }else if(!upgrade && dexPatchVersions[i]==-1){
                 updateBundles.put(locations[i],"-1");
+                AtlasHotPatchManager.getInstance().disablePatch(locations[i]);
                 continue;
             }
 
