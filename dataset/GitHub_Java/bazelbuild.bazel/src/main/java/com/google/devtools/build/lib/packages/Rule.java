@@ -374,14 +374,7 @@ public final class Rule implements Target, DependencyFilter.AttributeInfoProvide
    * Returns a new List instance containing all direct dependencies (all types).
    */
   public Collection<Label> getLabels() {
-    final List<Label> labels = Lists.newArrayList();
-    AggregatingAttributeMapper.of(this).visitLabels(new AttributeMap.AcceptsLabelAttribute() {
-      @Override
-      public void acceptLabelAttribute(Label label, Attribute attribute) {
-        labels.add(label);
-      }
-    });
-    return labels;
+    return getLabels(DependencyFilter.ALL_DEPS);
   }
 
   /**
