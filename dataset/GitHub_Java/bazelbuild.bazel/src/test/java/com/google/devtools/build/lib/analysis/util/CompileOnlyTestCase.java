@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@ package com.google.devtools.build.lib.analysis.util;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.TopLevelArtifactProvider;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 
 /**
  * Common code for unit tests that validate --compile_only behavior.
  */
-public abstract class CompileOnlyTestCase extends BuildViewTestCase {
+public abstract class CompileOnlyTestCase extends BuildViewTestCaseForJunit4 {
 
   protected Artifact getArtifactByExecPathSuffix(ConfiguredTarget target, String path) {
-    for (Artifact artifact : getOutputGroup(target, TopLevelArtifactProvider.FILES_TO_COMPILE)) {
+    for (Artifact artifact : getOutputGroup(target, OutputGroupProvider.FILES_TO_COMPILE)) {
       if (artifact.getExecPathString().endsWith(path)) {
         return artifact;
       }
