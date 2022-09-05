@@ -310,15 +310,6 @@ public class AppVariantOutputContext {
                         ".ap_");
     }
 
-    public File getAwbCompressResourcePackageOutputFile(AwbBundle awbBundle) {
-        return new File(variantScope.getGlobalScope().getIntermediatesDir(),
-                "res/" +
-                        awbBundle.getName() +
-                        "/resources-" +
-                        variantData.getVariantConfiguration().getBaseName() +
-                        "-stripped.ap_");
-    }
-
     public Map<String, ProcessAwbAndroidResources> getAwbAndroidResourcesMap() {
         return awbAndroidResourcesMap;
     }
@@ -376,8 +367,6 @@ public class AppVariantOutputContext {
 //    public Map<String, DataBindingProcessLayoutsTask> getDataBindingProcessLayoutsTaskMap() {
 //        return dataBindingProcessLayoutsTaskMap;
 //    }
-
-
     public String getAwbPackageOutputFilePath(AwbBundle awbBundle) {
         String awbOutputName = awbBundle.getAwbSoName();
 
@@ -403,7 +392,7 @@ public class AppVariantOutputContext {
         Set<String> libSoNames = variantContext.getAtlasExtension().getTBuildConfig().getKeepInLibSoNames();
 
         File file = null;
-
+        // if (libSoNames.isEmpty() || libSoNames.contains(awbOutputName)) {
             file = new File(variantContext.getAwbApkOutputDir(), "lib/armeabi" + File.separator + awbOutputName);
             file.getParentFile().mkdirs();
         // }else {
@@ -414,11 +403,6 @@ public class AppVariantOutputContext {
         // if (!assetsSoNames.isEmpty() && assetsSoNames.contains(awbOutputName)) {
         //     file = new File(variantContext.getVariantData().mergeAssetsTask.getOutputDir(), awbOutputName);
         // }
-
-        Set<String> assetsSoNames = variantContext.getAtlasExtension().getTBuildConfig().getKeepInAssetsSoNames();
-        if (!assetsSoNames.isEmpty() && assetsSoNames.contains(awbOutputName)) {
-            file = new File(variantContext.getVariantData().mergeAssetsTask.getOutputDir(), awbOutputName);
-        }
 
         awbBundle.outputBundleFile = file;
         return file;
@@ -525,17 +509,6 @@ public class AppVariantOutputContext {
     }
 
     public  File updateAwbDexFile(JarInput jarInput, File output) {
-        boolean localJar = false;
-        if (jarInput.getName().startsWith("android.local.jars")){
-            localJar = true;
-        }
-        if (localJar){
-            //todo awb localJars
-            //subproject local
-
-
-        }
-
         for (AwbTransform awbTransform:awbTransformMap.values()){
             if (awbTransform.getFileTransform().containsKey(jarInput.getFile())){
                 File currentFile = awbTransform.getFileTransform().get(jarInput.getFile());
