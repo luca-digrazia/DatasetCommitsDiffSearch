@@ -1454,8 +1454,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   /**
    * Returns the generating action of a given artifact ({@code null} if it's a source artifact).
    */
-  private Action getGeneratingAction(EventHandler eventHandler, Artifact artifact)
-      throws InterruptedException {
+  private Action getGeneratingAction(Artifact artifact) throws InterruptedException {
     if (artifact.isSourceArtifact()) {
       return null;
     }
@@ -1473,7 +1472,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       // this action. We don't expect callers to query generating actions in such cases.
       EvaluationResult<ActionLookupValue> result = buildDriver.evaluate(
           ImmutableList.of(actionLookupKey), false, ResourceUsage.getAvailableProcessors(),
-          eventHandler);
+          errorEventListener);
       return result.hasError()
           ? null
           : result.get(actionLookupKey).getGeneratingAction(artifact);
@@ -1485,7 +1484,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    *
    * <p>For legacy compatibility only.
    */
-  public ActionGraph getActionGraph(final EventHandler eventHandler) {
+  public ActionGraph getActionGraph() {
     return new ActionGraph() {
       @Override
       public Action getGeneratingAction(final Artifact artifact) {
@@ -1493,7 +1492,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
           return callUninterruptibly(new Callable<Action>() {
             @Override
             public Action call() throws InterruptedException {
-              return SkyframeExecutor.this.getGeneratingAction(eventHandler, artifact);
+              return SkyframeExecutor.this.getGeneratingAction(artifact);
             }
           });
         } catch (Exception e) {
