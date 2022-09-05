@@ -581,7 +581,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
         + "  return s\n"
         + "s = foo()");
     exec(input, env);
-    assertEquals("abc", env.lookup("s"));
+    assertEquals("cab", env.lookup("s"));
   }
 
   @Test
