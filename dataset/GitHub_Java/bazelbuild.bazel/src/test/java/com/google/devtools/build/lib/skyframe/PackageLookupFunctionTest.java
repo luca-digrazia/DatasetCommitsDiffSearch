@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.NullEventHandler;
+import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.ErrorReason;
@@ -95,10 +96,8 @@ public class PackageLookupFunctionTest extends FoundationTestCase {
         SkyFunctions.WORKSPACE_FILE,
         new WorkspaceFileFunction(
             ruleClassProvider,
-            TestConstants.PACKAGE_FACTORY_FACTORY_FOR_TESTING.create(
-                ruleClassProvider,
-                new BazelRulesModule().getPackageEnvironmentExtension(),
-                scratch.getFileSystem()),
+            new PackageFactory(
+                ruleClassProvider, new BazelRulesModule().getPackageEnvironmentExtension()),
             directories));
     skyFunctions.put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction());
     differencer = new RecordingDifferencer();
