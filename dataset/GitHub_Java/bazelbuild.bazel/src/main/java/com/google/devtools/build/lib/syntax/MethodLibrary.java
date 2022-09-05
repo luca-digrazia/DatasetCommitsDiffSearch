@@ -14,8 +14,8 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
+import com.google.common.base.CharMatcher;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -27,9 +27,12 @@ import com.google.devtools.build.lib.syntax.ClassObject.SkylarkClassObject;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkSignature.Param;
+import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor.HackHackEitherList;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -48,6 +51,16 @@ import java.util.regex.Pattern;
 public class MethodLibrary {
 
   private MethodLibrary() {}
+
+  // TODO(bazel-team):
+  // the Build language and Skylark currently have different list types:
+  // the Build language uses plain java List (usually ArrayList) which is mutable and accepts
+  // any argument, whereas Skylark uses SkylarkList which is immutable and accepts only
+  // arguments of the same kind. Some methods below use HackHackEitherList as a magic marker
+  // to indicate that either kind of lists is used depending on the evaluation context.
+  // It might be a good idea to either have separate methods for the two languages where it matters,
+  // or to unify the two languages so they use the same data structure (which might require
+  // updating all existing clients).
 
   // Convert string index in the same way Python does.
   // If index is negative, starts from the end.
@@ -101,10 +114,11 @@ public class MethodLibrary {
           + "<pre class=\"language-python\">\"|\".join([\"a\", \"b\", \"c\"]) == \"a|b|c\"</pre>",
       mandatoryPositionals = {
         @Param(name = "self", type = String.class, doc = "This string, a separator."),
-        @Param(name = "elements", type = SkylarkList.class, doc = "The objects to join.")})
+        @Param(name = "elements", type = HackHackEitherList.class, doc = "The objects to join.")})
   private static BuiltinFunction join = new BuiltinFunction("join") {
-    public String invoke(String self, SkylarkList elements) throws ConversionException {
-      return Joiner.on(self).join(elements);
+    public String invoke(String self, Object elements) throws ConversionException {
+      List<?> seq = Type.OBJECT_LIST.convert(elements, "'join.elements' argument");
+      return Joiner.on(self).join(seq);
     }
   };
 
@@ -267,7 +281,7 @@ public class MethodLibrary {
   };
 
   @SkylarkSignature(name = "split", objectType = StringModule.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Returns a list of all the words in the string, using <code>sep</code>  "
           + "as the separator, optionally limiting the number of splits to <code>maxsplit</code>.",
       mandatoryPositionals = {
@@ -279,18 +293,18 @@ public class MethodLibrary {
       useEnvironment = true,
       useLocation = true)
   private static BuiltinFunction split = new BuiltinFunction("split") {
-    public MutableList invoke(String self, String sep, Object maxSplitO, Location loc,
+    public Object invoke(String self, String sep, Object maxSplitO, Location loc,
         Environment env) throws ConversionException, EvalException {
       int maxSplit = Type.INTEGER.convertOptional(
           maxSplitO, "'split' argument of 'split'", /*label*/null, -2);
       // + 1 because the last result is the remainder, and default of -2 so that after +1 it's -1
       String[] ss = Pattern.compile(sep, Pattern.LITERAL).split(self, maxSplit + 1);
-      return MutableList.of(env, (Object[]) ss);
+      return convert(Arrays.<String>asList(ss), env);
     }
   };
 
   @SkylarkSignature(name = "rsplit", objectType = StringModule.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Returns a list of all the words in the string, using <code>sep</code>  "
           + "as the separator, optionally limiting the number of splits to <code>maxsplit</code>. "
           + "Except for splitting from the right, this method behaves like split().",
@@ -304,18 +318,19 @@ public class MethodLibrary {
       useLocation = true)
   private static BuiltinFunction rsplit = new BuiltinFunction("rsplit") {
     @SuppressWarnings("unused")
-    public MutableList invoke(
-        String self, String sep, Object maxSplitO, Location loc, Environment env)
+    public Object invoke(String self, String sep, Object maxSplitO, Location loc, Environment env)
         throws ConversionException, EvalException {
       int maxSplit =
           Type.INTEGER.convertOptional(maxSplitO, "'split' argument of 'split'", null, -1);
       List<String> result;
 
       try {
-        return stringRSplit(self, sep, maxSplit, env);
+        result = stringRSplit(self, sep, maxSplit);
       } catch (IllegalArgumentException ex) {
         throw new EvalException(loc, ex);
       }
+
+      return convert(result, env);
     }
   };
 
@@ -331,8 +346,7 @@ public class MethodLibrary {
    * @return A list of words
    * @throws IllegalArgumentException
    */
-  private static MutableList stringRSplit(
-      String input, String separator, int maxSplits, Environment env)
+  private static List<String> stringRSplit(String input, String separator, int maxSplits)
       throws IllegalArgumentException {
     if (separator.isEmpty()) {
       throw new IllegalArgumentException("Empty separator");
@@ -364,11 +378,11 @@ public class MethodLibrary {
       result.addFirst(input.substring(0, remainingLength));
     }
 
-    return new MutableList(result, env);
+    return result;
   }
 
   @SkylarkSignature(name = "partition", objectType = StringModule.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Splits the input string at the first occurrence of the separator "
           + "<code>sep</code> and returns the resulting partition as a three-element "
           + "list of the form [substring_before, separator, substring_after].",
@@ -381,14 +395,14 @@ public class MethodLibrary {
       useLocation = true)
   private static BuiltinFunction partition = new BuiltinFunction("partition") {
     @SuppressWarnings("unused")
-    public MutableList invoke(String self, String sep, Location loc, Environment env)
+    public Object invoke(String self, String sep, Location loc, Environment env)
         throws EvalException {
       return partitionWrapper(self, sep, true, env, loc);
     }
   };
 
   @SkylarkSignature(name = "rpartition", objectType = StringModule.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Splits the input string at the last occurrence of the separator "
           + "<code>sep</code> and returns the resulting partition as a three-element "
           + "list of the form [substring_before, separator, substring_after].",
@@ -401,7 +415,7 @@ public class MethodLibrary {
       useLocation = true)
   private static BuiltinFunction rpartition = new BuiltinFunction("rpartition") {
     @SuppressWarnings("unused")
-    public MutableList invoke(String self, String sep, Location loc, Environment env)
+    public Object invoke(String self, String sep, Location loc, Environment env)
         throws EvalException {
       return partitionWrapper(self, sep, false, env, loc);
     }
@@ -419,10 +433,10 @@ public class MethodLibrary {
    * @param loc The location that is used for potential exceptions
    * @return A list with three elements
    */
-  private static MutableList partitionWrapper(String self, String separator, boolean forward,
+  private static Object partitionWrapper(String self, String separator, boolean forward,
       Environment env, Location loc) throws EvalException {
     try {
-      return new MutableList(stringPartition(self, separator, forward), env);
+      return convert(stringPartition(self, separator, forward), env);
     } catch (IllegalArgumentException ex) {
       throw new EvalException(loc, ex);
     }
@@ -431,7 +445,7 @@ public class MethodLibrary {
   /**
    * Splits the input string at the {first|last} occurrence of the given separator
    * and returns the resulting partition as a three-tuple of Strings, contained
-   * in a {@code MutableList}.
+   * in a {@code List}.
    *
    * <p>If the input string does not contain the separator, the tuple will
    * consist of the original input string and two empty strings.
@@ -728,16 +742,16 @@ public class MethodLibrary {
           @Param(name = "self", type = String.class, doc = "This string."),
       },
       extraPositionals = {
-          @Param(name = "args", type = SkylarkList.class, defaultValue = "()",
+          @Param(name = "args", type = HackHackEitherList.class, defaultValue = "[]",
               doc = "List of arguments"),
       },
       extraKeywords = {@Param(name = "kwargs", doc = "Dictionary of arguments")},
       useLocation = true)
   private static BuiltinFunction format = new BuiltinFunction("format") {
     @SuppressWarnings("unused")
-    public String invoke(String self, SkylarkList args, Map<String, Object> kwargs, Location loc)
+    public String invoke(String self, Object args, Map<String, Object> kwargs, Location loc)
         throws ConversionException, EvalException {
-      return new FormatParser(loc).format(self, args.getList(), kwargs);
+      return new FormatParser(loc).format(self, Type.OBJECT_LIST.convert(args, "format"), kwargs);
     }
   };
 
@@ -776,6 +790,20 @@ public class MethodLibrary {
     }
   };
 
+  @SkylarkSignature(name = "$slice", objectType = List.class,
+      documented = false,
+      mandatoryPositionals = {
+        @Param(name = "self", type = List.class, doc = "This list or tuple."),
+        @Param(name = "start", type = Integer.class, doc = "start position of the slice."),
+        @Param(name = "end", type = Integer.class, doc = "end position of the slice.")},
+      doc = "x[<code>start</code>:<code>end</code>] returns a slice or a list slice.")
+  private static BuiltinFunction listSlice = new BuiltinFunction("$slice") {
+    public Object invoke(List<Object> self, Integer left, Integer right)
+        throws EvalException, ConversionException {
+      return sliceList(self, left, right);
+    }
+  };
+
   @SkylarkSignature(name = "$slice", objectType = MutableList.class, returnType = MutableList.class,
       documented = false,
       mandatoryPositionals = {
@@ -785,11 +813,11 @@ public class MethodLibrary {
       doc = "x[<code>start</code>:<code>end</code>] returns a slice or a list slice.",
       useEnvironment = true)
   private static BuiltinFunction mutableListSlice = new BuiltinFunction("$slice") {
-    public MutableList invoke(MutableList self, Integer left, Integer right,
-        Environment env) throws EvalException, ConversionException {
-      return new MutableList(sliceList(self.getList(), left, right), env);
-    }
-  };
+      public MutableList invoke(MutableList self, Integer left, Integer right,
+          Environment env) throws EvalException, ConversionException {
+        return new MutableList(sliceList(self.getList(), left, right), env);
+      }
+    };
 
   @SkylarkSignature(name = "$slice", objectType = Tuple.class, returnType = Tuple.class,
       documented = false,
@@ -818,7 +846,7 @@ public class MethodLibrary {
   // supported list methods
   @SkylarkSignature(
     name = "sorted",
-    returnType = MutableList.class,
+    returnType = HackHackEitherList.class,
     doc =
         "Sort a collection. Elements are sorted first by their type, "
             + "then by their value (in ascending order).",
@@ -828,16 +856,43 @@ public class MethodLibrary {
   )
   private static BuiltinFunction sorted =
       new BuiltinFunction("sorted") {
-        public MutableList invoke(Object self, Location loc, Environment env)
+        public Object invoke(Object self, Location loc, Environment env)
             throws EvalException, ConversionException {
           try {
-            return new MutableList(
-                Ordering.from(EvalUtils.SKYLARK_COMPARATOR).sortedCopy(
-                    EvalUtils.toCollection(self, loc)),
-                env);
+            Collection<?> col =
+                Ordering.from(EvalUtils.SKYLARK_COMPARATOR)
+                    .sortedCopy(EvalUtils.toCollection(self, loc));
+            return convert(col, env);
           } catch (EvalUtils.ComparisonException e) {
             throw new EvalException(loc, e);
           }
+        }
+      };
+
+  // This function has a SkylarkSignature but is only used by the Build language, not Skylark.
+  @SkylarkSignature(
+    name = "append",
+    objectType = List.class,
+    returnType = Runtime.NoneType.class,
+    documented = false,
+    doc = "Adds an item to the end of the list.",
+    mandatoryPositionals = {
+      // we use List rather than SkylarkList because this is actually for use *outside* Skylark
+      @Param(name = "self", type = List.class, doc = "This list."),
+      @Param(name = "item", type = Object.class, doc = "Item to add at the end.")
+    },
+    useLocation = true,
+    useEnvironment = true)
+  private static BuiltinFunction append =
+      new BuiltinFunction("append") {
+        public Runtime.NoneType invoke(List<Object> self, Object item,
+            Location loc, Environment env) throws EvalException, ConversionException {
+          if (EvalUtils.isTuple(self)) {
+            throw new EvalException(loc,
+                "function 'append' is not defined on object of type 'Tuple'");
+          }
+          self.add(item);
+          return Runtime.NONE;
         }
       };
 
@@ -853,11 +908,37 @@ public class MethodLibrary {
     },
     useLocation = true,
     useEnvironment = true)
-  private static BuiltinFunction append =
+  private static BuiltinFunction skylarkAppend =
       new BuiltinFunction("append") {
         public Runtime.NoneType invoke(MutableList self, Object item,
             Location loc, Environment env) throws EvalException, ConversionException {
           self.add(item, loc, env);
+          return Runtime.NONE;
+        }
+      };
+
+  // This function has a SkylarkSignature but is only used by the Build language, not Skylark.
+  @SkylarkSignature(
+    name = "extend",
+    objectType = List.class,
+    returnType = Runtime.NoneType.class,
+    documented = false,
+    doc = "Adds all items to the end of the list.",
+    mandatoryPositionals = {
+      // we use List rather than SkylarkList because this is actually for use *outside* Skylark
+      @Param(name = "self", type = List.class, doc = "This list."),
+      @Param(name = "items", type = List.class, doc = "Items to add at the end.")},
+    useLocation = true,
+    useEnvironment = true)
+  private static BuiltinFunction skylarkExtend =
+      new BuiltinFunction("extend") {
+        public Runtime.NoneType invoke(List<Object> self, List<Object> items,
+            Location loc, Environment env) throws EvalException, ConversionException {
+          if (EvalUtils.isTuple(self)) {
+            throw new EvalException(loc,
+                "function 'extend' is not defined on object of type 'Tuple'");
+          }
+          self.addAll(items);
           return Runtime.NONE;
         }
       };
@@ -889,7 +970,7 @@ public class MethodLibrary {
         @Param(name = "self", type = Map.class, doc = "This object."),
         @Param(name = "key", type = Object.class, doc = "The index or key to access.")},
       useLocation = true)
-  private static BuiltinFunction dictIndexOperator = new BuiltinFunction("$index") {
+  private static BuiltinFunction indexOperator = new BuiltinFunction("$index") {
     public Object invoke(Map<?, ?> self, Object key,
         Location loc) throws EvalException, ConversionException {
       if (!self.containsKey(key)) {
@@ -906,7 +987,7 @@ public class MethodLibrary {
         @Param(name = "self", type = MutableList.class, doc = "This list."),
         @Param(name = "key", type = Object.class, doc = "The index or key to access.")},
       useLocation = true)
-  private static BuiltinFunction listIndexOperator = new BuiltinFunction("$index") {
+  private static BuiltinFunction mutableListIndexOperator = new BuiltinFunction("$index") {
       public Object invoke(MutableList self, Object key,
           Location loc) throws EvalException, ConversionException {
         if (self.isEmpty()) {
@@ -919,7 +1000,7 @@ public class MethodLibrary {
 
   // tuple access operator
   @SkylarkSignature(name = "$index", documented = false, objectType = Tuple.class,
-      doc = "Returns the nth element of a tuple.",
+      doc = "Returns the nth element of a list.",
       mandatoryPositionals = {
         @Param(name = "self", type = Tuple.class, doc = "This tuple."),
         @Param(name = "key", type = Object.class, doc = "The index or key to access.")},
@@ -928,12 +1009,30 @@ public class MethodLibrary {
       public Object invoke(Tuple self, Object key,
           Location loc) throws EvalException, ConversionException {
         if (self.isEmpty()) {
-          throw new EvalException(loc, "tuple is empty");
+          throw new EvalException(loc, "Tuple is empty");
         }
         int index = getListIndex(key, self.size(), loc);
         return self.getList().get(index);
       }
     };
+
+  // list access operator
+  @SkylarkSignature(name = "$index", documented = false, objectType = List.class,
+      doc = "Returns the nth element of a list.",
+      mandatoryPositionals = {
+        @Param(name = "self", type = List.class, doc = "This object."),
+        @Param(name = "key", type = Object.class, doc = "The index or key to access.")},
+      useLocation = true)
+  private static BuiltinFunction listIndexOperator = new BuiltinFunction("$index") {
+    public Object invoke(List<?> self, Object key,
+        Location loc) throws EvalException, ConversionException {
+      if (self.isEmpty()) {
+        throw new EvalException(loc, "List is empty");
+      }
+      int index = getListIndex(key, self.size(), loc);
+      return self.get(index);
+    }
+  };
 
   @SkylarkSignature(name = "$index", documented = false, objectType = String.class,
       doc = "Returns the nth element of a string.",
@@ -950,57 +1049,58 @@ public class MethodLibrary {
   };
 
   @SkylarkSignature(name = "values", objectType = Map.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Returns the list of values. Dictionaries are always sorted by their keys:"
           + "<pre class=\"language-python\">"
           + "{2: \"a\", 4: \"b\", 1: \"c\"}.values() == [\"c\", \"a\", \"b\"]</pre>\n",
       mandatoryPositionals = {@Param(name = "self", type = Map.class, doc = "This dict.")},
-      useEnvironment = true)
+      useLocation = true, useEnvironment = true)
   private static BuiltinFunction values = new BuiltinFunction("values") {
-    public MutableList invoke(Map<?, ?> self,
-        Environment env) throws EvalException, ConversionException {
+    public Object invoke(Map<?, ?> self,
+        Location loc, Environment env) throws EvalException, ConversionException {
       // Use a TreeMap to ensure consistent ordering.
       Map<?, ?> dict = new TreeMap<>(self);
-      return new MutableList(dict.values(), env);
+      return convert(dict.values(), env);
     }
   };
 
   @SkylarkSignature(name = "items", objectType = Map.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Returns the list of key-value tuples. Dictionaries are always sorted by their keys:"
           + "<pre class=\"language-python\">"
           + "{2: \"a\", 4: \"b\", 1: \"c\"}.items() == [(1, \"c\"), (2, \"a\"), (4, \"b\")]"
           + "</pre>\n",
       mandatoryPositionals = {
         @Param(name = "self", type = Map.class, doc = "This dict.")},
-      useEnvironment = true)
+      useLocation = true, useEnvironment = true)
   private static BuiltinFunction items = new BuiltinFunction("items") {
-    public MutableList invoke(Map<?, ?> self,
-        Environment env) throws EvalException, ConversionException {
+    public Object invoke(Map<?, ?> self,
+        Location loc, Environment env) throws EvalException, ConversionException {
       // Use a TreeMap to ensure consistent ordering.
       Map<?, ?> dict = new TreeMap<>(self);
       List<Object> list = Lists.newArrayListWithCapacity(dict.size());
       for (Map.Entry<?, ?> entries : dict.entrySet()) {
-        list.add(Tuple.of(entries.getKey(), entries.getValue()));
+        List<?> item = ImmutableList.of(entries.getKey(), entries.getValue());
+        list.add(env.isCallerSkylark() ? Tuple.copyOf(item) : item);
       }
-      return new MutableList(list, env);
+      return convert(list, env);
     }
   };
 
   @SkylarkSignature(name = "keys", objectType = Map.class,
-      returnType = MutableList.class,
+      returnType = HackHackEitherList.class,
       doc = "Returns the list of keys. Dictionaries are always sorted by their keys:"
           + "<pre class=\"language-python\">{2: \"a\", 4: \"b\", 1: \"c\"}.keys() == [1, 2, 4]"
           + "</pre>\n",
       mandatoryPositionals = {
         @Param(name = "self", type = Map.class, doc = "This dict.")},
-      useEnvironment = true)
+      useLocation = true, useEnvironment = true)
   // Skylark will only call this on a dict; and
   // allowed keys are all Comparable... if not mutually, it's OK to get a runtime exception.
   private static BuiltinFunction keys = new BuiltinFunction("keys") {
-    public MutableList invoke(Map<Comparable<?>, ?> dict,
-        Environment env) throws EvalException {
-      return new MutableList(Ordering.natural().sortedCopy(dict.keySet()), env);
+    public Object invoke(Map<Comparable<?>, ?> dict,
+        Location loc, Environment env) throws EvalException {
+      return convert(Ordering.natural().sortedCopy(dict.keySet()), env);
     }
   };
 
@@ -1022,6 +1122,17 @@ public class MethodLibrary {
       return defaultValue;
     }
   };
+
+  // TODO(bazel-team): Use the same type for both Skylark and BUILD files.
+  @SuppressWarnings("unchecked")
+  private static Iterable<Object> convert(Collection<?> list, Environment env)
+      throws EvalException {
+    if (env.isCallerSkylark()) {
+      return new MutableList(list, env);
+    } else {
+      return Lists.newArrayList(list);
+    }
+  }
 
   // unary minus
   @SkylarkSignature(name = "-", returnType = Integer.class,
@@ -1239,28 +1350,29 @@ public class MethodLibrary {
     }
   };
 
-  @SkylarkSignature(name = "enumerate", returnType = MutableList.class,
+  @SkylarkSignature(name = "enumerate", returnType = HackHackEitherList.class,
       doc = "Returns a list of pairs (two-element tuples), with the index (int) and the item from"
           + " the input list.\n<pre class=\"language-python\">"
           + "enumerate([24, 21, 84]) == [(0, 24), (1, 21), (2, 84)]</pre>\n",
       mandatoryPositionals = {
-        @Param(name = "list", type = SkylarkList.class, doc = "input list")
+        @Param(name = "list", type = HackHackEitherList.class, doc = "input list")
       },
+      useLocation = true,
       useEnvironment = true)
   private static BuiltinFunction enumerate = new BuiltinFunction("enumerate") {
-    public MutableList invoke(SkylarkList input, Environment env)
+    public Object invoke(Object input, Location loc, Environment env)
         throws EvalException, ConversionException {
       int count = 0;
       List<SkylarkList> result = Lists.newArrayList();
-      for (Object obj : input) {
+      for (Object obj : Type.OBJECT_LIST.convert(input, "input")) {
         result.add(Tuple.of(count, obj));
         count++;
       }
-      return new MutableList(result, env);
+      return convert(result, env);
     }
   };
 
-  @SkylarkSignature(name = "range", returnType = MutableList.class,
+  @SkylarkSignature(name = "range", returnType = HackHackEitherList.class,
       doc = "Creates a list where items go from <code>start</code> to <code>stop</code>, using a "
           + "<code>step</code> increment. If a single argument is provided, items will "
           + "range from 0 to that element."
@@ -1281,8 +1393,8 @@ public class MethodLibrary {
       useLocation = true,
       useEnvironment = true)
   private static final BuiltinFunction range = new BuiltinFunction("range") {
-      public MutableList invoke(Integer startOrStop, Object stopOrNone, Integer step,
-          Location loc, Environment env)
+      public Object invoke(Integer startOrStop, Object stopOrNone, Integer step, Location loc,
+          Environment env)
         throws EvalException, ConversionException {
       int start;
       int stop;
@@ -1308,7 +1420,7 @@ public class MethodLibrary {
           start += step;
         }
       }
-      return new MutableList(result, env);
+      return convert(result, env);
     }
   };
 
@@ -1387,13 +1499,13 @@ public class MethodLibrary {
     }
   };
 
-  @SkylarkSignature(name = "dir", returnType = MutableList.class,
+  @SkylarkSignature(name = "dir", returnType = SkylarkList.class,
       doc = "Returns a list strings: the names of the attributes and "
           + "methods of the parameter object.",
       mandatoryPositionals = {@Param(name = "x", doc = "The object to check.")},
       useLocation = true, useEnvironment = true)
   private static final BuiltinFunction dir = new BuiltinFunction("dir") {
-    public MutableList invoke(Object object,
+    public SkylarkList invoke(Object object,
         Location loc, Environment env) throws EvalException, ConversionException {
       // Order the fields alphabetically.
       Set<String> fields = new TreeSet<>();

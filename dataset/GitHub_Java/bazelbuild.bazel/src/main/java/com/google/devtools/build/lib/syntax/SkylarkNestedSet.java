@@ -228,8 +228,7 @@ public final class SkylarkNestedSet implements Iterable<Object>, SkylarkValue {
   }
 
   public Collection<Object> toCollection() {
-    // Do not remove <Object>: workaround for Java 7 type inference.
-    return ImmutableList.<Object>copyOf(set.toCollection());
+    return ImmutableList.copyOf(set.toCollection());
   }
 
   public boolean isEmpty() {
