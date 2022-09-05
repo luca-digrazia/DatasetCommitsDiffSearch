@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,8 @@
 
 package com.google.devtools.build.lib.graph;
 
-import static java.util.Comparator.comparing;
-
 import com.google.common.collect.Ordering;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -71,7 +70,12 @@ public class DFS<T> {
     if (edgeOrder == null) {
       this.edgeOrder = null;
     } else {
-      this.edgeOrder = comparing(Node::getLabel, edgeOrder::compare);
+      this.edgeOrder = new Comparator<Node<T>>() {
+        @Override
+        public int compare(Node<T> o1, Node<T> o2) {
+          return edgeOrder.compare(o1.getLabel(), o2.getLabel());
+        }
+      };
     }
   }
 

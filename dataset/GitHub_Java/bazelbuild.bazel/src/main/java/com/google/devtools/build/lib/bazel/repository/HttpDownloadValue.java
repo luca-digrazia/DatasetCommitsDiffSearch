@@ -34,11 +34,16 @@ public class HttpDownloadValue implements SkyValue {
   }
 
   @Override
+  public String toString() {
+    return path.getPathString();
+  }
+
+  @Override
   public boolean equals(Object other) {
     if (this == other) {
       return true;
     }
-    if (other == null || !(other instanceof HttpDownloadValue)) {
+    if (!(other instanceof HttpDownloadValue)) {
       return false;
     }
     HttpDownloadValue otherValue = (HttpDownloadValue) other;

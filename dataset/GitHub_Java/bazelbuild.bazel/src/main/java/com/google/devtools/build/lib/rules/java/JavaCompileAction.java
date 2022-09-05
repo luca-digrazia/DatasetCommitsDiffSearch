@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,13 +48,13 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomAr
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.ImmutableIterable;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
@@ -63,10 +63,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Action that represents a Java compilation.
@@ -182,7 +180,7 @@ public class JavaCompileAction extends AbstractAction {
                             Iterable<Artifact> instrumentationJars,
                             List<String> processorNames,
                             Collection<Artifact> messages,
-                            Map<PathFragment, Artifact> resources,
+                            Collection<Artifact> resources,
                             Collection<Artifact> classpathResources,
                             Collection<Artifact> sourceJars,
                             Collection<Artifact> sourceFiles,
@@ -194,7 +192,7 @@ public class JavaCompileAction extends AbstractAction {
             .addTransitive(classpathEntries)
             .addAll(processorPath)
             .addAll(messages)
-            .addAll(resources.values())
+            .addAll(resources)
             .addAll(classpathResources)
             .addAll(sourceJars)
             .addAll(sourceFiles)
@@ -215,7 +213,7 @@ public class JavaCompileAction extends AbstractAction {
     this.processorPath = ImmutableList.copyOf(processorPath);
     this.processorNames = ImmutableList.copyOf(processorNames);
     this.messages = ImmutableList.copyOf(messages);
-    this.resources = ImmutableList.copyOf(resources.values());
+    this.resources = ImmutableList.copyOf(resources);
     this.classpathResources = ImmutableList.copyOf(classpathResources);
     this.sourceJars = ImmutableList.copyOf(sourceJars);
     this.sourceFiles = ImmutableList.copyOf(sourceFiles);
@@ -464,7 +462,7 @@ public class JavaCompileAction extends AbstractAction {
       List<Artifact> processorPath,
       List<String> processorNames,
       Collection<Artifact> messages,
-      Map<PathFragment, Artifact> resources,
+      Collection<Artifact> resources,
       Collection<Artifact> classpathResources,
       Collection<Artifact> sourceJars,
       Collection<Artifact> sourceFiles,
@@ -541,15 +539,14 @@ public class JavaCompileAction extends AbstractAction {
     if (!messages.isEmpty()) {
       result.add("--messages");
       for (Artifact message : messages) {
-        addAsResourcePrefixedExecPath(
-            semantics.getDefaultJavaResourcePath(message.getRootRelativePath()), message, result);
+        addAsResourcePrefixedExecPath(semantics, message, result);
       }
     }
 
     if (!resources.isEmpty()) {
       result.add("--resources");
-      for (Map.Entry<PathFragment, Artifact> resource : resources.entrySet()) {
-        addAsResourcePrefixedExecPath(resource.getKey(), resource.getValue(), result);
+      for (Artifact resource : resources) {
+        addAsResourcePrefixedExecPath(semantics, resource, result);
       }
     }
 
@@ -571,7 +568,8 @@ public class JavaCompileAction extends AbstractAction {
     // written out and whether we try to minimize the compile-time classpath.
     if (strictJavaDeps != BuildConfiguration.StrictDepsMode.OFF) {
       result.add("--strict_java_deps");
-      result.add(strictJavaDeps.toString());
+      result.add((semantics.useStrictJavaDeps(configuration) ? strictJavaDeps
+          : BuildConfiguration.StrictDepsMode.OFF).toString());
       result.add(new CustomMultiArgv() {
         @Override
         public Iterable<String> argv() {
@@ -607,9 +605,10 @@ public class JavaCompileAction extends AbstractAction {
     return result;
   }
 
-  private static void addAsResourcePrefixedExecPath(PathFragment resourcePath,
+  private static void addAsResourcePrefixedExecPath(JavaSemantics semantics,
       Artifact artifact, CustomCommandLine.Builder builder) {
     PathFragment execPath = artifact.getExecPath();
+    PathFragment resourcePath = semantics.getJavaResourcePath(artifact.getRootRelativePath());
     if (execPath.equals(resourcePath)) {
       builder.addPaths(":%s", resourcePath);
     } else {
@@ -736,7 +735,7 @@ public class JavaCompileAction extends AbstractAction {
     private Artifact metadata;
     private final Collection<Artifact> sourceFiles = new ArrayList<>();
     private final Collection<Artifact> sourceJars = new ArrayList<>();
-    private final Map<PathFragment, Artifact> resources = new LinkedHashMap<>();
+    private final Collection<Artifact> resources = new ArrayList<>();
     private final Collection<Artifact> classpathResources = new ArrayList<>();
     private final Collection<Artifact> translations = new LinkedHashSet<>();
     private BuildConfiguration.StrictDepsMode strictJavaDeps =
@@ -968,8 +967,8 @@ public class JavaCompileAction extends AbstractAction {
       return this;
     }
 
-    public Builder addResources(Map<PathFragment, Artifact> resources) {
-      this.resources.putAll(resources);
+    public Builder addResources(Collection<Artifact> resources) {
+      this.resources.addAll(resources);
       return this;
     }
 

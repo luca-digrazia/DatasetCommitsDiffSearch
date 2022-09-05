@@ -23,17 +23,10 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ChangedFilesMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
-import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
-import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.standalone.StandaloneSpawnStrategy;
-import com.google.devtools.build.lib.util.CommandFailureUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
@@ -50,44 +43,31 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class WorkerSpawnStrategy implements SpawnActionContext {
   private final WorkerPool workers;
   private final IncrementalHeuristic incrementalHeuristic;
-  private final StandaloneSpawnStrategy standaloneStrategy;
-  private final boolean verboseFailures;
-  private final int maxRetries;
 
   public WorkerSpawnStrategy(
-      BlazeDirectories blazeDirs,
-      OptionsClassProvider optionsProvider,
-      EventBus eventBus,
-      WorkerPool workers,
-      boolean verboseFailures,
-      int maxRetries) {
+      OptionsClassProvider optionsProvider, WorkerPool workers, EventBus eventBus) {
     Preconditions.checkNotNull(optionsProvider);
     WorkerOptions options = optionsProvider.getOptions(WorkerOptions.class);
+    workers.setMaxTotalPerKey(options.workerMaxInstances);
+    workers.setMaxIdlePerKey(options.workerMaxInstances);
+    workers.setMinIdlePerKey(options.workerMaxInstances);
+    this.workers = workers;
     this.incrementalHeuristic = new IncrementalHeuristic(options.workerMaxChangedFiles);
     eventBus.register(incrementalHeuristic);
-    this.workers = Preconditions.checkNotNull(workers);
-    this.standaloneStrategy = new StandaloneSpawnStrategy(blazeDirs.getExecRoot(), verboseFailures);
-    this.verboseFailures = verboseFailures;
-    this.maxRetries = maxRetries;
   }
 
   @Override
   public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
-    Executor executor = actionExecutionContext.getExecutor();
-    if (executor.reportsSubcommands()) {
-      executor.reportSubcommand(
-          Label.print(spawn.getOwner().getLabel())
-              + " ["
-              + spawn.getResourceOwner().prettyPrint()
-              + "]",
-          spawn.asShellCommand(executor.getExecRoot()));
+    if (!incrementalHeuristic.shouldUseWorkers()) {
+      SpawnActionContext context = actionExecutionContext.getExecutor().getSpawnActionContext("");
+      if (context != this) {
+        context.exec(spawn, actionExecutionContext);
+        return;
+      }
     }
 
-    if (!incrementalHeuristic.shouldUseWorkers()) {
-      standaloneStrategy.exec(spawn, actionExecutionContext);
-      return;
-    }
+    String paramFile = Iterables.getLast(spawn.getArguments());
 
     // We assume that the spawn to be executed always gets a single argument, which is a flagfile
     // prefixed with @ and that it will start in persistent mode when we don't pass it one.
@@ -95,11 +75,10 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
     // persistent mode and then pass it the flagfile via a WorkRequest to make it actually do the
     // work.
     if (!Iterables.getLast(spawn.getArguments()).startsWith("@")) {
-      standaloneStrategy.exec(spawn, actionExecutionContext);
-      return;
+      throw new IllegalStateException(
+          "Must have parameter file as last arg, got args: " + spawn.getArguments());
     }
 
-    String paramFile = Iterables.getLast(spawn.getArguments());
     FileOutErr outErr = actionExecutionContext.getFileOutErr();
 
     ImmutableList<String> args = ImmutableList.<String>builder()
@@ -108,76 +87,42 @@ final class WorkerSpawnStrategy implements SpawnActionContext {
         .build();
     ImmutableMap<String, String> env = spawn.getEnvironment();
     Path workDir = actionExecutionContext.getExecutor().getExecRoot();
-    WorkerKey key = new WorkerKey(args, env, workDir, spawn.getMnemonic());
+    WorkerKey key = new WorkerKey(args, env, workDir);
 
     try {
-      WorkResponse response = execInWorker(executor.getEventHandler(), paramFile, key, maxRetries);
+      Worker worker = workers.borrowObject(key);
+      try {
+        WorkRequest.newBuilder()
+            .addArguments(paramFile)
+            .build()
+            .writeDelimitedTo(worker.getOutputStream());
+        worker.getOutputStream().flush();
 
-      outErr.getErrorStream().write(response.getOutputBytes().toByteArray());
+        WorkResponse response = WorkResponse.parseDelimitedFrom(worker.getInputStream());
 
-      if (response.getExitCode() != 0) {
-        throw new UserExecException(
-            String.format("Worker process failed with exit code: %d.", response.getExitCode()));
+        if (response == null) {
+          throw new UserExecException(
+              "Worker process did not return a correct WorkResponse. This is probably caused by a "
+                  + "bug in the worker, writing unexpected other data to stdout.");
+        }
+
+        String trimmedOutput = response.getOutput().trim();
+        if (!trimmedOutput.isEmpty()) {
+          outErr.getErrorStream().write(trimmedOutput.getBytes());
+        }
+
+        if (response.getExitCode() != 0) {
+          throw new UserExecException(
+              String.format("Worker process failed with exit code: %d.", response.getExitCode()));
+        }
+      } finally {
+        if (worker != null) {
+          workers.returnObject(key, worker);
+        }
       }
     } catch (Exception e) {
-      String message =
-          CommandFailureUtils.describeCommandFailure(
-              verboseFailures, spawn.getArguments(), env, workDir.getPathString());
-      throw new UserExecException(message, e);
+      throw new UserExecException(e.getMessage(), e);
     }
-  }
-
-  private WorkResponse execInWorker(
-      EventHandler eventHandler, String paramFile, WorkerKey key, int retriesLeft)
-      throws Exception {
-    Worker worker = null;
-    WorkResponse response = null;
-
-    try {
-      worker = workers.borrowObject(key);
-      WorkRequest.newBuilder()
-          .addArguments(paramFile)
-          .build()
-          .writeDelimitedTo(worker.getOutputStream());
-      worker.getOutputStream().flush();
-
-      response = WorkResponse.parseDelimitedFrom(worker.getInputStream());
-
-      if (response == null) {
-        throw new UserExecException(
-            "Worker process did not return a correct WorkResponse. This is probably caused by a "
-                + "bug in the worker, writing unexpected other data to stdout.");
-      }
-    } catch (Exception e) {
-      if (e instanceof InterruptedException) {
-        // The user pressed Ctrl-C. Get out here quick.
-        retriesLeft = 0;
-      }
-
-      if (worker != null) {
-        workers.invalidateObject(key, worker);
-        worker = null;
-      }
-
-      if (retriesLeft > 0) {
-        // The worker process failed, but we still have some retries left. Let's retry with a fresh
-        // worker.
-        eventHandler.handle(
-            Event.warn(
-                key.getMnemonic()
-                    + " worker failed ("
-                    + e
-                    + "), invalidating and retrying with new worker..."));
-        return execInWorker(eventHandler, paramFile, key, retriesLeft - 1);
-      } else {
-        throw e;
-      }
-    } finally {
-      if (worker != null) {
-        workers.returnObject(key, worker);
-      }
-    }
-    return response;
   }
 
   @Override

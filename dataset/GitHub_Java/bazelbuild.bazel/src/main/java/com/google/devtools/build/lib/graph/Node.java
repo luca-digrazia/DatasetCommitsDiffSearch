@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.graph;
 
 import com.google.common.collect.Sets;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -85,7 +86,11 @@ public final class Node<T> {
    * Returns a duplicate-free collection of the nodes that this node links to.
    */
   public Collection<Node<T>> getSuccessors() {
-    return succs == null ? Collections.emptyList() : Collections.unmodifiableCollection(succs);
+    if (succs == null) {
+      return Collections.emptyList();
+    } else {
+      return Collections.unmodifiableCollection(succs);
+    }
   }
 
   /**
@@ -117,7 +122,11 @@ public final class Node<T> {
    * this node.
    */
   public Collection<Node<T>> getPredecessors() {
-    return preds == null ? Collections.emptyList() : Collections.unmodifiableCollection(preds);
+    if (preds == null) {
+      return Collections.emptyList();
+    } else {
+      return Collections.unmodifiableCollection(preds);
+    }
   }
 
   /**

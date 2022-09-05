@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,14 @@ import static com.google.common.base.StandardSystemProperty.USER_NAME;
 
 import com.google.common.base.Strings;
 
+import java.util.Map;
+
 /**
  * User information utility methods.
  */
 public final class UserUtils {
+
+  private static final String ORIGINATING_USER_KEY = "BLAZE_ORIGINATING_USER";
 
   private UserUtils() {
     // prohibit instantiation
@@ -41,9 +45,14 @@ public final class UserUtils {
   /**
    * Returns the originating user for this build from the command-line or the environment.
    */
-  public static String getOriginatingUser(String originatingUser) {
+  public static String getOriginatingUser(String originatingUser,
+                                          Map<String, String> clientEnv) {
     if (!Strings.isNullOrEmpty(originatingUser)) {
       return originatingUser;
+    }
+
+    if (!Strings.isNullOrEmpty(clientEnv.get(ORIGINATING_USER_KEY))) {
+      return clientEnv.get(ORIGINATING_USER_KEY);
     }
 
     return UserUtils.getUserName();

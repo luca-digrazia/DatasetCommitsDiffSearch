@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.runtime;
 
-import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
-import static com.google.devtools.build.lib.profiler.AutoProfiler.profiledAndLogged;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -66,7 +64,6 @@ import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
-import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.MemoryProfiler;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -302,9 +299,10 @@ public final class BlazeRuntime {
     if (getOutputService() != null) {
       return getOutputService().getFilesSystemName();
     }
-    try (AutoProfiler p = profiled("Finding output file system", ProfilerTask.INFO)) {
-      return FileSystemUtils.getFileSystem(getOutputBase());
-    }
+    long startTime = Profiler.nanoTimeMaybe();
+    String fileSystem = FileSystemUtils.getFileSystem(getOutputBase());
+    Profiler.instance().logSimpleTask(startTime, ProfilerTask.INFO, "Finding output file system");
+    return fileSystem;
   }
 
   public String getOutputFileSystem() {
@@ -634,19 +632,25 @@ public final class BlazeRuntime {
         actionCache = new NullActionCache();
         return actionCache;
       }
-      try (AutoProfiler p = profiledAndLogged("Loading action cache", ProfilerTask.INFO, LOG)) {
-        try {
-          actionCache = new CompactPersistentActionCache(getCacheDirectory(), clock);
-        } catch (IOException e) {
-          LOG.log(Level.WARNING, "Failed to load action cache: " + e.getMessage(), e);
-          LoggingUtil.logToRemote(Level.WARNING, "Failed to load action cache: "
-              + e.getMessage(), e);
-          getReporter().handle(
-              Event.error("Error during action cache initialization: " + e.getMessage()
-              + ". Corrupted files were renamed to '" + getCacheDirectory() + "/*.bad'. "
-              + "Blaze will now reset action cache data, causing a full rebuild"));
-          actionCache = new CompactPersistentActionCache(getCacheDirectory(), clock);
+      long startTime = Profiler.nanoTimeMaybe();
+      try {
+        actionCache = new CompactPersistentActionCache(getCacheDirectory(), clock);
+      } catch (IOException e) {
+        LOG.log(Level.WARNING, "Failed to load action cache: " + e.getMessage(), e);
+        LoggingUtil.logToRemote(Level.WARNING, "Failed to load action cache: "
+            + e.getMessage(), e);
+        getReporter().handle(
+            Event.error("Error during action cache initialization: " + e.getMessage()
+            + ". Corrupted files were renamed to '" + getCacheDirectory() + "/*.bad'. "
+            + "Blaze will now reset action cache data, causing a full rebuild"));
+        actionCache = new CompactPersistentActionCache(getCacheDirectory(), clock);
+      } finally {
+        long stopTime = Profiler.nanoTimeMaybe();
+        long duration = stopTime - startTime;
+        if (duration > 0) {
+          LOG.info("Spent " + (duration / (1000 * 1000)) + " ms loading persistent action cache");
         }
+        Profiler.instance().logSimpleTask(startTime, ProfilerTask.INFO, "Loading action cache");
       }
     }
     return actionCache;
@@ -1502,7 +1506,6 @@ public final class BlazeRuntime {
     }
 
     BlazeRuntime runtime = runtimeBuilder.build();
-    AutoProfiler.setClock(runtime.getClock());
     BugReport.setRuntime(runtime);
     return runtime;
   }

@@ -65,7 +65,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionPhaseCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionStartingEvent;
 import com.google.devtools.build.lib.collect.CollectionUtils;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
@@ -474,7 +473,7 @@ public class ExecutionTool {
 
       long startTime = Profiler.nanoTimeMaybe();
       determineSuccessfulTargets(buildResult, configuredTargets, builtTargets, timer);
-      showBuildResult(request, buildResult, configuredTargets, analysisResult.getAspects());
+      showBuildResult(request, buildResult, configuredTargets);
       Preconditions.checkNotNull(buildResult.getSuccessfulTargets());
       Profiler.instance().logSimpleTask(startTime, ProfilerTask.INFO, "Show results");
       if (explanationHandler != null) {
@@ -648,51 +647,18 @@ public class ExecutionTool {
     result.setSuccessfulTargets(successfulTargets);
   }
 
-
-  private interface ArtifactFormatter {
-    boolean shouldPrint(Artifact artifact);
-    String format(Artifact artifact);
-  }
-
-  private class BriefArtifactFormatter implements ArtifactFormatter {
-    @Override
-    public boolean shouldPrint(Artifact artifact) {
-      return !artifact.isSourceArtifact() && !artifact.isMiddlemanArtifact();
-    }
-
-    @Override
-    public String format(Artifact artifact) {
-      return "  " +
-          OutputDirectoryLinksUtils.getPrettyPath(artifact.getPath(),
-              runtime.getWorkspaceName(), getWorkspace(), request.getSymlinkPrefix());
-    }
-  }
-
-  private class DetailedArtifactFormatter implements ArtifactFormatter {
-    @Override
-    public boolean shouldPrint(Artifact artifact) {
-      return !artifact.isSourceArtifact();
-    }
-
-    @Override
-    public String format(Artifact artifact) {
-      return ">>>" + artifact.getPath();
-    }
-  }
-
   /**
    * Shows the result of the build. Information includes the list of up-to-date
    * and failed targets and list of output artifacts for successful targets
-   *  @param request The build request, which specifies various options.
+   *
+   * @param request The build request, which specifies various options.
    * @param configuredTargets The configured targets whose artifacts are to be
    *   built.
-   *@param aspects
+   *
+   * TODO(bazel-team): (2010) refactor into using Reporter and info/progress events
    */
-  private void showBuildResult(
-      BuildRequest request,
-      BuildResult result,
-      Collection<ConfiguredTarget> configuredTargets,
-      Collection<AspectValue> aspects) {
+  private void showBuildResult(BuildRequest request, BuildResult result,
+      Collection<ConfiguredTarget> configuredTargets) {
     // NOTE: be careful what you print!  We don't want to create a consistency
     // problem where the summary message and the exit code disagree.  The logic
     // here is already complex.
@@ -734,17 +700,11 @@ public class ExecutionTool {
     }
 
     // Suppress summary if --show_result value is exceeded:
-    if (succeeded.size() + failed.size() + aspects.size()
-        > request.getBuildOptions().maxResultTargets) {
+    if (succeeded.size() + failed.size() > request.getBuildOptions().maxResultTargets) {
       return;
     }
 
     OutErr outErr = request.getOutErr();
-
-    ArtifactFormatter formatter =
-        request.getBuildOptions().detailedResult
-        ? new DetailedArtifactFormatter()
-        : new BriefArtifactFormatter();
 
     TopLevelArtifactContext context = request.getTopLevelArtifactContext();
     for (ConfiguredTarget target : succeeded) {
@@ -754,37 +714,18 @@ public class ExecutionTool {
       boolean headerFlag = true;
       for (Artifact artifact :
           TopLevelArtifactHelper.getAllArtifactsToBuild(target, context).getImportantArtifacts()) {
-        if (formatter.shouldPrint(artifact)) {
+        if (!artifact.isSourceArtifact() && !artifact.isMiddlemanArtifact()) {
           if (headerFlag) {
             outErr.printErr("Target " + label + " up-to-date:\n");
             headerFlag = false;
           }
-          outErr.printErrLn(formatter.format(artifact));
+          outErr.printErrLn("  " +
+              OutputDirectoryLinksUtils.getPrettyPath(artifact.getPath(),
+                  runtime.getWorkspaceName(), getWorkspace(), request.getSymlinkPrefix()));
         }
       }
       if (headerFlag) {
         outErr.printErr("Target " + label + " up-to-date (nothing to build)\n");
-      }
-    }
-
-    for (AspectValue aspect : aspects) {
-      Label label = aspect.getLabel();
-      String aspectName = aspect.getAspect().getName();
-      boolean headerFlag = true;
-      NestedSet<Artifact> importantArtifacts =
-          TopLevelArtifactHelper.getAllArtifactsToBuild(aspect, context).getImportantArtifacts();
-      for (Artifact importantArtifact : importantArtifacts) {
-        if (headerFlag) {
-          outErr.printErr("Aspect " + aspectName + " of " + label + " up-to-date:\n");
-          headerFlag = false;
-        }
-        if (formatter.shouldPrint(importantArtifact)) {
-          outErr.printErrLn(formatter.format(importantArtifact));
-        }
-      }
-      if (headerFlag) {
-        outErr.printErr(
-            "Aspect " + aspectName + " of " + label + " up-to-date (nothing to build)\n");
       }
     }
 

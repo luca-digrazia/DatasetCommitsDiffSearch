@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.rules.java.JavaOptions;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.commands.QueryCommand;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -57,13 +56,12 @@ public final class FetchCommand implements BlazeCommand {
   public static final String NAME = "fetch";
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) { }
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) { }
 
   @Override
-  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
-    BlazeRuntime runtime = env.getRuntime();
+  public ExitCode exec(BlazeRuntime runtime, OptionsProvider options) {
     if (options.getResidue().isEmpty()) {
-      env.getReporter().handle(Event.error(String.format(
+      runtime.getReporter().handle(Event.error(String.format(
           "missing fetch expression. Type '%s help fetch' for syntax and help",
           Constants.PRODUCT_NAME)));
       return ExitCode.COMMAND_LINE_ERROR;
@@ -74,16 +72,16 @@ public final class FetchCommand implements BlazeCommand {
           options.getOptions(PackageCacheOptions.class),
           runtime.getDefaultsPackageContent());
     } catch (InterruptedException e) {
-      env.getReporter().handle(Event.error("fetch interrupted"));
+      runtime.getReporter().handle(Event.error("fetch interrupted"));
       return ExitCode.INTERRUPTED;
     } catch (AbruptExitException e) {
-      env.getReporter().handle(Event.error(null, "Unknown error: " + e.getMessage()));
+      runtime.getReporter().handle(Event.error(null, "Unknown error: " + e.getMessage()));
       return e.getExitCode();
     }
 
     PackageCacheOptions pkgOptions = options.getOptions(PackageCacheOptions.class);
     if (!pkgOptions.fetch) {
-      env.getReporter().handle(Event.error(null, "You cannot run fetch with --fetch=false"));
+      runtime.getReporter().handle(Event.error(null, "You cannot run fetch with --fetch=false"));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
@@ -104,31 +102,33 @@ public final class FetchCommand implements BlazeCommand {
     String query = Joiner.on(" union ").join(labelsToLoad.build());
     query = "deps(" + query + ")";
 
-    AbstractBlazeQueryEnvironment<Target> queryEnv = QueryCommand.newQueryEnvironment(
+    AbstractBlazeQueryEnvironment<Target> env = QueryCommand.newQueryEnvironment(
         runtime, options.getOptions(FetchOptions.class).keepGoing, false,
         Lists.<String>newArrayList(), 200, Sets.<Setting>newHashSet());
 
     // 1. Parse query:
     QueryExpression expr;
     try {
-      expr = QueryExpression.parse(query, queryEnv);
+      expr = QueryExpression.parse(query, env);
     } catch (QueryException e) {
-      env.getReporter().handle(Event.error(
+      runtime.getReporter().handle(Event.error(
           null, "Error while parsing '" + query + "': " + e.getMessage()));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
     // 2. Evaluate expression:
     try {
-      queryEnv.evaluateQuery(expr);
+      env.evaluateQuery(expr);
     } catch (QueryException | InterruptedException e) {
       // Keep consistent with reportBuildFileError()
-      env.getReporter().handle(Event.error(e.getMessage()));
+      runtime.getReporter().handle(Event.error(e.getMessage()));
       return ExitCode.COMMAND_LINE_ERROR;
     }
 
-    env.getReporter().handle(
+    runtime.getReporter().handle(
         Event.progress("All external dependencies fetched successfully."));
     return ExitCode.SUCCESS;
   }
+
+
 }

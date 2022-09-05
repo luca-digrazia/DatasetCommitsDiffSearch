@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.GotOptionsEvent;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.shell.CommandResult;
@@ -240,18 +239,16 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
           BuildInfo.BUILD_HOST,
           Key.of(KeyType.STRING, "hostname", "redacted"),
           BuildInfo.BUILD_USER,
-          Key.of(KeyType.STRING, "username", "redacted"));
-    }
-
-    @Override
-    public ImmutableMap<String, Key> getVolatileKeys() {
-      return ImmutableMap.of(
-          BuildInfo.BUILD_TIMESTAMP,
-          Key.of(KeyType.INTEGER, "0", "0"),
+          Key.of(KeyType.STRING, "username", "redacted"),
           BuildInfo.BUILD_SCM_REVISION,
           Key.of(KeyType.STRING, "0", "0"),
           BuildInfo.BUILD_SCM_STATUS,
           Key.of(KeyType.STRING, "", "redacted"));
+    }
+
+    @Override
+    public ImmutableMap<String, Key> getVolatileKeys() {
+      return ImmutableMap.of(BuildInfo.BUILD_TIMESTAMP, Key.of(KeyType.INTEGER, "0", "0"));
     }
   }
 
@@ -259,9 +256,9 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
   private WorkspaceStatusAction.Options options;
 
   @Override
-  public void beforeCommand(Command command, CommandEnvironment env) {
-    this.runtime = env.getRuntime();
-    env.getEventBus().register(this);
+  public void beforeCommand(BlazeRuntime runtime, Command command) {
+    this.runtime = runtime;
+    runtime.getEventBus().register(this);
   }
 
   @Override

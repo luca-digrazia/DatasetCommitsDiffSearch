@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.runtime.BlazeCommandDispatcher;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.OsUtils;
@@ -178,14 +177,13 @@ public class InfoCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) { }
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) { }
 
   @Override
-  public ExitCode exec(final CommandEnvironment env, final OptionsProvider optionsProvider) {
-    final BlazeRuntime runtime = env.getRuntime();
-    env.getReporter().switchToAnsiAllowingHandler();
+  public ExitCode exec(final BlazeRuntime runtime, final OptionsProvider optionsProvider) {
+    runtime.getReporter().switchToAnsiAllowingHandler();
     Options infoOptions = optionsProvider.getOptions(Options.class);
-    OutErr outErr = env.getReporter().getOutErr();
+    OutErr outErr = runtime.getReporter().getOutErr();
     // Creating a BuildConfiguration is expensive and often unnecessary. Delay the creation until
     // it is needed.
     Supplier<BuildConfiguration> configurationSupplier = new Supplier<BuildConfiguration>() {
@@ -208,13 +206,13 @@ public class InfoCommand implements BlazeCommand {
               .getTargetConfigurations().get(0);
           return configuration;
         } catch (InvalidConfigurationException e) {
-          env.getReporter().handle(Event.error(e.getMessage()));
+          runtime.getReporter().handle(Event.error(e.getMessage()));
           throw new ExitCausingRuntimeException(ExitCode.COMMAND_LINE_ERROR);
         } catch (AbruptExitException e) {
           throw new ExitCausingRuntimeException("unknown error: " + e.getMessage(),
               e.getExitCode());
         } catch (InterruptedException e) {
-          env.getReporter().handle(Event.error("interrupted"));
+          runtime.getReporter().handle(Event.error("interrupted"));
           throw new ExitCausingRuntimeException(ExitCode.INTERRUPTED);
         }
       }
@@ -233,7 +231,7 @@ public class InfoCommand implements BlazeCommand {
 
       List<String> residue = optionsProvider.getResidue();
       if (residue.size() > 1) {
-        env.getReporter().handle(Event.error("at most one key may be specified"));
+        runtime.getReporter().handle(Event.error("at most one key may be specified"));
         return ExitCode.COMMAND_LINE_ERROR;
       }
 
@@ -243,14 +241,14 @@ public class InfoCommand implements BlazeCommand {
         if (items.containsKey(key)) {
           value = items.get(key).get(configurationSupplier);
         } else {
-          env.getReporter().handle(Event.error("unknown key: '" + key + "'"));
+          runtime.getReporter().handle(Event.error("unknown key: '" + key + "'"));
           return ExitCode.COMMAND_LINE_ERROR;
         }
         try {
           outErr.getOutputStream().write(value);
           outErr.getOutputStream().flush();
         } catch (IOException e) {
-          env.getReporter().handle(Event.error("Cannot write info block: " + e.getMessage()));
+          runtime.getReporter().handle(Event.error("Cannot write info block: " + e.getMessage()));
           return ExitCode.ANALYSIS_FAILURE;
         }
       } else { // print them all

@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.runtime.BlazeCommandUtils;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.Converters;
@@ -130,12 +129,11 @@ public final class HelpCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
+  public void editOptions(BlazeRuntime runtime, OptionsParser optionsParser) {}
 
   @Override
-  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
-    BlazeRuntime runtime = env.getRuntime();
-    OutErr outErr = env.getReporter().getOutErr();
+  public ExitCode exec(BlazeRuntime runtime, OptionsProvider options) {
+    OutErr outErr = runtime.getReporter().getOutErr();
     Options helpOptions = options.getOptions(Options.class);
     if (options.getResidue().isEmpty()) {
       emitBlazeVersionInfo(outErr);
@@ -143,7 +141,7 @@ public final class HelpCommand implements BlazeCommand {
       return ExitCode.SUCCESS;
     }
     if (options.getResidue().size() != 1) {
-      env.getReporter().handle(Event.error("You must specify exactly one command"));
+      runtime.getReporter().handle(Event.error("You must specify exactly one command"));
       return ExitCode.COMMAND_LINE_ERROR;
     }
     String helpSubject = options.getResidue().get(0);
@@ -172,7 +170,7 @@ public final class HelpCommand implements BlazeCommand {
         outErr.printOut(BlazeRuleHelpPrinter.getRuleDoc(helpSubject, provider));
         return ExitCode.SUCCESS;
       } else {
-        env.getReporter().handle(Event.error(
+        runtime.getReporter().handle(Event.error(
             null, "'" + helpSubject + "' is neither a command nor a build rule"));
         return ExitCode.COMMAND_LINE_ERROR;
       }

@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,12 +19,14 @@ import static com.google.common.base.StandardSystemProperty.JAVA_IO_TMPDIR;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.CharMatcher;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.vfs.Path;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,7 +47,7 @@ import java.util.Map;
  */
 public final class CommandBuilder {
 
-  private static final ImmutableList<String> SHELLS = ImmutableList.of("/bin/sh", "/bin/bash");
+  private static final List<String> SHELLS = ImmutableList.of("/bin/sh", "/bin/bash");
 
   private static final Splitter ARGV_SPLITTER = Splitter.on(CharMatcher.anyOf(" \t"));
 

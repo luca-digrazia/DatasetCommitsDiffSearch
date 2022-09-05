@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,9 +54,6 @@ public final class ModifiedFileSet {
 
   @Override
   public boolean equals(Object o) {
-    if (o == this) {
-      return true;
-    }
     if (!(o instanceof ModifiedFileSet)) {
       return false;
     }
@@ -71,9 +68,9 @@ public final class ModifiedFileSet {
 
   @Override
   public String toString() {
-    if (this.equals(EVERYTHING_MODIFIED)) {
+    if (this == EVERYTHING_MODIFIED) {
       return "EVERYTHING_MODIFIED";
-    } else if (this.equals(NOTHING_MODIFIED)) {
+    } else if (this == NOTHING_MODIFIED) {
       return "NOTHING_MODIFIED";
     } else {
       return modified.toString();

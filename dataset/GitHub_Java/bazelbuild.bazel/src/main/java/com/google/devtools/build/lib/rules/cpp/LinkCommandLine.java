@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,12 +29,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
+import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -938,15 +938,15 @@ public final class LinkCommandLine extends CommandLine {
           if (ltoMap != null) {
             Artifact backend = ltoMap.remove(member);
 
-            if (backend != null) {
-              // If the backend artifact is missing, we can't print a warning because this may
-              // happen normally, due libraries that list .o files explicitly, or generate .o
-              // files from assembler.
-              member = backend;
+            if (backend == null) {
+              System.err.println(
+                  "LTO backend file missing for " + member + " already did: " + options);
+              backend = member;
             }
+            options.add(backend.getExecPathString());
+          } else {
+            options.add(member.getExecPathString());
           }
-
-          options.add(member.getExecPathString());
         }
         options.add("-Wl,--end-lib");
       }
