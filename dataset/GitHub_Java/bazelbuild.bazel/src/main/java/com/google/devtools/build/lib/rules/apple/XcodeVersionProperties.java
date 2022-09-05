@@ -17,14 +17,13 @@ package com.google.devtools.build.lib.rules.apple;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Strings;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 
 import javax.annotation.Nullable;
 
 /**
  * A tuple containing information about a version of xcode and its properties. 
  */
-public class XcodeVersionProperties implements TransitiveInfoProvider {
+public class XcodeVersionProperties {
   @VisibleForTesting public static final String DEFAULT_IOS_SDK_VERSION = "8.4";
   @VisibleForTesting public static final String DEFAULT_WATCHOS_SDK_VERSION = "2.0";
   @VisibleForTesting public static final String DEFAULT_MACOSX_SDK_VERSION = "10.10";

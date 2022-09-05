@@ -133,15 +133,16 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
 
   /**
    * Returns a map of environment variables (derived from configuration) that should be propagated
-   * for actions pertaining to the given apple platform. Keys are variable names and values are
+   * for actions pertaining to building ios applications. Keys are variable names and values are
    * their corresponding values.
    */
-  public Map<String, String> getTargetAppleEnvironment(Platform platform) {
+  // TODO(bazel-team): Repurpose for non-ios platforms.
+  public Map<String, String> getEnvironmentForIosAction() {
     ImmutableMap.Builder<String, String> mapBuilder = ImmutableMap.builder();
-    mapBuilder.putAll(appleTargetPlatformEnv(platform));
+    mapBuilder.putAll(appleTargetPlatformEnv(Platform.forIosArch(getIosCpu())));
     return mapBuilder.build();
   }
-
+  
   /**
    * Returns a map of environment variables that should be propagated for actions that build on an
    * apple host system. These environment variables are needed by the apple toolchain. Keys are
@@ -181,24 +182,8 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     return builder.build();
   }
 
-  /**
-   * Returns the value of {@code ios_cpu} for this configuration. This is not necessarily the
-   * platform or cpu for all actions spawned in this configuration; it is appropriate for
-   * identifying the target cpu of iOS compile and link actions within this configuration.
-   */
   public String getIosCpu() {
     return iosCpu;
-  }
-
-  /**
-   * Returns the {@link Platform} represented by {@code ios_cpu} (see {@link #getIosCpu}.
-   * (For example, {@code i386} maps to {@link Platform#IOS_SIMULATOR}.) Note that this is not
-   * necessarily the effective platform for all ios actions in the current context: This is
-   * typically the correct platform for implicityly-ios compile and link actions in the current
-   * context. For effective platform for bundling actions, see {@link #getBundlingPlatform}.
-   */
-  public Platform getIosCpuPlatform() {
-    return Platform.forIosArch(getIosCpu());
   }
   
   /**
