@@ -1097,7 +1097,7 @@ public class MaterialCalendarView extends ViewGroup {
                 .setCalendarDisplayMode(ss.calendarMode)
                 .setMinimumDate(ss.minDate)
                 .setMaximumDate(ss.maxDate)
-                .isCacheCalendarPositionEnabled(ss.saveCurrentPosition)
+                .setSaveCurrentPosition(ss.saveCurrentPosition)
                 .commit();
 
         setSelectionColor(ss.color);
@@ -1580,15 +1580,15 @@ public class MaterialCalendarView extends ViewGroup {
             } else {
                 measureTileHeight = desiredTileHeight;
             }
-        } else if (specWidthMode == MeasureSpec.EXACTLY || specWidthMode == MeasureSpec.AT_MOST) {
+        } else if (specWidthMode == MeasureSpec.EXACTLY) {
             if (specHeightMode == MeasureSpec.EXACTLY) {
-                //Pick the smaller of the two explicit sizes
-                measureTileSize = Math.min(desiredTileWidth, desiredTileHeight);
+                //Pick the larger of the two explicit sizes
+                measureTileSize = Math.max(desiredTileWidth, desiredTileHeight);
             } else {
                 //Be the width size the user wants
                 measureTileSize = desiredTileWidth;
             }
-        } else if (specHeightMode == MeasureSpec.EXACTLY || specHeightMode == MeasureSpec.AT_MOST) {
+        } else if (specHeightMode == MeasureSpec.EXACTLY) {
             //Be the height size the user wants
             measureTileSize = desiredTileHeight;
         }
@@ -1798,18 +1798,18 @@ public class MaterialCalendarView extends ViewGroup {
     }
 
     public class State {
-        private final CalendarMode calendarMode;
-        private final int firstDayOfWeek;
-        private final CalendarDay minDate;
-        private final CalendarDay maxDate;
-        private final boolean saveCurrentPosition;
+        public final CalendarMode calendarMode;
+        public final int firstDayOfWeek;
+        public final CalendarDay minDate;
+        public final CalendarDay maxDate;
+        public final boolean saveCurrentPosition;
 
-        private State(final StateBuilder builder) {
+        public State(StateBuilder builder) {
             calendarMode = builder.calendarMode;
             firstDayOfWeek = builder.firstDayOfWeek;
             minDate = builder.minDate;
             maxDate = builder.maxDate;
-            saveCurrentPosition = builder.cacheCurrentPosition;
+            saveCurrentPosition = builder.saveCurrentPosition;
         }
 
         /**
@@ -1824,9 +1824,9 @@ public class MaterialCalendarView extends ViewGroup {
     public class StateBuilder {
         private CalendarMode calendarMode = CalendarMode.MONTHS;
         private int firstDayOfWeek = Calendar.getInstance().getFirstDayOfWeek();
-        private boolean cacheCurrentPosition = false;
-        private CalendarDay minDate = null;
-        private CalendarDay maxDate = null;
+        public CalendarDay minDate = null;
+        public CalendarDay maxDate = null;
+        public boolean saveCurrentPosition = false;
 
         public StateBuilder() {
         }
@@ -1836,7 +1836,7 @@ public class MaterialCalendarView extends ViewGroup {
             firstDayOfWeek = state.firstDayOfWeek;
             minDate = state.minDate;
             maxDate = state.maxDate;
-            cacheCurrentPosition = state.saveCurrentPosition;
+            saveCurrentPosition = state.saveCurrentPosition;
         }
 
         /**
@@ -1914,15 +1914,13 @@ public class MaterialCalendarView extends ViewGroup {
         }
 
         /**
-         * Use this method to enable saving the current position when switching
-         * between week and month mode. By default, the calendar update to the latest selected date
-         * or the current date. When set to true, the view will used the month that the calendar is
-         * currently on.
+         * Use this method  to enable saving the current position when switching
+         * between week and month mode.
          *
-         * @param cacheCurrentPosition Set to true to cache the current position, false otherwise.
+         * @param saveCurrentPosition Set to true to save the current position, false otherwise.
          */
-        public StateBuilder isCacheCalendarPositionEnabled(final boolean cacheCurrentPosition) {
-            this.cacheCurrentPosition = cacheCurrentPosition;
+        public StateBuilder setSaveCurrentPosition(final boolean saveCurrentPosition) {
+            this.saveCurrentPosition = saveCurrentPosition;
             return this;
         }
 
