@@ -1,6 +1,5 @@
 package me.leolin.shortcutbadger;
 
-import android.app.Notification;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -9,8 +8,6 @@ import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.util.Log;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -18,7 +15,6 @@ import me.leolin.shortcutbadger.impl.AdwHomeBadger;
 import me.leolin.shortcutbadger.impl.ApexHomeBadger;
 import me.leolin.shortcutbadger.impl.AsusHomeBadger;
 import me.leolin.shortcutbadger.impl.DefaultBadger;
-import me.leolin.shortcutbadger.impl.EverythingMeHomeBadger;
 import me.leolin.shortcutbadger.impl.HuaweiHomeBadger;
 import me.leolin.shortcutbadger.impl.NewHtcHomeBadger;
 import me.leolin.shortcutbadger.impl.NovaHomeBadger;
@@ -26,7 +22,7 @@ import me.leolin.shortcutbadger.impl.OPPOHomeBader;
 import me.leolin.shortcutbadger.impl.SamsungHomeBadger;
 import me.leolin.shortcutbadger.impl.SonyHomeBadger;
 import me.leolin.shortcutbadger.impl.VivoHomeBadger;
-import me.leolin.shortcutbadger.impl.ZTEHomeBadger;
+import me.leolin.shortcutbadger.impl.XiaomiHomeBadger;
 import me.leolin.shortcutbadger.impl.ZukHomeBadger;
 
 
@@ -41,23 +37,21 @@ public final class ShortcutBadger {
     private static final List<Class<? extends Badger>> BADGERS = new LinkedList<Class<? extends Badger>>();
 
     private volatile static Boolean sIsBadgeCounterSupported;
-    private final static Object sCounterSupportedLock = new Object();
+    private volatile static Object sCounterSupportedLock = new Object();
 
     static {
         BADGERS.add(AdwHomeBadger.class);
         BADGERS.add(ApexHomeBadger.class);
-        BADGERS.add(DefaultBadger.class);
         BADGERS.add(NewHtcHomeBadger.class);
         BADGERS.add(NovaHomeBadger.class);
         BADGERS.add(SonyHomeBadger.class);
+        BADGERS.add(XiaomiHomeBadger.class);
         BADGERS.add(AsusHomeBadger.class);
         BADGERS.add(HuaweiHomeBadger.class);
         BADGERS.add(OPPOHomeBader.class);
         BADGERS.add(SamsungHomeBadger.class);
         BADGERS.add(ZukHomeBadger.class);
         BADGERS.add(VivoHomeBadger.class);
-        BADGERS.add(ZTEHomeBadger.class);
-        BADGERS.add(EverythingMeHomeBadger.class);
     }
 
     private static Badger sShortcutBadger;
@@ -166,26 +160,6 @@ public final class ShortcutBadger {
         return sIsBadgeCounterSupported;
     }
 
-    /**
-     * @param context      Caller context
-     * @param notification
-     * @param badgeCount
-     */
-    public static void applyNotification(Context context, Notification notification, int badgeCount) {
-        if (Build.MANUFACTURER.equalsIgnoreCase("Xiaomi")) {
-            try {
-                Field field = notification.getClass().getDeclaredField("extraNotification");
-                Object extraNotification = field.get(notification);
-                Method method = extraNotification.getClass().getDeclaredMethod("setMessageCount", int.class);
-                method.invoke(extraNotification, badgeCount);
-            } catch (Exception e) {
-                if (Log.isLoggable(LOG_TAG, Log.DEBUG)) {
-                    Log.d(LOG_TAG, "Unable to execute badge", e);
-                }
-            }
-        }
-    }
-
     // Initialize Badger if a launcher is availalble (eg. set as default on the device)
     // Returns true if a launcher is available, in this case, the Badger will be set and sShortcutBadger will be non null.
     private static boolean initBadger(Context context) {
@@ -199,33 +173,34 @@ public final class ShortcutBadger {
 
         Intent intent = new Intent(Intent.ACTION_MAIN);
         intent.addCategory(Intent.CATEGORY_HOME);
-        List<ResolveInfo> resolveInfos = context.getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+        ResolveInfo resolveInfo = context.getPackageManager().resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY);
 
-        for (ResolveInfo resolveInfo : resolveInfos) {
-            String currentHomePackage = resolveInfo.activityInfo.packageName;
+        if (resolveInfo == null || resolveInfo.activityInfo.name.toLowerCase().contains("resolver"))
+            return false;
 
-            for (Class<? extends Badger> badger : BADGERS) {
-                Badger shortcutBadger = null;
-                try {
-                    shortcutBadger = badger.newInstance();
-                } catch (Exception ignored) {
-                }
-                if (shortcutBadger != null && shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
-                    sShortcutBadger = shortcutBadger;
-                    break;
-                }
+        String currentHomePackage = resolveInfo.activityInfo.packageName;
+
+        for (Class<? extends Badger> badger : BADGERS) {
+            Badger shortcutBadger = null;
+            try {
+                shortcutBadger = badger.newInstance();
+            } catch (Exception ignored) {
+            }
+            if (shortcutBadger != null && shortcutBadger.getSupportLaunchers().contains(currentHomePackage)) {
+                sShortcutBadger = shortcutBadger;
+                break;
             }
         }
 
         if (sShortcutBadger == null) {
-            if (Build.MANUFACTURER.equalsIgnoreCase("ZUK"))
+            if (Build.MANUFACTURER.equalsIgnoreCase("Xiaomi"))
+                sShortcutBadger = new XiaomiHomeBadger();
+            else if (Build.MANUFACTURER.equalsIgnoreCase("ZUK"))
                 sShortcutBadger = new ZukHomeBadger();
             else if (Build.MANUFACTURER.equalsIgnoreCase("OPPO"))
                 sShortcutBadger = new OPPOHomeBader();
             else if (Build.MANUFACTURER.equalsIgnoreCase("VIVO"))
                 sShortcutBadger = new VivoHomeBadger();
-            else if (Build.MANUFACTURER.equalsIgnoreCase("ZTE"))
-                sShortcutBadger = new ZTEHomeBadger();
             else
                 sShortcutBadger = new DefaultBadger();
         }
