@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,37 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.DISTRIBUTIONS;
-import static com.google.devtools.build.lib.packages.Type.FILESET_ENTRY_LIST;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.INTEGER_LIST;
-import static com.google.devtools.build.lib.packages.Type.LABEL;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST_DICT;
-import static com.google.devtools.build.lib.packages.Type.LICENSE;
-import static com.google.devtools.build.lib.packages.Type.NODEP_LABEL;
-import static com.google.devtools.build.lib.packages.Type.NODEP_LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.OUTPUT;
-import static com.google.devtools.build.lib.packages.Type.OUTPUT_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT_UNARY;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST_DICT;
-import static com.google.devtools.build.lib.packages.Type.TRISTATE;
-
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.MakeEnvironment.Binding;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
-import com.google.devtools.build.lib.syntax.FilesetEntry;
-import com.google.devtools.build.lib.syntax.GlobCriteria;
-import com.google.devtools.build.lib.syntax.GlobList;
-import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.query2.proto.proto2api.Build.Rule.Builder;
+import com.google.protobuf.CodedOutputStream;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -53,143 +33,52 @@ import java.util.Map;
  * Functionality to serialize loaded packages.
  */
 public class PackageSerializer {
-  private static Build.SourceFile serializeInputFile(InputFile inputFile) {
-    Build.SourceFile.Builder result = Build.SourceFile.newBuilder();
-    result.setName(inputFile.getLabel().toString());
-    if (inputFile.isVisibilitySpecified()) {
-      for (Label visibilityLabel : inputFile.getVisibility().getDeclaredLabels()) {
-        result.addVisibilityLabel(visibilityLabel.toString());
-      }
-    }
-    if (inputFile.isLicenseSpecified()) {
-      result.setLicense(serializeLicense(inputFile.getLicense()));
-    }
-
-    result.setParseableLocation(serializeLocation(inputFile.getLocation()));
-    return result.build();
+  /** Allows custom serialization logic to be injected. */
+  public interface PackageSerializationEnvironment {
+    /**
+     * Called right before the given builder's {@link Build.Rule.Builder#build} method is called.
+     * Implementations can use this hook to serialize additional data in the proto.
+     */
+    void maybeSerializeAdditionalDataForRule(Rule rule, Build.Rule.Builder builder);
   }
 
-  private static Build.Location serializeLocation(Location location) {
-    Build.Location.Builder result = Build.Location.newBuilder();
+  // Workaround for Java serialization making it tough to pass in a serialization environment
+  // manually.
+  // volatile is needed to ensure that the objects are published safely.
+  public static volatile PackageSerializationEnvironment defaultPackageSerializationEnvironment =
+      new PackageSerializationEnvironment() {
+        @Override
+        public void maybeSerializeAdditionalDataForRule(Rule rule, Builder builder) {
+        }
+      };
 
-    result.setStartOffset(location.getStartOffset());
-    if (location.getStartLineAndColumn() != null) {
-      result.setStartLine(location.getStartLineAndColumn().getLine());
-      result.setStartColumn(location.getStartLineAndColumn().getColumn());
-    }
+  private final PackageSerializationEnvironment env;
 
-    result.setEndOffset(location.getEndOffset());
-    if (location.getEndLineAndColumn() != null) {
-      result.setEndLine(location.getEndLineAndColumn().getLine());
-      result.setEndColumn(location.getEndLineAndColumn().getColumn());
-    }
-
-    return result.build();
+  public PackageSerializer() {
+    this(defaultPackageSerializationEnvironment);
   }
 
-  private static Build.PackageGroup serializePackageGroup(PackageGroup packageGroup) {
-    Build.PackageGroup.Builder result = Build.PackageGroup.newBuilder();
-
-    result.setName(packageGroup.getLabel().toString());
-    result.setParseableLocation(serializeLocation(packageGroup.getLocation()));
-
-    for (PackageSpecification packageSpecification : packageGroup.getPackageSpecifications()) {
-      result.addContainedPackage(packageSpecification.toString());
-    }
-
-    for (Label include : packageGroup.getIncludes()) {
-      result.addIncludedPackageGroup(include.toString());
-    }
-
-    return result.build();
+  public PackageSerializer(PackageSerializationEnvironment env) {
+    this.env = Preconditions.checkNotNull(env);
   }
 
-  private static Build.Rule serializeRule(Rule rule) {
-    Build.Rule.Builder result = Build.Rule.newBuilder();
-    result.setName(rule.getLabel().toString());
-    result.setRuleClass(rule.getRuleClass());
-    result.setParseableLocation(serializeLocation(rule.getLocation()));
-    for (Attribute attribute : rule.getAttributes()) {
-      Object value = attribute.getName().equals("visibility")
-          ? rule.getVisibility().getDeclaredLabels()
-          // TODO(bazel-team): support configurable attributes. AggregatingAttributeMapper
-          // may make more sense here. Computed defaults may add complications.
-          : RawAttributeMapper.of(rule).get(attribute.getName(), attribute.getType());
-      if (value != null) {
-        PackageSerializer.addAttributeToProto(result, attribute, value,
-            rule.getAttributeLocation(attribute.getName()),
-            rule.isAttributeValueExplicitlySpecified(attribute),
-            true);
-      }
-    }
-
-    return result.build();
-  }
-
-  private static List<Build.MakeVar> serializeMakeEnvironment(MakeEnvironment makeEnv) {
-    List<Build.MakeVar> result = new ArrayList<>();
-
-    for (Map.Entry<String, ImmutableList<Binding>> var : makeEnv.getBindings().entrySet()) {
-      Build.MakeVar.Builder varPb = Build.MakeVar.newBuilder();
-      varPb.setName(var.getKey());
-      for (Binding binding : var.getValue()) {
-        Build.MakeVarBinding.Builder bindingPb = Build.MakeVarBinding.newBuilder();
-        bindingPb.setValue(binding.getValue());
-        bindingPb.setPlatformSetRegexp(binding.getPlatformSetRegexp());
-        varPb.addBinding(bindingPb);
-      }
-
-      result.add(varPb.build());
-    }
-
-    return result;
-  }
-
-  private static Build.License serializeLicense(License license) {
-    Build.License.Builder result = Build.License.newBuilder();
-
-    for (License.LicenseType licenseType : license.getLicenseTypes()) {
-      result.addLicenseType(licenseType.toString());
-    }
-
-    for (Label exception : license.getExceptions()) {
-      result.addException(exception.toString());
-    }
-    return result.build();
-  }
-
-  private static Build.Event serializeEvent(Event event) {
-    Build.Event.Builder result = Build.Event.newBuilder();
-    result.setMessage(event.getMessage());
-    if (event.getLocation() != null) {
-      result.setLocation(serializeLocation(event.getLocation()));
-    }
-
-    Build.Event.EventKind kind;
-
-    switch (event.getKind()) {
-      case ERROR:
-        kind = Build.Event.EventKind.ERROR;
-        break;
-      case WARNING:
-        kind = Build.Event.EventKind.WARNING;
-        break;
-      case INFO:
-        kind = Build.Event.EventKind.INFO;
-        break;
-      case PROGRESS:
-        kind = Build.Event.EventKind.PROGRESS;
-        break;
-      default: throw new IllegalStateException();
-    }
-
-    result.setKind(kind);
-    return result.build();
-  }
-
-  private static void serializePackageInternal(Package pkg, Build.Package.Builder builder) {
+  /**
+   * Serialize a package to {@code out}. The inverse of {@link PackageDeserializer#deserialize}.
+   *
+   * <p>Writes pkg as a single
+   * {@link com.google.devtools.build.lib.query2.proto.proto2api.Build.Package} protocol buffer
+   * message followed by a series of
+   * {@link com.google.devtools.build.lib.query2.proto.proto2api.Build.TargetOrTerminator} messages
+   * encoding the targets.
+   *
+   * @param pkg the {@link Package} to be serialized
+   * @param codedOut the stream to pkg's serialized representation to
+   * @throws IOException on failure writing to {@code out}
+   */
+  public void serialize(Package pkg, CodedOutputStream codedOut) throws IOException {
+    Build.Package.Builder builder = Build.Package.newBuilder();
     builder.setName(pkg.getName());
-    builder.setRepository(pkg.getPackageIdentifier().getRepository().toString());
+    builder.setRepository(pkg.getPackageIdentifier().getRepository().getName());
     builder.setBuildFilePath(pkg.getFilename().getPathString());
     // The extra bit is needed to handle the corner case when the default visibility is [], i.e.
     // zero labels.
@@ -236,226 +125,162 @@ public class PackageSerializer {
       builder.addMakeVariable(makeVar);
     }
 
-    for (Target target : pkg.getTargets()) {
-      if (target instanceof InputFile) {
-        builder.addSourceFile(serializeInputFile((InputFile) target));
-      } else if (target instanceof OutputFile) {
-        // Output files are ignored; they are recorded in rules.
-      } else if (target instanceof PackageGroup) {
-        builder.addPackageGroup(serializePackageGroup((PackageGroup) target));
-      } else if (target instanceof Rule) {
-        builder.addRule(serializeRule((Rule) target));
-      }
-    }
-
     for (Event event : pkg.getEvents()) {
       builder.addEvent(serializeEvent(event));
     }
 
     builder.setContainsErrors(pkg.containsErrors());
-    builder.setContainsTemporaryErrors(pkg.containsTemporaryErrors());
+
+    builder.setWorkspaceName(pkg.getWorkspaceName());
+
+    codedOut.writeMessageNoTag(builder.build());
+
+    // Targets are emitted separately as individual protocol buffers as to prevent overwhelming
+    // protocol buffer deserialization size limits.
+    emitTargets(pkg.getTargets(), codedOut);
   }
 
-  /**
-   * Serialize a package to a protocol message. The inverse of
-   * {@link PackageDeserializer#deserialize}.
-   */
-  public static Build.Package serializePackage(Package pkg) {
-    Build.Package.Builder builder = Build.Package.newBuilder();
-    serializePackageInternal(pkg, builder);
-    return builder.build();
+  private Build.Target serializeInputFile(InputFile inputFile) {
+    Build.SourceFile.Builder builder = Build.SourceFile.newBuilder();
+    builder.setName(inputFile.getLabel().getName());
+    if (inputFile.isVisibilitySpecified()) {
+      for (Label visibilityLabel : inputFile.getVisibility().getDeclaredLabels()) {
+        builder.addVisibilityLabel(visibilityLabel.toString());
+      }
+    }
+    if (inputFile.isLicenseSpecified()) {
+      builder.setLicense(serializeLicense(inputFile.getLicense()));
+    }
+
+    return Build.Target.newBuilder()
+        .setType(Build.Target.Discriminator.SOURCE_FILE)
+        .setSourceFile(builder.build())
+        .build();
   }
 
-  /**
-   * Adds the serialized version of the specified attribute to the specified message.
-   *
-   * @param result the message to amend
-   * @param attr the attribute to add
-   * @param value the value of the attribute
-   * @param location the location of the attribute in the source file
-   * @param explicitlySpecified whether the attribute was explicitly specified or not
-   * @param includeGlobs add glob expression for attributes that contain them
-   */
-  // TODO(bazel-team): This is a copy of the code in ProtoOutputFormatter.
-  @SuppressWarnings("unchecked")
-  public static void addAttributeToProto(
-      Build.Rule.Builder result, Attribute attr, Object value, Location location,
-      Boolean explicitlySpecified, boolean includeGlobs) {
-    // Get the attribute type.  We need to convert and add appropriately
-    com.google.devtools.build.lib.packages.Type<?> type = attr.getType();
+  private Build.Target serializePackageGroup(PackageGroup packageGroup) {
+    Build.PackageGroup.Builder builder = Build.PackageGroup.newBuilder();
 
-    Build.Attribute.Builder attrPb = Build.Attribute.newBuilder();
+    builder.setName(packageGroup.getLabel().getName());
 
-    // Set the type, name and source
-    Build.Attribute.Discriminator attributeProtoType = ProtoUtils.getDiscriminatorFromType(type);
-    attrPb.setName(attr.getName());
-    attrPb.setType(attributeProtoType);
-
-    if (location != null) {
-      attrPb.setParseableLocation(serializeLocation(location));
+    for (PackageSpecification packageSpecification : packageGroup.getPackageSpecifications()) {
+      builder.addContainedPackage(packageSpecification.toString());
     }
 
-    if (explicitlySpecified != null) {
-      attrPb.setExplicitlySpecified(explicitlySpecified);
+    for (Label include : packageGroup.getIncludes()) {
+      builder.addIncludedPackageGroup(include.toString());
     }
 
-    /*
-     * Set the appropriate type and value.  Since string and string list store
-     * values for multiple types, use the toString() method on the objects
-     * instead of casting them.  Note that Boolean and TriState attributes have
-     * both an integer and string representation.
-     */
-    if (type == INTEGER) {
-      attrPb.setIntValue((Integer) value);
-    } else if (type == STRING || type == LABEL || type == NODEP_LABEL || type == OUTPUT) {
-      attrPb.setStringValue(value.toString());
-    } else if (type == STRING_LIST || type == LABEL_LIST || type == NODEP_LABEL_LIST
-        || type == OUTPUT_LIST || type == DISTRIBUTIONS) {
-      Collection<?> values = (Collection<?>) value;
-      for (Object entry : values) {
-        attrPb.addStringListValue(entry.toString());
-      }
-    } else if (type == INTEGER_LIST) {
-      Collection<Integer> values = (Collection<Integer>) value;
-      for (Integer entry : values) {
-        attrPb.addIntListValue(entry);
-      }
-    } else if (type == BOOLEAN) {
-      if ((Boolean) value) {
-        attrPb.setStringValue("true");
-        attrPb.setBooleanValue(true);
-      } else {
-        attrPb.setStringValue("false");
-        attrPb.setBooleanValue(false);
-      }
-      // This maintains partial backward compatibility for external users of the
-      // protobuf that were expecting an integer field and not a true boolean.
-      attrPb.setIntValue((Boolean) value ? 1 : 0);
-    } else if (type == TRISTATE) {
-      switch ((TriState) value) {
-        case AUTO:
-            attrPb.setIntValue(-1);
-            attrPb.setStringValue("auto");
-            attrPb.setTristateValue(Build.Attribute.Tristate.AUTO);
-            break;
-        case NO:
-            attrPb.setIntValue(0);
-            attrPb.setStringValue("no");
-            attrPb.setTristateValue(Build.Attribute.Tristate.NO);
-            break;
-        case YES:
-            attrPb.setIntValue(1);
-            attrPb.setStringValue("yes");
-            attrPb.setTristateValue(Build.Attribute.Tristate.YES);
-            break;
-      }
-    } else if (type == LICENSE) {
-      License license = (License) value;
-      Build.License.Builder licensePb = Build.License.newBuilder();
-      for (License.LicenseType licenseType : license.getLicenseTypes()) {
-        licensePb.addLicenseType(licenseType.toString());
-      }
-      for (Label exception : license.getExceptions()) {
-        licensePb.addException(exception.toString());
-      }
-      attrPb.setLicense(licensePb);
-    } else if (type == STRING_DICT) {
-      Map<String, String> dict = (Map<String, String>) value;
-      for (Map.Entry<String, String> dictEntry : dict.entrySet()) {
-        Build.StringDictEntry entry = Build.StringDictEntry.newBuilder()
-            .setKey(dictEntry.getKey())
-            .setValue(dictEntry.getValue())
-            .build();
-        attrPb.addStringDictValue(entry);
-      }
-    } else if (type == STRING_DICT_UNARY) {
-      Map<String, String> dict = (Map<String, String>) value;
-      for (Map.Entry<String, String> dictEntry : dict.entrySet()) {
-        Build.StringDictUnaryEntry entry = Build.StringDictUnaryEntry.newBuilder()
-            .setKey(dictEntry.getKey())
-            .setValue(dictEntry.getValue())
-            .build();
-        attrPb.addStringDictUnaryValue(entry);
-      }
-    } else if (type == STRING_LIST_DICT) {
-      Map<String, List<String>> dict = (Map<String, List<String>>) value;
-      for (Map.Entry<String, List<String>> dictEntry : dict.entrySet()) {
-        Build.StringListDictEntry.Builder entry = Build.StringListDictEntry.newBuilder()
-            .setKey(dictEntry.getKey());
-        for (Object dictEntryValue : dictEntry.getValue()) {
-          entry.addValue(dictEntryValue.toString());
-        }
-        attrPb.addStringListDictValue(entry);
-      }
-    } else if (type == LABEL_LIST_DICT) {
-      Map<String, List<Label>> dict = (Map<String, List<Label>>) value;
-      for (Map.Entry<String, List<Label>> dictEntry : dict.entrySet()) {
-        Build.LabelListDictEntry.Builder entry = Build.LabelListDictEntry.newBuilder()
-            .setKey(dictEntry.getKey());
-        for (Object dictEntryValue : dictEntry.getValue()) {
-          entry.addValue(dictEntryValue.toString());
-        }
-        attrPb.addLabelListDictValue(entry);
-      }
-    } else if (type == FILESET_ENTRY_LIST) {
-      List<FilesetEntry> filesetEntries = (List<FilesetEntry>) value;
-      for (FilesetEntry filesetEntry : filesetEntries) {
-        Build.FilesetEntry.Builder filesetEntryPb = Build.FilesetEntry.newBuilder()
-            .setSource(filesetEntry.getSrcLabel().toString())
-            .setDestinationDirectory(filesetEntry.getDestDir().getPathString())
-            .setSymlinkBehavior(symlinkBehaviorToPb(filesetEntry.getSymlinkBehavior()))
-            .setStripPrefix(filesetEntry.getStripPrefix())
-            .setFilesPresent(filesetEntry.getFiles() != null);
-
-        if (filesetEntry.getFiles() != null) {
-          for (Label file : filesetEntry.getFiles()) {
-            filesetEntryPb.addFile(file.toString());
-          }
-        }
-
-        if (filesetEntry.getExcludes() != null) {
-          for (String exclude : filesetEntry.getExcludes()) {
-            filesetEntryPb.addExclude(exclude);
-          }
-        }
-
-        attrPb.addFilesetListValue(filesetEntryPb);
-      }
-    } else {
-      throw new IllegalStateException("Unknown type: " + type);
-    }
-
-    if (includeGlobs && value instanceof GlobList<?>) {
-      GlobList<?> globList = (GlobList<?>) value;
-
-      for (GlobCriteria criteria : globList.getCriteria()) {
-        Build.GlobCriteria.Builder criteriaPb = Build.GlobCriteria.newBuilder();
-        criteriaPb.setGlob(criteria.isGlob());
-        for (String include : criteria.getIncludePatterns()) {
-          criteriaPb.addInclude(include);
-        }
-        for (String exclude : criteria.getExcludePatterns()) {
-          criteriaPb.addExclude(exclude);
-        }
-
-        attrPb.addGlobCriteria(criteriaPb);
-      }
-    }
-    result.addAttribute(attrPb);
+    return Build.Target.newBuilder()
+        .setType(Build.Target.Discriminator.PACKAGE_GROUP)
+        .setPackageGroup(builder.build())
+        .build();
   }
 
-  // This is needed because I do not want to use the SymlinkBehavior from the
-  // protocol buffer all over the place, so there are two classes that do
-  // essentially the same thing.
-  private static Build.FilesetEntry.SymlinkBehavior symlinkBehaviorToPb(
-      FilesetEntry.SymlinkBehavior symlinkBehavior) {
-    switch (symlinkBehavior) {
-      case COPY:
-        return Build.FilesetEntry.SymlinkBehavior.COPY;
-      case DEREFERENCE:
-        return Build.FilesetEntry.SymlinkBehavior.DEREFERENCE;
-      default:
-        throw new AssertionError("Unhandled FilesetEntry.SymlinkBehavior");
+  private Build.Target serializeRule(Rule rule) {
+    Build.Rule.Builder builder = Build.Rule.newBuilder();
+    builder.setName(rule.getLabel().getName());
+    builder.setRuleClass(rule.getRuleClass());
+    builder.setPublicByDefault(rule.getRuleClassObject().isPublicByDefault());
+    for (Attribute attribute : rule.getAttributes()) {
+      builder.addAttribute(
+          AttributeSerializer.getAttributeProto(
+              attribute,
+              AttributeSerializer.getAttributeValues(rule, attribute),
+              rule.isAttributeValueExplicitlySpecified(attribute),
+              /*includeGlobs=*/ true));
     }
+    env.maybeSerializeAdditionalDataForRule(rule, builder);
+
+    return Build.Target.newBuilder()
+        .setType(Build.Target.Discriminator.RULE)
+        .setRule(builder.build())
+        .build();
   }
+
+  private static List<Build.MakeVar> serializeMakeEnvironment(MakeEnvironment makeEnv) {
+    List<Build.MakeVar> result = new ArrayList<>();
+
+    for (Map.Entry<String, ImmutableList<Binding>> var : makeEnv.getBindings().entrySet()) {
+      Build.MakeVar.Builder varPb = Build.MakeVar.newBuilder();
+      varPb.setName(var.getKey());
+      for (Binding binding : var.getValue()) {
+        Build.MakeVarBinding.Builder bindingPb = Build.MakeVarBinding.newBuilder();
+        bindingPb.setValue(binding.getValue());
+        bindingPb.setPlatformSetRegexp(binding.getPlatformSetRegexp());
+        varPb.addBinding(bindingPb);
+      }
+
+      result.add(varPb.build());
+    }
+
+    return result;
+  }
+
+  private static Build.License serializeLicense(License license) {
+    Build.License.Builder result = Build.License.newBuilder();
+
+    for (License.LicenseType licenseType : license.getLicenseTypes()) {
+      result.addLicenseType(licenseType.toString());
+    }
+
+    for (Label exception : license.getExceptions()) {
+      result.addException(exception.toString());
+    }
+    return result.build();
+  }
+
+  private Build.Event serializeEvent(Event event) {
+    Build.Event.Builder result = Build.Event.newBuilder();
+    result.setMessage(event.getMessage());
+
+    Build.Event.EventKind kind;
+    switch (event.getKind()) {
+      case ERROR:
+        kind = Build.Event.EventKind.ERROR;
+        break;
+      case WARNING:
+        kind = Build.Event.EventKind.WARNING;
+        break;
+      case INFO:
+        kind = Build.Event.EventKind.INFO;
+        break;
+      case PROGRESS:
+        kind = Build.Event.EventKind.PROGRESS;
+        break;
+      default: throw new IllegalArgumentException("unexpected event type: " + event.getKind());
+    }
+
+    result.setKind(kind);
+    return result.build();
+  }
+
+  /** Writes targets as a series of separate TargetOrTerminator messages to out. */
+  private void emitTargets(Collection<Target> targets, CodedOutputStream codedOut)
+      throws IOException {
+    for (Target target : targets) {
+      if (target instanceof InputFile) {
+        emitTarget(serializeInputFile((InputFile) target), codedOut);
+      } else if (target instanceof OutputFile) {
+        // Output files are not serialized; they are recreated by the RuleClass on deserialization.
+      } else if (target instanceof PackageGroup) {
+        emitTarget(serializePackageGroup((PackageGroup) target), codedOut);
+      } else if (target instanceof Rule) {
+        emitTarget(serializeRule((Rule) target), codedOut);
+      }
+    }
+
+    // Terminate stream with isTerminator = true.
+    codedOut.writeMessageNoTag(Build.TargetOrTerminator.newBuilder()
+        .setIsTerminator(true)
+        .build());
+  }
+
+  private static void emitTarget(Build.Target target, CodedOutputStream codedOut)
+      throws IOException {
+    codedOut.writeMessageNoTag(Build.TargetOrTerminator.newBuilder()
+        .setTarget(target)
+        .build());
+  }
+
 }

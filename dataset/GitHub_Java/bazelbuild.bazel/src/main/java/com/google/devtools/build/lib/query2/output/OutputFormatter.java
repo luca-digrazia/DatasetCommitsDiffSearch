@@ -24,15 +24,15 @@ import com.google.devtools.build.lib.collect.CompactHashSet;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.graph.Digraph;
 import com.google.devtools.build.lib.graph.Node;
-import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.DependencyFilter;
+import com.google.devtools.build.lib.packages.AttributeSerializer;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.util.BinaryPredicate;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.common.options.EnumConverter;
 
@@ -140,13 +140,11 @@ public abstract class OutputFormatter implements Serializable {
    * Given a set of query options, returns a BinaryPredicate suitable for
    * passing to {@link Rule#getLabels()}, {@link XmlOutputFormatter}, etc.
    */
-  public static DependencyFilter getDependencyFilter(QueryOptions queryOptions) {
+  public static BinaryPredicate<Rule, Attribute> getDependencyFilter(QueryOptions queryOptions) {
     // TODO(bazel-team): Optimize: and(ALL_DEPS, x) -> x, etc.
-    return DependencyFilter.and(
-        queryOptions.includeHostDeps ? DependencyFilter.ALL_DEPS : DependencyFilter.NO_HOST_DEPS,
-        queryOptions.includeImplicitDeps
-            ? DependencyFilter.ALL_DEPS
-            : DependencyFilter.NO_IMPLICIT_DEPS);
+    return Rule.and(
+          queryOptions.includeHostDeps ? Rule.ALL_DEPS : Rule.NO_HOST_DEPS,
+          queryOptions.includeImplicitDeps ? Rule.ALL_DEPS : Rule.NO_IMPLICIT_DEPS);
   }
 
   /**
@@ -336,13 +334,12 @@ public abstract class OutputFormatter implements Serializable {
           out.printf("  name = \"%s\",%n", rule.getName());
 
           for (Attribute attr : rule.getAttributes()) {
-            Pair<Iterable<Object>, AttributeValueSource> values =
-                getPossibleAttributeValuesAndSources(rule, attr);
+            Pair<Iterable<Object>, AttributeValueSource> values = getAttributeValues(rule, attr);
             if (Iterables.size(values.first) != 1) {
-              continue; // TODO(bazel-team): handle configurable attributes.
+              continue;  // TODO(bazel-team): handle configurable attributes.
             }
             if (values.second != AttributeValueSource.RULE) {
-              continue; // Don't print default values.
+              continue;  // Don't print default values.
             }
             Object value = Iterables.getOnlyElement(values.first);
             out.printf("  %s = ", attr.getPublicName());
@@ -541,18 +538,17 @@ public abstract class OutputFormatter implements Serializable {
   }
 
   /**
-   * Returns the possible values of the specified attribute in the specified rule. For simple
-   * attributes, this is a single value. For configurable and computed attributes, this may be a
-   * list of values. See {@link AggregatingAttributeMapper#getPossibleAttributeValues} for how the
-   * value(s) is/are made.
+   * Returns the possible values of the specified attribute in the specified rule. For
+   * non-configured attributes, this is a single value. For configurable attributes, this
+   * may be multiple values.
    *
    * @return a pair, where the first value is the set of possible values and the
    *     second is an enum that tells where the values come from (declared on the
    *     rule, declared as a package level default or a
    *     global default)
    */
-  protected static Pair<Iterable<Object>, AttributeValueSource>
-      getPossibleAttributeValuesAndSources(Rule rule, Attribute attr) {
+  protected static Pair<Iterable<Object>, AttributeValueSource> getAttributeValues(
+      Rule rule, Attribute attr) {
     AttributeValueSource source;
 
     if (attr.getName().equals("visibility")) {
@@ -568,9 +564,7 @@ public abstract class OutputFormatter implements Serializable {
           ? AttributeValueSource.RULE : AttributeValueSource.DEFAULT;
     }
 
-    Iterable<Object> possibleAttributeValues =
-        AggregatingAttributeMapper.of(rule).getPossibleAttributeValues(rule, attr);
-    return Pair.of(possibleAttributeValues, source);
+    return Pair.of(AttributeSerializer.getAttributeValues(rule, attr), source);
   }
 
   /**
