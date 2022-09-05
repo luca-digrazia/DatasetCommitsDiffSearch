@@ -56,8 +56,16 @@ public abstract class PackageLookupValue implements SkyValue {
     return new SuccessfulPackageLookupValue(root);
   }
 
+  public static PackageLookupValue workspace(Path root) {
+    return new WorkspacePackageLookupValue(root);
+  }
+
   public static PackageLookupValue invalidPackageName(String errorMsg) {
     return new InvalidNamePackageLookupValue(errorMsg);
+  }
+
+  public boolean isExternalPackage() {
+    return false;
   }
 
   /**
@@ -85,11 +93,10 @@ public abstract class PackageLookupValue implements SkyValue {
 
   static SkyKey key(PathFragment directory) {
     Preconditions.checkArgument(!directory.isAbsolute(), directory);
-    return key(PackageIdentifier.createInMainRepo(directory));
+    return key(PackageIdentifier.createInDefaultRepo(directory));
   }
 
   public static SkyKey key(PackageIdentifier pkgIdentifier) {
-    Preconditions.checkArgument(!pkgIdentifier.getRepository().isDefault());
     return SkyKey.create(SkyFunctions.PACKAGE_LOOKUP, pkgIdentifier);
   }
 
@@ -134,6 +141,28 @@ public abstract class PackageLookupValue implements SkyValue {
     @Override
     public int hashCode() {
       return root.hashCode();
+    }
+  }
+
+  // TODO(kchodorow): fix these semantics.  This class should not exist, WORKSPACE lookup should
+  // just return success/failure like a "normal" package.
+  /** Successful workspace package lookup value. */
+  public static class WorkspacePackageLookupValue extends SuccessfulPackageLookupValue {
+
+    private WorkspacePackageLookupValue(Path root) {
+      super(root);
+    }
+
+    // TODO(kchodorow): get rid of this, the semantics are wrong (successful package lookup should
+    // mean the package exists).
+    @Override
+    public boolean packageExists() {
+      return getRoot().exists();
+    }
+
+    @Override
+    public boolean isExternalPackage() {
+      return true;
     }
   }
 
