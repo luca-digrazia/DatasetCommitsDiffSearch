@@ -158,15 +158,11 @@ public class ObjcProtoLibrary implements RuleConfiguredTargetFactory {
     ImmutableSet.Builder<PathFragment> searchPathEntriesBuilder =
         new ImmutableSet.Builder<PathFragment>()
             .add(workspaceRelativeOutputDir);
-    boolean libPerProtoIncludes =
-         ruleContext.attributes().get(
-             ObjcProtoLibraryRule.PER_PROTO_INCLUDES, Type.BOOLEAN);
-    if (ruleContext.getConfiguration().getFragment(ObjcConfiguration.class).perProtoIncludes()
-        || libPerProtoIncludes) {
+     if (ruleContext.getConfiguration().getFragment(ObjcConfiguration.class).perProtoIncludes()) {
       searchPathEntriesBuilder
           .add(generatedProtoDir)
           .addAll(Iterables.transform(protoGeneratedHeaders, PARENT_PATHFRAGMENT));
-    }
+     }    
     ImmutableSet<PathFragment> searchPathEntries = searchPathEntriesBuilder.build();
 
     ObjcCommon common = new ObjcCommon.Builder(ruleContext)

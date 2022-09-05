@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -136,13 +135,6 @@ public class J2ObjcSource {
    */
   public SourceType getSourceType() {
     return sourceType;
-  }
-
-  /**
-   * Returns whether this {@link J2ObjcSource} contains any ObjC source (.m, .mm) files.
-   */
-  public boolean hasSourceFiles() {
-    return !Iterables.isEmpty(objcSrcs);
   }
 
   @Override

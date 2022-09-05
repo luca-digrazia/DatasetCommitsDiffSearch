@@ -93,8 +93,6 @@ public final class ReleaseBundlingSupport {
   static final String APP_BUNDLE_DIR_FORMAT = "Payload/%s.app";
   @VisibleForTesting
   static final String EXTENSION_BUNDLE_DIR_FORMAT = "PlugIns/%s.appex";
-  @VisibleForTesting
-  static final String FRAMEWORK_BUNDLE_DIR_FORMAT = "Frameworks/%s.framework";
 
   /**
    * Command string for "sed" that tries to extract the application version number from a larger
@@ -143,44 +141,19 @@ public final class ReleaseBundlingSupport {
    *    the latter
    * @param bundleDirFormat format string representing the bundle's directory with a single
    *    placeholder for the target name (e.g. {@code "Payload/%s.app"})
-   * @param bundleName name of the bundle, used with bundleDirFormat
-   * @param bundleMinimumOsVersion the minimum OS version this bundle's plist should be generated
-   *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
-   *    through the configuration)
-   */
-  ReleaseBundlingSupport(RuleContext ruleContext, ObjcProvider objcProvider,
-      LinkedBinary linkedBinary, String bundleDirFormat, String bundleName,
-      String bundleMinimumOsVersion) {
-    this.linkedBinary = linkedBinary;
-    this.attributes = new Attributes(ruleContext);
-    this.ruleContext = ruleContext;
-    this.objcProvider = objcProvider;
-    this.intermediateArtifacts = ObjcRuleClasses.intermediateArtifacts(ruleContext);
-    bundling = bundling(ruleContext, objcProvider, bundleDirFormat, bundleName,
-        bundleMinimumOsVersion);
-    bundleSupport = new BundleSupport(ruleContext, bundling, extraActoolArgs());
-  }
-
-  /**
-   * Creates a new application support within the given rule context.
-   *
-   * {@code bundleName} defaults to label name
-   *
-   * @param ruleContext context for the application-generating rule
-   * @param objcProvider provider containing all dependencies' information as well as some of this
-   *    rule's
-   * @param linkedBinary whether to look for a linked binary from this rule and dependencies or just
-   *    the latter
-   * @param bundleDirFormat format string representing the bundle's directory with a single
-   *    placeholder for the target name (e.g. {@code "Payload/%s.app"})
    * @param bundleMinimumOsVersion the minimum OS version this bundle's plist should be generated
    *    for (<b>not</b> the minimum OS version its binary is compiled with, that needs to be set
    *    through the configuration)
    */
   ReleaseBundlingSupport(RuleContext ruleContext, ObjcProvider objcProvider,
       LinkedBinary linkedBinary, String bundleDirFormat, String bundleMinimumOsVersion) {
-    this(ruleContext, objcProvider, linkedBinary, bundleDirFormat, ruleContext.getLabel().getName(),
-        bundleMinimumOsVersion);
+    this.linkedBinary = linkedBinary;
+    this.attributes = new Attributes(ruleContext);
+    this.ruleContext = ruleContext;
+    this.objcProvider = objcProvider;
+    this.intermediateArtifacts = ObjcRuleClasses.intermediateArtifacts(ruleContext);
+    bundling = bundling(ruleContext, objcProvider, bundleDirFormat, bundleMinimumOsVersion);
+    bundleSupport = new BundleSupport(ruleContext, bundling, extraActoolArgs());
   }
 
   /**
@@ -447,7 +420,7 @@ public final class ReleaseBundlingSupport {
    */
   RunfilesSupport runfilesSupport(Artifact runnerScript) {
     Artifact ipaFile = ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA);
-    Runfiles runfiles = new Runfiles.Builder(ruleContext.getWorkspaceName())
+    Runfiles runfiles = new Runfiles.Builder()
         .addArtifact(ipaFile)
         .addArtifact(runnerScript)
         .addArtifact(attributes.iossim())
@@ -467,7 +440,7 @@ public final class ReleaseBundlingSupport {
   }
 
   private Bundling bundling(RuleContext ruleContext, ObjcProvider objcProvider,
-      String bundleDirFormat, String bundleName, String minimumOsVersion) {
+      String bundleDirFormat, String minimumOsVersion) {
     ImmutableList<BundleableFile> extraBundleFiles;
     ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(ruleContext);
     if (objcConfiguration.getBundlingPlatform() == Platform.DEVICE) {
@@ -488,7 +461,7 @@ public final class ReleaseBundlingSupport {
     }
 
     return new Bundling.Builder()
-        .setName(bundleName)
+        .setName(ruleContext.getLabel().getName())
         // Architecture that determines which nested bundles are kept.
         .setArchitecture(objcConfiguration.getDependencySingleArchitecture())
         .setBundleDirFormat(bundleDirFormat)
@@ -571,7 +544,7 @@ public final class ReleaseBundlingSupport {
 
     ImmutableList.Builder<String> dirsToSign = new ImmutableList.Builder<>();
 
-    // Explicitly sign Swift dylibs. Unfortunately --deep option on codesign doesn't do this
+    // Explicitly sign Swift frameworks. Unfortunately --deep option on codesign doesn't do this
     // automatically.
     // The order here is important. The innermost code must singed first.
     String bundleDir = ShellUtils.shellEscape(bundling.getBundleDir());
@@ -970,7 +943,7 @@ public final class ReleaseBundlingSupport {
      * transition may exist with the same value in a single Bazel invocation.
      */
     enum ConfigurationDistinguisher {
-      EXTENSION, APPLICATION, FRAMEWORK, UNKNOWN
+      EXTENSION, APPLICATION, UNKNOWN
     }
   }
 }
