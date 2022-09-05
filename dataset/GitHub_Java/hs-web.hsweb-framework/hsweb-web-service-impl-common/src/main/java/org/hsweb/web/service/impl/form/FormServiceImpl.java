@@ -62,37 +62,37 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     public String createNewVersion(String oldVersionId) throws Exception {
         Form old = this.selectByPk(oldVersionId);
         Assert.notNull(old, "表单不存在!");
-        old.setId(RandomUtil.randomChar());
+        old.setU_id(RandomUtil.randomChar());
         old.setVersion(old.getVersion() + 1);
-        old.setCreateDate(new Date());
-        old.setUpdateDate(null);
+        old.setCreate_date(new Date());
+        old.setUpdate_date(null);
         old.setRevision(1);
         old.setRelease(0);
         old.setUsing(false);
         getMapper().insert(new InsertParam<>(old));
-        return old.getId();
+        return old.getU_id();
     }
 
     @Override
     public String insert(Form data) throws Exception {
         List<Form> old = this.select(new QueryParam().where("name", data.getName()));
         Assert.isTrue(old.isEmpty(), "表单 [" + data.getName() + "] 已存在!");
-        data.setCreateDate(new Date());
+        data.setCreate_date(new Date());
         data.setVersion(1);
-        if (StringUtils.isNullOrEmpty(data.getId()))
-            data.setId(RandomUtil.randomChar());
+        if (StringUtils.isNullOrEmpty(data.getU_id()))
+            data.setU_id(RandomUtil.randomChar());
         super.insert(data);
-        return data.getId();
+        return data.getU_id();
     }
 
     @Override
-    @CacheEvict(value = {CACHE_KEY}, key = "'form.'+#data.id")
+    @CacheEvict(value = {CACHE_KEY}, key = "'form.'+#data.u_id")
     public int update(Form data) throws Exception {
-        Form old = this.selectByPk(data.getId());
+        Form old = this.selectByPk(data.getU_id());
         Assert.notNull(old, "表单不存在!");
-        data.setUpdateDate(new Date());
+        data.setUpdate_date(new Date());
         data.setRevision(old.getRevision() + 1);
-        UpdateParam<Form> param = new UpdateParam<>(data).excludes("createDate", "release", "version", "using");
+        UpdateParam<Form> param = new UpdateParam<>(data).excludes("create_date", "release", "version", "using");
         return getMapper().update(param);
     }
 
@@ -138,8 +138,6 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     @Caching(evict = {
             @CacheEvict(value = {CACHE_KEY + ".deploy"},
                     key = "'form.deploy.'+target.selectByPk(#formId).getName()+'.html'"),
-            @CacheEvict(value = {CACHE_KEY + ".deploy"},
-                    key = "'form.deploy.'+target.selectByPk(#formId).getName()"),
             @CacheEvict(value = {CACHE_KEY},
                     key = "'form.using.'+target.selectByPk(#formId).getName()")
     })
@@ -149,39 +147,31 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
         //先卸载正在使用的表单
         Form using = getMapper().selectUsing(old.getName());
         if (using != null) {
-            this.unDeploy(using.getId());
+            this.unDeploy(using.getU_id());
         }
         //开始发布
         old.setUsing(true);
         dynamicFormService.deploy(old);
         old.setRelease(old.getRevision());//发布修订版本
-        getMapper().update(new UpdateParam<>(old).includes("using", "release").where("id", old.getId()));
+        getMapper().update(new UpdateParam<>(old).includes("using", "release").where("u_id", old.getU_id()));
         //加入发布历史记录
-        History history = History.newInstance("form.deploy." + old.getName());
-        history.setPrimaryKeyName("id");
-        history.setPrimaryKeyValue(old.getId());
-        history.setChangeBefore("{}");
-        history.setChangeAfter(JSON.toJSONString(old));
+        History history = History.newInstace("form.deploy." + old.getName());
+        history.setPrimary_key_name("u_id");
+        history.setPrimary_key_value(old.getU_id());
+        history.setChange_before("{}");
+        history.setChange_after(JSON.toJSONString(old));
         historyService.insert(history);
     }
 
     @Override
     @Transactional(rollbackFor = Throwable.class)
-    @Caching(evict = {
-            @CacheEvict(value = {CACHE_KEY + ".deploy"},
-                    key = "'form.deploy.'+target.selectByPk(#formId).getName()+'.html'"),
-            @CacheEvict(value = {CACHE_KEY + ".deploy"},
-                    key = "'form.deploy.'+target.selectByPk(#formId).getName()"),
-            @CacheEvict(value = {CACHE_KEY},
-                    key = "'form.using.'+target.selectByPk(#formId).getName()")
-    })
     public void unDeploy(String formId) throws Exception {
         Form old = this.selectByPk(formId);
         Assert.notNull(old, "表单不存在");
         dynamicFormService.unDeploy(old);
         old.setUsing(false);
         UpdateParam param = new UpdateParam<>(old);
-        param.includes("using").where("id", old.getId());
+        param.includes("using").where("u_id", old.getU_id());
         getMapper().update(param);
     }
 
@@ -190,23 +180,13 @@ public class FormServiceImpl extends AbstractServiceImpl<Form, String> implement
     public String createDeployHtml(String name) throws Exception {
         History history = historyService.selectLastHistoryByType("form.deploy." + name);
         Assert.notNull(history, "表单不存在");
-        return formParser.parseHtml(JSON.parseObject(history.getChangeAfter(), Form.class));
-    }
-
-    @Override
-    @Cacheable(value = CACHE_KEY + ".deploy", key = "'form.deploy.'+#name")
-    public Form selectDeployed(String name) throws Exception {
-        Form using = selectUsing(name);
-        assertNotNull(using, "表单不存在或未部署");
-        History history = historyService.selectLastHistoryByType("form.deploy." + name);
-        assertNotNull(history, "表单不存在或未部署");
-        return JSON.parseObject(history.getChangeAfter(), Form.class);
+        return formParser.parseHtml(JSON.parseObject(history.getChange_after(), Form.class));
     }
 
     @Override
     public String createViewHtml(String formId) throws Exception {
         Form form = this.selectByPk(formId);
-        assertNotNull(form, "表单不存在");
+        Assert.notNull(form, "表单不存在");
         return formParser.parseHtml(form);
     }
 
