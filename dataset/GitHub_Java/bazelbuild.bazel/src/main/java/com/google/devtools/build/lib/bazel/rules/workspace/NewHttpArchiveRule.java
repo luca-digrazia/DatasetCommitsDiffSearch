@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.bazel.rules.workspace;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.Type.STRING;
 
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -24,6 +25,10 @@ import com.google.devtools.build.lib.packages.RuleClass;
 /**
  * Rule definition for the new_http_archive rule.
  */
+@BlazeRule(name = NewHttpArchiveRule.NAME,
+    type = RuleClass.Builder.RuleClassType.WORKSPACE,
+    ancestors = { WorkspaceBaseRule.class },
+    factoryClass = WorkspaceConfiguredTargetFactory.class)
 public class NewHttpArchiveRule implements RuleDefinition {
   public static final String NAME = "new_http_archive";
 
@@ -31,54 +36,35 @@ public class NewHttpArchiveRule implements RuleDefinition {
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment environment) {
     return builder
         /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(url) -->
-         A URL referencing an archive file containing a Bazel repository.
-         ${SYNOPSIS}
+        A URL to an archive file containing a Bazel repository.
+        ${SYNOPSIS}
 
-         <p>Archives of type .zip, .jar, .war, .tar.gz or .tgz are supported. There is no support
-         for authentication or redirection.</p>
-         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        <p>This must be an HTTP URL that ends with .zip. There is no support for authentication or
+          redirection.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("url", STRING).mandatory())
         /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(sha256) -->
-         The expected SHA-256 hash of the file downloaded.
-         ${SYNOPSIS}
+        The expected SHA-256 hash of the file downloaded.
+        ${SYNOPSIS}
 
-         <p>This must match the SHA-256 hash of the file downloaded.</p>
-         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        <p>This must match the SHA-256 hash of the file downloaded.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("sha256", STRING).mandatory())
         /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(build_file) -->
-         A file to use as a BUILD file for this directory.
-         ${SYNOPSIS}
+        A file to use as a BUILD file for this directory.
+        ${SYNOPSIS}
 
-         <p>This path is relative to the build's workspace. The file does not need to be named
-         BUILD, but can be (something like BUILD.new-repo-name may work well for distinguishing it
-         from the repository's actual BUILD files.</p>
-         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+        <p>This path is relative to the build's workspace. The file does not need to be named
+        BUILD, but can be (something like BUILD.new-repo-name may work well for distinguishing it
+        from the repository's actual BUILD files.</p>
+        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("build_file", STRING).mandatory())
-        /* <!-- #BLAZE_RULE(new_http_archive).ATTRIBUTE(type) -->
-         The archive type of the downloaded file.
-         ${SYNOPSIS}
-
-         <p>By default, the archive type is determined from the file extension of the URL. If the
-         file has no extension, you can explicitly specify either "zip", "jar", "tar.gz", or
-         "tgz" here.</p>
-         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("type", STRING))
         .setWorkspaceOnly()
-        .build();
-  }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name(NewHttpArchiveRule.NAME)
-        .type(RuleClass.Builder.RuleClassType.WORKSPACE)
-        .ancestors(WorkspaceBaseRule.class)
-        .factoryClass(WorkspaceConfiguredTargetFactory.class)
         .build();
   }
 }
 
-/*<!-- #BLAZE_RULE (NAME = new_http_archive, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
+/*<!-- #BLAZE_RULE (NAME = new_http_archive, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
 
 ${ATTRIBUTE_SIGNATURE}
 
@@ -123,9 +109,13 @@ new_http_archive(
     sha256 = "03a58ac630e59778f328af4bcc4acb4f80208ed4",
     build_file = "ssl.BUILD",
 )
+
+bind(
+    name = "openssl",
+    actual = "@my-ssl//:openssl-lib",
+)
 </pre>
 
-<p>Targets would specify <code>@my-ssl//:openssl-lib</code> as a dependency to depend on this
- jar.</p>
+<p>See <a href="#bind_examples">Bind</a> for how to use bound targets.</p>
 
 <!-- #END_BLAZE_RULE -->*/

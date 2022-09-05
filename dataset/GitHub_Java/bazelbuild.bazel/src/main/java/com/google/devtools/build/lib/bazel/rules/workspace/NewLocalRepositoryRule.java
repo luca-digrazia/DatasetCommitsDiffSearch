@@ -15,8 +15,9 @@
 package com.google.devtools.build.lib.bazel.rules.workspace;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING;
 
+import com.google.devtools.build.lib.analysis.BlazeRule;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -26,6 +27,10 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 /**
  * Rule definition for the new_repository rule.
  */
+@BlazeRule(name = NewLocalRepositoryRule.NAME,
+           type = RuleClassType.WORKSPACE,
+           ancestors = { WorkspaceBaseRule.class },
+           factoryClass = WorkspaceConfiguredTargetFactory.class)
 public class NewLocalRepositoryRule implements RuleDefinition {
   public static final String NAME = "new_local_repository";
 
@@ -51,18 +56,8 @@ public class NewLocalRepositoryRule implements RuleDefinition {
         .setWorkspaceOnly()
         .build();
   }
-
-  @Override
-  public Metadata getMetadata() {
-    return RuleDefinition.Metadata.builder()
-        .name(NewLocalRepositoryRule.NAME)
-        .type(RuleClassType.WORKSPACE)
-        .ancestors(WorkspaceBaseRule.class)
-        .factoryClass(WorkspaceConfiguredTargetFactory.class)
-        .build();
-  }
 }
-/*<!-- #BLAZE_RULE (NAME = new_local_repository, TYPE = OTHER, FAMILY = Workspace)[GENERIC_RULE] -->
+/*<!-- #BLAZE_RULE (NAME = new_local_repository, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
 
 ${ATTRIBUTE_SIGNATURE}
 
@@ -71,7 +66,7 @@ ${ATTRIBUTE_SIGNATURE}
 
 <p>This rule creates a Bazel repository by creating a WORKSPACE file and subdirectory containing
 symlinks to the BUILD file and path given.  The build file should create targets relative to the
-<code>path</code>.
+path, which can then be bound and used by the current build.
 
 ${ATTRIBUTE_DEFINITION}
 
@@ -86,8 +81,7 @@ ${ATTRIBUTE_DEFINITION}
 <pre class="code">
 java_library(
     name = "openssl",
-    srcs = glob(['*.java'])
-    visibility = ["//visibility:public"],
+    srcs = glob(['ssl/*.java'])
 )
 </pre>
 
@@ -99,11 +93,18 @@ new_local_repository(
     path = "/home/user/ssl",
     build_file = "BUILD.my-ssl",
 )
+
+bind(
+    name = "openssl",
+    actual = "@my-ssl//my-ssl:openssl",
+)
 </pre>
 
-<p>This will create a <code>@my-ssl</code> repository that symlinks to <i>/home/user/ssl</i>.
-Targets can depend on this library by adding <code>@my-ssl//:openssl</code> to a target's
-dependencies.</p>
+<p>This will create a @my-ssl repository containing a my-ssl package that contains a symlink to
+/home/user/ssl named ssl (so the BUILD file must refer to paths within /home/user/ssl relative to
+ssl).</p>
+
+<p>See <a href="#bind_examples">Bind</a> for how to use bound targets.</p>
 
 <p>You can also use <code>new_local_repository</code> to include single files, not just
 directories. For example, suppose you had a jar file at /home/username/Downloads/piano.jar. You
@@ -115,18 +116,22 @@ new_local_repository(
     path = "/home/username/Downloads/piano.jar",
     build_file = "BUILD.piano",
 )
+
+bind(
+    name = "music",
+    actual = "@piano//piano:play-music",
+)
 </pre>
 
-<p>And creating the following BUILD.piano file:</p>
+<p>And creating the following BUILD file:</p>
 
 <pre class="code">
 java_import(
     name = "play-music",
     jars = ["piano.jar"],
-    visibility = ["//visibility:public"],
 )
 </pre>
 
-Then targets can depend on <code>@piano//:play-music</code> to use piano.jar.
+Then targets can depend on //external:music to use piano.jar.
 
 <!-- #END_BLAZE_RULE -->*/

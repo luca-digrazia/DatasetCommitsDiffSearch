@@ -18,7 +18,10 @@ import com.google.devtools.build.lib.bazel.repository.RepositoryFunction.Reposit
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.skyframe.FileValue;
+import com.google.devtools.build.lib.skyframe.RepositoryValue;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -44,17 +47,27 @@ public class HttpDownloadFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env) throws RepositoryFunctionException {
     HttpDescriptor descriptor = (HttpDescriptor) skyKey.argument();
     try {
-      // The downloaded file is not added to Skyframe, as changes to it cannot affect a build
-      // (it's essentially a temporary file). The downloaded file is always an archive and its
-      // contents, once decompressed, _can_ be dependencies of the build and _are_ added to
-      // Skyframe (through the normal package mechanism).
-      return new HttpDownloadValue(new HttpDownloader(
-          descriptor.url, descriptor.sha256, descriptor.outputDirectory).download());
+      FileSystemUtils.createDirectoryAndParents(descriptor.outputDirectory);
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(e, SkyFunctionException.Transience.TRANSIENT);
+    }
+    FileValue repositoryValue = RepositoryFunction.getRepositoryDirectory(
+        descriptor.outputDirectory, env);
+    if (repositoryValue == null) {
+      System.out.println("Returning null");
+      return null;
+    }
+
+    Path archive;
+    try {
+      archive = new HttpDownloader(descriptor.url, descriptor.sha256, descriptor.outputDirectory)
+          .download();
     } catch (IOException e) {
       throw new RepositoryFunctionException(new IOException("Error downloading from "
           + descriptor.url + " to " + descriptor.outputDirectory + ": " + e.getMessage()),
           SkyFunctionException.Transience.TRANSIENT);
     }
+    return new RepositoryValue(archive, repositoryValue);
   }
 
   @Nullable
@@ -76,7 +89,7 @@ public class HttpDownloadFunction implements SkyFunction {
     }
     String sha256 = mapper.get("sha256", Type.STRING);
     return new SkyKey(
-        SkyFunctionName.create(NAME),
+        SkyFunctionName.computed(NAME),
         new HttpDownloadFunction.HttpDescriptor(url, sha256, outputDirectory));
   }
 
@@ -101,7 +114,7 @@ public class HttpDownloadFunction implements SkyFunction {
       if (obj == this) {
         return true;
       }
-      if (obj == null || !(obj instanceof HttpDescriptor)) {
+      if (!(obj instanceof HttpDescriptor)) {
         return false;
       }
       HttpDescriptor other = (HttpDescriptor) obj;
