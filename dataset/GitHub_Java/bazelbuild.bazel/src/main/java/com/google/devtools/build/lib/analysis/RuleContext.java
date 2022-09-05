@@ -19,6 +19,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
+import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableBiMap;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
@@ -745,7 +746,7 @@ public final class RuleContext extends TargetContext
     for (BuildOptions options : splitOptions) {
       // This method should only be called when the split config is enabled on the command line, in
       // which case this cpu can't be null.
-      cpus.add(options.get(BuildConfiguration.Options.class).cpu);
+      cpus.add(Verify.verifyNotNull(options.get(BuildConfiguration.Options.class).getCpu()));
     }
 
     // Use an ImmutableListMultimap.Builder here to preserve ordering.
@@ -1815,37 +1816,28 @@ public final class RuleContext extends TargetContext
 
     private String getMissingMandatoryNativeProviders(
         ConfiguredTarget prerequisite, Attribute attribute) {
-      List<ImmutableList<Class<? extends TransitiveInfoProvider>>> mandatoryProvidersList =
-          attribute.getMandatoryNativeProvidersList();
+      List<Class<? extends TransitiveInfoProvider>> mandatoryProvidersList =
+          attribute.getMandatoryNativeProviders();
       if (mandatoryProvidersList.isEmpty()) {
         return null;
       }
-      List<List<String>> missingProvidersList = new ArrayList<>();
-      for (ImmutableList<Class<? extends TransitiveInfoProvider>> providers
-          : mandatoryProvidersList) {
-        List<String> missing = new ArrayList<>();
-        for (Class<? extends TransitiveInfoProvider> provider : providers) {
-          if (prerequisite.getProvider(provider) == null) {
-            missing.add(provider.getSimpleName());
-          }
-        }
-        if (missing.isEmpty()) {
-          return null;
-        } else {
-          missingProvidersList.add(missing);
+      List<Class<? extends TransitiveInfoProvider>> missing = new ArrayList<>();
+      for (Class<? extends TransitiveInfoProvider> provider : mandatoryProvidersList) {
+        if (prerequisite.getProvider(provider) == null) {
+          missing.add(provider);
         }
       }
-      StringBuilder missingProviders = new StringBuilder();
-      Joiner joinProvider = Joiner.on(", ");
-      for (List<String> providers : missingProvidersList) {
-        if (missingProviders.length() > 0) {
-          missingProviders.append(" or ");
-        }
-        missingProviders.append((providers.size() > 1) ? "[" : "");
-        joinProvider.appendTo(missingProviders, providers);
-        missingProviders.append((providers.size() > 1) ? "]" : "");
+      if (missing.isEmpty()) {
+        return null;
       }
-      return missingProviders.toString();
+      StringBuilder sb = new StringBuilder();
+      for (Class<? extends TransitiveInfoProvider> provider : missing) {
+        if (sb.length() > 0) {
+          sb.append(", ");
+        }
+        sb.append(provider.getSimpleName());
+      }
+      return sb.toString();
     }
 
     /**
@@ -1880,7 +1872,7 @@ public final class RuleContext extends TargetContext
       // if no providers were mandatory (thus, none are missing), which would cause an early return
       // below without emitting the error message about the not-allowed rule class if that
       // requirement was unfulfilled.
-      if (!attribute.getMandatoryNativeProvidersList().isEmpty()
+      if (!attribute.getMandatoryNativeProviders().isEmpty()
           || !attribute.getMandatoryProvidersList().isEmpty()) {
         boolean hadAllMandatoryProviders = true;
 
