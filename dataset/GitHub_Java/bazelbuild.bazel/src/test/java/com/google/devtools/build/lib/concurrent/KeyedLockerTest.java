@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,14 +49,14 @@ public abstract class KeyedLockerTest {
   protected abstract KeyedLocker<String> makeFreshLocker();
 
   @Before
-  public final void setUp_KeyedLockerTest() {
+  public void setUp_KeyedLockerTest() {
     locker = makeFreshLocker();
     executorService = Executors.newFixedThreadPool(NUM_EXECUTOR_THREADS);
     wrapper = new ThrowableRecordingRunnableWrapper("KeyedLockerTest");
   }
 
   @After
-  public final void shutdownExecutor() throws Exception  {
+  public void tearDown() {
     locker = null;
     MoreExecutors.shutdownAndAwaitTermination(executorService, TestUtils.WAIT_TIMEOUT_SECONDS,
         TimeUnit.SECONDS);
