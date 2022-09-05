@@ -259,6 +259,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         .containsExactlyElementsIn(hiddenTopLevelArtifacts);
   }
 
+
+
   @Test
   public void testOutputGroupsWithList() throws Exception {
     scratch.file(
