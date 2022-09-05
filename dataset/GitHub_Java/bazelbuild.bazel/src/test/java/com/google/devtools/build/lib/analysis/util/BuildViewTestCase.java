@@ -1314,10 +1314,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
           StringUtil.joinEnglishList(ImmutableSet.copyOf(expected), "or", "'"), value);
   }
 
-  /**
-   * A stub analysis environment.
-   */
-  protected class StubAnalysisEnvironment implements AnalysisEnvironment {
+  private class StubAnalysisEnvironment implements AnalysisEnvironment {
 
     @Override
     public void registerAction(Action... action) {
