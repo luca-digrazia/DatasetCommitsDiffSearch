@@ -97,7 +97,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     createPackages();
 
     // When package "a" is evaluated,
-    SkyKey key = createPrepDepsKey(rootDirectory, PathFragment.create("a"));
+    SkyKey key = createPrepDepsKey(rootDirectory, new PathFragment("a"));
     EvaluationResult<?> evaluationResult = getEvaluationResult(key);
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
 
@@ -122,7 +122,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     createPackages();
 
     // When package "a" is evaluated under a test-only filtering policy,
-    SkyKey key = createPrepDepsKey(rootDirectory, PathFragment.create("a"),
+    SkyKey key = createPrepDepsKey(rootDirectory, new PathFragment("a"),
         ImmutableSet.<PathFragment>of(), FilteringPolicies.FILTER_TESTS);
     EvaluationResult<?> evaluationResult = getEvaluationResult(key);
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
@@ -157,12 +157,12 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
 
     // When the top package is evaluated via PrepareDepsOfTargetsUnderDirectoryValue with "a/b"
     // excluded,
-    PathFragment excludedPathFragment = PathFragment.create("a/b");
-    SkyKey key = createPrepDepsKey(rootDirectory, PathFragment.create("a"),
+    PathFragment excludedPathFragment = new PathFragment("a/b");
+    SkyKey key = createPrepDepsKey(rootDirectory, new PathFragment("a"),
         ImmutableSet.of(excludedPathFragment));
     SkyKey collectkey =
         createCollectPackagesKey(
-            rootDirectory, PathFragment.create("a"), ImmutableSet.of(excludedPathFragment));
+            rootDirectory, new PathFragment("a"), ImmutableSet.of(excludedPathFragment));
     EvaluationResult<?> evaluationResult = getEvaluationResult(key, collectkey);
     CollectPackagesUnderDirectoryValue value =
         (CollectPackagesUnderDirectoryValue)
@@ -171,7 +171,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
                 .getValue(
                     createCollectPackagesKey(
                         rootDirectory,
-                        PathFragment.create("a"),
+                        new PathFragment("a"),
                         ImmutableSet.of(excludedPathFragment)));
 
     // Then the value reports that "a" is a package,
@@ -179,13 +179,11 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
 
     // And only the subdirectory corresponding to "a/c" is present in the result,
     RootedPath onlySubdir =
-        Iterables.getOnlyElement(
-            value.getSubdirectoryTransitivelyContainsPackagesOrErrors().keySet());
-    assertThat(onlySubdir.getRelativePath()).isEqualTo(PathFragment.create("a/c"));
+        Iterables.getOnlyElement(value.getSubdirectoryTransitivelyContainsPackages().keySet());
+    assertThat(onlySubdir.getRelativePath()).isEqualTo(new PathFragment("a/c"));
 
     // And the "a/c" subdirectory reports a package under it.
-    assertThat(value.getSubdirectoryTransitivelyContainsPackagesOrErrors().get(onlySubdir))
-        .isTrue();
+    assertThat(value.getSubdirectoryTransitivelyContainsPackages().get(onlySubdir)).isTrue();
 
     // Also, the computation graph does not contain a cached value for "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
@@ -199,7 +197,7 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     assertTrue(
         exists(
             createPrepDepsKey(
-                rootDirectory, PathFragment.create("a/c"), ImmutableSet.<PathFragment>of()),
+                rootDirectory, new PathFragment("a/c"), ImmutableSet.<PathFragment>of()),
             graph));
   }
 
@@ -212,37 +210,33 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
     scratch.file("a/b/d/helloworld");
 
     // When the top package is evaluated for recursive package values, and "a/b/c" is excluded,
-    ImmutableSet<PathFragment> excludedPaths = ImmutableSet.of(PathFragment.create("a/b/c"));
-    SkyKey key = createPrepDepsKey(rootDirectory, PathFragment.create("a"), excludedPaths);
+    ImmutableSet<PathFragment> excludedPaths = ImmutableSet.of(new PathFragment("a/b/c"));
+    SkyKey key = createPrepDepsKey(rootDirectory, new PathFragment("a"), excludedPaths);
     SkyKey collectKey =
-        createCollectPackagesKey(rootDirectory, PathFragment.create("a"), excludedPaths);
+        createCollectPackagesKey(rootDirectory, new PathFragment("a"), excludedPaths);
     EvaluationResult<?> evaluationResult = getEvaluationResult(key, collectKey);
     CollectPackagesUnderDirectoryValue value =
         (CollectPackagesUnderDirectoryValue)
             evaluationResult
                 .getWalkableGraph()
                 .getValue(
-                    createCollectPackagesKey(
-                        rootDirectory, PathFragment.create("a"), excludedPaths));
+                    createCollectPackagesKey(rootDirectory, new PathFragment("a"), excludedPaths));
 
     // Then the value reports that "a" is a package,
     assertThat(value.isDirectoryPackage()).isTrue();
 
     // And the subdirectory corresponding to "a/b" is present in the result,
     RootedPath onlySubdir =
-        Iterables.getOnlyElement(
-            value.getSubdirectoryTransitivelyContainsPackagesOrErrors().keySet());
-    assertThat(onlySubdir.getRelativePath()).isEqualTo(PathFragment.create("a/b"));
+        Iterables.getOnlyElement(value.getSubdirectoryTransitivelyContainsPackages().keySet());
+    assertThat(onlySubdir.getRelativePath()).isEqualTo(new PathFragment("a/b"));
 
     // And the "a/b" subdirectory does not report a package under it (because it got excluded).
-    assertThat(value.getSubdirectoryTransitivelyContainsPackagesOrErrors().get(onlySubdir))
-        .isFalse();
+    assertThat(value.getSubdirectoryTransitivelyContainsPackages().get(onlySubdir)).isFalse();
 
     // Also, the computation graph contains a cached value for "a/b" with "a/b/c" excluded, because
     // "a/b/c" does live underneath "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
-    SkyKey abKey = createCollectPackagesKey(
-        rootDirectory, PathFragment.create("a/b"), excludedPaths);
+    SkyKey abKey = createCollectPackagesKey(rootDirectory, new PathFragment("a/b"), excludedPaths);
     assertThat(exists(abKey, graph)).isTrue();
     CollectPackagesUnderDirectoryValue abValue =
         (CollectPackagesUnderDirectoryValue) Preconditions.checkNotNull(graph.getValue(abKey));
@@ -252,11 +246,10 @@ public class PrepareDepsOfTargetsUnderDirectoryFunctionTest extends BuildViewTes
 
     // And only the subdirectory "a/b/d" is present in that value,
     RootedPath abd =
-        Iterables.getOnlyElement(
-            abValue.getSubdirectoryTransitivelyContainsPackagesOrErrors().keySet());
-    assertThat(abd.getRelativePath()).isEqualTo(PathFragment.create("a/b/d"));
+        Iterables.getOnlyElement(abValue.getSubdirectoryTransitivelyContainsPackages().keySet());
+    assertThat(abd.getRelativePath()).isEqualTo(new PathFragment("a/b/d"));
 
     // And no package is under "a/b/d".
-    assertThat(abValue.getSubdirectoryTransitivelyContainsPackagesOrErrors().get(abd)).isFalse();
+    assertThat(abValue.getSubdirectoryTransitivelyContainsPackages().get(abd)).isFalse();
   }
 }
