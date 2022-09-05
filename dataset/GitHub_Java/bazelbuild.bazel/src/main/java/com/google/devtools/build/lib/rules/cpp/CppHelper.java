@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionOwner;
@@ -41,7 +42,6 @@ import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.IncludeScanningUtil;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 
@@ -260,15 +260,15 @@ public class CppHelper {
    * performance problems if many headers are generated.
    */
   @Nullable
-  public static final Map<Artifact, Artifact> createExtractInclusions(
-      RuleContext ruleContext, CppSemantics semantics, Iterable<Artifact> prerequisites) {
+  public static final Map<Artifact, Artifact> createExtractInclusions(RuleContext ruleContext,
+      Iterable<Artifact> prerequisites) {
     Map<Artifact, Artifact> extractions = new HashMap<>();
     for (Artifact prerequisite : prerequisites) {
       if (extractions.containsKey(prerequisite)) {
         // Don't create duplicate actions just because user specified same header file twice.
         continue;
       }
-      Artifact scanned = createExtractInclusions(ruleContext, semantics, prerequisite);
+      Artifact scanned = createExtractInclusions(ruleContext, prerequisite);
       if (scanned != null) {
         extractions.put(prerequisite, scanned);
       }
@@ -284,13 +284,13 @@ public class CppHelper {
    * .cc source in serial. For high-latency file systems, this could cause
    * performance problems if many headers are generated.
    */
-  private static final Artifact createExtractInclusions(
-      RuleContext ruleContext, CppSemantics semantics, Artifact prerequisite) {
-    if (ruleContext != null
-        && semantics.needsIncludeScanning(ruleContext)
-        && !prerequisite.isSourceArtifact()
-        && CPP_FILETYPES.matches(prerequisite.getFilename())) {
-      Artifact scanned = getIncludesOutput(ruleContext, semantics, prerequisite);
+  private static final Artifact createExtractInclusions(RuleContext ruleContext,
+      Artifact prerequisite) {
+    if (ruleContext != null &&
+        ruleContext.getFragment(CppConfiguration.class).needsIncludeScanning() &&
+        !prerequisite.isSourceArtifact() &&
+        CPP_FILETYPES.matches(prerequisite.getFilename())) {
+      Artifact scanned = getIncludesOutput(ruleContext, prerequisite);
       ruleContext.registerAction(
           new ExtractInclusionAction(ruleContext.getActionOwner(), prerequisite, scanned));
       return scanned;
@@ -298,9 +298,8 @@ public class CppHelper {
     return null;
   }
 
-  private static Artifact getIncludesOutput(
-      RuleContext ruleContext, CppSemantics semantics, Artifact src) {
-    Root root = semantics.getGreppedIncludesDirectory(ruleContext);
+  private static Artifact getIncludesOutput(RuleContext ruleContext, Artifact src) {
+    Root root = ruleContext.getFragment(CppConfiguration.class).getGreppedIncludesDirectory();
     PathFragment relOut = IncludeScanningUtil.getRootRelativeOutputPath(src.getExecPath());
     return ruleContext.getShareableArtifact(relOut, root);
   }
