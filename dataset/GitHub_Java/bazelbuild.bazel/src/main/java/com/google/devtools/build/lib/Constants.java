@@ -14,6 +14,9 @@
 
 package com.google.devtools.build.lib;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+
 /**
  * A temporary class of constants; these encode differences between Google's internal setup and
  * Bazel. We're working to remove this class, which requires cleaning up our internal code base.
@@ -25,11 +28,18 @@ public final class Constants {
   // Google's internal name for Bazel is 'Blaze', and it will take some more time to change that.
   public static final String PRODUCT_NAME = "bazel";
 
+  // Default value for the --package_path flag if not otherwise set.
+  public static final ImmutableList<String> DEFAULT_PACKAGE_PATH = ImmutableList.of("%workspace%");
+
   // Native Java deps are all linked into a single file, which is named with this value + ".so".
   public static final String NATIVE_DEPS_LIB_SUFFIX = "_nativedeps";
 
   // Locations of implicit Android SDK dependencies.
   public static final String ANDROID_DEFAULT_SDK = "//external:android/sdk";
+
+  // If the --fat_apk_cpu flag is not set, we use this as the default value.
+  public static final ImmutableList<String> ANDROID_DEFAULT_FAT_APK_CPUS =
+      ImmutableList.<String>of("armeabi-v7a");
 
   // Most other tools dependencies use this; we plan to split it into per-language repositories.
   public static final String TOOLS_REPOSITORY = "@bazel_tools";
