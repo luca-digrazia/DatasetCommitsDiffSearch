@@ -29,18 +29,15 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.GENERAL_RESO
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.IMPORTED_LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INCLUDE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.INSTRUMENTED_SOURCE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LIBRARY;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.LINKED_BINARY;
+import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_DYLIB;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SOURCE;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STORYBOARD;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STRINGS;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCASSETS_DIR;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XCDATAMODEL;
-import static com.google.devtools.build.lib.rules.objc.ObjcProvider.XIB;
 import static com.google.devtools.build.lib.vfs.PathFragment.TO_PATH_FRAGMENT;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -63,8 +60,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.util.FileType;
-import com.google.devtools.build.lib.util.RegexFilter;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.xcode.util.Interspersing;
 
 import java.util.HashSet;
 import java.util.List;
@@ -340,6 +337,8 @@ public final class ObjcCommon {
           .addTransitiveAndPropagate(depObjcProviders)
           .addTransitiveWithoutPropagating(directDepObjcProviders);
 
+      Storyboards storyboards;
+      Iterable<Xcdatamodel> datamodels;
       if (compilationAttributes.isPresent()) {
         CompilationAttributes attributes = compilationAttributes.get();
         ObjcConfiguration objcConfiguration = ObjcRuleClasses.objcConfiguration(context);
@@ -359,21 +358,31 @@ public final class ObjcCommon {
       
       if (resourceAttributes.isPresent()) {
         ResourceAttributes attributes = resourceAttributes.get();
+        storyboards = Storyboards.fromInputs(attributes.storyboards(), intermediateArtifacts);
+        datamodels = Xcdatamodels.xcdatamodels(intermediateArtifacts, attributes.datamodels());
+        Iterable<CompiledResourceFile> compiledResources =
+            CompiledResourceFile.fromStringsFiles(intermediateArtifacts, attributes.strings());
+        XibFiles xibFiles = new XibFiles(attributes.xibs());
+        
         objcProvider
-            .addAll(GENERAL_RESOURCE_FILE, attributes.storyboards())
+            .addTransitiveAndPropagate(MERGE_ZIP, storyboards.getOutputZips())
+            .addAll(MERGE_ZIP, xibFiles.compiledZips(intermediateArtifacts))
+            .addAll(GENERAL_RESOURCE_FILE, storyboards.getInputs())
             .addAll(GENERAL_RESOURCE_FILE, attributes.resources())
             .addAll(GENERAL_RESOURCE_FILE, attributes.strings())
             .addAll(GENERAL_RESOURCE_FILE, attributes.xibs())
             .addAll(BUNDLE_FILE, BundleableFile.flattenedRawResourceFiles(attributes.resources()))
             .addAll(BUNDLE_FILE,
                 BundleableFile.structuredRawResourceFiles(attributes.structuredResources()))
+            .addAll(BUNDLE_FILE,
+                Iterables.transform(compiledResources, CompiledResourceFile.TO_BUNDLED))
             .addAll(XCASSETS_DIR,
                 uniqueContainers(attributes.assetCatalogs(), ASSET_CATALOG_CONTAINER_TYPE))
             .addAll(ASSET_CATALOG, attributes.assetCatalogs())
-            .addAll(XCDATAMODEL, attributes.datamodels())
-            .addAll(XIB, attributes.xibs())
-            .addAll(STRINGS, attributes.strings())
-            .addAll(STORYBOARD, attributes.storyboards());
+            .addAll(XCDATAMODEL, datamodels);
+      } else {
+        storyboards = Storyboards.empty();
+        datamodels = ImmutableList.of();
       }
 
       for (CompilationArtifacts artifacts : compilationArtifacts.asSet()) {
@@ -381,12 +390,8 @@ public final class ObjcCommon {
             Iterables.concat(artifacts.getSrcs(), artifacts.getNonArcSrcs());
         objcProvider.addAll(LIBRARY, artifacts.getArchive().asSet());
         objcProvider.addAll(SOURCE, allSources);
-        BuildConfiguration configuration = context.getConfiguration();
-        RegexFilter filter = configuration.getInstrumentationFilter();
-        if (configuration.isCodeCoverageEnabled()
-            && filter.isIncluded(context.getLabel().toString())) {
+        if (context.getConfiguration().isCodeCoverageEnabled()) {
           for (Artifact source : allSources) {
-            objcProvider.add(INSTRUMENTED_SOURCE, source);
             objcProvider.add(GCNO, intermediateArtifacts.gcnoFile(source));
           }
         }
@@ -405,9 +410,8 @@ public final class ObjcCommon {
         for (CompilationArtifacts artifacts : compilationArtifacts.asSet()) {
           for (Artifact archive : artifacts.getArchive().asSet()) {
             objcProvider.add(FORCE_LOAD_LIBRARY, archive);
-            objcProvider.add(FORCE_LOAD_FOR_XCODEGEN, String.format(
-                "$(BUILT_PRODUCTS_DIR)/lib%s.a",
-                XcodeProvider.xcodeTargetName(context.getLabel())));
+            objcProvider.add(FORCE_LOAD_FOR_XCODEGEN,
+                "$(BUILT_PRODUCTS_DIR)/" + archive.getExecPath().getBaseName());
           }
         }
         for (Artifact archive : extraImportLibraries) {
@@ -419,7 +423,8 @@ public final class ObjcCommon {
 
       objcProvider.addAll(LINKED_BINARY, linkedBinary.asSet());
 
-      return new ObjcCommon(context, objcProvider.build(), compilationArtifacts);
+      return new ObjcCommon(
+          context, objcProvider.build(), storyboards, datamodels, compilationArtifacts);
     }
 
   }
@@ -431,15 +436,21 @@ public final class ObjcCommon {
   static final FileType FRAMEWORK_CONTAINER_TYPE = FileType.of(".framework");
   private final RuleContext context;
   private final ObjcProvider objcProvider;
+  private final Storyboards storyboards;
+  private final Iterable<Xcdatamodel> datamodels;
 
   private final Optional<CompilationArtifacts> compilationArtifacts;
 
   private ObjcCommon(
       RuleContext context,
       ObjcProvider objcProvider,
+      Storyboards storyboards,
+      Iterable<Xcdatamodel> datamodels,
       Optional<CompilationArtifacts> compilationArtifacts) {
     this.context = Preconditions.checkNotNull(context);
     this.objcProvider = Preconditions.checkNotNull(objcProvider);
+    this.storyboards = Preconditions.checkNotNull(storyboards);
+    this.datamodels = Preconditions.checkNotNull(datamodels);
     this.compilationArtifacts = Preconditions.checkNotNull(compilationArtifacts);
   }
 
@@ -449,6 +460,22 @@ public final class ObjcCommon {
 
   public Optional<CompilationArtifacts> getCompilationArtifacts() {
     return compilationArtifacts;
+  }
+
+  /**
+   * Returns all storyboards declared in this rule (not including others in the transitive
+   * dependency tree).
+   */
+  public Storyboards getStoryboards() {
+    return storyboards;
+  }
+
+  /**
+   * Returns all datamodels declared in this rule (not including others in the transitive
+   * dependency tree).
+   */
+  public Iterable<Xcdatamodel> getDatamodels() {
+    return datamodels;
   }
 
   /**
@@ -579,6 +606,8 @@ public final class ObjcCommon {
       Optional<J2ObjcSrcsProvider> maybeJ2ObjcSrcsProvider) {
     NestedSet<Artifact> allFilesToBuild = NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(filesToBuild)
+        .addTransitive(storyboards.getOutputZips())
+        .addAll(Xcdatamodel.outputZips(datamodels))
         .build();
 
     RunfilesProvider runfilesProvider = RunfilesProvider.withData(

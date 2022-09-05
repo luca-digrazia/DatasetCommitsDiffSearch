@@ -355,7 +355,7 @@ final class ObjcActionsBuilder {
       ObjcRuleClasses.Tools tools,
       ObjcProvider provider,
       Artifact zipOutput,
-      Artifact partialInfoPlist,
+      ExtraActoolOutputs extraActoolOutputs,
       ExtraActoolArgs extraActoolArgs,
       Set<TargetDeviceFamily> families) {
     // TODO(bazel-team): Do not use the deploy jar explicitly here. There is currently a bug where
@@ -367,12 +367,11 @@ final class ObjcActionsBuilder {
         .setMnemonic("AssetCatalogCompile")
         .addTransitiveInputs(provider.get(ASSET_CATALOG))
         .addOutput(zipOutput)
-        .addOutput(partialInfoPlist)
+        .addOutputs(extraActoolOutputs)
         .setCommandLine(actoolzipCommandLine(
             objcConfiguration,
             provider,
             zipOutput,
-            partialInfoPlist,
             extraActoolArgs,
             ImmutableSet.copyOf(families)))
         .build(context));
@@ -382,7 +381,6 @@ final class ObjcActionsBuilder {
       final ObjcConfiguration objcConfiguration,
       final ObjcProvider provider,
       final Artifact zipOutput,
-      final Artifact partialInfoPlist,
       final ExtraActoolArgs extraActoolArgs,
       final ImmutableSet<TargetDeviceFamily> families) {
     return new CommandLine() {
@@ -395,7 +393,6 @@ final class ObjcActionsBuilder {
             .add(IosSdkCommands.ACTOOL_PATH)
             .add("--platform")
             .add(objcConfiguration.getPlatform().getLowerCaseNameInPlist())
-            .add("--output-partial-info-plist").add(partialInfoPlist.getExecPathString())
             .add("--minimum-deployment-target").add(objcConfiguration.getMinimumOs());
         for (TargetDeviceFamily targetDeviceFamily : families) {
           args.add("--target-device").add(targetDeviceFamily.name().toLowerCase(Locale.US));
