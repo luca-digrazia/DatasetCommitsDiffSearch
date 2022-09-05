@@ -53,9 +53,9 @@ public class UniformSample implements Sample {
 		if (c <= values.length()) {
 			values.set((int) c - 1, value);
 		} else {
-			final long r = Math.abs(RANDOM.nextLong()) % c;
+			final int r = (int) (Math.abs(RANDOM.nextLong()) % c);
 			if (r < values.length()) {
-				values.set((int) r, value);
+				values.set(r, value);
 			}
 		}
 	}
