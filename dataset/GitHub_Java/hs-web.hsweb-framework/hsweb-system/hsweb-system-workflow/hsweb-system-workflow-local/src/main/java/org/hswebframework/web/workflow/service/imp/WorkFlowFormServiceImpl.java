@@ -109,9 +109,6 @@ public class WorkFlowFormServiceImpl extends AbstractFlowableService implements 
         RDBTableMetaData table = context.getTable();
         Dialect dialect = context.getDatabase().getMeta().getDialect();
 
-        if(!table.getProperty("enable-workflow",true).isTrue()){
-            return;
-        }
         //----------taskId--------------
         {
             RDBColumnMetaData processTaskId = new RDBColumnMetaData();
