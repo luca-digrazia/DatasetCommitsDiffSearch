@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Sets;
@@ -40,7 +39,12 @@ public class EnvironmentTest extends EvaluationTestCase {
   // Test the API directly
   @Test
   public void testLookupAndUpdate() throws Exception {
-    assertNull(lookup("foo"));
+    try {
+      lookup("foo");
+      fail();
+    } catch (Environment.NoSuchVariableException e) {
+      assertThat(e).hasMessage("no such variable: foo");
+    }
     update("foo", "bar");
     assertEquals("bar", lookup("foo"));
   }
@@ -63,7 +67,12 @@ public class EnvironmentTest extends EvaluationTestCase {
   // Test assign through interpreter, lookup through API:
   @Test
   public void testAssign() throws Exception {
-    assertNull(lookup("foo"));
+    try {
+      lookup("foo");
+      fail();
+    } catch (Environment.NoSuchVariableException e) {
+      assertThat(e).hasMessage("no such variable: foo");
+    }
     eval("foo = 'bar'");
     assertEquals("bar", lookup("foo"));
   }
