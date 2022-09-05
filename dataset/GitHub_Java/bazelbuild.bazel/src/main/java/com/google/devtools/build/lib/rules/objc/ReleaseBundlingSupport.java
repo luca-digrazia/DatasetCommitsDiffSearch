@@ -103,8 +103,6 @@ public final class ReleaseBundlingSupport {
   @VisibleForTesting
   static final String APP_BUNDLE_DIR_FORMAT = "Payload/%s.app";
   @VisibleForTesting
-  static final String XCTEST_BUNDLE_DIR_FORMAT = "Payload/%s.xctest";
-  @VisibleForTesting
   static final String EXTENSION_BUNDLE_DIR_FORMAT = "PlugIns/%s.appex";
   @VisibleForTesting
   static final String FRAMEWORK_BUNDLE_DIR_FORMAT = "Frameworks/%s.framework";
@@ -386,9 +384,10 @@ public final class ReleaseBundlingSupport {
             configuration.getBundlingPlatform().getLowerCaseNameInPlist(),
             configuration.getIosSdkVersion());
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnXcrunActionBuilder(ruleContext)
+        ObjcRuleClasses.spawnOnDarwinActionBuilder()
             .setMnemonic("EnvironmentPlist")
-            .setExecutable(attributes.environmentPlist())
+            .addInput(attributes.environmentPlistScript())
+            .setExecutable(attributes.environmentPlistScript())
             .addArguments("--platform", platformWithVersion)
             .addArguments("--output", getGeneratedEnvironmentPlist().getExecPathString())
             .addOutput(getGeneratedEnvironmentPlist())
@@ -886,6 +885,10 @@ public final class ReleaseBundlingSupport {
             .setCommandLine(commandLine.build())
             .addOutput(intermediateArtifacts.swiftFrameworksFileZip())
             .addInput(intermediateArtifacts.combinedArchitectureBinary())
+            // TODO(dmaclach): Adding realpath and xcrunwrapper should not be required once
+            // https://github.com/google/bazel/issues/285 is fixed.
+            .addInput(attributes.realpath())
+            .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
             .build(ruleContext));
   }
 
@@ -1018,10 +1021,20 @@ public final class ReleaseBundlingSupport {
     }
 
     /**
-     * Returns the location of the environment_plist.
+     * Returns the location of the realpath tool.
+     * TODO(dmaclach): Should not be required once https://github.com/google/bazel/issues/285
+     * is fixed.
      */
-    public FilesToRunProvider environmentPlist() {
-      return ruleContext.getExecutablePrerequisite("$environment_plist", Mode.HOST);
+    Artifact realpath() {
+      return ruleContext.getPrerequisiteArtifact("$realpath", Mode.HOST);
+    }
+
+    /**
+     * Returns the location of the environment_plist.sh.
+     */
+    public Artifact environmentPlistScript() {
+      return checkNotNull(
+          ruleContext.getPrerequisiteArtifact("$environment_plist_sh", Mode.HOST));
     }
 
     String bundleId() {
