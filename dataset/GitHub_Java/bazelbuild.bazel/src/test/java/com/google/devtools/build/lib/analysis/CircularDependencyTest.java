@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -64,10 +65,9 @@ public class CircularDependencyTest extends BuildViewTestCase {
     String expectedEvent =
         "cycle in dependency graph:\n"
             + "    //cycle:superman\n"
-            + ".-> //cycle:rock\n"
-            + "|   //cycle:paper\n"
-            + "|   //cycle:scissors\n"
-            + "`-- //cycle:rock";
+            + "  * //cycle:rock\n"
+            + "    //cycle:paper\n"
+            + "    //cycle:scissors";
     checkError(
         "cycle",
         "superman",
@@ -134,9 +134,8 @@ public class CircularDependencyTest extends BuildViewTestCase {
         "a",
         "rule1",
         "in cc_library rule //a:rule1: cycle in dependency graph:\n"
-            + ".-> //a:rule1\n"
-            + "|   //b:rule2\n"
-            + "`-- //a:rule1",
+            + "  * //a:rule1\n"
+            + "    //b:rule2",
         "cc_library(name='rule1',",
         "           deps=['//b:rule2'])");
   }

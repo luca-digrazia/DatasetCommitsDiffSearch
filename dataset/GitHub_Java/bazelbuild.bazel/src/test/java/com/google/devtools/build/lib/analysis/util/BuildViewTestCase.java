@@ -1202,15 +1202,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   private ConfiguredTargetKey makeLabelAndConfiguration(String label) {
-    BuildConfiguration config = targetConfig;
-    if (targetConfig.useDynamicConfigurations()) {
-      try {
-        config = view.trimConfigurationForTesting(getTarget(label), targetConfig, reporter);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-    return new ConfiguredTargetKey(makeLabel(label), config);
+    return new ConfiguredTargetKey(makeLabel(label), targetConfig);
   }
 
   protected static List<String> actionInputsToPaths(Iterable<? extends ActionInput> actionInputs) {

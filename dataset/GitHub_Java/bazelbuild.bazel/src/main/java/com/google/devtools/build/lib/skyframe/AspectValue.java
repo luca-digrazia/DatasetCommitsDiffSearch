@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Objects;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.analysis.AspectDescriptor;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -28,6 +27,7 @@ import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 
 import javax.annotation.Nullable;
 
@@ -40,6 +40,7 @@ public final class AspectValue extends ActionLookupValue {
    * A base class for keys that have AspectValue as a Sky value.
    */
   public abstract static class AspectValueKey extends ActionLookupKey {
+
     public abstract String getDescription();
   }
 
@@ -48,36 +49,22 @@ public final class AspectValue extends ActionLookupValue {
    */
   public static final class AspectKey extends AspectValueKey {
     private final Label label;
-    private final AspectKey baseKey;
     private final BuildConfiguration aspectConfiguration;
     private final BuildConfiguration baseConfiguration;
     private final AspectClass aspectClass;
     private final AspectParameters parameters;
 
-    private AspectKey(
+    protected AspectKey(
         Label label,
         BuildConfiguration aspectConfiguration,
         BuildConfiguration baseConfiguration,
         AspectClass aspectClass,
         AspectParameters parameters) {
-      this.baseKey = null;
       this.label = label;
       this.aspectConfiguration = aspectConfiguration;
       this.baseConfiguration = baseConfiguration;
       this.aspectClass = aspectClass;
       this.parameters = parameters;
-    }
-
-    private AspectKey(
-        AspectKey baseKey,
-        AspectClass aspectClass, AspectParameters aspectParameters,
-        BuildConfiguration aspectConfiguration) {
-      this.baseKey = baseKey;
-      this.label = baseKey.label;
-      this.baseConfiguration = baseKey.getBaseConfiguration();
-      this.aspectConfiguration = aspectConfiguration;
-      this.aspectClass = aspectClass;
-      this.parameters = aspectParameters;
     }
 
     @Override
@@ -100,18 +87,9 @@ public final class AspectValue extends ActionLookupValue {
       return parameters;
     }
 
-    @Nullable
-    public AspectKey getBaseKey() {
-      return baseKey;
-    }
-
     @Override
     public String getDescription() {
-      if (baseKey == null) {
-        return String.format("%s of %s", aspectClass.getName(), getLabel());
-      } else {
-        return String.format("%s on top of %s", aspectClass.getName(), baseKey.toString());
-      }
+      return String.format("%s of %s", aspectClass.getName(), getLabel());
     }
 
     /**
@@ -154,7 +132,6 @@ public final class AspectValue extends ActionLookupValue {
     public int hashCode() {
       return Objects.hashCode(
           label,
-          baseKey,
           aspectConfiguration,
           baseConfiguration,
           aspectClass,
@@ -173,7 +150,6 @@ public final class AspectValue extends ActionLookupValue {
 
       AspectKey that = (AspectKey) other;
       return Objects.equal(label, that.label)
-          && Objects.equal(baseKey, that.baseKey)
           && Objects.equal(aspectConfiguration, that.aspectConfiguration)
           && Objects.equal(baseConfiguration, that.baseConfiguration)
           && Objects.equal(aspectClass, that.aspectClass)
@@ -185,7 +161,7 @@ public final class AspectValue extends ActionLookupValue {
         return "null";
       }
       return String.format("%s with aspect %s%s",
-          baseKey == null ? label.toString() : baseKey.prettyPrint(),
+          label.toString(),
           aspectClass.getName(),
           (aspectConfiguration != null && aspectConfiguration.isHostConfiguration())
               ? "(host) " : "");
@@ -193,7 +169,7 @@ public final class AspectValue extends ActionLookupValue {
 
     @Override
     public String toString() {
-      return (baseKey == null ? label : baseKey.toString())
+      return label
           + "#"
           + aspectClass.getName()
           + " "
@@ -202,16 +178,6 @@ public final class AspectValue extends ActionLookupValue {
           + (baseConfiguration == null ? "null" : baseConfiguration.checksum())
           + " "
           + parameters;
-    }
-
-    public AspectKey withLabel(Label label) {
-      if (baseKey == null) {
-        return new AspectKey(
-            label, aspectConfiguration, baseConfiguration, aspectClass, parameters);
-      } else {
-        return new AspectKey(
-            baseKey.withLabel(label), aspectClass, parameters, aspectConfiguration);
-      }
     }
   }
 
@@ -327,24 +293,33 @@ public final class AspectValue extends ActionLookupValue {
     return transitivePackages;
   }
 
-  public static AspectKey createAspectKey(AspectKey baseKey, AspectDescriptor aspectDescriptor,
-      BuildConfiguration aspectConfiguration) {
-    return new AspectKey(
-        baseKey, aspectDescriptor.getAspectClass(), aspectDescriptor.getParameters(),
-        aspectConfiguration
-    );
+  /**
+   * Constructs a new SkyKey containing an AspectKey.
+   */
+  public static SkyKey key(
+      Label label,
+      BuildConfiguration aspectConfiguration,
+      BuildConfiguration baseConfiguration,
+      AspectClass aspectFactory,
+      AspectParameters additionalConfiguration) {
+    return SkyKey.create(
+        SkyFunctions.ASPECT,
+        new AspectKey(
+            label, aspectConfiguration, baseConfiguration, aspectFactory, additionalConfiguration));
   }
 
+  public static SkyKey key(AspectValueKey aspectKey) {
+    return SkyKey.create(aspectKey.getType(), aspectKey);
+  }
 
   public static AspectKey createAspectKey(
       Label label,
-      BuildConfiguration baseConfiguration, AspectDescriptor aspectDescriptor,
-      BuildConfiguration aspectConfiguration) {
+      BuildConfiguration aspectConfiguration,
+      BuildConfiguration baseConfiguration,
+      AspectClass aspectFactory) {
     return new AspectKey(
-        label, aspectConfiguration, baseConfiguration,
-        aspectDescriptor.getAspectClass(), aspectDescriptor.getParameters());
+        label, aspectConfiguration, baseConfiguration, aspectFactory, AspectParameters.EMPTY);
   }
-
 
   public static SkylarkAspectLoadingKey createSkylarkAspectKey(
       Label targetLabel,
