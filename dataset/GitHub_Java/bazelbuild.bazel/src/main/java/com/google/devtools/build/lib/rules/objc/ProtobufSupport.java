@@ -64,7 +64,6 @@ final class ProtobufSupport {
   private final RuleContext ruleContext;
   private final BuildConfiguration buildConfiguration;
   private final ProtoAttributes attributes;
-  private final IntermediateArtifacts intermediateArtifacts;
 
   // Each entry of this map represents a generation action and a compilation action. The input set
   // are dependencies of the output set. The output set is always a subset of, or the same set as,
@@ -110,13 +109,6 @@ final class ProtobufSupport {
     this.buildConfiguration = buildConfiguration;
     this.attributes = new ProtoAttributes(ruleContext);
     this.inputsToOutputsMap = getInputsToOutputsMap();
-    if (buildConfiguration != null) {
-      this.intermediateArtifacts =
-          ObjcRuleClasses.intermediateArtifacts(ruleContext, buildConfiguration);
-    } else {
-      this.intermediateArtifacts =
-          ObjcRuleClasses.intermediateArtifacts(ruleContext, ruleContext.getConfiguration());
-    }
   }
 
   /**
@@ -140,9 +132,11 @@ final class ProtobufSupport {
   }
 
   private void registerModuleMapGenerationAction() {
+    IntermediateArtifacts moduleMapIntermediateArtifacts =
+        ObjcRuleClasses.intermediateArtifacts(ruleContext);
     CompilationArtifacts.Builder moduleMapCompilationArtifacts =
         new CompilationArtifacts.Builder()
-            .setIntermediateArtifacts(intermediateArtifacts)
+            .setIntermediateArtifacts(moduleMapIntermediateArtifacts)
             .setPchFile(Optional.<Artifact>absent())
             .addAdditionalHdrs(getProtobufHeaders())
             .addAdditionalHdrs(
@@ -150,7 +144,7 @@ final class ProtobufSupport {
 
     new CompilationSupport(
             ruleContext,
-            intermediateArtifacts,
+            ObjcRuleClasses.intermediateArtifacts(ruleContext),
             new CompilationAttributes.Builder().build())
         .registerGenerateModuleMapAction(Optional.of(moduleMapCompilationArtifacts.build()));
   }
@@ -216,11 +210,12 @@ final class ProtobufSupport {
 
     Iterable<PathFragment> userHeaderSearchPaths =
         ImmutableList.of(getWorkspaceRelativeOutputDir());
-    ObjcCommon.Builder commonBuilder = new ObjcCommon.Builder(ruleContext);
-
-    if (!isLinkingTarget()) {
-      commonBuilder.setIntermediateArtifacts(intermediateArtifacts).setHasModuleMap();
-    }
+    IntermediateArtifacts moduleMapIntermediateArtifacts =
+        ObjcRuleClasses.intermediateArtifacts(ruleContext);
+    ObjcCommon.Builder commonBuilder =
+        new ObjcCommon.Builder(ruleContext)
+            .setIntermediateArtifacts(moduleMapIntermediateArtifacts)
+            .setHasModuleMap();
 
     int actionId = 0;
     for (ImmutableSet<Artifact> inputProtos : inputsToOutputsMap.keySet()) {
@@ -254,6 +249,8 @@ final class ProtobufSupport {
     }
 
     XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
+    IntermediateArtifacts intermediateArtifacts =
+        ObjcRuleClasses.intermediateArtifacts(ruleContext);
     new XcodeSupport(ruleContext, intermediateArtifacts, getXcodeLabel(getBundledProtosSuffix()))
         .addXcodeSettings(xcodeProviderBuilder, getObjcProvider().get(), LIBRARY_STATIC);
 
@@ -416,13 +413,6 @@ final class ProtobufSupport {
   }
 
   private IntermediateArtifacts getUniqueIntermediateArtifacts(int actionId) {
-    if (buildConfiguration != null) {
-      return new IntermediateArtifacts(
-          ruleContext,
-          getUniqueBundledProtosSuffix(actionId),
-          getUniqueBundledProtosPrefix(actionId),
-          buildConfiguration);
-    }
     return new IntermediateArtifacts(
         ruleContext,
         getUniqueBundledProtosSuffix(actionId),

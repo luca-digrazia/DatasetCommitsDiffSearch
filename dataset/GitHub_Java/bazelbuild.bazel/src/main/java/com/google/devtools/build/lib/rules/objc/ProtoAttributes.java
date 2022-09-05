@@ -119,7 +119,8 @@ final class ProtoAttributes {
         ruleContext.throwWithRuleError(PORTABLE_PROTO_FILTERS_EMPTY_ERROR);
       }
 
-      if (usesObjcHeaderNames()
+      if (outputsCpp()
+          || usesObjcHeaderNames()
           || needsPerProtoIncludes()
           || getOptionsFile().isPresent()) {
         ruleContext.throwWithRuleError(PORTABLE_PROTO_FILTERS_NOT_EXCLUSIVE_ERROR);
@@ -133,6 +134,11 @@ final class ProtoAttributes {
         ruleContext.throwWithRuleError(NO_PROTOS_ERROR);
       }
 
+      if (outputsCpp()) {
+        ruleContext.ruleWarning(
+            "The output_cpp attribute has been deprecated. Please "
+                + "refer to b/29342376 for information on possible alternatives.");
+      }
       if (!usesObjcHeaderNames()) {
         ruleContext.ruleWarning(
             "As part of the migration process, it is recommended to enable "
@@ -142,6 +148,14 @@ final class ProtoAttributes {
         ruleContext.throwWithRuleError(OBJC_PROTO_LIB_DEP_IN_PROTOCOL_BUFFERS2_DEPS_ERROR);
       }
     }
+  }
+
+  /** Returns whether the generated files should be C++ or Objective C. */
+  boolean outputsCpp() {
+    if (ruleContext.attributes().has(ObjcProtoLibraryRule.OUTPUT_CPP_ATTR, Type.BOOLEAN)) {
+      return ruleContext.attributes().get(ObjcProtoLibraryRule.OUTPUT_CPP_ATTR, Type.BOOLEAN);
+    }
+    return false;
   }
 
   /** Returns whether the generated header files should have be of type pb.h or pbobjc.h. */

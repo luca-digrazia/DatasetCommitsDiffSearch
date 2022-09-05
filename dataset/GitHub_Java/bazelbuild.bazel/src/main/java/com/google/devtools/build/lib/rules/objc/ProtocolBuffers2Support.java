@@ -134,7 +134,7 @@ final class ProtocolBuffers2Support {
   }
 
   private String getSourceExtension() {
-    return ".pb.m";
+    return ".pb" + (attributes.outputsCpp() ? ".cc" : ".m");
   }
 
   private ObjcCommon getCommon() {
@@ -189,6 +189,10 @@ final class ProtocolBuffers2Support {
           .add(attributes.getOptionsFile().get().getExecPathString());
     }
 
+    if (attributes.outputsCpp()) {
+      commandLineBuilder.add("--generate-cpp");
+    }
+
     if (attributes.usesObjcHeaderNames()) {
       commandLineBuilder.add("--use-objc-header-names");
     }
@@ -228,7 +232,12 @@ final class ProtocolBuffers2Support {
     ImmutableList.Builder<Artifact> builder = new ImmutableList.Builder<>();
     for (Artifact protoFile : attributes.filterWellKnownProtos(attributes.getProtoFiles())) {
       String protoFileName = FileSystemUtils.removeExtension(protoFile.getFilename());
-      String generatedOutputName = attributes.getGeneratedProtoFilename(protoFileName, false);
+      String generatedOutputName;
+      if (attributes.outputsCpp()) {
+        generatedOutputName = protoFileName;
+      } else {
+        generatedOutputName = attributes.getGeneratedProtoFilename(protoFileName, false);
+      }
 
       PathFragment generatedFilePath =
           new PathFragment(
