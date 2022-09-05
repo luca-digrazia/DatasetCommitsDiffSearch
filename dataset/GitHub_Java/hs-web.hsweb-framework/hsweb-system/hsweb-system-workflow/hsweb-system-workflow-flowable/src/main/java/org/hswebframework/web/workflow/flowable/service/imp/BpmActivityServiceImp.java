@@ -44,8 +44,18 @@ public class BpmActivityServiceImp extends FlowableAbstract implements BpmActivi
                 .orderByProcessDefinitionVersion()
                 .desc()
                 .singleResult();
+//                .list()
+//                .get(0);
 
         return getActivitiesById(definition.getId(), activityId);
+//        String procDefId = definition.getId();
+//        if (activityId == null) {
+//            return getProcessDefinition(procDefId).getActivities();
+//        } else {
+//            List<ActivityImpl> activities = new ArrayList<>();
+//            activities.add(getProcessDefinition(procDefId).findActivity(activityId));
+//            return activities;
+//        }
     }
 
     public List<ActivityImpl> getActivitiesById(String processDefId, String activityId) {
@@ -55,6 +65,9 @@ public class BpmActivityServiceImp extends FlowableAbstract implements BpmActivi
         } else {
             ActivityImpl activity = pde.findActivity(activityId);
             if (null == activity) return Collections.emptyList();
+
+//            List<ActivityImpl> activities = new ArrayList<>();
+//            activities.add(activity);
             return Collections.singletonList(activity);
         }
     }
@@ -212,6 +225,12 @@ public class BpmActivityServiceImp extends FlowableAbstract implements BpmActivi
     @Override
     public ActivityImpl getEndEvent(String procDefId) {
         return findActivity(procDefId, activity -> "endEvent".equals(activity.getProperty("type")));
+
+//        for (ActivityImpl activity : pde.getActivities()) {
+//            if (activity.getProperty("type").equals("endEvent"))
+//                return activity;
+//        }
+//        return null;
     }
 
     /**
