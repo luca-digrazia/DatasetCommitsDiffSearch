@@ -208,11 +208,11 @@
 
 package android.taobao.atlas.startup;
 
-import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+
+import android.annotation.Nullable;
 import android.content.Context;
-import android.taobao.atlas.framework.Framework;
 import android.text.TextUtils;
 import android.util.Log;
 import com.taobao.android.runtime.AndroidRuntime;
@@ -245,7 +245,7 @@ public class DexLoadBooster {
                 //AndroidRuntime.getInstance().init(context);
             }
         }
-        AndroidRuntime.getInstance().init(context, isClassAvailable("com.ali.mobisecenhance.ld.startup.ConfigInfo"));
+        AndroidRuntime.getInstance().init(context, isClassAvailable("com.ali.mobisecenhance.ReflectMap"));
         if (!AndroidRuntime.getInstance().isEnabled()) {
             return;
         }
@@ -279,7 +279,7 @@ public class DexLoadBooster {
             || version != null && version.trim().length() > 0;
     }
 
-    public static boolean isClassAvailable(String className) {
+    public static boolean isClassAvailable(@Nullable String className) {
         if (TextUtils.isEmpty(className)) {
             return false;
         }
