@@ -62,26 +62,20 @@ public class DialogsActivity extends AppCompatActivity {
 
         private TextView textView;
 
-        @NonNull
         @Override
-        public Dialog onCreateDialog(Bundle savedInstanceState) {
-            LayoutInflater inflater = getActivity().getLayoutInflater();
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+            return inflater.inflate(R.layout.dialog_basic, container, false);
+        }
 
-            //inflate custom layout and get views
-            //pass null as parent view because will be in dialog layout
-            View view = inflater.inflate(R.layout.dialog_basic, null);
+        @Override
+        public void onViewCreated(View view, Bundle savedInstanceState) {
+            super.onViewCreated(view, savedInstanceState);
 
             textView = (TextView) view.findViewById(R.id.textView);
 
             MaterialCalendarView widget = (MaterialCalendarView) view.findViewById(R.id.calendarView);
 
             widget.setOnDateChangedListener(this);
-
-            return new AlertDialog.Builder(getActivity())
-                    .setTitle(R.string.title_activity_dialogs)
-                    .setView(view)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .create();
         }
 
         @Override
