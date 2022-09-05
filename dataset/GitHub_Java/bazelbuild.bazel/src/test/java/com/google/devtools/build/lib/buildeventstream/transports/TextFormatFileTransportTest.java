@@ -20,12 +20,10 @@ import static org.mockito.Mockito.when;
 import com.google.common.base.Joiner;
 import com.google.common.io.Files;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildStarted;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Progress;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.TargetComplete;
-import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.protobuf.TextFormat;
 import java.io.File;
 import java.io.IOException;
@@ -37,7 +35,6 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
@@ -49,8 +46,6 @@ public class TextFormatFileTransportTest {
   @Rule public TemporaryFolder tmp = new TemporaryFolder();
 
   @Mock public BuildEvent buildEvent;
-
-  @Mock public PathConverter pathConverter;
 
   @Before
   public void initMocks() {
@@ -70,21 +65,20 @@ public class TextFormatFileTransportTest {
         BuildEventStreamProtos.BuildEvent.newBuilder()
             .setStarted(BuildStarted.newBuilder().setCommand("build"))
             .build();
-    when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(started);
-    TextFormatFileTransport transport =
-        new TextFormatFileTransport(output.getAbsolutePath(), pathConverter);
+    when(buildEvent.asStreamProto()).thenReturn(started);
+    TextFormatFileTransport transport = new TextFormatFileTransport(output.getAbsolutePath());
     transport.sendBuildEvent(buildEvent);
 
     BuildEventStreamProtos.BuildEvent progress =
         BuildEventStreamProtos.BuildEvent.newBuilder().setProgress(Progress.newBuilder()).build();
-    when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(progress);
+    when(buildEvent.asStreamProto()).thenReturn(progress);
     transport.sendBuildEvent(buildEvent);
 
     BuildEventStreamProtos.BuildEvent completed =
         BuildEventStreamProtos.BuildEvent.newBuilder()
             .setCompleted(TargetComplete.newBuilder().setSuccess(true))
             .build();
-    when(buildEvent.asStreamProto(Matchers.<BuildEventConverters>any())).thenReturn(completed);
+    when(buildEvent.asStreamProto()).thenReturn(completed);
     transport.sendBuildEvent(buildEvent);
 
     transport.close();
