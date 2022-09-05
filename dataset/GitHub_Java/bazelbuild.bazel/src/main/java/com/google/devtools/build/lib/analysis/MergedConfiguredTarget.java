@@ -31,17 +31,6 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   private final ConfiguredTarget base;
   private final TransitiveInfoProviderMap providers;
 
-  /**
-   * This exception is thrown when configured targets and aspects
-   * being merged provide duplicate things that they shouldn't
-   * (output groups or providers).
-   */
-  public static final class DuplicateException extends Exception {
-    public DuplicateException(String message) {
-      super(message);
-    }
-  }
-
   private MergedConfiguredTarget(ConfiguredTarget base, TransitiveInfoProviderMap providers) {
     super(base.getTarget(), base.getConfiguration());
     this.base = base;
@@ -73,8 +62,7 @@ public final class MergedConfiguredTarget extends AbstractConfiguredTarget {
   }
 
   /** Creates an instance based on a configured target and a set of aspects. */
-  public static ConfiguredTarget of(ConfiguredTarget base, Iterable<ConfiguredAspect> aspects)
-      throws DuplicateException {
+  public static ConfiguredTarget of(ConfiguredTarget base, Iterable<ConfiguredAspect> aspects) {
     if (Iterables.isEmpty(aspects)) {
       // If there are no aspects, don't bother with creating a proxy object
       return base;
