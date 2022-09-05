@@ -382,6 +382,12 @@ public class JavaOptions extends FragmentOptions {
       help = "Disables the Jvm configuration entirely.")
   public boolean disableJvm;
 
+  @Option(name = "allow_precompiled_jars_in_srcs",
+      defaultValue = "false",
+      category = "undocumented",
+      help = "No-op. Kept here for backwards compatibility.")
+  public boolean allowPrecompiledJarsInSrcs;
+
   @Option(name = "java_optimization_mode",
       defaultValue = "legacy",
       converter = JavaOptimizationModeConverter.class,

@@ -141,6 +141,7 @@ public final class JavaConfiguration extends Fragment {
   private final TriState bundleTranslations;
   private final ImmutableList<Label> translationTargets;
   private final String javaCpu;
+  private final boolean allowPrecompiledJarsInSrcs;
   private final JavaOptimizationMode javaOptimizationMode;
 
   private final Label javaToolchain;
@@ -168,6 +169,7 @@ public final class JavaConfiguration extends Fragment {
     this.bundleTranslations = javaOptions.bundleTranslations;
     this.javaCpu = javaCpu;
     this.javaToolchain = javaToolchain;
+    this.allowPrecompiledJarsInSrcs = javaOptions.allowPrecompiledJarsInSrcs;
     this.javaOptimizationMode = javaOptions.javaOptimizationMode;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
@@ -326,6 +328,11 @@ public final class JavaConfiguration extends Fragment {
    */
   public Label getToolchainLabel() {
     return javaToolchain;
+  }
+
+  /** Returns whether pre-compiled jar files should be allowed in srcs. */
+  public boolean allowPrecompiledJarsInSrcs() {
+    return allowPrecompiledJarsInSrcs;
   }
 
   /**
