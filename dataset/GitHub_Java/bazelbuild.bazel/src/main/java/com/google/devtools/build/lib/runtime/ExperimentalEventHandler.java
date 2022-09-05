@@ -263,9 +263,7 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
           terminal.writeString("      " + logPath.getPathString());
           crlf();
         }
-        if (summary.getFailedLogs().size() > 0) {
-          crlf();
-        }
+        crlf();
         if (cursorControl) {
           addProgressBar();
         }
