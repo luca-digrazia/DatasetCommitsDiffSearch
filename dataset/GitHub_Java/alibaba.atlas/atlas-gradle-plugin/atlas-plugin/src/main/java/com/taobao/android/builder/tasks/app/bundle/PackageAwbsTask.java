@@ -209,21 +209,6 @@
 
 package com.taobao.android.builder.tasks.app.bundle;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-
-import javax.annotation.Nullable;
-
 import com.android.build.gradle.AndroidConfig;
 import com.android.build.gradle.internal.api.AppVariantContext;
 import com.android.build.gradle.internal.api.AppVariantOutputContext;
@@ -250,9 +235,24 @@ import com.taobao.android.builder.dependency.AtlasDependencyTree;
 import com.taobao.android.builder.dependency.model.AwbBundle;
 import com.taobao.android.builder.tasks.manager.MtlBaseTaskAction;
 import com.taobao.android.builder.tools.concurrent.ExecutorServicesHelper;
-import com.taobao.android.builder.tools.log.FileLogger;
+
 import org.gradle.api.GradleException;
 import org.gradle.api.tasks.TaskAction;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+import javax.annotation.Nullable;
 
 public class PackageAwbsTask extends BaseTask {
 
@@ -294,7 +294,7 @@ public class PackageAwbsTask extends BaseTask {
 
         ExecutorServicesHelper executorServicesHelper = new ExecutorServicesHelper(taskName,
                                                                                    getLogger(),
-                                                                                   1);
+                                                                                   0);
         List<Runnable> runnables = new ArrayList<>();
 
         final AtomicLong dexTotalTime = new AtomicLong(0);
@@ -333,7 +333,7 @@ public class PackageAwbsTask extends BaseTask {
                                                          .isMultiDexEnabled(),
                                                  null,
                                                  androidConfig.getDexOptions(),
-                                                 outputHandler, true);
+                                                 outputHandler);
                         //create package
 
                         long endDex = System.currentTimeMillis();
@@ -413,20 +413,22 @@ public class PackageAwbsTask extends BaseTask {
 
         executorServicesHelper.execute(runnables);
 
-        getLogger().info(">>>>> packageAwbs >>>>>>>>>>>>");
+        if (getLogger().isInfoEnabled()) {
 
-        FileLogger fileLogger = FileLogger.getInstance("packageAwbs");
-        fileLogger.log("totalTime is " + (System.currentTimeMillis() - startTime));
-        fileLogger.log("dexTotalTime is " + dexTotalTime);
-        fileLogger.log("packageTotalTime is " + packageTotalTime);
-        String format = "[packageawb]  bundle:%50s  dexTime: %10d  packageTime: %10d ";
-        for (String bundle : monitors.keySet()) {
-            Long[] value = monitors.get(bundle);
-            fileLogger.log(String.format(format, bundle, value[0], value[1]));
+            getLogger().info(">>>>> packageAwbs >>>>>>>>>>>>");
+
+            getLogger().info("totalTime is " + (System.currentTimeMillis() - startTime));
+            getLogger().info("dexTotalTime is " + dexTotalTime);
+            getLogger().info("packageTotalTime is " + packageTotalTime);
+
+            String format = "[packageawb]  bundle:%50s  dexTime: %10d  packageTime: %10d ";
+            for (String bundle : monitors.keySet()) {
+                Long[] value = monitors.get(bundle);
+                getLogger().info(String.format(format, bundle, value[0], value[1]));
+            }
+
+            getLogger().info(">>>>> packageAwbs >>>>>>>>>>>>");
         }
-
-        getLogger().info(">>>>> packageAwbs >>>>>>>>>>>>");
-
     }
 
     private File getOutputFile(AwbBundle awbBundle) {
