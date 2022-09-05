@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -282,7 +281,7 @@ public final class CcLinkParams {
      * getPreferredLibraries() and getLinkOpts() into the current link params
      * object.
      */
-    public Builder addCcLibrary(RuleContext context, boolean neverlink, List<String> linkopts,
+    public Builder addCcLibrary(RuleContext context, CcCommon common, boolean neverlink,
         CcLinkingOutputs linkingOutputs) {
       addTransitiveTargets(
           context.getPrerequisites("deps", Mode.TARGET),
@@ -291,7 +290,7 @@ public final class CcLinkParams {
       if (!neverlink) {
         addLibraries(linkingOutputs.getPreferredLibraries(linkingStatically,
             linkShared || context.getFragment(CppConfiguration.class).forcePic()));
-        addLinkOpts(linkopts);
+        addLinkOpts(common.getLinkopts());
       }
       return this;
     }
