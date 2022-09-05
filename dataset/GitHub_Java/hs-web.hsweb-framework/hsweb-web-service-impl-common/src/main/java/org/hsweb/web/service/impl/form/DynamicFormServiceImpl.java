@@ -1,7 +1,6 @@
 package org.hsweb.web.service.impl.form;
 
 import com.alibaba.fastjson.JSON;
-import org.hsweb.commons.StringUtils;
 import org.hsweb.concurrent.lock.annotation.LockName;
 import org.hsweb.concurrent.lock.annotation.ReadLock;
 import org.hsweb.concurrent.lock.annotation.WriteLock;
@@ -34,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.hsweb.commons.StringUtils;
 
 import javax.annotation.Resource;
 import java.io.InputStream;
@@ -41,7 +41,6 @@ import java.io.OutputStream;
 import java.sql.JDBCType;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Created by zhouhao on 16-4-14.
@@ -85,7 +84,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         FieldMetaData id = new FieldMetaData("u_id", String.class, dataType, JDBCType.VARCHAR);
         id.setComment("主键");
         id.setProperty("read-only", true);
-        id.setProperty("not-null", true);
+
         metaData.setPrimaryKeys(new HashSet<>(Arrays.asList("u_id")));
         metaData.setProperty("primaryKey", "u_id");
         metaData.addField(id);
@@ -98,7 +97,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     }
 
     @Override
-    public TableMetaData parseMeta(Form form) {
+    public TableMetaData parseMeta(Form form){
         return formParser.parse(form);
     }
 
@@ -137,11 +136,11 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     @Override
     @WriteLock
     @LockName(value = "'form.lock.'+#form.name", isExpression = true)
-    public void unDeploy(Form form) {
+    public void unDeploy(Form form){
         database.removeTable(form.getName());
     }
 
-    public Table getTableByName(String name) {
+    public Table getTableByName(String name){
         try {
             Table table = database.getTable(name);
             if (table == null) {
@@ -203,22 +202,6 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     }
 
     @Override
-    @ReadLock
-    @LockName(value = "'form.lock.'+#name", isExpression = true)
-    public List<String> insert(String name, List<Map<String, Object>> dataList) throws SQLException {
-        Table table = getTableByName(name);
-        String primaryKeyName = getPrimaryKeyName(name);
-        List<String> idList = new ArrayList<>();
-        dataList.forEach(data -> {
-            String pk = GenericPo.createUID();
-            data.put(primaryKeyName, pk);
-            idList.add(pk);
-        });
-        table.createInsert().values(dataList).exec();
-        return idList;
-    }
-
-    @Override
     public String saveOrUpdate(String name, Map<String, Object> data) throws SQLException {
         String id = (String) data.get(getPrimaryKeyName(name));
         if (id == null)
@@ -229,16 +212,6 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
             id = insert(name, data);
         }
         return id;
-    }
-
-    @Override
-    public String saveOrUpdate(String name, List<Map<String, Object>> map) throws SQLException {
-        StringBuilder builder = new StringBuilder();
-        for (Map<String, Object> objectMap : map) {
-            String id = saveOrUpdate(name, objectMap);
-            builder.append(id).append(",");
-        }
-        return builder.substring(0, builder.length());
     }
 
     protected String getRepeatDataId(String name, Map<String, Object> data) {
@@ -278,10 +251,8 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     @LockName(value = "'form.lock.'+#name", isExpression = true)
     public int updateByPk(String name, String pk, UpdateParam<Map<String, Object>> param) throws SQLException {
         Table table = getTableByName(name);
-        String pkName = getPrimaryKeyName(name);
         Update update = table.createUpdate().setParam(param);
-        param.getData().put(pkName, pk);
-        update.where(pkName, pk);
+        update.where(getPrimaryKeyName(name), pk);
         return update.exec();
     }
 
@@ -296,7 +267,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
 
     @ReadLock
     @LockName(value = "'form.lock.'+#tableName", isExpression = true)
-    public String getPrimaryKeyName(String tableName) {
+    public String getPrimaryKeyName(String tableName){
         Table table = getTableByName(tableName);
         return table.getMeta().getProperty("primaryKey", "u_id").toString();
     }
@@ -369,8 +340,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
     @Override
     @ReadLock
     @LockName(value = "'form.lock.'+#name", isExpression = true)
-    public Map<String, Object> importExcel(String name, InputStream inputStream) {
-        Table table = getTableByName(name);
+    public Map<String, Object> importExcel(String name, InputStream inputStream){
         Map<String, Object> result = new HashMap<>();
         long startTime = System.currentTimeMillis();
         List<Map<String, Object>> excelData;
@@ -381,6 +351,7 @@ public class DynamicFormServiceImpl implements DynamicFormService, ExpressionSco
         }
         List<Map<String, Object>> dataList = new LinkedList<>();
         Map<String, String> headerMapper = new HashMap<>();
+        Table table = getTableByName(name);
         TableMetaData metaData = table.getMeta();
         metaData.getFields().forEach(fieldMetaData -> {
             PropertyWrapper valueWrapper = fieldMetaData.getProperty("importExcel", true);

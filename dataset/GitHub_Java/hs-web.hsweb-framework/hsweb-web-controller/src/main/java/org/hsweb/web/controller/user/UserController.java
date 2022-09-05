@@ -1,13 +1,16 @@
 package org.hsweb.web.controller.user;
 
-import org.hsweb.web.authorize.annotation.AccessLogger;
-import org.hsweb.web.authorize.annotation.Authorize;
-import org.hsweb.web.bean.param.QueryParam;
+import org.hsweb.web.bean.common.QueryParam;
 import org.hsweb.web.bean.po.user.User;
 import org.hsweb.web.controller.GenericController;
-import org.hsweb.web.message.ResponseMessage;
+import org.hsweb.web.core.authorize.annotation.Authorize;
+import org.hsweb.web.core.logger.annotation.AccessLogger;
+import org.hsweb.web.core.message.ResponseMessage;
 import org.hsweb.web.service.user.UserService;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 
@@ -32,7 +35,7 @@ public class UserController extends GenericController<User, String> {
 
     @Override
     @AccessLogger("获取列表")
-    public ResponseMessage list(QueryParam param) {
+    public ResponseMessage list(QueryParam param)  {
         param.excludes("password");
         return super.list(param)
                 .exclude(User.class, "password", "modules", "userRoles")
@@ -41,22 +44,24 @@ public class UserController extends GenericController<User, String> {
 
     @Override
     @AccessLogger("获取用户详情")
-    public ResponseMessage info(@PathVariable("id") String id) {
+    public ResponseMessage info(@PathVariable("id") String id)  {
         return super.info(id).exclude(User.class, "password", "modules");
     }
 
-    @Override
-    @AccessLogger("删除")
-    public ResponseMessage delete(@PathVariable("id") String id) {
-        try {
-            User user = getService().selectByPk(id);
-            if (user == null) return new ResponseMessage(false, "该用户不存在!", "404");
-            user.setStatus(-1);
-            getService().update(id, user);
-            return new ResponseMessage(true, "删除成功");
-        } catch (Exception e) {
-            return new ResponseMessage(false, e);
-        }
+    @AccessLogger("禁用")
+    @RequestMapping(value = "/{id}/disable", method = RequestMethod.PUT)
+    @Authorize(action = "disable")
+    public ResponseMessage disable(@PathVariable("id") String id)  {
+        getService().disableUser(id);
+        return ResponseMessage.ok();
+    }
+
+    @AccessLogger("启用")
+    @Authorize(action = "enable")
+    @RequestMapping(value = "/{id}/enable", method = RequestMethod.PUT)
+    public ResponseMessage enable(@PathVariable("id") String id)  {
+        getService().enableUser(id);
+        return ResponseMessage.ok();
     }
 
 }
