@@ -75,8 +75,6 @@ public class CppLinkActionBuilder {
    */
   public static final String LIBOPTS_VARIABLE = "libopts";
 
-  public static final String LIBRARY_SEARCH_DIRECTORIES_VARIABLE = "library_search_directories";
-
   /** A build variable for flags providing files to link as inputs in the linker invocation */
   public static final String LIBRARIES_TO_LINK_VARIABLE = "libraries_to_link";
 
@@ -95,8 +93,6 @@ public class CppLinkActionBuilder {
   /** A build variable for the path where to generate interface library using the builder tool. */
   public static final String INTERFACE_LIBRARY_OUTPUT_VARIABLE = "interface_library_output_path";
 
-  /** A build variable for hard-coded linker flags currently only known by bazel. */
-  public static final String LEGACY_LINK_FLAGS_VARIABLE = "legacy_link_flags";
   /**
    * A build variable that is set to indicate a mostly static linking for which the linked binary
    * should be piped to /dev/null.
@@ -111,9 +107,6 @@ public class CppLinkActionBuilder {
 
   /** A build variable whose presence indicates that PIC code should be generated. */
   public static final String FORCE_PIC_VARIABLE = "force_pic";
-
-  /** A build variable whose presence indicates that this action is a cc_test linking action. */
-  public static final String IS_CC_TEST_LINK_ACTION_VARIABLE = "is_cc_test_link_action";
 
   // Builder-only
   // Null when invoked from tests (e.g. via createTestBuilder).
@@ -1175,7 +1168,6 @@ public class CppLinkActionBuilder {
     String rpathRoot;
     ImmutableList<String> rpathEntries;
     ImmutableSet<String> libopts;
-    ImmutableSet<String> librarySearchDirectories;
     SequenceBuilder librariesToLink;
 
     public void setRpathRoot(String rPathRoot) {
@@ -1194,10 +1186,6 @@ public class CppLinkActionBuilder {
       this.librariesToLink = librariesToLink;
     }
 
-    public void setLibrarySearchDirectories(ImmutableSet<String> librarySearchDirectories) {
-      this.librarySearchDirectories = librarySearchDirectories;
-    }
-
     public String getRpathRoot() {
       return rpathRoot;
     }
@@ -1213,11 +1201,6 @@ public class CppLinkActionBuilder {
     public SequenceBuilder getLibrariesToLink() {
       return librariesToLink;
     }
-
-    public ImmutableSet<String> getLibrarySearchDirectories() {
-      return librarySearchDirectories;
-    }
-
   }
 
   private class CppLinkVariablesExtension implements VariablesExtension {
@@ -1284,10 +1267,6 @@ public class CppLinkActionBuilder {
         buildVariables.addStringVariable(FORCE_PIC_VARIABLE, "");
       }
 
-      if (useTestOnlyFlags()) {
-        buildVariables.addStringVariable(IS_CC_TEST_LINK_ACTION_VARIABLE, "");
-      }
-
       // rpath
       if (linkArgCollector.getRpathRoot() != null) {
         buildVariables.addStringVariable(
@@ -1303,9 +1282,6 @@ public class CppLinkActionBuilder {
 
       buildVariables.addCustomBuiltVariable(
           LIBRARIES_TO_LINK_VARIABLE, linkArgCollector.getLibrariesToLink());
-
-      buildVariables.addStringSequenceVariable(
-          LIBRARY_SEARCH_DIRECTORIES_VARIABLE, linkArgCollector.getLibrarySearchDirectories());
 
       // mostly static
       if (linkStaticness == LinkStaticness.MOSTLY_STATIC && cppConfiguration.skipStaticOutputs()) {
@@ -1371,7 +1347,6 @@ public class CppLinkActionBuilder {
 
       // Used to collect -L and -Wl,-rpath options, ensuring that each used only once.
       ImmutableSet.Builder<String> libOpts = ImmutableSet.builder();
-      ImmutableSet.Builder<String> librarySearchDirectories = ImmutableSet.builder();
 
       // List of command line parameters that need to be placed *outside* of
       // --whole-archive ... --no-whole-archive.
@@ -1482,14 +1457,7 @@ public class CppLinkActionBuilder {
           if (libDir.equals(solibDir)) {
             includeSolibDir = true;
           }
-          addDynamicInputLinkOptions(
-              input,
-              librariesToLink,
-              false,
-              libOpts,
-              librarySearchDirectories,
-              solibDir,
-              rpathRoot);
+          addDynamicInputLinkOptions(input, librariesToLink, false, libOpts, solibDir, rpathRoot);
         } else {
           addStaticInputLinkOptions(input, librariesToLink, false, ltoMap);
         }
@@ -1506,8 +1474,7 @@ public class CppLinkActionBuilder {
               input.getArtifact(),
               solibDir);
           includeRuntimeSolibDir = true;
-          addDynamicInputLinkOptions(
-              input, librariesToLink, true, libOpts, librarySearchDirectories, solibDir, rpathRoot);
+          addDynamicInputLinkOptions(input, librariesToLink, true, libOpts, solibDir, rpathRoot);
         } else {
           addStaticInputLinkOptions(input, librariesToLink, true, ltoMap);
         }
@@ -1527,7 +1494,6 @@ public class CppLinkActionBuilder {
       }
 
       linkArgCollector.setLibopts(libOpts.build());
-      linkArgCollector.setLibrarySearchDirectories(librarySearchDirectories.build());
 
       linkArgCollector.setLibrariesToLink(librariesToLink);
 
@@ -1546,7 +1512,6 @@ public class CppLinkActionBuilder {
         SequenceBuilder librariesToLink,
         boolean isRuntimeLinkerInput,
         ImmutableSet.Builder<String> libOpts,
-        ImmutableSet.Builder<String> librarySearchDirectories,
         PathFragment solibDir,
         String rpathRoot) {
       Preconditions.checkState(input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY);
@@ -1567,8 +1532,7 @@ public class CppLinkActionBuilder {
         libOpts.add(rpathRoot + dotdots + libDir.relativeTo(commonParent).getPathString());
       }
 
-      librarySearchDirectories.add(
-          inputArtifact.getExecPath().getParentDirectory().getPathString());
+      libOpts.add("-L" + inputArtifact.getExecPath().getParentDirectory().getPathString());
 
       String name = inputArtifact.getFilename();
       boolean inputIsWholeArchive = !isRuntimeLinkerInput && needWholeArchive;
