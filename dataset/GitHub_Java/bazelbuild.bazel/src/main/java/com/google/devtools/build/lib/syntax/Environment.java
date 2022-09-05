@@ -18,7 +18,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
@@ -99,39 +98,15 @@ public final class Environment implements Freezable {
     private final Mutability mutability;
     final Frame parent;
     final Map<String, Object> bindings = new HashMap<>();
-    // The label for the target this frame is defined in (e.g., //foo:bar.bzl).
-    @Nullable
-    private Label label;
 
-    private Frame(Mutability mutability, Frame parent) {
+    Frame(Mutability mutability, Frame parent) {
       this.mutability = mutability;
       this.parent = parent;
-      this.label = parent == null ? null : parent.label;
     }
 
     @Override
     public final Mutability mutability() {
       return mutability;
-    }
-
-    /**
-     * Attaches a label to an existing frame. This is used to get the repository a Skylark
-     * extension is actually defined in.
-     * @param label the label to attach.
-     * @return a new Frame with the existing frame's properties plus the label.
-     */
-    public Frame setLabel(Label label) {
-      Frame result = new Frame(mutability, this);
-      result.label = label;
-      return result;
-    }
-
-    /**
-     * Returns the label for this frame.
-     */
-    @Nullable
-    public final Label label() {
-      return label;
     }
 
     /**
@@ -350,13 +325,6 @@ public final class Environment implements Freezable {
   @Nullable private Continuation continuation;
 
   /**
-   * Gets the label of the BUILD file that is using this environment. For example, if a target
-   * //foo has a dependency on //bar which is a Skylark rule defined in //rules:my_rule.bzl being
-   * evaluated in this environment, then this would return //foo.
-   */
-  @Nullable private final Label callerLabel;
-
-  /**
    * Enters a scope by saving state to a new Continuation
    * @param function the function whose scope to enter
    * @param caller the source AST node for the caller
@@ -426,7 +394,7 @@ public final class Environment implements Freezable {
   /**
    * @return the current Frame, in which variable side-effects happen.
    */
-  public Frame currentFrame() {
+  private Frame currentFrame() {
     return isGlobal() ? globalFrame : lexicalFrame;
   }
 
@@ -482,7 +450,6 @@ public final class Environment implements Freezable {
    * @param isSkylark true if in Skylark context
    * @param fileContentHashCode a hash for the source file being evaluated, if any
    * @param isLoadingPhase true if in loading phase
-   * @param callerLabel the label this environment came from
    */
   private Environment(
       Frame globalFrame,
@@ -491,8 +458,7 @@ public final class Environment implements Freezable {
       Map<String, Extension> importedExtensions,
       boolean isSkylark,
       @Nullable String fileContentHashCode,
-      boolean isLoadingPhase,
-      @Nullable Label callerLabel) {
+      boolean isLoadingPhase) {
     this.globalFrame = Preconditions.checkNotNull(globalFrame);
     this.dynamicFrame = Preconditions.checkNotNull(dynamicFrame);
     Preconditions.checkArgument(globalFrame.mutability().isMutable());
@@ -502,7 +468,6 @@ public final class Environment implements Freezable {
     this.isSkylark = isSkylark;
     this.fileContentHashCode = fileContentHashCode;
     this.isLoadingPhase = isLoadingPhase;
-    this.callerLabel = callerLabel;
   }
 
   /**
@@ -516,7 +481,6 @@ public final class Environment implements Freezable {
     @Nullable private EventHandler eventHandler;
     @Nullable private Map<String, Extension> importedExtensions;
     @Nullable private String fileContentHashCode;
-    private Label label;
 
     Builder(Mutability mutability) {
       this.mutability = mutability;
@@ -581,25 +545,12 @@ public final class Environment implements Freezable {
           importedExtensions,
           isSkylark,
           fileContentHashCode,
-          isLoadingPhase,
-          label);
-    }
-
-    public Builder setCallerLabel(Label label) {
-      this.label = label;
-      return this;
+          isLoadingPhase);
     }
   }
 
   public static Builder builder(Mutability mutability) {
     return new Builder(mutability);
-  }
-
-  /**
-   * Returns the caller's label.
-   */
-  public Label getCallerLabel() {
-    return callerLabel;
   }
 
   /**
@@ -905,7 +856,7 @@ public final class Environment implements Freezable {
 
   /**
    * Parses some String input without a supporting file, returning statements and comments.
-   * @param inputLines a list of lines of code
+   * @param input a list of lines of code
    */
   @VisibleForTesting
   Parser.ParseResult parseFileWithComments(String... inputLines) {
