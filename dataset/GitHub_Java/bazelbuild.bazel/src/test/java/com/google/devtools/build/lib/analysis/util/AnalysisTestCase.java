@@ -258,32 +258,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     return masterConfig;
   }
 
-  /**
-   * Returns the target configuration for the most recent build, as created in Blaze's
-   * master configuration creation phase. Most significantly, this is never a dynamic
-   * configuration.
-   */
-  protected BuildConfiguration getTargetConfiguration() throws InterruptedException {
-    return getTargetConfiguration(false);
-  }
-
-  /**
-   * Returns the target configuration for the most recent build. If useDynamicVersionIfEnabled is
-   * true and dynamic configurations are enabled, returns the dynamic version. Else returns the
-   * static version.
-   */
-  // TODO(gregce): force getTargetConfiguration() to getTargetConfiguration(true) once we know
-  //    all callers can handle the dynamic version
-  protected BuildConfiguration getTargetConfiguration(boolean useDynamicVersionIfEnabled)
-    throws InterruptedException {
-    BuildConfiguration targetConfig =
-        Iterables.getOnlyElement(masterConfig.getTargetConfigurations());
-    if (useDynamicVersionIfEnabled && targetConfig.useDynamicConfigurations()) {
-      return skyframeExecutor.getConfigurationForTesting(eventCollector,
-          targetConfig.fragmentClasses(), targetConfig.getOptions());
-    } else {
-      return targetConfig;
-    }
+  protected BuildConfiguration getTargetConfiguration() {
+    return Iterables.getOnlyElement(masterConfig.getTargetConfigurations());
   }
 
   protected BuildConfiguration getHostConfiguration() {
@@ -403,7 +379,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
    * Returns the corresponding configured target, if it exists. Note that this will only return
    * anything useful after a call to update() with the same label.
    */
-  protected ConfiguredTarget getConfiguredTarget(String label) throws InterruptedException {
+  protected ConfiguredTarget getConfiguredTarget(String label) {
     return getConfiguredTarget(label, getTargetConfiguration());
   }
 
@@ -420,8 +396,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     return buildView.hasErrors(configuredTarget);
   }
 
-  protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner)
-      throws InterruptedException {
+  protected Artifact getBinArtifact(String packageRelativePath, ConfiguredTarget owner) {
     Label label = owner.getLabel();
     return buildView.getArtifactFactory().getDerivedArtifact(
         label.getPackageFragment().getRelative(packageRelativePath),

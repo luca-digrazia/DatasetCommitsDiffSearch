@@ -20,7 +20,6 @@ import com.google.common.base.Verify;
 import com.google.common.base.VerifyException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.LinkedListMultimap;
@@ -845,22 +844,12 @@ final class ConfiguredTargetFunction implements SkyFunction {
 
   private static boolean aspectMatchesConfiguredTarget(ConfiguredTarget dep, Aspect aspect) {
     AspectDefinition aspectDefinition = aspect.getDefinition();
-    ImmutableList<ImmutableSet<Class<?>>> providersList = aspectDefinition.getRequiredProviders();
-
-    for (ImmutableSet<Class<?>> providers : providersList) {
-      boolean matched = true;
-      for (Class<?> provider : providers) {
-        if (dep.getProvider(provider.asSubclass(TransitiveInfoProvider.class)) == null) {
-          matched = false;
-          break;
-        }
-      }
-
-      if (matched) {
-        return true;
+    for (Class<?> provider : aspectDefinition.getRequiredProviders()) {
+      if (dep.getProvider(provider.asSubclass(TransitiveInfoProvider.class)) == null) {
+        return false;
       }
     }
-    return false;
+    return true;
   }
 
   /**

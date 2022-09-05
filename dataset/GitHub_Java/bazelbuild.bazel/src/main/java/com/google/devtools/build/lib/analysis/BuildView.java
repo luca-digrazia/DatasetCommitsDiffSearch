@@ -75,9 +75,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeAnalysisResult;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkImport;
-import com.google.devtools.build.lib.syntax.SkylarkImports;
-import com.google.devtools.build.lib.syntax.SkylarkImports.SkylarkImportSyntaxException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.RegexFilter;
@@ -468,22 +465,7 @@ public class BuildView {
         // TODO(jfield): For consistency with Skylark loads, the aspect should be specified
         // as an absolute path. Also, we probably need to do at least basic validation of
         // path well-formedness here.
-        String bzlFileLoadLikeString = aspect.substring(0, delimiterPosition);
-        if (!bzlFileLoadLikeString.startsWith("//") && !bzlFileLoadLikeString.startsWith("@")) {
-          // "Legacy" behavior of '--aspects' parameter.
-          bzlFileLoadLikeString = new PathFragment("/" + bzlFileLoadLikeString).toString();
-          if (bzlFileLoadLikeString.endsWith(".bzl")) {
-            bzlFileLoadLikeString = bzlFileLoadLikeString.substring(0,
-                bzlFileLoadLikeString.length() - ".bzl".length());
-          }
-        }
-        SkylarkImport skylarkImport;
-        try {
-          skylarkImport = SkylarkImports.create(bzlFileLoadLikeString);
-        } catch (SkylarkImportSyntaxException e) {
-          throw new ViewCreationFailedException(
-              String.format("Invalid aspect '%s': %s", aspect, e.getMessage()), e);
-        }
+        PathFragment bzlFile = new PathFragment("/" + aspect.substring(0, delimiterPosition));
 
         String skylarkFunctionName = aspect.substring(delimiterPosition + 1);
         for (TargetAndConfiguration targetSpec : topLevelTargetsWithConfigs) {
@@ -497,7 +479,7 @@ public class BuildView {
                   // aspect and the base target while the top-level configuration is untrimmed.
                   targetSpec.getConfiguration(),
                   targetSpec.getConfiguration(),
-                  skylarkImport,
+                  bzlFile,
                   skylarkFunctionName));
         }
       } else {
