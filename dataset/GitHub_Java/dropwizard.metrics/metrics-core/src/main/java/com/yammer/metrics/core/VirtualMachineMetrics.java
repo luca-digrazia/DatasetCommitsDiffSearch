@@ -13,6 +13,8 @@ import static java.lang.management.ManagementFactory.*;
 
 /**
  * A collection of Java Virtual Machine metrics.
+ *
+ * @author coda
  */
 public class VirtualMachineMetrics {
     public static class GarbageCollector {
@@ -151,7 +153,7 @@ public class VirtualMachineMetrics {
     public static Map<String, GarbageCollector> garbageCollectors() {
         final Map<String, GarbageCollector> gcs = new HashMap<String, GarbageCollector>();
         for (GarbageCollectorMXBean bean : getGarbageCollectorMXBeans()) {
-            gcs.put(bean.getName(), new GarbageCollector(bean.getCollectionCount(), bean.getCollectionTime()));
+            gcs.put(bean.getName(), new GarbageCollector(bean.getCollectionCount(), bean.getCollectionCount()));
         }
         return gcs;
     }

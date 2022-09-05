@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 public class Metrics {
     private static final MetricsRegistry DEFAULT_REGISTRY = new MetricsRegistry();
     static {{
-        JmxReporter.startDefault(DEFAULT_REGISTRY);
+        JmxReporter.INSTANCE.start();
         // make sure we initialize this so it can monitor GC etc
         VirtualMachineMetrics.daemonThreadCount();
     }}

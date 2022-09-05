@@ -291,10 +291,10 @@ public class JmxReporter implements Runnable {
         }
     }
 
-    private static JmxReporter INSTANCE;
-    public static final void startDefault(MetricsRegistry defaultMetricsRegistry) {
-        INSTANCE = new JmxReporter(defaultMetricsRegistry);
-        INSTANCE.start();
+    public static final JmxReporter INSTANCE = new JmxReporter();
+
+    /*package*/ JmxReporter() {
+        this(Metrics.defaultRegistry());
     }
 
     public JmxReporter(MetricsRegistry metricsRegistry) {

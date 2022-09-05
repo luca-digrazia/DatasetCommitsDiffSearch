@@ -29,7 +29,6 @@ public class MeterMetric implements Metered {
      * @deprecated use the other {@code newMeter} method or create a new meter via the
      *              {@link MetricsRegistry} or {@link Metrics}
      */
-    @SuppressWarnings({"deprecation"})
     public static MeterMetric newMeter(String eventType, TimeUnit rateUnit) {
         return newMeter(Utils.newScheduledThreadPool(2, "meter-tick"), eventType, rateUnit);
     }

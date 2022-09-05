@@ -17,12 +17,15 @@ public class Utils {
         final Map<String, Map<String, Metric>> sortedMetrics =
                 new TreeMap<String, Map<String, Metric>>();
         for (Entry<MetricName, Metric> entry : metrics.entrySet()) {
-            final String qualifiedTypeName = entry.getKey().getGroup() + "." + entry.getKey().getType();
+            final String className = entry.getKey().getKlass()
+                                          .getName()
+                                          .replace('$', '.')
+                                          .replaceAll("\\.$", "");
             final String scopedName;
             if (entry.getKey().hasScope()) {
-                scopedName = qualifiedTypeName + "." + entry.getKey().getScope();
+                scopedName = className + "." + entry.getKey().getScope();
             } else {
-                scopedName = qualifiedTypeName;
+                scopedName = className;
             }
             Map<String, Metric> subMetrics = sortedMetrics.get(scopedName);
             if (subMetrics == null) {
