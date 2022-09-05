@@ -414,7 +414,7 @@ public final class CppModel {
       // - the compiled source file is the module map
       // - it creates a header module (.pcm file).
       createSourceAction(outputName, result, env, moduleMapArtifact, builder, ".pcm", ".pcm.d",
-          /*addObject=*/false, /*enableCoverage=*/false);
+          /*addObject=*/false);
     }
 
     for (Pair<Artifact, Label> source : sourceFiles) {
@@ -428,7 +428,7 @@ public final class CppModel {
         createHeaderAction(outputName, result, env, builder);
       } else {
         createSourceAction(outputName, result, env, sourceArtifact, builder, ".o", ".d",
-            /*addObject=*/true, isCodeCoverageEnabled());
+            /*addObject=*/true);
       }
     }
 
@@ -459,8 +459,7 @@ public final class CppModel {
       CppCompileActionBuilder builder,
       String outputExtension,
       String dependencyFileExtension,
-      boolean addObject,
-      boolean enableCoverage) {
+      boolean addObject) {
     PathFragment ccRelativeName = semantics.getEffectiveSourcePath(sourceArtifact);
     if (cppConfiguration.isLipoOptimization()) {
       // TODO(bazel-team): we shouldn't be needing this, merging context with the binary
@@ -485,7 +484,9 @@ public final class CppModel {
         CppCompileActionBuilder picBuilder =
             copyAsPicBuilder(builder, outputName, outputExtension, dependencyFileExtension);
         Artifact gcnoFile =
-            enableCoverage ? ruleContext.getRelatedArtifact(outputName, ".pic.gcno") : null;
+            isCodeCoverageEnabled()
+                ? ruleContext.getRelatedArtifact(outputName, ".pic.gcno")
+                : null;
         if (gcnoFile != null) {
           picBuilder.setGcnoFile(gcnoFile);
         }
@@ -524,7 +525,7 @@ public final class CppModel {
             .setDotdFile(outputName, dependencyFileExtension);
         // Create non-PIC compile actions
         Artifact gcnoFile =
-            !cppConfiguration.isLipoOptimization() && enableCoverage
+            !cppConfiguration.isLipoOptimization() && isCodeCoverageEnabled()
                 ? ruleContext.getRelatedArtifact(outputName, ".gcno")
                 : null;
         if (gcnoFile != null) {

@@ -55,9 +55,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
   
   // True if this context is for a compilation that needs transitive module maps.
   private final boolean provideTransitiveModuleMaps;
-  
-  // True if this context is for a compilation that should use header modules from dependencies.
-  private final boolean useHeaderModules;
 
   // Derived from depsContexts; no need to consider it for equals/hashCode.
   private final ImmutableSet<Artifact> compilationPrerequisites;
@@ -68,8 +65,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       CppModuleMap cppModuleMap,
       Artifact headerModule,
       Artifact picHeaderModule,
-      boolean provideTransitiveModuleMaps,
-      boolean useHeaderModules) {
+      boolean provideTransitiveModuleMaps) {
     Preconditions.checkNotNull(commandLineContext);
     Preconditions.checkArgument(!depsContexts.isEmpty());
     this.commandLineContext = commandLineContext;
@@ -78,7 +74,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     this.headerModule = headerModule;
     this.picHeaderModule = picHeaderModule;
     this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
-    this.useHeaderModules = useHeaderModules;
 
     if (depsContexts.size() == 1) {
       // Only LIPO targets have more than one DepsContexts. This codepath avoids creating
@@ -265,14 +260,12 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
 
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
     for (DepsContext depsContext : depsContexts) {
-      if (useHeaderModules) {
-        if (usePic) {
-          builder.addTransitive(depsContext.picTopLevelHeaderModules);
-          builder.addTransitive(depsContext.picImpliedHeaderModules);
-        } else {
-          builder.addTransitive(depsContext.topLevelHeaderModules);
-          builder.addTransitive(depsContext.impliedHeaderModules);
-        }
+      if (usePic) {
+        builder.addTransitive(depsContext.picTopLevelHeaderModules);
+        builder.addTransitive(depsContext.picImpliedHeaderModules);
+      } else {
+        builder.addTransitive(depsContext.topLevelHeaderModules);
+        builder.addTransitive(depsContext.impliedHeaderModules);
       }
       builder.addTransitive(depsContext.directModuleMaps);
       if (provideTransitiveModuleMaps) {
@@ -368,8 +361,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         && Objects.equals(picHeaderModule, other.picHeaderModule)
         && commandLineContext.equals(other.commandLineContext)
         && depsContexts.equals(other.depsContexts)
-        && (provideTransitiveModuleMaps == other.provideTransitiveModuleMaps)
-        && (useHeaderModules == other.useHeaderModules);
+        && (provideTransitiveModuleMaps == other.provideTransitiveModuleMaps);
   }
 
   @Override
@@ -380,8 +372,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         commandLineContext,
         depsContexts,
         cppModuleMap,
-        provideTransitiveModuleMaps,
-        useHeaderModules);
+        provideTransitiveModuleMaps);
   }
 
   /**
@@ -412,8 +403,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         context.cppModuleMap,
         context.headerModule,
         context.picHeaderModule,
-        context.provideTransitiveModuleMaps,
-        context.useHeaderModules);
+        context.provideTransitiveModuleMaps);
   }
 
   /**
@@ -449,8 +439,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
         libContext.cppModuleMap,
         libContext.headerModule,
         libContext.picHeaderModule,
-        /*providesTransitiveModuleMaps=*/ false,
-        /*useHeaderModules=*/ false);
+        /*providesTransitiveModuleMaps=*/ false);
   }
 
   /**
@@ -661,7 +650,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
     private Artifact headerModule;
     private Artifact picHeaderModule;
     private boolean provideTransitiveModuleMaps = false;
-    private boolean useHeaderModules = false;
 
     /** The rule that owns the context */
     private final RuleContext ruleContext;
@@ -923,15 +911,6 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
       this.provideTransitiveModuleMaps = provideTransitiveModuleMaps;
       return this;
     }
-    
-    /**
-     * Sets that the context will be used by a compilation that uses header modules provided by
-     * its dependencies.
-     */
-    public Builder setUseHeaderModules(boolean useHeaderModules) {
-      this.useHeaderModules = useHeaderModules;
-      return this;
-    }
 
     /**
      * Builds the {@link CppCompilationContext}.
@@ -984,8 +963,7 @@ public final class CppCompilationContext implements TransitiveInfoProvider {
           cppModuleMap,
           headerModule,
           picHeaderModule,
-          provideTransitiveModuleMaps,
-          useHeaderModules);
+          provideTransitiveModuleMaps);
     }
     
     /**
