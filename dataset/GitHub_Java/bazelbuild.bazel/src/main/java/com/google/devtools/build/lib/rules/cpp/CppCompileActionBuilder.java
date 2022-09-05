@@ -76,8 +76,6 @@ public class CppCompileActionBuilder {
   private Class<? extends CppCompileActionContext> actionContext;
   private CppConfiguration cppConfiguration;
   private ImmutableMap<Artifact, IncludeScannable> lipoScannableMap;
-  private final ImmutableList.Builder<Artifact> additionalIncludeFiles =
-      new ImmutableList.Builder<>();
   private RuleContext ruleContext = null;
   private Boolean shouldScanIncludes;
   private Map<String, String> environment = new LinkedHashMap<>();
@@ -230,8 +228,6 @@ public class CppCompileActionBuilder {
       return CppCompileAction.ASSEMBLE;
     } else if (CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR.matches(sourcePath)) {
       return CppCompileAction.PREPROCESS_ASSEMBLE;
-    } else if (CppFileTypes.CLIF_INPUT_PROTO.matches(sourcePath)) {
-      return CppCompileAction.CLIF_MATCH;
     }
     // CcLibraryHelper ensures CppCompileAction only gets instantiated for supported file types.
     throw new IllegalStateException();
@@ -338,7 +334,6 @@ public class CppCompileActionBuilder {
           getNocoptPredicate(nocopts),
           specialInputsHandler,
           getLipoScannables(realMandatoryInputs),
-          additionalIncludeFiles.build(),
           actionClassId,
           executionRequirements,
           ImmutableMap.copyOf(environment),
@@ -410,11 +405,6 @@ public class CppCompileActionBuilder {
 
   public CppCompileActionBuilder addTransitiveMandatoryInputs(NestedSet<Artifact> artifacts) {
     mandatoryInputsBuilder.addTransitive(artifacts);
-    return this;
-  }
-
-  public CppCompileActionBuilder addAdditionalIncludes(List<Artifact> includes) {
-    additionalIncludeFiles.addAll(includes);
     return this;
   }
 
