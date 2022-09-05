@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.swift.SwiftConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportFunction;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportValue;
@@ -119,7 +118,7 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create(
         "/bazel_tools_workspace/tools/android/android_sdk_repository_template.bzl",
         "def create_android_sdk_rules("
-            + "name, build_tools_version, build_tools_directory, api_levels, default_api_level):",
+            + "name, build_tools_version, build_tools_directory, api_level):",
         "    pass");
 
     config.create(
@@ -241,7 +240,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
         new JavaConfigurationLoader(),
         new ObjcConfigurationLoader(),
         new AppleConfiguration.Loader(),
-        new SwiftConfiguration.Loader(),
         new J2ObjcConfiguration.Loader(),
         new ProtoConfiguration.Loader(),
         new AndroidConfiguration.Loader());
