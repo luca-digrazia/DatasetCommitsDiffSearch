@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -135,7 +134,7 @@ public abstract class EvalUtils {
    *         dictionary key) according to the rules of the Build language.
    */
   public static boolean isImmutable(Object o) {
-    if (o instanceof Map<?, ?> || o instanceof BaseFunction
+    if (o instanceof Map<?, ?> || o instanceof Function
         || o instanceof FilesetEntry || o instanceof GlobList<?>) {
       return false;
     } else if (o instanceof List<?>) {
@@ -273,7 +272,7 @@ public abstract class EvalUtils {
     } else if (c.equals(Boolean.class)) {
       return "bool";
     } else if (c.equals(Void.TYPE) || c.equals(Environment.NoneType.class)) {
-      return "NoneType";
+      return "None";
     } else if (List.class.isAssignableFrom(c)) {
       // NB: the capital here is a subtle way to distinguish java Tuple and java List
       // from native SkylarkList tuple and list.
@@ -283,7 +282,7 @@ public abstract class EvalUtils {
       return "glob list";
     } else if (Map.class.isAssignableFrom(c)) {
       return "dict";
-    } else if (BaseFunction.class.isAssignableFrom(c)) {
+    } else if (Function.class.isAssignableFrom(c)) {
       return "function";
     } else if (c.equals(FilesetEntry.class)) {
       return "FilesetEntry";
@@ -372,8 +371,8 @@ public abstract class EvalUtils {
       }
       buffer.append(")");
 
-    } else if (o instanceof BaseFunction) {
-      BaseFunction func = (BaseFunction) o;
+    } else if (o instanceof Function) {
+      Function func = (Function) o;
       buffer.append("<function " + func.getName() + ">");
 
     } else if (o instanceof FilesetEntry) {
@@ -505,7 +504,8 @@ public abstract class EvalUtils {
    * Pretty-print values of 'o' separated by the separator.
    */
   public static String prettyPrintValues(String separator, Iterable<Object> o) {
-    return Joiner.on(separator).join(Iterables.transform(o, new Function<Object, String>() {
+    return Joiner.on(separator).join(Iterables.transform(o,
+        new com.google.common.base.Function<Object, String>() {
       @Override
       public String apply(Object input) {
         return prettyPrintValue(input);
