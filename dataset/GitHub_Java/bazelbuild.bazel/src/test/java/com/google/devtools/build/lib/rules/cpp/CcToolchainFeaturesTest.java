@@ -77,10 +77,7 @@ public class CcToolchainFeaturesTest {
     return variables.build();
   }
   
-  /**
-   * Creates a CcToolchainFeatures from features described in the given toolchain fragment.
-   */
-  public static CcToolchainFeatures buildFeatures(String... toolchain) throws Exception {
+  private CcToolchainFeatures buildFeatures(String... toolchain) throws Exception {
     CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
     TextFormat.merge(Joiner.on("").join(toolchain), toolchainBuilder);      
     return new CcToolchainFeatures(toolchainBuilder.buildPartial());    

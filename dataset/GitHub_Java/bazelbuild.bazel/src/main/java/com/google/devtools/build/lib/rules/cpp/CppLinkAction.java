@@ -112,14 +112,13 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
   /**
    * The name of this action for the purpose of crosstool features/action_configs
    */
-  private static final String ACTION_NAME = "c++-link";
+  private static final String ACTION_NAME = "cpp-link";
   
   private final CppConfiguration cppConfiguration;
   private final LibraryToLink outputLibrary;
   private final LibraryToLink interfaceOutputLibrary;
-  private final Map<String, String> toolchainEnv;
   private final ImmutableSet<String> executionRequirements;
-
+  
   private final LinkCommandLine linkCommandLine;
 
   /** True for cc_fake_binary targets. */
@@ -165,7 +164,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
       boolean isLTOIndexing,
       Iterable<LTOBackendArtifacts> allLTOBackendArtifacts,
       LinkCommandLine linkCommandLine,
-      Map<String, String> toolchainEnv,
       ImmutableSet<String> executionRequirements) {
     super(owner, inputs, outputs);
     this.mandatoryInputs = inputs;
@@ -176,7 +174,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
     this.isLTOIndexing = isLTOIndexing;
     this.allLTOBackendArtifacts = allLTOBackendArtifacts;
     this.linkCommandLine = linkCommandLine;
-    this.toolchainEnv = toolchainEnv;
     this.executionRequirements = executionRequirements;
   }
 
@@ -212,12 +209,8 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
   }
 
   public ImmutableMap<String, String> getEnvironment() {
-    ImmutableMap.Builder<String, String> result = ImmutableMap.<String, String>builder();
-
-    result.putAll(toolchainEnv);
-
     if (OS.getCurrent() == OS.WINDOWS) {
-      // Both GCC and clang rely on their execution directories being on
+      // TODO(bazel-team): Both GCC and clang rely on their execution directories being on
       // PATH, otherwise they fail to find dependent DLLs (and they fail silently...). On
       // the other hand, Windows documentation says that the directory of the executable
       // is always searched for DLLs first. Not sure what to make of it.
@@ -225,15 +218,13 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
       // the crosstool file.
       //
       // @see com.google.devtools.build.lib.rules.cpp.CppCompileAction#getEnvironment.
-      // TODO(b/28791924): Use the crosstool to provide this value.
-      result.put(
+      return ImmutableMap.of(
           "PATH",
-          cppConfiguration
-              .getToolPathFragment(CppConfiguration.Tool.GCC)
-              .getParentDirectory()
-              .getPathString());
+          cppConfiguration.getToolPathFragment(CppConfiguration.Tool.GCC).getParentDirectory()
+              .getPathString()
+      );
     }
-    return result.build();
+    return ImmutableMap.of();
   }
 
   /**
@@ -433,7 +424,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
     f.addString(fake ? FAKE_LINK_GUID : LINK_GUID);
     f.addString(getCppConfiguration().getLdExecutable().getPathString());
     f.addStrings(linkCommandLine.arguments());
-    f.addStrings(getExecutionInfo().keySet());
+    f.addStrings(executionRequirements);
 
     // TODO(bazel-team): For correctness, we need to ensure the invariant that all values accessed
     // during the execution phase are also covered by the key. Above, we add the argv to the key,
@@ -549,8 +540,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
     protected final BuildConfiguration configuration;
     private final CppConfiguration cppConfiguration;
     private FeatureConfiguration featureConfiguration;
-    private CcToolchainFeatures.Variables buildVariables =
-        new CcToolchainFeatures.Variables.Builder().build();
 
     // Morally equivalent with {@link Context}, except these are mutable.
     // Keep these in sync with {@link Context}.
@@ -650,14 +639,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
       this.fake = linkContext.fake;
       this.isNativeDeps = linkContext.isNativeDeps;
       this.useTestOnlyFlags = linkContext.useTestOnlyFlags;
-    }
-
-    /**
-     * Returns the action name for purposes of querying the crosstool.
-     */
-    // TODO(b/28791924): Expand action types to values in Link.LinkTargetType.
-    private String getActionName() {
-      return ACTION_NAME;
     }
 
     public CppLinkAction.Builder setLinkArtifactFactory(LinkArtifactFactory linkArtifactFactory) {
@@ -806,7 +787,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
 
       LinkCommandLine.Builder linkCommandLineBuilder =
           new LinkCommandLine.Builder(configuration, getOwner(), ruleContext)
-              .setActionName(getActionName())
               .setLinkerInputs(linkerInputs)
               .setRuntimeInputs(
                   ImmutableList.copyOf(LinkerInputs.simpleLinkerInputs(runtimeInputs)))
@@ -913,26 +893,17 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
         analysisEnvironment.registerAction(parameterFileWriteAction);
       }
 
-      
-      // For backwards compatibility, and for tests, 
-      // we permit the link action to be instantiated without a feature configuration.  
-      // In this case, an empty feature configuration is used.
-      if (featureConfiguration == null) {
-        this.featureConfiguration = new FeatureConfiguration();
-      }
-
-      Map<String, String> toolchainEnv =
-          featureConfiguration.getEnvironmentVariables(getActionName(), buildVariables);
-
       // If the crosstool uses action_configs to configure cc compilation, collect execution info
       // from there, otherwise, use no execution info.
       // TODO(b/27903698): Assert that the crosstool has an action_config for this action.
-      ImmutableSet.Builder<String> executionRequirements = ImmutableSet.<String>builder();
-      if (featureConfiguration.actionIsConfigured(getActionName())) {
-        executionRequirements.addAll(
-            featureConfiguration.getToolForAction(getActionName()).getExecutionRequirements());
+      ImmutableSet<String> executionRequirements = ImmutableSet.of();
+      if (featureConfiguration != null) {
+        if (featureConfiguration.actionIsConfigured(ACTION_NAME)) {
+          executionRequirements =
+              featureConfiguration.getToolForAction(ACTION_NAME).getExecutionRequirements();
+        }
       }
-    
+
       return new CppLinkAction(
           getOwner(),
           inputsBuilder.deduplicate().build(),
@@ -944,8 +915,7 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
           isLTOIndexing,
           allLTOArtifacts,
           linkCommandLine,
-          toolchainEnv,
-          executionRequirements.build());
+          executionRequirements);
     }
 
     /**
@@ -1025,14 +995,6 @@ public final class CppLinkAction extends AbstractAction implements ExecutionInfo
      */
     public Builder setFeatureConfiguration(FeatureConfiguration featureConfiguration) {
       this.featureConfiguration = featureConfiguration;
-      return this;
-    }
-
-    /**
-     * Sets the build variables that will be used to template the crosstool.
-     */
-    public Builder setBuildVariables(CcToolchainFeatures.Variables buildVariables) {
-      this.buildVariables = buildVariables;
       return this;
     }
 

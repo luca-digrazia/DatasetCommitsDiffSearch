@@ -692,21 +692,21 @@ public class CcToolchainFeatures implements Serializable {
      * so getting rid of the overhead of {@code Value} objects significantly reduces memory
      * overhead.
      */
-    public static class ValueSequence implements Sequence {
+    static class ValueSequence implements Sequence {
       private final List<String> values;
 
       /** Builder for value sequences. */
-      public static class Builder {
+      static class Builder {
         private final ImmutableList.Builder<String> values = ImmutableList.builder();
 
         /** Adds a value to the sequence. */
-        public Builder addValue(String value) {
+        Builder addValue(String value) {
           values.add(value);
           return this;
         }
 
         /** Returns an immutable value sequence. */
-        public ValueSequence build() {
+        ValueSequence build() {
           return new ValueSequence(values.build());
         }
       }
