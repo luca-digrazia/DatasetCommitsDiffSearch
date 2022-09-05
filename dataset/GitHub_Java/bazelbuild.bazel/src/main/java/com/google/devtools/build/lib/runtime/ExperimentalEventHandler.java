@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.primitives.Bytes;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
@@ -94,7 +93,6 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
         this.cursorControl
             ? new ExperimentalStateTracker(clock, this.terminalWidth - 2)
             : new ExperimentalStateTracker(clock);
-    this.stateTracker.setSampleSize(options.experimentalUiActionsShown);
     this.numLinesProgressBar = 0;
     this.minimalDelayMillis = Math.round(options.showProgressRateLimit * 1000);
     this.minimalUpdateInterval = Math.max(this.minimalDelayMillis, MAXIMAL_UPDATE_DELAY_MILLIS);
@@ -299,44 +297,24 @@ public class ExperimentalEventHandler extends BlazeCommandEventHandler {
     refresh();
   }
 
-  /**
-   * Return true, if the test summary provides information that is both
-   * worth being shown in the scroll-back buffer and new with respect to
-   * the alreay shown failure messages.
-   */
-  private boolean testSummaryProvidesNewInformation(TestSummary summary) {
-    ImmutableSet<BlazeTestStatus> statusToIgnore =
-        ImmutableSet.of(
-            BlazeTestStatus.PASSED,
-            BlazeTestStatus.FAILED_TO_BUILD,
-            BlazeTestStatus.BLAZE_HALTED_BEFORE_TESTING,
-            BlazeTestStatus.NO_STATUS);
-
-    if (statusToIgnore.contains(summary.getStatus())) {
-      return false;
-    }
-    if (summary.getStatus() == BlazeTestStatus.FAILED && summary.getFailedLogs().size() == 1) {
-      return false;
-    }
-    return true;
-  }
-
   @Subscribe
   public synchronized void testSummary(TestSummary summary) {
     stateTracker.testSummary(summary);
-    if (testSummaryProvidesNewInformation(summary)) {
+    if (summary.getStatus() != BlazeTestStatus.PASSED) {
       // For failed test, write the failure to the scroll-back buffer immediately
       try {
         clearProgressBar();
-        crlf();
         setEventKindColor(EventKind.ERROR);
-        terminal.writeString("" + summary.getStatus() + ": ");
+        terminal.writeString("FAIL: ");
         terminal.resetTerminal();
         terminal.writeString(summary.getTarget().getLabel().toString());
         terminal.writeString(" (Summary)");
         crlf();
         for (Path logPath : summary.getFailedLogs()) {
           terminal.writeString("      " + logPath.getPathString());
+          crlf();
+        }
+        if (summary.getFailedLogs().size() > 0) {
           crlf();
         }
         if (showProgress && cursorControl) {
