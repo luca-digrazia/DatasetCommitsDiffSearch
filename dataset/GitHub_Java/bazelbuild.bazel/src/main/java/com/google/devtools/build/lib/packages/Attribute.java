@@ -61,41 +61,21 @@ public final class Attribute implements Comparable<Attribute> {
 
   public static final Predicate<RuleClass> NO_RULE = Predicates.alwaysFalse();
 
-  private abstract static class RuleAspect<C extends AspectClass> {
-    protected final C aspectClass;
-    protected final Function<Rule, AspectParameters> parametersExtractor;
+  private static final class RuleAspect {
+    private final AspectClass aspectFactory;
+    private final Function<Rule, AspectParameters> parametersExtractor;
 
-    protected RuleAspect(C aspectClass, Function<Rule, AspectParameters> parametersExtractor) {
-      this.aspectClass = aspectClass;
+    RuleAspect(AspectClass aspectFactory, Function<Rule, AspectParameters> parametersExtractor) {
+      this.aspectFactory = aspectFactory;
       this.parametersExtractor = parametersExtractor;
     }
 
-    public abstract Aspect getAspect(Rule rule);
-  }
-
-  private static class NativeRuleAspect extends RuleAspect<NativeAspectClass<?>> {
-    public NativeRuleAspect(NativeAspectClass<?> aspectClass,
-        Function<Rule, AspectParameters> parametersExtractor) {
-      super(aspectClass, parametersExtractor);
+    AspectClass getAspectFactory() {
+      return aspectFactory;
     }
-
-    @Override
-    public Aspect getAspect(Rule rule) {
-      return Aspect.forNative(aspectClass, parametersExtractor.apply(rule));
-    }
-  }
-
-  private static class SkylarkRuleAspect extends RuleAspect<SkylarkAspectClass> {
-    public SkylarkRuleAspect(SkylarkAspectClass aspectClass) {
-      super(aspectClass, NO_PARAMETERS);
-    }
-
-    @Override
-    public Aspect getAspect(Rule rule) {
-      return Aspect.forSkylark(
-          aspectClass,
-          aspectClass.getDefinition(),
-          parametersExtractor.apply(rule));
+    
+    Function<Rule, AspectParameters> getParametersExtractor() {
+      return parametersExtractor;
     }
   }
 
@@ -301,15 +281,6 @@ public final class Attribute implements Comparable<Attribute> {
     }
   }
 
-  private static final Function<Rule, AspectParameters> NO_PARAMETERS =
-      new Function<Rule, AspectParameters>() {
-        @Override
-        public AspectParameters apply(Rule input) {
-          return AspectParameters.EMPTY;
-        }
-      };
-
-
   /**
    * Creates a new attribute builder.
    *
@@ -330,7 +301,6 @@ public final class Attribute implements Comparable<Attribute> {
    * already undocumented based on its name cannot be marked as undocumented.
    */
   public static class Builder <TYPE> {
-
     private String name;
     private final Type<TYPE> type;
     private Transition configTransition = ConfigurationTransition.NONE;
@@ -754,7 +724,13 @@ public final class Attribute implements Comparable<Attribute> {
      * through this attribute.
      */
     public <T extends NativeAspectFactory> Builder<TYPE> aspect(Class<T> aspect) {
-      return this.aspect(aspect, NO_PARAMETERS);
+      Function<Rule, AspectParameters> noParameters = new Function<Rule, AspectParameters>() {
+        @Override
+        public AspectParameters apply(Rule input) {
+          return AspectParameters.EMPTY;
+        }
+      };
+      return this.aspect(aspect, noParameters);
     }
 
     /**
@@ -774,9 +750,8 @@ public final class Attribute implements Comparable<Attribute> {
      *
      * @param evaluator function that extracts aspect parameters from rule.
      */
-    public Builder<TYPE> aspect(
-        NativeAspectClass<?> aspect, Function<Rule, AspectParameters> evaluator) {
-      this.aspects.add(new NativeRuleAspect(aspect, evaluator));
+    public Builder<TYPE> aspect(AspectClass aspect, Function<Rule, AspectParameters> evaluator) {
+      this.aspects.add(new RuleAspect(aspect, evaluator));
       return this;
     }
 
@@ -784,7 +759,7 @@ public final class Attribute implements Comparable<Attribute> {
      * Asserts that a particular parameterized aspect probably needs to be computed for all direct
      * dependencies through this attribute.
      */
-    public Builder<TYPE> aspect(NativeAspectClass<?> aspect) {
+    public Builder<TYPE> aspect(AspectClass aspect) {
       Function<Rule, AspectParameters> noParameters =
           new Function<Rule, AspectParameters>() {
             @Override
@@ -793,11 +768,6 @@ public final class Attribute implements Comparable<Attribute> {
             }
           };
       return this.aspect(aspect, noParameters);
-    }
-
-    public Builder<TYPE> aspect(SkylarkAspectClass aspectClass) {
-      this.aspects.add(new SkylarkRuleAspect(aspectClass));
-      return this;
     }
 
     /**
@@ -1430,7 +1400,8 @@ public final class Attribute implements Comparable<Attribute> {
   public ImmutableList<Aspect> getAspects(Rule rule) {
     ImmutableList.Builder<Aspect> builder = ImmutableList.builder();
     for (RuleAspect aspect : aspects) {
-      builder.add(aspect.getAspect(rule));
+      builder.add(
+          new Aspect(aspect.getAspectFactory(), aspect.getParametersExtractor().apply(rule)));
     }
     return builder.build();
   }
