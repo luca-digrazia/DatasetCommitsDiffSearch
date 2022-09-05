@@ -25,40 +25,31 @@ import org.nlpcn.es4sql.spatial.SpatialParamsFactory;
 public class SqlParser {
 
 	public SqlParser() {
-	}
+	};
 
 	public Select parseSelect(SQLQueryExpr mySqlExpr) throws SqlParseException {
 
 		MySqlSelectQueryBlock query = (MySqlSelectQueryBlock) mySqlExpr.getSubQuery().getQuery();
 
-        Select select = parseSelect(query);
+		Select select = new Select();
+
+		findSelect(query, select,null);
+
+		select.getFrom().addAll(findFrom(query.getFrom()));
+
+		select.setWhere(findWhere(query.getWhere()));
+
+		findLimit(query.getLimit(), select);
+
+		findOrderBy(query, select);
+
+		findGroupBy(query, select);
 
 		return select;
 	}
 
-    private Select parseSelect(MySqlSelectQueryBlock query) throws SqlParseException {
-        Select select = new Select();
 
-        findSelect(query, select,null);
-
-        select.getFrom().addAll(findFrom(query.getFrom()));
-
-        select.setWhere(findWhere(query.getWhere()));
-
-        select.fillSubQueries();
-
-        select.getHints().addAll(parseHints(query.getHints()));
-
-        findLimit(query.getLimit(), select);
-
-        findOrderBy(query, select);
-
-        findGroupBy(query, select);
-        return select;
-    }
-
-
-    public Delete parseDelete(SQLDeleteStatement deleteStatement) throws SqlParseException {
+	public Delete parseDelete(SQLDeleteStatement deleteStatement) throws SqlParseException {
 		Delete delete = new Delete();
 
 		delete.getFrom().addAll(findFrom(deleteStatement.getTableSource()));
@@ -88,53 +79,39 @@ public class SqlParser {
 			SQLBinaryOpExpr bExpr = (SQLBinaryOpExpr) expr;
 			routeCond(bExpr, bExpr.getLeft(), where);
 			routeCond(bExpr, bExpr.getRight(), where);
-		} else if (expr instanceof SQLNotExpr) {
-			parseWhere(((SQLNotExpr) expr).getExpr(), where);
-			negateWhere(where);
 		} else {
 			explanCond("AND", expr, where);
 		}
 	}
 
 	private void routeCond(SQLBinaryOpExpr bExpr, SQLExpr sub, Where where) throws SqlParseException {
-		if (sub instanceof SQLBinaryOpExpr && !isCond((SQLBinaryOpExpr) sub)) {
-			SQLBinaryOpExpr binarySub = (SQLBinaryOpExpr) sub;
-			if (binarySub.getOperator().priority != bExpr.getOperator().priority) {
-				Where subWhere = new Where(bExpr.getOperator().name);
-				where.addWhere(subWhere);
-				parseWhere(binarySub, subWhere);
-			} else {
-				parseWhere(binarySub, where);
-			}
-		} else if (sub instanceof SQLNotExpr) {
-			Where subWhere = new Where(bExpr.getOperator().name);
-			where.addWhere(subWhere);
-			parseWhere(((SQLNotExpr) sub).getExpr(), subWhere);
-			negateWhere(subWhere);
+		if (sub instanceof SQLBinaryOpExpr) {
+			parseWhere(bExpr, (SQLBinaryOpExpr) sub, where);
 		} else {
 			explanCond(bExpr.getOperator().name, sub, where);
 		}
 	}
 
+	private void parseWhere(SQLBinaryOpExpr expr, SQLBinaryOpExpr sub, Where where) throws SqlParseException {
+		if (isCond(sub)) {
+			explanCond(expr.getOperator().name, sub, where);
+		} else {
+			if (sub.getOperator().priority != expr.getOperator().priority) {
+				Where subWhere = new Where(expr.getOperator().name);
+				where.addWhere(subWhere);
+				parseWhere(sub, subWhere);
+			} else {
+				parseWhere(sub, where);
+			}
+		}
+
+	}
+
 	private void explanCond(String opear, SQLExpr expr, Where where) throws SqlParseException {
         if (expr instanceof SQLBinaryOpExpr) {
             SQLBinaryOpExpr soExpr = (SQLBinaryOpExpr) expr;
-            boolean methodAsOpear = false;
-            if(soExpr.getRight() instanceof SQLMethodInvokeExpr){
-                SQLMethodInvokeExpr method = (SQLMethodInvokeExpr) soExpr.getRight();
-                String methodName = method.getMethodName().toLowerCase();
-
-                if(Condition.OPEAR.methodNameToOpear.containsKey(methodName)){
-                    Object methodParametersValue = getMethodValuesWithSubQueries(method);
-                    Condition condition = new Condition(CONN.valueOf(opear) ,soExpr.getLeft().toString(), Condition.OPEAR.methodNameToOpear.get(methodName),methodParametersValue);
-                    where.addWhere(condition);
-                    methodAsOpear = true;
-                }
-            }
-            if(!methodAsOpear){
-                Condition condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()));
-                where.addWhere(condition);
-            }
+            Condition condition = new Condition(CONN.valueOf(opear), soExpr.getLeft().toString(), soExpr.getOperator().name, parseValue(soExpr.getRight()));
+            where.addWhere(condition);
         } else if (expr instanceof SQLInListExpr) {
             SQLInListExpr siExpr = (SQLInListExpr) expr;
             Condition condition = new Condition(CONN.valueOf(opear), siExpr.getExpr().toString(), siExpr.isNot() ? "NOT IN" : "IN", parseValue(siExpr.getTargetList()));
@@ -143,6 +120,14 @@ public class SqlParser {
             SQLBetweenExpr between = ((SQLBetweenExpr) expr);
             Condition condition = new Condition(CONN.valueOf(opear), between.getTestExpr().toString(), between.isNot() ? "NOT BETWEEN" : "BETWEEN", new Object[]{parseValue(between.beginExpr),
                     parseValue(between.endExpr)});
+            where.addWhere(condition);
+        } else if (expr instanceof SQLNotExpr){
+            SQLBinaryOpExpr notExpr = (SQLBinaryOpExpr) ((SQLNotExpr) expr).getExpr();
+            String left = notExpr.getLeft().toString();
+            SQLExpr right = notExpr.getRight();
+            // add a check here to see if the not'd value is a 'like' operator
+            Condition.OPEAR notOpear = notExpr.getOperator() == SQLBinaryOperator.Like ? Condition.OPEAR.NLIKE : Condition.OPEAR.N;
+            Condition condition = new Condition(CONN.valueOf(opear), left, notOpear, parseValue(right));
             where.addWhere(condition);
         }
         else if (expr instanceof SQLMethodInvokeExpr) {
@@ -155,31 +140,12 @@ public class SqlParser {
 
             Condition condition = new Condition(CONN.valueOf(opear), fieldName, methodName, spatialParamsObject);
             where.addWhere(condition);
-        } else if (expr instanceof SQLInSubQueryExpr){
-            SQLInSubQueryExpr sqlIn = (SQLInSubQueryExpr) expr;
-            Select innerSelect = parseSelect((MySqlSelectQueryBlock) sqlIn.getSubQuery().getQuery());
-            if(innerSelect.getFields() == null || innerSelect.getFields().size()!=1)
-                throw new SqlParseException("should only have one return field in subQuery");
-            SubQueryExpression subQueryExpression = new SubQueryExpression(innerSelect);
-            Condition condition = new Condition(CONN.valueOf(opear), sqlIn.getExpr().toString(), sqlIn.isNot() ? "NOT IN" : "IN",subQueryExpression);
-            where.addWhere(condition);
-        } else {
+        }else {
 			throw new SqlParseException("err find condition " + expr.getClass());
 		}
 	}
 
-    private Object getMethodValuesWithSubQueries(SQLMethodInvokeExpr method) throws SqlParseException {
-        List<Object> values = new ArrayList<>();
-        boolean foundSubQuery = false;
-        if(method.getParameters().size() == 1 && method.getParameters().get(0) instanceof  SQLQueryExpr){
-            SQLQueryExpr sqlSubQuery = (SQLQueryExpr) method.getParameters().get(0);
-            Select select = parseSelect((MySqlSelectQueryBlock) sqlSubQuery.getSubQuery().getQuery());
-            return new SubQueryExpression(select);
-        }
-        return method.getParameters().toArray();
-    }
-
-    private Object[] parseValue(List<SQLExpr> targetList) throws SqlParseException {
+	private Object[] parseValue(List<SQLExpr> targetList) throws SqlParseException {
 		Object[] value = new Object[targetList.size()];
 		for (int i = 0; i < targetList.size(); i++) {
 			value[i] = parseValue(targetList.get(i));
@@ -426,10 +392,11 @@ public class SqlParser {
                 fields.add(new Field(condition.getName().replaceFirst(prefix,""),null));
             }
             else {
-                if(! ((condition.getValue() instanceof SQLPropertyExpr)||(condition.getValue() instanceof String))){
+                if(! (condition.getValue() instanceof SQLPropertyExpr)){
                     throw new SqlParseException("conditions on join should be one side is firstTable second Other , condition was:" + condition.toString());
                 }
-                String aliasDotValue = condition.getValue().toString();
+                SQLPropertyExpr conditionValue = (SQLPropertyExpr) condition.getValue();
+                String aliasDotValue = conditionValue.toString();
                 int indexOfDot = aliasDotValue.indexOf(".");
                 String owner = aliasDotValue.substring(0, indexOfDot);
                 if(owner.equals(alias))
@@ -506,8 +473,8 @@ public class SqlParser {
     private void addIfConditionRecursive(Where where, List<Condition> conditions) throws SqlParseException {
         if(where instanceof Condition){
             Condition cond = (Condition) where;
-            if( ! ((cond.getValue() instanceof  SQLPropertyExpr)|| (cond.getValue() instanceof  String))){
-                throw new SqlParseException("conditions on join should be one side is secondTable OPEAR firstTable, condition was:" + cond.toString());
+            if( ! (cond.getValue() instanceof  SQLPropertyExpr)){
+                throw new SqlParseException("conditions on join should be one side is firstTable second Other , condition was:" + cond.toString());
             }
             conditions.add(cond);
         }
@@ -524,17 +491,5 @@ public class SqlParser {
         fromList.addAll(findFrom(joinTableSource.getRight()));
         return fromList;
     }
-
-	private void negateWhere(Where where) throws SqlParseException {
-		for (Where sub : where.getWheres()) {
-			if (sub instanceof Condition) {
-				Condition cond = (Condition) sub;
-				cond.setOpear(cond.getOpear().negative());
-			} else {
-				negateWhere(sub);
-			}
-			sub.setConn(sub.getConn().negative());
-		}
-	}
 
 }
