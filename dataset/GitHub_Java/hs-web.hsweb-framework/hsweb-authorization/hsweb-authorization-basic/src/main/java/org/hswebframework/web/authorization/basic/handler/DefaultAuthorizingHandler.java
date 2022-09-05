@@ -12,7 +12,7 @@ import org.hswebframework.web.authorization.annotation.Logical;
 import org.hswebframework.web.authorization.define.AuthorizeDefinition;
 import org.hswebframework.web.authorization.define.AuthorizingContext;
 import org.hswebframework.web.authorization.exception.AccessDenyException;
-import org.hswebframework.web.boost.aop.context.MethodInterceptorContext;
+import org.hswebframework.web.boost.aop.context.MethodInterceptorParamContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,21 +42,22 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
     }
 
     @Override
-    public void handRDAC(AuthorizingContext context) {
+    public void handle(AuthorizingContext context) {
 
         //进行rdac权限控制
         handleRdac(context.getAuthentication(), context.getDefinition());
+
+        //进行数据权限控制
+        handleDataAccess(context);
+
         //表达式权限控制
         handleExpression(context.getAuthentication(), context.getDefinition(), context.getParamContext());
 
-
     }
-    public void handleDataAccess(AuthorizingContext context) {
+
+    protected void handleDataAccess(AuthorizingContext context) {
         if (dataAccessController == null) {
             logger.warn("dataAccessController is null,skip result access control!");
-            return;
-        }
-        if(context.getDefinition().getDataAccessDefinition()==null){
             return;
         }
         List<Permission> permission = context.getAuthentication().getPermissions()
@@ -73,9 +74,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
                 .filter(access -> context.getDefinition().getActions().contains(access.getAction()))
                 .collect(Collectors.toSet());
         //无规则,则代表不进行控制
-        if (accesses.isEmpty()) {
-            return;
-        }
+        if (accesses.isEmpty()) return;
         //单个规则验证函数
         Function<Predicate<DataAccessConfig>, Boolean> function = accesses.stream()::allMatch;
         //调用控制器进行验证
@@ -86,7 +85,7 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
 
     }
 
-    protected void handleExpression(Authentication authentication, AuthorizeDefinition definition, MethodInterceptorContext paramContext) {
+    protected void handleExpression(Authentication authentication, AuthorizeDefinition definition, MethodInterceptorParamContext paramContext) {
         if (definition.getScript() != null) {
             String scriptId = DigestUtils.md5Hex(definition.getScript().getScript());
 
@@ -131,22 +130,17 @@ public class DefaultAuthorizingHandler implements AuthorizingHandler {
             List<Permission> permissions = authentication.getPermissions().stream()
                     .filter(permission -> {
                         // 未持有任何一个权限
-                        if (!permissionsDef.contains(permission.getId())) {
-                            return false;
-                        }
+                        if (!permissionsDef.contains(permission.getId())) return false;
                         //未配置action
-                        if (actionsDef.isEmpty()) {
+                        if (actionsDef.isEmpty())
                             return true;
-                        }
                         //判断action
                         List<String> actions = permission.getActions()
                                 .stream()
                                 .filter(actionsDef::contains)
                                 .collect(Collectors.toList());
 
-                        if (actions.isEmpty()) {
-                            return false;
-                        }
+                        if (actions.isEmpty()) return false;
 
                         //如果 控制逻辑是or,则只要过滤结果数量不为0.否则过滤结果数量必须和配置的数量相同
                         return logicalIsOr ? actions.size() > 0 : permission.getActions().containsAll(actions);

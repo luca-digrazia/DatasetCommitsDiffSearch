@@ -19,7 +19,6 @@ package org.hswebframework.web.controller.authorization;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import org.hswebframework.web.AopUtils;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.annotation.Authorize;
@@ -51,13 +50,16 @@ import static org.hswebframework.web.controller.message.ResponseMessage.ok;
  */
 @RestController
 @RequestMapping("${hsweb.web.mappings.user:user}")
-@Authorize(permission = "user", description = "用户管理")
-@Api(value = "用户管理",tags = "权限-用户管理")
+@Authorize(permission = "user")
+@AccessLogger("用户管理")
+@Api(tags = "user-manager", description = "用户基本信息管理")
 public class UserController implements
         QueryController<UserEntity, String, QueryParamEntity>,
         CreateController<BindRoleUserEntity, String, BindRoleUserEntity> {
 
     private UserService userService;
+
+    private UserTokenManager userTokenManager;
 
     @Override
     @SuppressWarnings("unchecked")
@@ -70,28 +72,42 @@ public class UserController implements
         this.userService = userService;
     }
 
+    @Autowired
+    public void setUserTokenManager(UserTokenManager userTokenManager) {
+        this.userTokenManager = userTokenManager;
+    }
+
+    @GetMapping("/tokens")
+    @Authorize(action = Permission.ACTION_QUERY)
+    @AccessLogger("获取所有已登录用户的信息")
+    public ResponseMessage<List<UserToken>> userTokens() {
+        return ok(userTokenManager.allLoggedUser());
+    }
+
+    @PutMapping("/tokens/{token}/{state}")
+    @Authorize(action = "change-state")
+    @AccessLogger("修改token的状态")
+    public ResponseMessage<List<UserToken>> makeOffline(@PathVariable String token, @PathVariable TokenState state) {
+        userTokenManager.changeTokenState(token, state);
+        return ok();
+    }
+
     @Override
-    @SuppressWarnings("all")
     public ResponseMessage<PagerResult<UserEntity>> list(QueryParamEntity param) {
         param.excludes("password", "salt");
         return QueryController.super.list(param)
                 .exclude(UserEntity.class, "password", "salt");
     }
 
-    public static void main(String[] args) throws NoSuchMethodException {
-        System.out.println(AopUtils
-                .findMethodAnnotation(UserController.class,UserController.class.getMethod("list",QueryParamEntity.class),Authorize.class));
-    }
-
     @Override
-    @SuppressWarnings("all")
     public ResponseMessage<UserEntity> getByPrimaryKey(@PathVariable String id) {
         return QueryController.super.getByPrimaryKey(id)
                 .exclude(UserEntity.class, "password", "salt");
     }
 
-    @Authorize(action = Permission.ACTION_UPDATE)
+    @Authorize(action = "update")
     @PutMapping(path = "/{id:.+}")
+    @AccessLogger("{update_by_primary_key}")
     @ApiOperation("根据ID修改用户信息")
     public ResponseMessage<Void> updateByPrimaryKey(@PathVariable String id,
                                                     @RequestBody BindRoleUserEntity userModel) {
@@ -101,7 +117,8 @@ public class UserController implements
 
     @Authorize(merge = false)
     @PutMapping(path = "/password")
-    @ApiOperation("修改当前登录用户的密码")
+    @AccessLogger("{update_password_login_user}")
+    @ApiOperation("修改当前用户的密码")
     public ResponseMessage<Void> updateLoginUserPassword(@RequestParam String password,
                                                          @RequestParam String oldPassword) {
 
@@ -112,6 +129,7 @@ public class UserController implements
 
     @Authorize(action = Permission.ACTION_UPDATE)
     @PutMapping(path = "/password/{id:.+}")
+    @AccessLogger("{update_password_by_id}")
     @ApiOperation("修改指定用户的密码")
     public ResponseMessage<Void> updateByPasswordPrimaryKey(@PathVariable String id,
                                                             @RequestParam String password,
@@ -129,15 +147,17 @@ public class UserController implements
         return CreateController.super.add(data);
     }
 
-    @Authorize(action = Permission.ACTION_ENABLE)
+    @Authorize(action = "enable")
     @PutMapping(path = "/{id}/enable")
+    @AccessLogger("{enable_user}")
     @ApiOperation("启用用户")
     public ResponseMessage<Boolean> enable(@PathVariable String id) {
         return ok(getService().enable(id));
     }
 
-    @Authorize(action = Permission.ACTION_DISABLE)
+    @Authorize(action = "disable")
     @PutMapping(path = "/{id}/disable")
+    @AccessLogger("{disable_user}")
     @ApiOperation("禁用用户")
     public ResponseMessage<Boolean> disable(@PathVariable String id) {
         return ok(getService().disable(id));

@@ -14,8 +14,6 @@ public class SimpleUserToken implements UserToken {
 
     private String token;
 
-    private String type = "default";
-
     private volatile TokenState state;
 
     private AtomicLong requestTimesCounter = new AtomicLong(0);
@@ -25,17 +23,6 @@ public class SimpleUserToken implements UserToken {
     private volatile long firstRequestTime = System.currentTimeMillis();
 
     private volatile long requestTimes;
-
-    private long maxInactiveInterval;
-
-    @Override
-    public long getMaxInactiveInterval() {
-        return maxInactiveInterval;
-    }
-
-    public void setMaxInactiveInterval(long maxInactiveInterval) {
-        this.maxInactiveInterval = maxInactiveInterval;
-    }
 
     public SimpleUserToken(String userId, String token) {
         this.userId = userId;
@@ -100,16 +87,8 @@ public class SimpleUserToken implements UserToken {
         requestTimesCounter.set(requestTimes);
     }
 
-    public void touch() {
+    void touch() {
         requestTimesCounter.addAndGet(1);
         lastRequestTime = System.currentTimeMillis();
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public void setType(String type) {
-        this.type = type;
     }
 }

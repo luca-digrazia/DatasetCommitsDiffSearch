@@ -51,10 +51,10 @@ public class RestControllerExceptionTranslator {
         return ResponseMessage.error(400, exception.getMessage());
     }
 
-    @ExceptionHandler(org.hswebframework.ezorm.rdb.exception.ValidationException.class)
+    @ExceptionHandler(org.hsweb.ezorm.rdb.exception.ValidationException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ResponseBody
-    ResponseMessage<Object> handleException(org.hswebframework.ezorm.rdb.exception.ValidationException exception) {
+    ResponseMessage<Object> handleException(org.hsweb.ezorm.rdb.exception.ValidationException exception) {
         return ResponseMessage.error(400, exception.getMessage()).result(exception.getValidateResult());
     }
 
@@ -110,16 +110,6 @@ public class RestControllerExceptionTranslator {
 
         return ResponseMessage.error(400, results.getResults().size() == 0 ? e.getMessage() : results.getResults().get(0).getMessage()).result(results.getResults());
     }
-
-    @ExceptionHandler(RuntimeException.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    @ResponseBody
-    ResponseMessage handleException(RuntimeException exception) {
-        logger.error(exception.getMessage(), exception);
-        return ResponseMessage.error(400, exception.getMessage());
-    }
-
-
 //    @ExceptionHandler(Throwable.class)
 //    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
 //    @ResponseBody

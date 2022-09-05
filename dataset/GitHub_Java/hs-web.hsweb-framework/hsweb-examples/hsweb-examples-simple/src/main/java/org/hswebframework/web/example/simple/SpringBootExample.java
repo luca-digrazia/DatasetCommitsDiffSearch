@@ -22,13 +22,9 @@ import com.alibaba.fastjson.serializer.SerializerFeature;
 import org.hswebframework.web.authorization.Authentication;
 import org.hswebframework.web.authorization.Permission;
 import org.hswebframework.web.authorization.access.DataAccessConfig;
-import org.hswebframework.web.authorization.basic.aop.AopMethodAuthorizeDefinitionCustomizerParser;
 import org.hswebframework.web.authorization.basic.configuration.EnableAopAuthorize;
-import org.hswebframework.web.authorization.basic.define.EmptyAuthorizeDefinition;
 import org.hswebframework.web.authorization.basic.web.UserTokenHolder;
-import org.hswebframework.web.authorization.define.AuthorizeDefinition;
 import org.hswebframework.web.authorization.simple.SimpleFieldFilterDataAccessConfig;
-import org.hswebframework.web.boost.aop.context.MethodInterceptorContext;
 import org.hswebframework.web.commons.entity.DataStatus;
 import org.hswebframework.web.commons.entity.factory.EntityFactory;
 import org.hswebframework.web.entity.authorization.*;
@@ -89,12 +85,6 @@ public class SpringBootExample
         implements CommandLineRunner {
 
     @Bean
-    public AopMethodAuthorizeDefinitionCustomizerParser customizerParser(){
-        //自定义权限声明
-        return context -> EmptyAuthorizeDefinition.instance;
-    }
-
-    @Bean
     public AccessLoggerListener accessLoggerListener() {
         Class excludes[] = {
                 ServletRequest.class,
@@ -110,7 +100,7 @@ public class SpringBootExample
                     return obj.getClass().getName();
                 return JSON.toJSONString(obj);
             });
-//            loggerMap.put("userToken", UserTokenHolder.currentToken());
+            loggerMap.put("userToken", UserTokenHolder.currentToken());
 
             System.out.println(JSON.toJSONString(loggerMap, SerializerFeature.SortField, SerializerFeature.PrettyFormat));
 
@@ -302,8 +292,5 @@ public class SpringBootExample
         relationInfo.setRelationId("leader");
         relationInfoService.insert(relationInfo);
 
-//        relationInfoService
-//                .getRelations("person","王伟")
-//                .findRev("直属上级");
     }
 }
