@@ -95,13 +95,9 @@ public final class CcCommon {
   
   private final RuleContext ruleContext;
 
-  private final CcToolchainProvider ccToolchain;
-
   public CcCommon(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
     this.cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    this.ccToolchain =
-        Preconditions.checkNotNull(CppHelper.getToolchain(ruleContext, ":cc_toolchain"));
   }
 
   /**
@@ -273,13 +269,6 @@ public final class CcCommon {
       result.add(Pair.of(entry.getKey(), entry.getValue()));
     }
     return result.build();
-  }
-
-  /**
-   * Returns the C++ toolchain provider.
-   */
-  public CcToolchainProvider getToolchain() {
-    return ccToolchain;
   }
 
   /**
@@ -502,8 +491,8 @@ public final class CcCommon {
         ? InstrumentedFilesProviderImpl.EMPTY
         : InstrumentedFilesCollector.collect(
             ruleContext, CppRuleClasses.INSTRUMENTATION_SPEC, CC_METADATA_COLLECTOR, files,
-            CppHelper.getGcovFilesIfNeeded(ruleContext, ccToolchain),
-            CppHelper.getCoverageEnvironmentIfNeeded(ruleContext, ccToolchain),
+            CppHelper.getGcovFilesIfNeeded(ruleContext),
+            CppHelper.getCoverageEnvironmentIfNeeded(ruleContext),
             withBaselineCoverage);
   }
 
@@ -546,10 +535,9 @@ public final class CcCommon {
     ImmutableSet.Builder<String> requestedFeatures = ImmutableSet.builder();
     for (String feature :
         Iterables.concat(
-            ImmutableSet.of(
-                toolchain.getCompilationMode().toString(), getHostOrNonHostFeature(ruleContext)),
+            ImmutableSet.of(toolchain.getCompilationMode().toString()),
+            ImmutableSet.of(getHostOrNonHostFeature(ruleContext)),
             DEFAULT_FEATURES,
-            toolchain.getFeatures().getDefaultFeatures(),
             ruleContext.getFeatures())) {
       if (!unsupportedFeatures.contains(feature)) {
         requestedFeatures.add(feature);
@@ -592,14 +580,24 @@ public final class CcCommon {
   }
 
   /**
-   * Creates a feature configuration for a given rule.  Assumes strictly cc sources.
+   * Creates a feature configuration for a given rule.
    *
-   * @param ruleContext the context of the rule we want the feature configuration for.
-   * @param toolchain C++ toolchain provider.
+   * @param ruleContext the context of the rule we want the feature configuraiton for.
+   * @param sourceCategory the category of sources to be used in this build.
    * @return the feature configuration for the given {@code ruleContext}.
    */
   public static FeatureConfiguration configureFeatures(
-      RuleContext ruleContext, CcToolchainProvider toolchain) {
-    return configureFeatures(ruleContext, toolchain, SourceCategory.CC);
+      RuleContext ruleContext, SourceCategory sourceCategory) {
+    return configureFeatures(ruleContext, CppHelper.getToolchain(ruleContext), sourceCategory);
+  }
+
+  /**
+   * Creates a feature configuration for a given rule.  Assumes strictly cc sources.
+   *
+   * @param ruleContext the context of the rule we want the feature configuration for.
+   * @return the feature configuration for the given {@code ruleContext}.
+   */
+  public static FeatureConfiguration configureFeatures(RuleContext ruleContext) {
+    return configureFeatures(ruleContext, SourceCategory.CC);
   }
 }

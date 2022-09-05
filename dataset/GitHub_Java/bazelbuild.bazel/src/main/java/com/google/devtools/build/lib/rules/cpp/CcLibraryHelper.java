@@ -249,7 +249,6 @@ public final class CcLibraryHelper {
   private final CppSemantics semantics;
 
   private final List<Artifact> publicHeaders = new ArrayList<>();
-  private final List<Artifact> nonModuleMapHeaders = new ArrayList<>();
   private final List<Artifact> publicTextualHeaders = new ArrayList<>();
   private final List<Artifact> privateHeaders = new ArrayList<>();
   private final List<PathFragment> additionalExportedHeaders = new ArrayList<>();
@@ -461,13 +460,6 @@ public final class CcLibraryHelper {
       return;
     }
     compilationUnitSources.add(CppSource.create(header, label, ImmutableMap.<String, String>of()));
-  }
-
-  /** Adds a header to {@code publicHeaders}, but not to this target's module map. */
-  public CcLibraryHelper addNonModuleMapHeader(Artifact header) {
-    Preconditions.checkNotNull(header);
-    nonModuleMapHeaders.add(header);
-    return this;
   }
 
   /**
@@ -1077,24 +1069,15 @@ public final class CcLibraryHelper {
   @Immutable
   private static class PublicHeaders {
     private final ImmutableList<Artifact> headers;
-    private final ImmutableList<Artifact> moduleMapHeaders;
     private final @Nullable PathFragment virtualIncludePath;
 
-    private PublicHeaders(
-        ImmutableList<Artifact> headers,
-        ImmutableList<Artifact> moduleMapHeaders,
-        PathFragment virtualIncludePath) {
+    private PublicHeaders(ImmutableList<Artifact> headers, PathFragment virtualIncludePath) {
       this.headers = headers;
-      this.moduleMapHeaders = moduleMapHeaders;
       this.virtualIncludePath = virtualIncludePath;
     }
 
     public ImmutableList<Artifact> getHeaders() {
       return headers;
-    }
-
-    public ImmutableList<Artifact> getModuleMapHeaders() {
-      return moduleMapHeaders;
     }
 
     @Nullable
@@ -1106,10 +1089,7 @@ public final class CcLibraryHelper {
   private PublicHeaders computePublicHeaders() {
     if (!ruleContext.attributes().has("strip_include_prefix", Type.STRING)
         || !ruleContext.attributes().has("include_prefix", Type.STRING)) {
-      return new PublicHeaders(
-          ImmutableList.copyOf(Iterables.concat(publicHeaders, nonModuleMapHeaders)),
-          ImmutableList.copyOf(publicHeaders),
-          null);
+      return new PublicHeaders(ImmutableList.copyOf(publicHeaders), null);
     }
 
     PathFragment prefix =
@@ -1135,10 +1115,7 @@ public final class CcLibraryHelper {
 
     if (stripPrefix == null && prefix == null) {
       // Simple case, no magic needed
-      return new PublicHeaders(
-          ImmutableList.copyOf(Iterables.concat(publicHeaders, nonModuleMapHeaders)),
-          ImmutableList.copyOf(publicHeaders),
-          null);
+      return new PublicHeaders(ImmutableList.copyOf(publicHeaders), null);
     }
 
     if (stripPrefix.containsUplevelReferences()) {
@@ -1155,10 +1132,10 @@ public final class CcLibraryHelper {
     }
 
     if (ruleContext.hasErrors()) {
-      return new PublicHeaders(ImmutableList.<Artifact>of(), ImmutableList.<Artifact>of(), null);
+      return new PublicHeaders(ImmutableList.<Artifact>of(), null);
     }
 
-    ImmutableList.Builder<Artifact> moduleHeadersBuilder = ImmutableList.builder();
+    ImmutableList.Builder<Artifact> virtualHeaders = ImmutableList.builder();
 
     for (Artifact originalHeader : publicHeaders) {
       if (!originalHeader.getRootRelativePath().startsWith(stripPrefix)) {
@@ -1178,23 +1155,12 @@ public final class CcLibraryHelper {
       ruleContext.registerAction(new SymlinkAction(
           ruleContext.getActionOwner(), originalHeader, virtualHeader,
           "Symlinking virtual headers for " + ruleContext.getLabel()));
-      moduleHeadersBuilder.add(virtualHeader);
+      virtualHeaders.add(virtualHeader);
     }
 
-    ImmutableList<Artifact> moduleMapHeaders = moduleHeadersBuilder.build();
-    ImmutableList<Artifact> virtualHeaders =
-        ImmutableList.<Artifact>builder()
-            .addAll(moduleMapHeaders)
-            .addAll(nonModuleMapHeaders)
-            .build();
-
-    return new PublicHeaders(
-        virtualHeaders,
-        moduleMapHeaders,
-        ruleContext
-            .getBinOrGenfilesDirectory()
-            .getExecPath()
-            .getRelative(ruleContext.getUniqueDirectory("_virtual_includes")));
+    return new PublicHeaders(virtualHeaders.build(),
+        ruleContext.getBinOrGenfilesDirectory().getExecPath().getRelative(
+            ruleContext.getUniqueDirectory("_virtual_includes")));
   }
 
   /** Create context for cc compile action from generated inputs. */
@@ -1318,7 +1284,7 @@ public final class CcLibraryHelper {
         featureConfiguration.isEnabled(CppRuleClasses.EXCLUDE_PRIVATE_HEADERS_IN_MODULE_MAPS)
             ? ImmutableList.<Artifact>of()
             : privateHeaders,
-        publicHeaders.getModuleMapHeaders(),
+        publicHeaders.getHeaders(),
         dependentModuleMaps,
         additionalExportedHeaders,
         compiledModule,

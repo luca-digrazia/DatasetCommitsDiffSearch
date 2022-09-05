@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.DotdFile;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction.SpecialInputsHandler;
@@ -281,7 +282,9 @@ public class CppCompileActionBuilder {
 
     NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
 
-    NestedSet<Artifact> includesExemptFromDiscovery = context.getDeclaredIncludeSrcs();
+    NestedSet<Artifact> includesExemptFromDiscovery = shouldScanIncludes
+        ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
+        : context.getDeclaredIncludeSrcs();
 
     // Copying the collections is needed to make the builder reusable.
     if (fake) {
