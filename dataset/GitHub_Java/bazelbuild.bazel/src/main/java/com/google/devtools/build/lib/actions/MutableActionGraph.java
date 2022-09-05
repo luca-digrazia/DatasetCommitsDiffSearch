@@ -143,12 +143,6 @@ public interface MutableActionGraph extends ActionGraph {
       }
     }
 
-    private static String getKey(ActionAnalysisMetadata action) {
-      return action instanceof Action
-          ? ((Action) action).getKey()
-          : null;
-    }
-
     // See also Actions.canBeShared()
     private static String suffix(ActionAnalysisMetadata a, ActionAnalysisMetadata b) {
       // Note: the error message reveals to users the names of intermediate files that are not
@@ -167,7 +161,6 @@ public interface MutableActionGraph extends ActionGraph {
       addStringDetail(sb, "Configuration", aNull ? null : aOwner.getConfigurationChecksum(),
           bNull ? null : bOwner.getConfigurationChecksum());
       addStringDetail(sb, "Mnemonic", a.getMnemonic(), b.getMnemonic());
-      addStringDetail(sb, "Action key", getKey(a), getKey(b));
 
       if ((a instanceof ActionExecutionMetadata) && (b instanceof ActionExecutionMetadata)) {
         addStringDetail(
@@ -194,7 +187,7 @@ public interface MutableActionGraph extends ActionGraph {
               && bPrimaryInput != null
               && aPrimaryInput.toString().equals(bPrimaryInput.toString()))) {
         if (aPrimaryInput != bPrimaryInput) {
-          sb.append("Primary inputs are different objects: ")
+          sb.append("Primary outputs are different objects: ")
               .append(System.identityHashCode(aPrimaryInput))
               .append(", ")
               .append(System.identityHashCode(bPrimaryInput))
