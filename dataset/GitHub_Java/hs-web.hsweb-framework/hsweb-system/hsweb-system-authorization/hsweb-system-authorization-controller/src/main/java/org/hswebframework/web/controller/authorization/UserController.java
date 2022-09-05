@@ -17,25 +17,17 @@
 
 package org.hswebframework.web.controller.authorization;
 
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import org.hswebframework.web.AuthorizeException;
-import org.hswebframework.web.authorization.Authentication;
-import org.hswebframework.web.authorization.Permission;
+import org.hswebframework.web.authorization.Authorization;
 import org.hswebframework.web.authorization.annotation.Authorize;
-import org.hswebframework.web.commons.entity.PagerResult;
 import org.hswebframework.web.commons.entity.param.QueryParamEntity;
 import org.hswebframework.web.controller.CreateController;
 import org.hswebframework.web.controller.QueryController;
 import org.hswebframework.web.controller.message.ResponseMessage;
 import org.hswebframework.web.entity.authorization.UserEntity;
-import org.hswebframework.web.entity.authorization.bind.BindRoleUserEntity;
 import org.hswebframework.web.logging.AccessLogger;
-import org.hswebframework.web.model.authorization.UserModel;
 import org.hswebframework.web.service.authorization.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
-
 
 import static org.hswebframework.web.controller.message.ResponseMessage.ok;
 
@@ -48,18 +40,9 @@ import static org.hswebframework.web.controller.message.ResponseMessage.ok;
 @RequestMapping("${hsweb.web.mappings.user:user}")
 @Authorize(permission = "user")
 @AccessLogger("用户管理")
-@Api(tags = "user-manager", description = "用户基本信息管理")
-public class UserController implements
-        QueryController<UserEntity, String, QueryParamEntity>,
-        CreateController<BindRoleUserEntity, String, BindRoleUserEntity> {
+public class UserController implements QueryController<UserEntity, String, QueryParamEntity>, CreateController<UserEntity, String> {
 
     private UserService userService;
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public UserService getService() {
-        return userService;
-    }
 
     @Autowired
     public void setUserService(UserService userService) {
@@ -67,47 +50,42 @@ public class UserController implements
     }
 
     @Override
-    public ResponseMessage<PagerResult<UserEntity>> list(QueryParamEntity param) {
-        param.excludes("password", "salt");
+    public ResponseMessage list(QueryParamEntity param) {
         return QueryController.super.list(param)
                 .exclude(UserEntity.class, "password", "salt");
     }
 
     @Override
-    public ResponseMessage<UserEntity> getByPrimaryKey(@PathVariable String id) {
-        return QueryController.super.getByPrimaryKey(id)
-                .exclude(UserEntity.class, "password", "salt");
+    @SuppressWarnings("unchecked")
+    public UserService getService() {
+        return userService;
     }
 
     @Authorize(action = "update")
-    @PutMapping(path = "/{id:.+}")
+    @PutMapping(path = "/{id}")
     @AccessLogger("{update_by_primary_key}")
-    @ApiOperation("根据ID修改用户信息")
-    public ResponseMessage<Void> updateByPrimaryKey(@PathVariable String id,
-                                                    @RequestBody BindRoleUserEntity userModel) {
-        getService().update(id, userModel);
+    public ResponseMessage updateByPrimaryKey(@PathVariable String id, @RequestBody UserEntity data) {
+        data.setId(id);
+        getService().update(data);
         return ok();
     }
 
     @Authorize(merge = false)
     @PutMapping(path = "/password")
     @AccessLogger("{update_password_login_user}")
-    @ApiOperation("修改当前用户的密码")
-    public ResponseMessage<Void> updateLoginUserPassword(@RequestParam String password,
-                                                         @RequestParam String oldPassword) {
-
-        Authentication authentication = Authentication.current().orElseThrow(AuthorizeException::new);
-        getService().updatePassword(authentication.getUser().getId(), oldPassword, password);
+    public ResponseMessage updateLoginUserPassword(Authorization authorization,
+                                                   @RequestParam String password,
+                                                   @RequestParam String oldPassword) {
+        getService().updatePassword(authorization.getUser().getId(), oldPassword, password);
         return ok();
     }
 
-    @Authorize(action = Permission.ACTION_UPDATE)
-    @PutMapping(path = "/password/{id:.+}")
+    @Authorize(action = "update")
+    @PutMapping(path = "/password/{id}")
     @AccessLogger("{update_password_by_id}")
-    @ApiOperation("修改指定用户的密码")
-    public ResponseMessage<Void> updateByPasswordPrimaryKey(@PathVariable String id,
-                                                            @RequestParam String password,
-                                                            @RequestParam String oldPassword) {
+    public ResponseMessage updateByPasswordPrimaryKey(@PathVariable String id,
+                                                      @RequestParam String password,
+                                                      @RequestParam String oldPassword) {
         getService().updatePassword(id, oldPassword, password);
         return ok();
     }
@@ -115,21 +93,14 @@ public class UserController implements
     @Authorize(action = "enable")
     @PutMapping(path = "/{id}/enable")
     @AccessLogger("{enable_user}")
-    @ApiOperation("启用用户")
-    public ResponseMessage<Boolean> enable(@PathVariable String id) {
+    public ResponseMessage enable(@PathVariable String id) {
         return ok(getService().enable(id));
     }
 
     @Authorize(action = "disable")
     @PutMapping(path = "/{id}/disable")
     @AccessLogger("{disable_user}")
-    @ApiOperation("禁用用户")
-    public ResponseMessage<Boolean> disable(@PathVariable String id) {
+    public ResponseMessage disable(@PathVariable String id) {
         return ok(getService().disable(id));
-    }
-
-    @Override
-    public BindRoleUserEntity modelToEntity(BindRoleUserEntity model, BindRoleUserEntity entity) {
-        return model;
     }
 }
