@@ -262,9 +262,8 @@ public class FieldMaker {
                 String scriptCode = new CaseWhenParser((SQLCaseExpr) object, alias, tableAlias).parse();
                 paramers.add(new KVValue("script",new SQLCharExpr(scriptCode)));
             } else if(object instanceof SQLCastExpr) {
-                CastParser castParser = new CastParser((SQLCastExpr) object, alias, tableAlias);
-                String scriptCode = castParser.parse(false);
-                paramers.add(new KVValue(castParser.getName(),new SQLCharExpr(scriptCode)));
+                String scriptCode = new CastParser((SQLCastExpr) object, alias, tableAlias).parse(false);
+                paramers.add(new KVValue("script",new SQLCharExpr(scriptCode)));
             } else {
                 paramers.add(new KVValue(Util.removeTableAilasFromField(object, tableAlias)));
             }
