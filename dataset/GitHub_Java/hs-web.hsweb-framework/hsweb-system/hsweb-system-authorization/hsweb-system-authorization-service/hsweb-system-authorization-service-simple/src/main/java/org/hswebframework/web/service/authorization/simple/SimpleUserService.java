@@ -23,14 +23,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
-import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_AUTH_CACHE_NAME;
-import static org.hswebframework.web.service.authorization.simple.CacheConstants.USER_CACHE_NAME;
+import static org.hswebframework.web.service.authorization.simple.CacheConstants.*;
 
 /**
  * TODO 完成注释
@@ -111,10 +107,10 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
     @Override
     @CacheEvict(value = USER_CACHE_NAME, key = "#userEntity.id")
     public String insert(UserEntity userEntity) {
-        //用户名合法性验证
-        tryValidateProperty(usernameValidator, UserEntity.username, userEntity.getUsername());
         //判断用户是否已经存在
         tryValidateProperty(null == selectByUsername(userEntity.getUsername()), UserEntity.username, "{username_exists}");
+        //用户名合法性验证
+        tryValidateProperty(usernameValidator, UserEntity.username, userEntity.getUsername());
         //密码强度验证
         tryValidateProperty(passwordStrengthValidator, UserEntity.password, userEntity.getPassword());
         userEntity.setCreateTime(System.currentTimeMillis());
@@ -163,7 +159,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         tryValidateProperty(!userExists, GenericEntity.id, "{username_exists}");
         List<String> updateProperties = Arrays.asList("name");
         //修改密码
-        if (StringUtils.hasLength(userEntity.getPassword())) {
+        if (!StringUtils.hasLength(userEntity.getPassword())) {
             //密码强度验证
             tryValidateProperty(usernameValidator, UserEntity.password, userEntity.getPassword());
             //密码MD5
@@ -222,14 +218,14 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
         //用户持有的角色
         List<UserRoleEntity> roleEntities = userRoleDao.selectByUserId(userId);
         if (ListUtils.isNullOrEmpty(roleEntities)) {
-            return SimpleAuthenticationBuilder.build(userEntity, new ArrayList<>(), new ArrayList<>(), dataAccessFactory);
+            return new SimpleAuthentication(userEntity, new ArrayList<>(), new ArrayList<>(), dataAccessFactory);
         }
         List<String> roleIdList = roleEntities.stream().map(UserRoleEntity::getRoleId).collect(Collectors.toList());
 
         List<RoleEntity> roleEntityList = DefaultDSLQueryService.createQuery(roleDao).where().in(GenericEntity.id, roleIdList).noPaging().list();
         //权限角色关联信息
         List<PermissionRoleEntity> permissionRoleEntities = permissionRoleDao.selectByRoleIdList(roleIdList);
-        return SimpleAuthenticationBuilder.build(userEntity, roleEntityList, permissionRoleEntities, dataAccessFactory);
+        return new SimpleAuthentication(userEntity, roleEntityList, permissionRoleEntities, dataAccessFactory);
     }
 
     @Override
@@ -259,7 +255,7 @@ public class SimpleUserService extends AbstractService<UserEntity, String>
             admin.setName("admin");
             roleEntityList.add(admin);
         }
-        return SimpleAuthenticationBuilder.build(userEntity, roleEntityList, permissionRoleEntities, dataAccessFactory);
+        return new SimpleAuthentication(userEntity, roleEntityList, permissionRoleEntities, dataAccessFactory);
     }
 
 
