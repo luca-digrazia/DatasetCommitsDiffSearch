@@ -94,8 +94,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           null, /* proguardCfgOut */
           null, /* mainDexProguardCfg */
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
-          // This is just to communicate the results from the merge step to the validator step.
-          ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP));
+          null /* mergedResourcesOut */);
       if (ruleContext.hasErrors()) {
         return null;
       }
@@ -150,17 +149,12 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       String javaPackage = AndroidCommon.getJavaPackage(ruleContext);
 
       ResourceContainer resourceContainer = new ResourceContainer(ruleContext.getLabel(),
-          javaPackage,
-          null /* renameManifestPackage */,
-          false /* inlinedConstants */,
+          javaPackage, null /* renameManifestPackage */, false /* inlinedConstants */,
           null /* resourceApk -- not needed for library */,
           applicationManifest.getManifest(),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR),
-          null /* javaClassJar -- compiled separately from resource processing */,
-          ImmutableList.<Artifact>of(),
-          ImmutableList.<Artifact>of(),
-          ImmutableList.<PathFragment>of(),
-          ImmutableList.<PathFragment>of(),
+          ImmutableList.<Artifact>of(), ImmutableList.<Artifact>of(),
+          ImmutableList.<PathFragment>of(), ImmutableList.<PathFragment>of(),
           ruleContext.attributes().get("exports_manifest", Type.BOOLEAN),
           ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT), null);
 
