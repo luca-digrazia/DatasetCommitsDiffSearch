@@ -270,7 +270,7 @@ public abstract class TargetPattern implements Serializable {
       Preconditions.checkArgument(excludedSubdirectories.isEmpty(),
           "Target pattern \"%s\" of type %s cannot be evaluated with excluded subdirectories: %s.",
           getOriginalPattern(), getType(), excludedSubdirectories);
-      if (resolver.isPackage(PackageIdentifier.createInMainRepo(path))) {
+      if (resolver.isPackage(PackageIdentifier.createInDefaultRepo(path))) {
         // User has specified a package name. lookout for default target.
         callback.process(resolver.getExplicitTarget(label("//" + path)).getTargets());
       } else {
@@ -281,7 +281,7 @@ public abstract class TargetPattern implements Serializable {
         // first BUILD file is found (i.e. longest prefix match).
         for (int i = pieces.size() - 1; i > 0; i--) {
           String packageName = SLASH_JOINER.join(pieces.subList(0, i));
-          if (resolver.isPackage(PackageIdentifier.createInMainRepo(packageName))) {
+          if (resolver.isPackage(PackageIdentifier.createInDefaultRepo(packageName))) {
             String targetName = SLASH_JOINER.join(pieces.subList(i, pieces.size()));
             callback.process(
                 resolver
@@ -304,7 +304,7 @@ public abstract class TargetPattern implements Serializable {
     public PackageIdentifier getDirectory() {
       int lastSlashIndex = path.lastIndexOf('/');
       // The package name cannot be illegal because we verified it during target parsing
-      return PackageIdentifier.createInMainRepo(
+      return PackageIdentifier.createInDefaultRepo(
           lastSlashIndex < 0 ? "" : path.substring(0, lastSlashIndex));
     }
 
@@ -343,7 +343,6 @@ public abstract class TargetPattern implements Serializable {
         PackageIdentifier packageIdentifier, String suffix, boolean wasOriginallyAbsolute,
         boolean rulesOnly, boolean checkWildcardConflict) {
       super(Type.TARGETS_IN_PACKAGE, originalPattern, offset);
-      Preconditions.checkArgument(!packageIdentifier.getRepository().isDefault());
       this.packageIdentifier = packageIdentifier;
       this.suffix = Preconditions.checkNotNull(suffix);
       this.wasOriginallyAbsolute = wasOriginallyAbsolute;
@@ -457,7 +456,6 @@ public abstract class TargetPattern implements Serializable {
     private TargetsBelowDirectory(
         String originalPattern, String offset, PackageIdentifier directory, boolean rulesOnly) {
       super(Type.TARGETS_BELOW_DIRECTORY, originalPattern, offset);
-      Preconditions.checkArgument(!directory.getRepository().isDefault());
       this.directory = Preconditions.checkNotNull(directory);
       this.rulesOnly = rulesOnly;
     }
@@ -593,7 +591,7 @@ public abstract class TargetPattern implements Serializable {
 
       String originalPattern = pattern;
       final boolean includesRepo = pattern.startsWith("@");
-      RepositoryName repository = null;
+      RepositoryName repository = PackageIdentifier.DEFAULT_REPOSITORY_NAME;
       if (includesRepo) {
         int pkgStart = pattern.indexOf("//");
         if (pkgStart < 0) {
@@ -638,10 +636,6 @@ public abstract class TargetPattern implements Serializable {
       if (packagePart.endsWith("/")) {
         throw new TargetParsingException("The package part of '" + originalPattern
             + "' should not end in a slash");
-      }
-
-      if (repository == null) {
-        repository = PackageIdentifier.MAIN_REPOSITORY_NAME;
       }
 
       if (packagePart.endsWith("/...")) {
