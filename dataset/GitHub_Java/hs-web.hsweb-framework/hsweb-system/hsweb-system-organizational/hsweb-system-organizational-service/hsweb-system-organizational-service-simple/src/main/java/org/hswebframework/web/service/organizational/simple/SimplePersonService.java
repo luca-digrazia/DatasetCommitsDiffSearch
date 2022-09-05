@@ -366,9 +366,7 @@ public class SimplePersonService extends GenericEntityService<PersonEntity, Stri
     @Cacheable(cacheNames = "person", key = "'auth:user-id'+#userId")
     public PersonnelAuthorization getPersonnelAuthorizationByUserId(String userId) {
         PersonEntity entity = createQuery().where(PersonEntity.userId, userId).single();
-        if (entity == null) {
-            return null;
-        }
+        assertNotNull(entity);
         return getPersonnelAuthorizationByPersonId(entity.getId());
     }
 
