@@ -279,8 +279,6 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.addDirectJars(attributes.getDirectJars());
     builder.setRuleKind(attributes.getRuleKind());
     builder.setTargetLabel(attributes.getTargetLabel());
-    builder.setJavaBaseInputs(getHostJavabaseInputsNonStatic(ruleContext));
-    builder.setJavacJar(getLangtoolsJar());
     builder.build();
 
     artifactBuilder.setCompileTimeDependencies(headerDeps);
