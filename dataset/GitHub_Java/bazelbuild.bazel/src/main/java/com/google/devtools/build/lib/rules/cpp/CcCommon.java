@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -399,8 +398,7 @@ public final class CcCommon {
 
   private List<PathFragment> getIncludeDirsFromIncludesAttribute() {
     List<PathFragment> result = new ArrayList<>();
-    PackageIdentifier packageIdentifier = ruleContext.getLabel().getPackageIdentifier();
-    PathFragment packageFragment = packageIdentifier.getPathFragment();
+    PathFragment packageFragment = ruleContext.getLabel().getPackageIdentifier().getPathFragment();
     for (String includesAttr : ruleContext.attributes().get("includes", Type.STRING_LIST)) {
       includesAttr = ruleContext.expandMakeVariables("includes", includesAttr);
       if (includesAttr.startsWith("/")) {
@@ -432,8 +430,7 @@ public final class CcCommon {
                 + packageFragment
                 + "'. This will be an error in the future");
         // TODO(janakr): Add a link to a page explaining the problem and fixes?
-      } else if (packageIdentifier.getRepository().isMain()
-          && !includesPath.startsWith(RuleClass.THIRD_PARTY_PREFIX)) {
+      } else if (!packageFragment.startsWith(RuleClass.THIRD_PARTY_PREFIX)) {
         ruleContext.attributeWarning(
             "includes",
             "'"
