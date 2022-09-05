@@ -2,7 +2,6 @@ package org.hswebframework.web.crud.events;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import org.hswebframework.web.event.DefaultAsyncEvent;
 
 import java.io.Serializable;
 import java.util.List;
@@ -13,9 +12,9 @@ import java.util.List;
  */
 @AllArgsConstructor
 @Getter
-public class EntityCreatedEvent<E> extends DefaultAsyncEvent implements Serializable {
+public class EntityCreatedEvent<E> implements Serializable {
 
-    private final List<E> entity;
+    private List<E> entity;
 
-    private final Class<E> entityType;
+    private Class<E> entityType;
 }
