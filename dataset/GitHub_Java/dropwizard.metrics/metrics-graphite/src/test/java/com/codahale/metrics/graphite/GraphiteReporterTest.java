@@ -29,7 +29,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -447,10 +447,7 @@ public class GraphiteReporterTest {
     public void closesConnectionOnReporterStop() throws Exception {
         reporter.stop();
 
-        final InOrder inOrder = inOrder(graphite);
-        inOrder.verify(graphite).connect();
-        inOrder.verify(graphite).flush();
-        inOrder.verify(graphite, times(2)).close();
+        verify(graphite).close();
 
         verifyNoMoreInteractions(graphite);
     }
