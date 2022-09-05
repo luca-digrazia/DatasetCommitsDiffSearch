@@ -24,21 +24,17 @@ import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
-import com.google.devtools.build.lib.analysis.Runfiles;
-import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
@@ -66,8 +62,6 @@ public class ObjcRuleClasses {
   static final PathFragment LIBTOOL = new PathFragment(BIN_DIR + "/libtool");
   static final PathFragment DSYMUTIL = new PathFragment(BIN_DIR + "/dsymutil");
   static final PathFragment LIPO = new PathFragment(BIN_DIR + "/lipo");
-  static final PathFragment IBTOOL = new PathFragment(IosSdkCommands.IBTOOL_PATH);
-  private static final PathFragment JAVA = new PathFragment("/usr/bin/java");
 
   private ObjcRuleClasses() {
     throw new UnsupportedOperationException("static-only");
@@ -159,14 +153,12 @@ public class ObjcRuleClasses {
     builder.addAll(currentSource.asSet());
     boolean hasProtos = currentSource.isPresent()
         && currentSource.get().getSourceType() == J2ObjcSource.SourceType.PROTO;
-    ImmutableSet.Builder<String> entryClasses = ImmutableSet.builder();
 
     if (ruleContext.attributes().has("deps", Type.LABEL_LIST)) {
       for (J2ObjcSrcsProvider provider :
           ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcSrcsProvider.class)) {
         builder.addTransitive(provider.getSrcs());
         hasProtos |= provider.hasProtos();
-        entryClasses.addAll(provider.getEntryClasses());
       }
     }
 
@@ -175,40 +167,23 @@ public class ObjcRuleClasses {
           ruleContext.getPrerequisites("exports", Mode.TARGET, J2ObjcSrcsProvider.class)) {
         builder.addTransitive(provider.getSrcs());
         hasProtos |= provider.hasProtos();
-        entryClasses.addAll(provider.getEntryClasses());
       }
     }
 
-    if (ruleContext.attributes().has("entry_classes", Type.STRING_LIST)) {
-      entryClasses.addAll(ruleContext.attributes().get("entry_classes", Type.STRING_LIST));
-    }
-
-    return new J2ObjcSrcsProvider(builder.build(), entryClasses.build(), hasProtos);
-  }
-
-
-  /**
-   * Returns a {@link J2ObjcMappingFileProvider} containing J2ObjC mapping files from rules
-   * that can be reached transitively through the "deps" attribute.
-   *
-   * @param ruleContext the rule context of the current rule
-   * @return a {@link J2ObjcMappingFileProvider} containing J2ObjC mapping files information from
-   *     the transitive closure.
-   */
-  public static J2ObjcMappingFileProvider j2ObjcMappingFileProvider(RuleContext ruleContext) {
-    J2ObjcMappingFileProvider.Builder builder = new J2ObjcMappingFileProvider.Builder();
-    Iterable<J2ObjcMappingFileProvider> providers =
-        ruleContext.getPrerequisites("deps", Mode.TARGET, J2ObjcMappingFileProvider.class);
-    for (J2ObjcMappingFileProvider provider : providers) {
-      builder.addTransitive(provider);
-    }
-
-    return builder.build();
+    return new J2ObjcSrcsProvider(builder.build(), hasProtos);
   }
 
   public static Artifact artifactByAppendingToBaseName(RuleContext context, String suffix) {
     return artifactByAppendingToRootRelativePath(
         context, context.getLabel().toPathFragment(), suffix);
+  }
+
+  static ObjcActionsBuilder actionsBuilder(RuleContext ruleContext) {
+    return new ObjcActionsBuilder(
+        ruleContext,
+        intermediateArtifacts(ruleContext),
+        ObjcRuleClasses.objcConfiguration(ruleContext),
+        ruleContext);
   }
 
   public static ObjcConfiguration objcConfiguration(RuleContext ruleContext) {
@@ -218,45 +193,6 @@ public class ObjcRuleClasses {
   @VisibleForTesting
   static final Iterable<SdkFramework> AUTOMATIC_SDK_FRAMEWORKS = ImmutableList.of(
       new SdkFramework("Foundation"), new SdkFramework("UIKit"));
-
-  /**
-   * Creates a new spawn action builder that requires a darwin architecture to run.
-   */
-  static SpawnAction.Builder spawnOnDarwinActionBuilder() {
-    return new SpawnAction.Builder()
-        .setExecutionInfo(ImmutableMap.of(ExecutionRequirements.REQUIRES_DARWIN, ""));
-  }
-
-  /**
-   * Creates a new spawn action builder that requires a darwin architecture to run and is executed
-   * with the given jar.
-   */
-  // TODO(bazel-team): Reference a rule target rather than a jar file when Darwin runfiles work
-  // better.
-  static SpawnAction.Builder spawnJavaOnDarwinActionBuilder(Artifact deployJarArtifact) {
-    return spawnOnDarwinActionBuilder()
-        .setExecutable(JAVA)
-        .addExecutableArguments("-jar", deployJarArtifact.getExecPathString())
-        .addInput(deployJarArtifact);
-  }
-
-  /**
-   * Creates a new configured target builder with the given {@code filesToBuild}, which are also
-   * used as runfiles.
-   *
-   * @param ruleContext the current rule context
-   * @param filesToBuild files to build for this target. These also become the data runfiles
-   */
-  static RuleConfiguredTargetBuilder ruleConfiguredTarget(RuleContext ruleContext,
-      NestedSet<Artifact> filesToBuild) {
-    RunfilesProvider runfilesProvider = RunfilesProvider.withData(
-        new Runfiles.Builder().addRunfiles(ruleContext, RunfilesProvider.DEFAULT_RUNFILES).build(),
-        new Runfiles.Builder().addTransitiveArtifacts(filesToBuild).build());
-
-    return new RuleConfiguredTargetBuilder(ruleContext)
-        .setFilesToBuild(filesToBuild)
-        .add(RunfilesProvider.class, runfilesProvider);
-  }
 
   /**
    * Attributes for {@code objc_*} rules that have compiler options.
@@ -733,12 +669,6 @@ public class ObjcRuleClasses {
               return configuration.getFragment(ObjcConfiguration.class).getDumpSymsLabel();
             }
           }))
-          .add(attr("$j2objc_dead_code_pruner", LABEL)
-              .allowedFileTypes(FileType.of(".py"))
-              .cfg(HOST)
-              .exec()
-              .singleArtifact()
-              .value(env.getLabel("//tools/objc:j2objc_dead_code_pruner")))
         .build();
     }
     @Override
@@ -886,9 +816,6 @@ public class ObjcRuleClasses {
         This is known as the <code>TARGETED_DEVICE_FAMILY</code> build setting
         in Xcode project files. It is a list of one or more of the strings
         <code>"iphone"</code> and <code>"ipad"</code>.
-
-        <p>By default this is set to <code>"iphone"</code>, if explicitly specified may not be
-        empty.</p>
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(attr("families", STRING_LIST)
              .value(ImmutableList.of(TargetDeviceFamily.IPHONE.getNameInRule())))
@@ -1029,6 +956,22 @@ public class ObjcRuleClasses {
           .name("$objc_simulator_rule")
           .type(RuleClassType.ABSTRACT)
           .build();
+    }
+  }
+
+  /**
+   * Object that supplies tools used by all rules which have the helper tools common to most rule
+   * implementations.
+   */
+  static final class Tools {
+    private final RuleContext ruleContext;
+
+    Tools(RuleContext ruleContext) {
+      this.ruleContext = Preconditions.checkNotNull(ruleContext);
+    }
+
+    FilesToRunProvider xcodegen() {
+      return ruleContext.getExecutablePrerequisite("$xcodegen", Mode.HOST);
     }
   }
 }
