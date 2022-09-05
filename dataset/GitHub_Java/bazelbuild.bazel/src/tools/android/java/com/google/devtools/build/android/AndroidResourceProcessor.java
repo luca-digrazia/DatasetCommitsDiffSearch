@@ -241,7 +241,7 @@ public class AndroidResourceProcessor {
       command.add("--non-constant-id");
     }
 
-    if (variantType == VariantConfiguration.Type.DEFAULT  && !packages.isEmpty()) {
+    if (variantType == VariantConfiguration.Type.DEFAULT) {
       // Generate the dependent R and Manifest files.
       command.add("--extra-packages");
       command.add(Joiner.on(":").join(packages));
