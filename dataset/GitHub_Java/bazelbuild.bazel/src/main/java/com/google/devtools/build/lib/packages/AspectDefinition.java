@@ -55,7 +55,7 @@ import javax.annotation.Nullable;
 @Immutable
 public final class AspectDefinition {
 
-  private final AspectClass aspectClass;
+  private final String name;
   private final ImmutableSet<Class<?>> requiredProviders;
   private final ImmutableSet<String> requiredProviderNames;
   private final ImmutableMap<String, Attribute> attributes;
@@ -67,12 +67,12 @@ public final class AspectDefinition {
   }
 
   private AspectDefinition(
-      AspectClass aspectClass,
+      String name,
       ImmutableSet<Class<?>> requiredProviders,
       ImmutableMap<String, Attribute> attributes,
       PropagationFunction attributeAspects,
       @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy) {
-    this.aspectClass = aspectClass;
+    this.name = name;
     this.requiredProviders = requiredProviders;
     this.requiredProviderNames = toStringSet(requiredProviders);
     this.attributes = attributes;
@@ -81,11 +81,7 @@ public final class AspectDefinition {
   }
 
   public String getName() {
-    return aspectClass.getName();
-  }
-
-  public AspectClass getAspectClass() {
-    return aspectClass;
+    return name;
   }
 
   /**
@@ -226,7 +222,7 @@ public final class AspectDefinition {
    * Builder class for {@link AspectDefinition}.
    */
   public static final class Builder {
-    private final AspectClass aspectClass;
+    private final String name;
     private final Map<String, Attribute> attributes = new LinkedHashMap<>();
     private final Set<Class<?>> requiredProviders = new LinkedHashSet<>();
     private final Multimap<String, AspectClass> attributeAspects = LinkedHashMultimap.create();
@@ -234,8 +230,8 @@ public final class AspectDefinition {
     private final ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
         new ConfigurationFragmentPolicy.Builder();
 
-    public Builder(AspectClass aspectClass) {
-      this.aspectClass = aspectClass;
+    public Builder(String name) {
+      this.name = name;
     }
 
     /**
@@ -412,7 +408,7 @@ public final class AspectDefinition {
      * <p>The builder object is reusable afterwards.
      */
     public AspectDefinition build() {
-      return new AspectDefinition(aspectClass, ImmutableSet.copyOf(requiredProviders),
+      return new AspectDefinition(name, ImmutableSet.copyOf(requiredProviders),
           ImmutableMap.copyOf(attributes),
           allAttributesAspects != null
               ? new AllAttributesPropagationFunction(allAttributesAspects)
