@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Preprocessor;
@@ -54,6 +53,7 @@ import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -263,15 +263,8 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     ImmutableSortedSet<String> multiCpu = ImmutableSortedSet.copyOf(requestOptions.multiCpus);
     masterConfig = skyframeExecutor.createConfigurations(
         configurationFactory, buildOptions, directories, multiCpu, false);
-    analysisResult =
-        buildView.update(
-            loadingResult,
-            masterConfig,
-            ImmutableList.<String>of(),
-            viewOptions,
-            AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT,
-            reporter,
-            eventBus);
+    analysisResult = buildView.update(loadingResult, masterConfig, viewOptions,
+        AnalysisTestUtil.TOP_LEVEL_ARTIFACT_CONTEXT, reporter, eventBus);
   }
 
   protected void update(FlagBuilder config, String... labels) throws Exception {
@@ -289,7 +282,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     try {
       return SkyframeExecutorTestUtils.getExistingTarget(skyframeExecutor,
           Label.parseAbsolute(label));
-    } catch (LabelSyntaxException e) {
+    } catch (SyntaxException e) {
       throw new AssertionError(e);
     }
   }
@@ -304,7 +297,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     Label parsedLabel;
     try {
       parsedLabel = Label.parseAbsolute(label);
-    } catch (LabelSyntaxException e) {
+    } catch (SyntaxException e) {
       throw new AssertionError(e);
     }
     return skyframeExecutor.getConfiguredTargetForTesting(parsedLabel, configuration);
