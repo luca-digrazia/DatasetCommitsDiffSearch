@@ -58,6 +58,7 @@ public final class JavaToolchainProvider implements TransitiveInfoProvider {
       @Nullable NestedSet<Artifact> bootclasspath,
       @Nullable NestedSet<Artifact> extclasspath,
       List<String> defaultJavacFlags,
+      List<String> defaultJavacJvmOpts,
       @Nullable Artifact javac,
       @Nullable Artifact javaBuilder,
       @Nullable Artifact headerCompiler,
@@ -83,7 +84,13 @@ public final class JavaToolchainProvider implements TransitiveInfoProvider {
             .addAll(data.getJavacOptions())
             .addAll(defaultJavacFlags)
             .build();
-    this.javacJvmOptions = data.getJavacJvmOptions();
+    // merges the defaultJavaBuilderJvmFlags from
+    // {@link JavaConfiguration} with the flags from the {@code java_toolchain} rule.
+    this.javacJvmOptions =
+        ImmutableList.<String>builder()
+            .addAll(data.getJavacJvmOptions())
+            .addAll(defaultJavacJvmOpts)
+            .build();
   }
 
   /** @return the list of default options for the java compiler */

@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -74,8 +75,6 @@ public class JavaHeaderCompileActionBuilder {
   private ImmutableList<String> javacOpts;
   private List<Artifact> processorPath = new ArrayList<>();
   private List<String> processorNames = new ArrayList<>();
-  private NestedSet<Artifact> javabaseInputs;
-  private Artifact javacJar;
 
   /** Creates a builder using the configuration of the rule as the action configuration. */
   public JavaHeaderCompileActionBuilder(RuleContext ruleContext) {
@@ -205,20 +204,6 @@ public class JavaHeaderCompileActionBuilder {
     return this;
   }
 
-  /** Sets the javabase inputs. */
-  public JavaHeaderCompileActionBuilder setJavaBaseInputs(NestedSet<Artifact> javabaseInputs) {
-    checkNotNull(javabaseInputs, "javabaseInputs must not be null");
-    this.javabaseInputs = javabaseInputs;
-    return this;
-  }
-
-  /** Sets the javac jar. */
-  public JavaHeaderCompileActionBuilder setJavacJar(Artifact javacJar) {
-    checkNotNull(javacJar, "javacJar must not be null");
-    this.javacJar = javacJar;
-    return this;
-  }
-
   /** Builds and registers the {@link SpawnAction} for a header compilation. */
   public void build() {
     checkNotNull(outputDepsProto, "outputDepsProto must not be null");
@@ -244,7 +229,7 @@ public class JavaHeaderCompileActionBuilder {
     builder.useParameterFile(ParameterFileType.SHELL_QUOTED);
     builder.setCommandLine(buildCommandLine(ruleContext.getConfiguration().getHostPathSeparator()));
 
-    builder.addTransitiveInputs(javabaseInputs);
+    builder.addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext));
     builder.addInputs(classpathEntries);
     builder.addInputs(bootclasspathEntries);
     builder.addInputs(processorPath);
@@ -253,13 +238,14 @@ public class JavaHeaderCompileActionBuilder {
     builder.addInputs(directJars);
     builder.addInputs(compileTimeDependencyArtifacts);
 
-    builder.addTool(javacJar);
+    Artifact langtools = ruleContext.getPrerequisiteArtifact("$java_langtools", Mode.HOST);
+    builder.addTool(langtools);
 
     JavaToolchainProvider javaToolchain = JavaToolchainProvider.fromRuleContext(ruleContext);
     List<String> jvmArgs =
         ImmutableList.<String>builder()
             .addAll(javaToolchain.getJavacJvmOptions())
-            .add("-Xbootclasspath/p:" + javacJar.getExecPath().getPathString())
+            .add("-Xbootclasspath/p:" + langtools.getExecPath().getPathString())
             .build();
     builder.setJarExecutable(
         ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable(),

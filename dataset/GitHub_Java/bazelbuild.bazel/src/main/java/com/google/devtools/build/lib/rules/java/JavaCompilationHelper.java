@@ -423,7 +423,8 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
     builder.setClassDirectory(classDir(resourceJar));
     builder.setJavaBuilderJar(getJavaBuilderJar());
     builder.setJavacOpts(getDefaultJavacOptsFromRule(getRuleContext()));
-    builder.setJavacJvmOpts(javaToolchain.getJavacJvmOptions());
+    builder.setJavacJvmOpts(ImmutableList.copyOf(javaToolchain.getJavacOptions()));
+    builder.setJavacJvmOpts(ImmutableList.copyOf(javaToolchain.getJavacJvmOptions()));
     getAnalysisEnvironment().registerAction(builder.build());
     return resourceJar;
   }
@@ -626,7 +627,7 @@ public final class JavaCompilationHelper extends BaseJavaCompilationHelper {
    */
   private static ImmutableList<String> getDefaultJavacOptsFromRule(RuleContext ruleContext) {
     return ImmutableList.copyOf(Iterables.concat(
-        JavaToolchainProvider.fromRuleContext(ruleContext).getJavacOptions(),
+        JavaToolchainProvider.fromRuleContext(ruleContext).getJavacJvmOptions(),
         ruleContext.getTokenizedStringListAttr("javacopts")));
   }
 
