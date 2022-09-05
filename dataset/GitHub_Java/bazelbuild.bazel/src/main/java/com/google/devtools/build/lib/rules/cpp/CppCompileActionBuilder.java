@@ -281,7 +281,7 @@ public class CppCompileActionBuilder {
 
     NestedSet<Artifact> realMandatoryInputs = realMandatoryInputsBuilder.build();
 
-    NestedSet<Artifact> prunableInputs = context.getDeclaredIncludeSrcs();
+    NestedSet<Artifact> includesExemptFromDiscovery = context.getDeclaredIncludeSrcs();
 
     // Copying the collections is needed to make the builder reusable.
     if (fake) {
@@ -297,7 +297,7 @@ public class CppCompileActionBuilder {
           useHeaderModules,
           sourceLabel,
           realMandatoryInputs,
-          prunableInputs,
+          includesExemptFromDiscovery,
           outputFile,
           tempOutputFile,
           dotdFile,
@@ -322,7 +322,7 @@ public class CppCompileActionBuilder {
           useHeaderModules,
           sourceLabel,
           realMandatoryInputs,
-          prunableInputs,
+          includesExemptFromDiscovery,
           outputFile,
           dotdFile,
           gcnoFile,
